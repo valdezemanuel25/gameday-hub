@@ -11,6 +11,33 @@ const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
 const HOUR = 3600000;
+const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
+
+// Counts this request's KV writes so the Status tab can show how close the day is to the limit.
+// The count is saved with ONE extra write at the end, and only when something was written.
+function counted(env) {
+  const base = env.HUB; let n = 0;
+  const hub = Object.create(base);
+  hub.get = (...a) => base.get(...a);
+  hub.list = (...a) => base.list(...a);
+  hub.put = (...a) => { n++; return base.put(...a); };
+  return { env: { ...env, HUB: hub }, flush: async () => {
+    if (!n) return;
+    const d = new Date().toISOString().slice(0, 10);
+    const c = (await base.get('meta:writes', 'json').catch(() => null)) || {};
+    await base.put('meta:writes', JSON.stringify({ d, n: (c.d === d ? c.n : 0) + n + 1 })).catch(() => {});
+  } };
+}
+
+// Last problem per league (shown on the Status tab). Written only when it changes, to save writes.
+async function noteLeague(env, slug, kind, msg) {
+  const e = (await env.HUB.get('meta:errors', 'json')) || {};
+  const had = e[slug];
+  if (!msg) { if (!had || had.kind !== kind) return; delete e[slug]; }
+  else { if (had && had.msg === msg && had.kind === kind) return; e[slug] = { kind, msg: String(msg).slice(0, 160), at: new Date().toISOString() }; }
+  await env.HUB.put('meta:errors', JSON.stringify(e));
+}
+const syncNote = async (env, league, r) => { try { await noteLeague(env, league.slug, 'sync', r && r.error); } catch (e) { /* best effort */ } };
 // Everything up to and including this date is already in the imported Hub history (legacy.js).
 const LEGACY_THROUGH = '2026-10-13';
 // Form as of kickoff: the last 5 league games played BEFORE this match (never the match itself).
@@ -272,7 +299,8 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     const next = [...DOMESTIC].sort((a, b) => (meta[a.slug] || '').localeCompare(meta[b.slug] || ''))[0];
     // Free plan allows 1,000 KV writes a day: don't re-sync a league that was synced in the last 8 hours.
     if (meta[next.slug] && now.getTime() - new Date(meta[next.slug]).getTime() < 8 * 3600000) return { job: 'sync', idle: true };
-    return { job: 'sync', league: next.slug, ...(await syncLeague(next, env, now)) };
+    const r = await syncLeague(next, env, now); await syncNote(env, next, r);
+    return { job: 'sync', league: next.slug, ...r };
   }
 
   if (slot === 1) {
@@ -320,8 +348,13 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   return { job: 'analyze', idle: true };
 }
 
-export default {
-  async fetch(req, env) {
+const hub = {
+  async fetch(req, env0) {
+    const c = counted(env0), env = c.env;
+    try { return await hub.handle(req, env); } finally { await c.flush(); }
+  },
+
+  async handle(req, env) {
     const url = new URL(req.url);
     const p = url.pathname;
     const q = k => url.searchParams.get(k);
@@ -345,13 +378,31 @@ export default {
       return json((await env.HUB.get(`day:${date}`, 'json')) || { date, cards: [] });
     }
     if (p === '/api/tally') return json(await tally(env));
+    if (p === '/api/days') { // every saved day, for the Export button
+      const out = []; let cursor;
+      do { const r = await env.HUB.list({ prefix: 'day:', cursor }); out.push(...r.keys.map(k => k.name.slice(4))); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
+      return json({ days: out.sort() });
+    }
+    if (p === '/api/status') {
+      const [meta, errs, w] = await Promise.all([env.HUB.get('meta:synced', 'json'), env.HUB.get('meta:errors', 'json'), env.HUB.get('meta:writes', 'json')]);
+      const d = new Date().toISOString().slice(0, 10);
+      return json({
+        now: Date.now(), writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        leagues: DOMESTIC.map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, problem: (errs || {})[l.slug] || null })),
+      });
+    }
 
     if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm'].includes(p)) {
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
       try {
-        if (p === '/api/sync') return json({ ok: true, ...(await syncLeague(league, env)) });
-        if (p === '/api/analyze') return json({ ok: true, ...(await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1', leftover: q('leftover') === '1' })) });
+        if (p === '/api/sync') { const r = await syncLeague(league, env); await syncNote(env, league, r); return json({ ok: true, ...r }); }
+        if (p === '/api/analyze') {
+          const r = await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1', leftover: q('leftover') === '1' });
+          if (r.feedError) await noteLeague(env, league.slug, 'games', "ESPN's game list wouldn't load").catch(() => {});
+          else if (r.cards !== undefined) await noteLeague(env, league.slug, 'games', null).catch(() => {});
+          return json({ ok: true, ...r });
+        }
         if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
         return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
       } catch (e) {
@@ -361,7 +412,9 @@ export default {
     return env.ASSETS.fetch(req);
   },
 
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(runSlot(env));
+  async scheduled(event, env0, ctx) {
+    const c = counted(env0);
+    ctx.waitUntil(runSlot(c.env).finally(() => c.flush()));
   },
 };
+export default hub;
