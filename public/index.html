@@ -164,17 +164,18 @@ async function loadDay() {
 }
 
 /* ---------- Analyze / Update: one league at a time ---------- */
+let failed = [];
 async function syncUntilCaughtUp(slug, name, i, n) {
   for (let k = 0; k < 10; k++) {
     say(`Loading ${name} results (${i}/${n})…`);
     const r = await post('/api/sync?league=' + slug);
-    if (r.error) throw new Error(r.error);
+    if (r.error) { failed.push(name); return; } // a league ESPN won't load must not stop the whole run
     if (r.caughtUp) return;
   }
 }
 async function runAll(kind) {
   const buttons = ['#btn-analyze', '#btn-grade'].map($); buttons.forEach(b => b.disabled = true);
-  const date = $('#matchday-date').value; let done = 0, skipped = 0, graded = 0;
+  const date = $('#matchday-date').value; let done = 0, skipped = 0, graded = 0; failed = [];
   try {
     for (let i = 0; i < cfg.leagues.length; i++) {
       const lg = cfg.leagues[i], at = `${i + 1}/${cfg.leagues.length}`;
@@ -184,7 +185,7 @@ async function runAll(kind) {
         if (r.error) throw new Error(r.error);
         if (r.needsSync) {
           for (const slug of r.needsSync) { const m = cfg.leagues.find(l => l.slug === slug); await syncUntilCaughtUp(slug, m ? m.name : slug, at.split('/')[0], cfg.leagues.length); }
-          r = await post(`/api/analyze?league=${lg.slug}&date=${date}`);
+          r = await post(`/api/analyze?league=${lg.slug}&date=${date}&partial=1`);
         }
         done += r.cards || 0; skipped += r.skipped || 0;
       } else {
@@ -194,7 +195,7 @@ async function runAll(kind) {
         graded += r.graded || 0;
       }
     }
-    say(kind === 'analyze' ? `Done: ${done} matches${skipped ? ` (${skipped} skipped, not enough form data)` : ''}.` : `Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
+    say(kind === 'analyze' ? `Done: ${done} matches${skipped ? ` (${skipped} skipped, not enough form data)` : ''}.${failed.length ? ` Couldn't load: ${[...new Set(failed)].join(', ')}.` : ''}` : `Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
     tally = null; await loadDay();
     if (kind !== 'analyze') say(`Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
   } catch (err) { say(err.message); }
