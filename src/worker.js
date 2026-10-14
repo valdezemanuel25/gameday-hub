@@ -46,6 +46,8 @@ export async function analyzeLeague(date, slug, env, now = new Date()) {
 
   const fx = await fixturesForLeague(league, date, debug);
   if (!fx.length) {
+    // A failed feed is not "no games": report it and don't mark the league analyzed.
+    if (debug.length) return { fixtures: 0, cards: 0, skipped: 0, feedError: true, debug };
     day.cards = day.cards.filter(c => c.league !== slug || c.final);
     day.analyzed[slug] = now.getTime();
     await env.HUB.put(`day:${date}`, JSON.stringify(day));

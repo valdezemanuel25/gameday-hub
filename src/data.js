@@ -60,10 +60,14 @@ function parseEvent(ev) {
   };
 }
 
+// ESPN answers 400 to date ranges (confirmed live), so ask one day at a time and merge.
 export async function scoreboard(slug, from, to, debug) {
-  const range = ymd(from) === ymd(to) ? ymd(from) : `${ymd(from)}-${ymd(to)}`;
-  const j = await getJson(`${BASE}/${slug}/scoreboard?dates=${range}&limit=300`, debug);
-  return (j?.events || []).map(parseEvent).filter(Boolean);
+  const days = [];
+  for (let t = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()); t <= to.getTime(); t += DAY) days.push(ymd(new Date(t)));
+  const results = await Promise.all(days.map(d => getJson(`${BASE}/${slug}/scoreboard?dates=${d}&limit=300`, debug)));
+  const seen = new Map();
+  for (const j of results) for (const ev of j?.events || []) { const e = parseEvent(ev); if (e) seen.set(e.id, e); }
+  return [...seen.values()];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -200,6 +204,7 @@ export async function missingContexts(env, memo) {
 // Fixtures for ONE league on a local calendar date ('YYYY-MM-DD').
 export async function fixturesForLeague(league, date, debug) {
   const d = new Date(`${date}T12:00:00Z`);
-  const evs = await scoreboard(league.slug, new Date(d.getTime() - DAY), new Date(d.getTime() + DAY), debug);
+  // A Chicago calendar day spans UTC day D and D+1, so two single-day requests cover it.
+  const evs = await scoreboard(league.slug, d, new Date(d.getTime() + DAY), debug);
   return evs.filter(e => localDate(e.date) === date).sort((a, b) => new Date(a.date) - new Date(b.date));
 }
