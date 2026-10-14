@@ -5,8 +5,8 @@ compatibility_date = "2026-09-01"
 [assets]
 directory = "./public"
 binding = "ASSETS"
-# Let the Worker handle /api/* before static files
-run_worker_first = ["/api/*"]
+# The Worker sees every request first so it can ask for the password before serving the page
+run_worker_first = true
 
 # Storage: the KV namespace "HUB" (already created in your Cloudflare account).
 [[kv_namespaces]]
