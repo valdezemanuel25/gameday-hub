@@ -16,7 +16,7 @@ id = "3afff88abc944771a4c7bfdd78f05a36"
 # Every 10 minutes the Worker does ONE small job for ONE league, rotating:
 #   sync results -> grade (a league is graded GAME_HOURS + GRADE_DELAY_HOURS after its last kickoff) -> analyze.
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/5 * * * *"]
 
 [vars]
 GAME_HOURS = "2"          # assumed length of a game
