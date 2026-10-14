@@ -4,6 +4,8 @@ import {
   findTeam, getContext, missingContexts, fixturesForLeague,
 } from './data.js';
 import legacy from './legacy.js';
+import legacySm from './legacy_sm.js';
+import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -103,9 +105,11 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     const r3 = v3(mk(h.team, h.league, h.ctx), mk(a.team, a.league, a.ctx));
     card.v2 = slim(r2);
     card.v3 = slim(r3);
+    if (old?.sm) card.sm = old.sm;
     if (f.done && date <= LEGACY_THROUGH) { // old day: show the real result against the pre-kickoff prediction
       card.final = { h: f.home.score, a: f.away.score };
       card.grade = { v2: grade(toPred(card.v2), card.final), v3: grade(toPred(card.v3), card.final) };
+      if (card.sm) card.smGrade = smGrade(card.sm, card.final);
     }
     card.crossLeague = h.league.slug !== a.league.slug;
     card.homeLeague = h.league.name; card.awayLeague = a.league.name;
@@ -149,6 +153,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     if (!f) { pending++; continue; }
     c.final = { h: f.home.score, a: f.away.score };
     c.grade = { v2: grade(toPred(c.v2), c.final), v3: grade(toPred(c.v3), c.final) };
+    if (c.sm) c.smGrade = smGrade(c.sm, c.final);
     graded++;
   }
   // Remember the attempt so a league whose games aren't final yet (postponed, feed lagging) can't
@@ -156,6 +161,37 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   day.gradeTried = { ...(day.gradeTried || {}), [slug]: now.getTime() };
   await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { graded, pending };
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// SportsMole "We say" for ONE league / ONE date. Best effort: a miss just leaves the card without it.
+// ---------------------------------------------------------------------------------------------
+export async function smLeague(date, slug, env, now = new Date(), { force = false } = {}) {
+  const day = await env.HUB.get(`day:${date}`, 'json');
+  day && (day.smTried = day.smTried || {});
+  const todo = (day?.cards || []).filter(c => c.league === slug && c.v2 && !c.sm && (force || now.getTime() - (day.smTried[c.id] || 0) > 3 * HOUR));
+  if (!todo.length) return { idle: true, found: 0 };
+  let links;
+  try { links = await getListing(env, now.getTime()); } catch (e) { return { error: `SportsMole list: ${e.message}`, found: 0 }; }
+  let found = 0, missed = 0, fetched = 0;
+  const errors = [];
+  for (const c of todo) {
+    const link = matchLink(c.home, c.away, links);
+    day.smTried[c.id] = now.getTime();
+    if (!link) { missed++; continue; }
+    if (fetched >= 6) { delete day.smTried[c.id]; continue; } // keep each request small; the next run continues
+    fetched++;
+    try {
+      const w = parseWeSay(await fetchText(link.url));
+      if (!w) { missed++; continue; }
+      c.sm = { h: w.h, a: w.a, text: w.text, url: link.url };
+      if (c.final) c.smGrade = smGrade(c.sm, c.final);
+      found++;
+    } catch (e) { errors.push(e.message); delete day.smTried[c.id]; }
+  }
+  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  return { found, missed, listed: links.length, ...(errors.length ? { errors } : {}) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -187,7 +223,25 @@ async function tally(env) {
     }
   }
   live.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''));
+  // Model vs SportsMole: the Hub's 141 tracked matches + everything graded here since.
+  const smT = { n: 0, model: { outcome: 0, ou: 0, btts: 0 }, sm: { outcome: 0, ou: 0, btts: 0, score: 0 } };
+  for (const r of legacySm) {
+    smT.n++;
+    smT.model.outcome += r.modelHit === true; smT.model.ou += r.modelOuHit === true; smT.model.btts += r.modelBttsHit === true;
+    smT.sm.outcome += r.sportsmoleOutcomeHit === true; smT.sm.ou += r.smOuHit === true; smT.sm.btts += r.smBttsHit === true; smT.sm.score += r.sportsmoleScoreHit === true;
+  }
+  const smLive = live.filter(c => c.sm && c.smGrade);
+  for (const c of smLive) {
+    smT.n++;
+    smT.model.outcome += c.grade.v2.outcomeHit; smT.model.ou += c.grade.v2.ouHit; smT.model.btts += c.grade.v2.bttsHit;
+    smT.sm.outcome += c.smGrade.outcomeHit; smT.sm.ou += c.smGrade.ouHit; smT.sm.btts += c.smGrade.bttsHit; smT.sm.score += c.smGrade.scoreHit;
+  }
   return {
+    smCompare: {
+      ...smT, importedMatches: legacySm.length, newMatches: smLive.length,
+      recent: smLive.slice(0, 100).map(c => ({ date: c.date, home: c.home, away: c.away, final: c.final, modelPick: c.v2.pick, modelP: c.v2.p, sm: c.sm.text, hit: c.grade.v2, smHit: c.smGrade })),
+      earlier: legacySm.slice().reverse(),
+    },
     v2: fin(v2All),
     h2h: { v2: fin(h2hV2), v3: fin(h2hV3) },
     importedMatches: legacy.v2Rows.length,
@@ -198,11 +252,11 @@ async function tally(env) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Cron: runs every 10 minutes and does ONE small job per run, rotating:
+// Cron: runs every 5 minutes and does ONE small job per run, rotating:
 //   slot 0 = sync the least-recently-synced league   slot 1 = grade the next league that's due
 //   slot 2 = analyze the next league that has no cards yet for today / tomorrow
 // ---------------------------------------------------------------------------------------------
-export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTime() / 600000) % 3) {
+export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTime() / 300000) % 4) {
   const t = localDate(now.toISOString());
 
   if (slot === 0) {
@@ -226,6 +280,17 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     if (!due.length) return { job: 'grade', idle: true };
     const d = due[0];
     return { job: 'grade', league: d.slug, date: d.date, ...(await gradeLeague(d.date, d.slug, env, {}, now)) };
+  }
+
+  if (slot === 3) { // SportsMole "We say" for today / tomorrow, one league per run
+    for (const date of [t, addDays(t, 1)]) {
+      const day = await env.HUB.get(`day:${date}`, 'json');
+      for (const lg of VISIBLE) {
+        const need = (day?.cards || []).some(c => c.league === lg.slug && c.v2 && !c.sm && now.getTime() - (day.smTried?.[c.id] || 0) > 3 * HOUR);
+        if (need) return { job: 'sportsmole', league: lg.slug, date, ...(await smLeague(date, lg.slug, env, now)) };
+      }
+    }
+    return { job: 'sportsmole', idle: true };
   }
 
   // slot 2: analyze. Domestic leagues first, cups last (cups need domestic data).
@@ -264,12 +329,13 @@ export default {
     }
     if (p === '/api/tally') return json(await tally(env));
 
-    if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade'].includes(p)) {
+    if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm'].includes(p)) {
       if (!authed(req, env)) return json({ error: 'Bad or missing admin token' }, 401);
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
       if (p === '/api/sync') return json({ ok: true, ...(await syncLeague(league, env)) });
       if (p === '/api/analyze') return json({ ok: true, ...(await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1' })) });
+      if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
       return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
     }
     return env.ASSETS.fetch(req);
