@@ -63,11 +63,17 @@ export async function fetchText(url) {
   return res.text();
 }
 
+// SportsMole's list only shows UPCOMING games (a preview disappears once the game starts), so every
+// link seen is kept for 14 days. Cached 60 min; the cron refreshes it even when no card needs it.
 export async function getListing(env, now = Date.now()) {
   const c = await env.HUB.get('sm:list', 'json');
-  if (c && now - c.at < 20 * 60000) return c.links;
-  const links = parseListing(await fetchText(LIST_URL));
-  if (links.length) await env.HUB.put('sm:list', JSON.stringify({ at: now, links }));
+  if (c && now - c.at < 60 * 60000) return c.links;
+  const fresh = parseListing(await fetchText(LIST_URL));
+  const seen = new Map(((await env.HUB.get('sm:seen', 'json')) || []).filter(l => now - l.at < 14 * 86400000).map(l => [l.id, l]));
+  for (const l of fresh) seen.set(l.id, { ...l, at: seen.get(l.id)?.at ?? now });
+  const links = [...seen.values()].slice(-500);
+  if (fresh.length) await env.HUB.put('sm:seen', JSON.stringify(links));
+  await env.HUB.put('sm:list', JSON.stringify({ at: now, links }));
   return links;
 }
 

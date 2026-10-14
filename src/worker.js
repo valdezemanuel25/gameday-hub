@@ -263,6 +263,8 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   if (slot === 0) {
     const meta = (await env.HUB.get('meta:synced', 'json')) || {};
     const next = [...DOMESTIC].sort((a, b) => (meta[a.slug] || '').localeCompare(meta[b.slug] || ''))[0];
+    // Free plan allows 1,000 KV writes a day: don't re-sync a league that was synced in the last 8 hours.
+    if (meta[next.slug] && now.getTime() - new Date(meta[next.slug]).getTime() < 8 * 3600000) return { job: 'sync', idle: true };
     return { job: 'sync', league: next.slug, ...(await syncLeague(next, env, now)) };
   }
 
