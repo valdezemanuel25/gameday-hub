@@ -40,9 +40,16 @@ const slim = p => ({
 });
 const toPred = s => ({ home: s.p[0] / 100, draw: s.p[1] / 100, away: s.p[2] / 100, over25: s.over / 100, bttsYes: s.btts / 100 });
 
+// The password is ADMIN_TOKEN. It is accepted from the browser's login box (HTTP Basic, any username)
+// or from the x-admin-token header. With no ADMIN_TOKEN set, nothing is let in.
 function authed(req, env) {
-  const t = req.headers.get('x-admin-token') || '';
-  return !!env.ADMIN_TOKEN && t === env.ADMIN_TOKEN;
+  if (!env.ADMIN_TOKEN) return false;
+  if ((req.headers.get('x-admin-token') || '') === env.ADMIN_TOKEN) return true;
+  const h = req.headers.get('authorization') || '';
+  if (h.startsWith('Basic ')) {
+    try { const d = atob(h.slice(6)); return d.slice(d.indexOf(':') + 1) === env.ADMIN_TOKEN; } catch (e) { return false; }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -319,6 +326,12 @@ export default {
     const p = url.pathname;
     const q = k => url.searchParams.get(k);
 
+    // Whole site is private: page and data both need the password.
+    if (!authed(req, env)) {
+      if (p.startsWith('/api/')) return json({ error: 'Bad or missing admin token' }, 401);
+      return new Response('Sign in to open Game Day Hub.', { status: 401, headers: { 'www-authenticate': 'Basic realm="Game Day Hub", charset="UTF-8"', 'cache-control': 'no-store' } });
+    }
+
     if (p === '/api/config') {
       return json({
         today: today(), tomorrow: addDays(today(), 1), tz: TZ,
@@ -334,7 +347,6 @@ export default {
     if (p === '/api/tally') return json(await tally(env));
 
     if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm'].includes(p)) {
-      if (!authed(req, env)) return json({ error: 'Bad or missing admin token' }, 401);
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
       try {
