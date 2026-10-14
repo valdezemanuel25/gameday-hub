@@ -48,7 +48,7 @@ function authed(req, env) {
 // ---------------------------------------------------------------------------------------------
 // Analyze ONE league for ONE date: fixtures -> v2 (official) + v3 (shadow) cards.
 // ---------------------------------------------------------------------------------------------
-export async function analyzeLeague(date, slug, env, now = new Date(), { partial = false } = {}) {
+export async function analyzeLeague(date, slug, env, now = new Date(), { partial = false, leftover = false } = {}) {
   const league = leagueBySlug(slug);
   if (!league) return { error: `Unknown league ${slug}` };
   const debug = [], memo = new Map();
@@ -79,6 +79,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   for (const f of fx) {
     const old = prior.get(f.id);
     if (old?.final && date > LEGACY_THROUGH) { cards.push(old); continue; } // never overwrite a graded card
+    if (leftover && old?.v2) { cards.push(old); continue; } // 'Analyze leftover': keep finished predictions as they are
 
     const hint = league.cup ? undefined : slug;
     const h0 = await findTeam(f.home.id, env, memo, hint);
@@ -283,6 +284,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   }
 
   if (slot === 3) { // SportsMole "We say" for today / tomorrow, one league per run
+    try { await getListing(env, now.getTime()); } catch (e) { /* keep going; retried next run */ }
     for (const date of [t, addDays(t, 1)]) {
       const day = await env.HUB.get(`day:${date}`, 'json');
       for (const lg of VISIBLE) {
@@ -334,7 +336,7 @@ export default {
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
       if (p === '/api/sync') return json({ ok: true, ...(await syncLeague(league, env)) });
-      if (p === '/api/analyze') return json({ ok: true, ...(await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1' })) });
+      if (p === '/api/analyze') return json({ ok: true, ...(await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1', leftover: q('leftover') === '1' })) });
       if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
       return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
     }
