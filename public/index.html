@@ -149,6 +149,23 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .lg .when{color:var(--dim);font-size:12px;white-space:nowrap}
 .lg.bad .nm{color:var(--miss)}
 .xbtn{display:block;width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid #35514a;font-weight:650;font-size:14px;text-align:center}
+
+.tod{float:right;margin-top:2px;font-size:12px;font-weight:650;padding:5px 11px;border-radius:20px;border:1px solid #35514a;color:var(--ink)}
+.why{font-size:11.5px;color:var(--dim);margin-top:6px}
+.nt{color:var(--amber)}.you{color:#9ec5e8}
+.note textarea{width:100%;min-height:64px;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:9px 10px;font:inherit;font-size:13px;resize:vertical}
+.note .rw{display:flex;gap:8px;margin-top:8px;align-items:center}
+.note select{flex:1;min-width:0;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:9px 8px;font:inherit;font-size:13px}
+.note .sv{padding:9px 16px;border-radius:10px;background:var(--ink);color:#0B1210;font-weight:650;font-size:13px}
+.alert{margin:12px 18px 0;padding:10px 12px;border-radius:12px;background:rgba(240,181,74,.1);border:1px solid rgba(240,181,74,.35);font-size:12.5px;color:var(--ink);line-height:1.5}
+.alert b{color:var(--amber)}
+.pend.late{color:var(--amber);border-color:#6b5420}
+.cal{padding:9px 0;border-top:1px solid var(--line);font-size:13px}
+.cal .h2{display:flex;justify-content:space-between;gap:8px}
+.cal .tr2{height:6px;border-radius:6px;background:var(--panel2);margin-top:5px;overflow:hidden}.cal .tr2 i{display:block;height:100%}
+.cal.few{opacity:.55}
+.cal small{display:block;color:var(--faint);font-size:11.5px;margin-top:3px}
+.dotm{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-left:5px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -174,13 +191,15 @@ const TZ = 'America/Chicago';
 let cfg = null, day = { cards: [] }, tally = null;
 const S = { date: '', tab: 'board', league: 'all', top: false, open: null };
 const counts = {};
+try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); if (['board', 'results', 'compare', 'status'].includes(v.tab)) S.tab = v.tab; if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }
+const saveView = () => { try { localStorage.setItem('hubView', JSON.stringify({ tab: S.tab, league: S.league })); } catch (e) { /* ignore */ } };
 
 /* ---------- admin token (protects Analyze / Update so strangers can't use your free quota) ---------- */
 /* The browser's own login box (shown once per device) is the password; every request carries it automatically. */
 async function parse(r) { const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error(`Server replied ${r.status}: ${t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) || 'empty response'}`); } }
 async function api(path) { return parse(await fetch(path)); }
-async function post(path) {
-  const r = await fetch(path, { method: 'POST' });
+async function post(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', body: JSON.stringify(body) } : { method: 'POST' });
   if (r.status === 401) throw new Error('Signed out. Reload the page and sign in again.');
   return parse(r);
 }
@@ -213,12 +232,21 @@ function expanded(c) {
     <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
     <div class="small"><b>v3 shadow test</b>${v3.drawRisk ? ' (draw risk)' : ''}: ${esc(c.home)} ${v3.p[0]}%, draw ${v3.p[1]}%, ${esc(c.away)} ${v3.p[2]}%. It picks <b>${OUT[v3.pick]}</b>. Over 2.5 ${v3.over}%, both score ${v3.btts}%.
       ${g ? `<br>v3 result: ${pill(g.v3.outcomeHit, 'Winner')} ${pill(g.v3.ouHit, 'O/U')} ${pill(g.v3.bttsHit, 'Both')}` : ''}</div>
+    <div class="box f note">Your note<textarea id="note-${esc(c.id)}" maxlength="500" placeholder="Injuries, rotation, anything the model can't see">${esc(c.note || '')}</textarea>
+      <div class="rw"><select id="mine-${esc(c.id)}" aria-label="Your pick">${[['', 'No pick of my own'], ['H', c.home + ' win'], ['D', 'Draw'], ['A', c.away + ' win']].map(([v, l]) => `<option value="${v}" ${(c.mine || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><button type="button" class="sv" data-save="${esc(c.id)}">Save</button></div></div>
     <details class="how"><summary>How the model got here</summary>
       <p>Last 5 domestic league games per club (before kickoff). Expected goals: ${esc(c.home)} ${v.lam[0]}, ${esc(c.away)} ${v.lam[1]}. Official model v2: league-average prior 1.56, home 1.17×, away 0.83×, form weight 0.6.</p>
       ${c.crossLeague ? `<p>${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment; v3 applies rough tiers.</p>` : ''}
     </details></div></div>`;
 }
 const GAME_MS = 2 * 3600000;
+const why = c => {
+  if (c.v2.pick === 'D') return '';
+  const f = t => { const m = /(\d+) scored, (\d+) conceded in last (\d+)/.exec(t || ''); return m ? { gf: +m[1], ga: +m[2], n: +m[3] } : null; };
+  const H = c.v2.pick === 'H', pf = f(H ? c.form.home : c.form.away), of = f(H ? c.form.away : c.form.home);
+  if (!pf || !of) return '';
+  return `<div class="why">${esc(H ? c.home : c.away)} scored ${pf.gf} in their last ${pf.n}. ${esc(H ? c.away : c.home)} conceded ${of.ga} in theirs.</div>`;
+};
 const conf = c => { const t = Math.max(...c.v2.p); return t >= 55 ? ['Strong', 's', ''] : t >= 45 ? ['Lean', 'ln', 'lean'] : ['Toss-up', 'tu', 'toss']; };
 function game(c) {
   const open = S.open === c.id, ko = new Date(c.kickoff).getTime(), now = Date.now();
@@ -235,15 +263,33 @@ function game(c) {
     rt = `<div class="rt"><span class="live">In play</span><span class="sm">kicked off ${esc(c.ko)}</span></div>`;
   } else {
     pending = true;
-    rt = `<div class="rt"><span class="pend">Finished<br>result pending</span></div>`;
+    const hrs = Math.floor((now - ko - GAME_MS) / 3600000), late = hrs >= 6;
+    rt = `<div class="rt"><span class="pend ${late ? 'late' : ''}">Finished<br>result pending${hrs >= 1 ? `<br>${hrs} h` : ''}</span></div>`;
   }
   const nums = `<div class="nums"><span>${esc(c.home)} ${h}</span><span>Draw ${d}</span><span>${esc(c.away)} ${a}</span></div>`;
   const pickName = pickText(c), pp = v.pick === 'H' ? h : v.pick === 'A' ? a : d;
   return `<div class="m ${open ? 'open' : ''} ${pending ? 'pn' : ''}"><button type="button" class="hd" data-id="${esc(c.id)}" aria-expanded="${open}">
-    <div class="row"><div class="teams"><div class="tag">${esc(c.leagueName)}</div>
+    <div class="row"><div class="teams"><div class="tag">${esc(c.leagueName)}${c.note ? ' <span class="nt">· note</span>' : ''}${c.mine ? ` <span class="you">· you: ${OUT[c.mine]}</span>` : ''}</div>
       <div class="pk ${pcls}"><b>${esc(pickName)}<i>${pp}%</i></b><span class="cf ${ccls}">${cl}</span></div>
       <div class="vs">${esc(c.home)}${rank(c.hRank)} vs ${esc(c.away)}${rank(c.aRank)}</div>
-      <div class="bar" style="margin-top:0"><i class="h" style="width:${h}%"></i><i class="d" style="width:${d}%"></i><i class="a" style="width:${a}%"></i></div>${nums}</div>${rt}</div>${open ? '' : extra}</button>${open ? expanded(c) : ''}</div>`;
+      <div class="bar" style="margin-top:0"><i class="h" style="width:${h}%"></i><i class="d" style="width:${d}%"></i><i class="a" style="width:${a}%"></i></div>${nums}${cl === 'Strong' && !c.final ? why(c) : ''}</div>${rt}</div>${open ? '' : extra}</button>${open ? expanded(c) : ''}</div>`;
+}
+
+/* ---------- alerts ---------- */
+function backupAge() { try { const t = localStorage.getItem('hubBackup'); return t ? Math.floor((Date.now() - new Date(t).getTime()) / 86400000) : null; } catch (e) { return null; } }
+function alerts() {
+  const out = [], now = Date.now();
+  const late = day.cards.filter(c => c.v2 && !c.final && now > new Date(c.kickoff).getTime() + GAME_MS + 6 * 3600000).length;
+  if (late) out.push(`<b>${late} finished game${late === 1 ? ' is' : 's are'} 6+ hours past kickoff and still ungraded.</b> Tap Update results.`);
+  if (stat) {
+    const stale = stat.leagues.filter(l => !l.support && l.lastSync && now - new Date(l.lastSync).getTime() > 30 * 3600000);
+    if (stale.length) out.push(`<b>Results haven't refreshed in over a day</b> for ${stale.slice(0, 3).map(l => esc(l.name)).join(', ')}${stale.length > 3 ? ` and ${stale.length - 3} more` : ''}. The background job may have stalled.`);
+    const bad = stat.leagues.filter(l => l.problem && !l.support).length;
+    if (bad) out.push(`<b>${bad} league${bad === 1 ? '' : 's'} had a problem.</b> See the Status tab.`);
+    if (stat.writes.used >= 0.9 * stat.writes.limit) out.push(`<b>Saves are almost used up for today</b> (${stat.writes.used} of ${stat.writes.limit}).`);
+  }
+  const b = backupAge(); if (b != null && b >= 14) out.push(`<b>Last backup was ${b} days ago.</b> Export data on the Status tab.`);
+  return out;
 }
 
 /* ---------- board ---------- */
@@ -252,6 +298,7 @@ function uncovered(list) {
   return `<details class="unc"><summary>${list.length} game${list.length === 1 ? '' : 's'} not covered</summary>` +
     list.map(c => `<div class="u">${esc(c.home)} vs ${esc(c.away)}<small>${esc(c.leagueName)}, ${esc(c.ko)}. ${esc(c.skipped || 'No prediction yet.')}</small></div>`).join('') + `</details>`;
 }
+const alertBox = () => { const a = alerts(); return a.length ? `<div class="alert">${a.join('<br>')}</div>` : ''; };
 function board() {
   const unc = day.cards.filter(c => !c.v2);
   let cs = day.cards.filter(c => c.v2);
@@ -276,7 +323,7 @@ function board() {
     const [hm, ap] = list[0].ko.split(' ');
     html += `<div class="slot ${done ? 'done' : ''}"><div class="t">${esc(hm)}<small>${esc(ap || '')}</small></div>${list.map(game).join('')}</div>`;
   }
-  return chips + `<div class="rail">${html}</div>` + uncovered(uncShown);
+  return chips + alertBox() + `<div class="rail">${html}</div>` + uncovered(uncShown);
 }
 
 /* ---------- Model vs SportsMole ---------- */
@@ -314,6 +361,17 @@ function resultsBlock(title, m) {
   return `<div class="sec">${title}<small>${m.n} graded. Brier score ${m.brier ?? '–'} (lower is better, 0.667 is a random guess).</small></div>
     <div class="tiles">${tile('Winner', m, 'outcome')}${tile('Over/under', m, 'ou')}${tile('Both score', m, 'btts')}</div>`;
 }
+function calibrationView(t) {
+  if (!t.calibration) return '';
+  const rows = t.calibration.filter(b => b.n).map(b => {
+    const act = Math.round(100 * b.hits / b.n), few = b.n < 30, gap = act - b.avg;
+    const verdict = few ? 'Too few games to trust yet.' : gap <= -8 ? 'Overconfident here: wins less than it says.' : gap >= 8 ? 'Underconfident here: wins more than it says.' : 'Close to honest.';
+    return `<div class="cal ${few ? 'few' : ''}"><div class="h2"><b style="font-weight:600">${b.label}</b><span>said ${Math.round(b.avg)}%, won ${act}% <span class="fnt">(${b.hits}/${b.n})</span></span></div>
+      <div class="tr2"><i style="width:${Math.round(b.avg)}%;background:#5f746b"></i></div><div class="tr2"><i style="width:${act}%;background:var(--grass)"></i></div><small>${verdict}</small></div>`;
+  }).join('');
+  const mine = t.mine && t.mine.n ? `<div class="small" style="margin-top:10px">Your own picks on ${t.mine.n} games: you got ${t.mine.mine}, the model got ${t.mine.model}.</div>` : '';
+  return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>Winner picks grouped by how sure the model was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}${mine}</div>`;
+}
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;
   const t = tally;
@@ -322,7 +380,7 @@ function results() {
   const old = t.earlier.map(r => `<div class="li"><div class="a"><span>${esc(r.match)}</span><span>${esc(r.actual)}</span></div>
     <div class="b"><span>Winner <b class="${r.outcomeHit ? 'ok' : 'no'}">${r.outcomeHit ? '✓' : '✗'}</b></span><span>O/U <b class="${r.ouHit ? 'ok' : 'no'}">${r.ouHit ? '✓' : '✗'}</b></span><span>Both <b class="${r.bttsHit ? 'ok' : 'no'}">${r.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
-    resultsBlock('v2 official, all results', t.v2) +
+    resultsBlock('v2 official, all results', t.v2) + calibrationView(t) +
     `<div class="sec" style="padding-top:20px">v2 vs v3 shadow test<small>Both models on the same matches only.</small></div>` +
     resultsBlock('v2', t.h2h.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (shadow)', t.h2h.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') +
     `<div class="sec" style="padding-top:20px">Recent results</div><div class="lst">${rows || '<div class="small">Nothing new graded yet. Results fill in automatically a few hours after each league finishes.</div>'}</div>` +
@@ -344,7 +402,7 @@ function statusView() {
     <div class="sec" style="padding-top:16px">Leagues<small>When each league's results were last loaded. Each re-syncs about every 8 hours.</small></div>
     <div class="pair" style="padding-top:0">${ok.map(row).join('')}</div>
     <div class="sec" style="padding-top:16px">Back up your history<small>Downloads every saved day with predictions, results and SportsMole picks, plus the carried-over totals.</small></div>
-    <div class="pair" style="padding-top:0"><button type="button" class="xbtn" id="btn-export">Export data</button></div>`;
+    <div class="pair" style="padding-top:0"><div class="small" style="margin:0 0 4px;${backupAge() == null || backupAge() >= 7 ? 'color:var(--amber)' : ''}">${backupAge() == null ? 'No backup made from this device yet.' : backupAge() === 0 ? 'Last backup from this device: today.' : `Last backup from this device: ${backupAge()} day${backupAge() === 1 ? '' : 's'} ago.`}</div><button type="button" class="xbtn" id="btn-export">Export data</button></div>`;
 }
 async function exportAll() {
   const b = $('#btn-export'); if (b) b.disabled = true;
@@ -357,7 +415,9 @@ async function exportAll() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `gameday-hub-backup-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    say(`Backup downloaded: ${days.length} days.`, true);
+    try { localStorage.setItem('hubBackup', new Date().toISOString()); } catch (e) { /* ignore */ }
+    say(`Backup downloaded: ${days.length} day${days.length === 1 ? "" : "s"}.`, true);
+    if (S.tab === 'status') render();
   } catch (e) { say(e.message); }
   if (b) b.disabled = false;
 }
@@ -365,7 +425,7 @@ async function exportAll() {
 /* ---------- page ---------- */
 function renderHeader() {
   const d = new Date(S.date + 'T12:00:00');
-  $('#title').textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  $('#title').innerHTML = esc(d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })) + (S.date !== cfg.today ? `<button type="button" class="tod" data-date="${cfg.today}">Today</button>` : '');
   const done = day.cards.filter(c => c.v2).length, need = day.cards.filter(c => !c.v2).length;
   $('#sub').textContent = day.cards.length ? `${done} games with a prediction${need ? `, ${need} not covered` : ''}` : 'Nothing analyzed for this day yet';
   $('#days').innerHTML = [-2, -1, 0, 1, 2].map(o => {
@@ -373,7 +433,7 @@ function renderHeader() {
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
   $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status']].map(([k, n]) =>
-    `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}</button>`).join('');
+    `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function render() {
   renderHeader();
@@ -444,10 +504,20 @@ async function runAll(kind) {
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
   if (e.target.closest('#btn-export')) return exportAll();
+  const sv = e.target.closest('[data-save]');
+  if (sv) {
+    const id = sv.dataset.save, c = day.cards.find(x => x.id === id); if (!c) return;
+    const note = document.getElementById('note-' + id).value, mine = document.getElementById('mine-' + id).value;
+    sv.disabled = true;
+    try { const r = await post(`/api/note?league=${c.league}&date=${S.date}`, { id, note, mine }); if (r.error) throw new Error(r.error); c.note = r.note || undefined; c.mine = r.mine || undefined; delete counts[S.date]; tally = null; say('Note saved.', true); render(); }
+    catch (er) { say(er.message); sv.disabled = false; }
+    return;
+  }
   const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],.hd'); if (!t) return;
-  if (t.dataset.date) { S.tab = 'board'; return loadDay(t.dataset.date); }
-  if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
-  if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; return render(); }
+  if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
+  if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
+    if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
+  if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
   if (t.classList.contains('hd')) { S.open = S.open === t.dataset.id ? null : t.dataset.id; return render(); }
 });
@@ -458,7 +528,11 @@ $('#btn-analyze').onclick = () => {
 $('#btn-left').onclick = () => runAll('leftover');
 $('#btn-grade').onclick = () => runAll('grade');
 
-(async () => { cfg = await api('/api/config'); S.date = cfg.today; await loadDay(); })();
+(async () => {
+  cfg = await api('/api/config'); S.date = cfg.today; await loadDay();
+  if (S.tab === 'results' || S.tab === 'compare') { await ensureTally(); render(); }
+  try { stat = await api('/api/status'); if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') render(); } catch (e) { /* alerts are optional */ }
+})();
 </script>
 </body>
 </html>
