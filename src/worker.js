@@ -141,6 +141,8 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     card.v2 = slim(r2);
     card.v3 = slim(r3);
     if (old?.sm) card.sm = old.sm;
+    if (old?.note) card.note = old.note;
+    if (old?.mine) card.mine = old.mine;
     if (f.done && date <= LEGACY_THROUGH) { // old day: show the real result against the pre-kickoff prediction
       card.final = { h: f.home.score, a: f.away.score };
       card.grade = { v2: grade(toPred(card.v2), card.final), v3: grade(toPred(card.v3), card.final) };
@@ -240,8 +242,11 @@ function fin(t) { return { ...t, brier: t.n ? +(t.brier / t.n).toFixed(3) : null
 async function tally(env) {
   const list = await env.HUB.list({ prefix: 'day:' });
   const v2All = blank(), h2hV2 = blank(), h2hV3 = blank();
-  const live = [];
+  const live = [], mineT = { n: 0, mine: 0, model: 0 };
+  const CAL = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60% and up', 60, 101]].map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 }));
+  const cal = (p, hit) => { const t = Math.max(...p), b = CAL.find(x => t >= x.lo && t < x.hi); if (!b) return; b.n++; b.hits += hit ? 1 : 0; b.sum += t; };
   for (const r of legacy.v2Rows) {
+    if (r.p) cal(r.p, r.outcomeHit);
     v2All.n++; v2All.outcome += r.outcomeHit; v2All.ou += r.ouHit; v2All.btts += r.bttsHit; v2All.brier += r.brier ?? 0;
   }
   for (const r of legacy.shadow) {
@@ -254,6 +259,8 @@ async function tally(env) {
     for (const c of day?.cards || []) {
       if (!c.grade || day.date <= LEGACY_THROUGH) continue;
       add(v2All, c.grade.v2); add(h2hV2, c.grade.v2); add(h2hV3, c.grade.v3);
+      cal(c.v2.p, c.grade.v2.outcomeHit);
+      if (c.mine && c.final) { mineT.n++; mineT.model += c.grade.v2.outcomeHit ? 1 : 0; mineT.mine += c.mine === (c.final.h > c.final.a ? 'H' : c.final.h === c.final.a ? 'D' : 'A') ? 1 : 0; }
       live.push({ date: day.date, ...c });
     }
   }
@@ -278,12 +285,26 @@ async function tally(env) {
       earlier: legacySm.slice().reverse(),
     },
     v2: fin(v2All),
+    calibration: CAL.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null })),
+    mine: mineT,
     h2h: { v2: fin(h2hV2), v3: fin(h2hV3) },
     importedMatches: legacy.v2Rows.length,
     newlyGraded: live.length,
     recent: live.slice(0, 200),
     earlier: legacy.v2Rows.slice().reverse().map(r => ({ match: r.match, actual: r.actual, outcomeHit: r.outcomeHit, ouHit: r.ouHit, bttsHit: r.bttsHit })),
   };
+}
+
+// A note (and optional own pick) saved on one card. One small write.
+export async function noteCard(date, slug, id, note, mine, env) {
+  const day = await env.HUB.get(`day:${date}`, 'json');
+  const c = day?.cards?.find(x => x.league === slug && x.id === id);
+  if (!c) return { error: 'Game not found on that day' };
+  const t = String(note || '').trim().slice(0, 500);
+  if (t) c.note = t; else delete c.note;
+  if (['H', 'D', 'A'].includes(mine)) c.mine = mine; else delete c.mine;
+  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  return { saved: true, note: c.note || '', mine: c.mine || '' };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -392,7 +413,7 @@ const hub = {
       });
     }
 
-    if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm'].includes(p)) {
+    if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm', '/api/note'].includes(p)) {
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
       try {
@@ -403,6 +424,7 @@ const hub = {
           else if (r.cards !== undefined) await noteLeague(env, league.slug, 'games', null).catch(() => {});
           return json({ ok: true, ...r });
         }
+        if (p === '/api/note') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ } return json({ ok: true, ...(await noteCard(q('date'), league.slug, String(b.id || ''), b.note, b.mine, env)) }); }
         if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
         return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
       } catch (e) {
