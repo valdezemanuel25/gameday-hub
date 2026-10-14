@@ -26,7 +26,19 @@ export const LEAGUES = [
   { slug: 'usa.1', key: 'mls', name: 'MLS', ls: null, calendar: true },
   { slug: 'mex.1', key: 'ligamx', name: 'Liga MX', ls: null },
   { slug: 'uefa.nations', key: 'nationsleague', name: 'Nations League', cup: true },
+  // Background leagues (no tab): only used to find clubs that play in the Champions League.
+  { slug: 'por.1', key: 'por', name: 'Primeira Liga', ls: 'POR', support: true },
+  { slug: 'tur.1', key: 'tur', name: 'Süper Lig', ls: 'TUR', support: true },
+  { slug: 'bel.1', key: 'bel', name: 'Belgian Pro League', ls: 'BEL', support: true },
+  { slug: 'nor.1', key: 'nor', name: 'Eliteserien', ls: 'NOR', calendar: true, support: true },
+  { slug: 'cze.1', key: 'cze', name: 'Czech First League', ls: 'CZE', support: true },
+  { slug: 'sco.1', key: 'sco', name: 'Scottish Premiership', ls: null, support: true },
+  { slug: 'gre.1', key: 'gre', name: 'Greek Super League', ls: null, support: true },
+  { slug: 'aut.1', key: 'aut', name: 'Austrian Bundesliga', ls: null, support: true },
+  { slug: 'sui.1', key: 'sui', name: 'Swiss Super League', ls: null, support: true },
+  { slug: 'den.1', key: 'den', name: 'Danish Superliga', ls: null, support: true },
 ];
+export const VISIBLE = LEAGUES.filter(l => !l.support);
 export const DOMESTIC = LEAGUES.filter(l => !l.cup);
 export const leagueBySlug = slug => LEAGUES.find(l => l.slug === slug);
 
@@ -85,7 +97,7 @@ export async function syncLeague(league, env, now = new Date(), debug) {
   const end = new Date(Math.min(now.getTime(), start.getTime() + 12 * DAY));
   const evs = await scoreboard(league.slug, start, end, dbg);
   // A failed request is not "no games": don't advance, so the same window is retried.
-  if (dbg.length) return { caughtUp: false, games: st.games.length, context: false, error: dbg.join('; ') };
+  if (dbg.length) { await touchSynced(league.slug, env, now); return { caughtUp: false, games: st.games.length, context: false, error: dbg.join('; ') }; }
   const seen = new Set(st.games.map(g => g[0]));
   for (const e of evs) {
     if (e.done && e.home.score != null && !seen.has(e.id)) {

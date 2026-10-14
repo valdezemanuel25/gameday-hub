@@ -1,6 +1,6 @@
 import { v2, v3, grade, pickOutcome, bestBet } from './model.js';
 import {
-  TZ, LEAGUES, DOMESTIC, leagueBySlug, localDate, localTime, syncLeague,
+  TZ, LEAGUES, VISIBLE, DOMESTIC, leagueBySlug, localDate, localTime, syncLeague,
   findTeam, getContext, missingContexts, fixturesForLeague,
 } from './data.js';
 import legacy from './legacy.js';
@@ -212,7 +212,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   }
 
   // slot 2: analyze. Domestic leagues first, cups last (cups need domestic data).
-  const ordered = [...DOMESTIC, ...LEAGUES.filter(l => l.cup)];
+  const ordered = [...DOMESTIC.filter(l => !l.support), ...LEAGUES.filter(l => l.cup)];
   let tries = 0;
   for (const date of [t, addDays(t, 1)]) {
     const day = await env.HUB.get(`day:${date}`, 'json');
@@ -237,8 +237,8 @@ export default {
       return json({
         today: today(), tomorrow: addDays(today(), 1), tz: TZ,
         // domestic first, cups last (cups need domestic data)
-        leagues: [...DOMESTIC, ...LEAGUES.filter(l => l.cup)].map(l => ({ slug: l.slug, key: l.key, name: l.name, cup: !!l.cup })),
-        tabs: LEAGUES.map(l => ({ slug: l.slug, key: l.key, name: l.name })),
+        leagues: [...DOMESTIC.filter(l => !l.support), ...LEAGUES.filter(l => l.cup)].map(l => ({ slug: l.slug, key: l.key, name: l.name, cup: !!l.cup })),
+        tabs: VISIBLE.map(l => ({ slug: l.slug, key: l.key, name: l.name })),
       });
     }
     if (p === '/api/day') {
