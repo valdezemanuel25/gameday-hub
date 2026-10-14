@@ -99,6 +99,32 @@ function card(c) {
     </div></details>${grade}</div>`;
 }
 
+
+/* ---------- scoreboard tiles (same look as the Hub); tap a game to drop down its full card ---------- */
+let openId = null;
+const ord = n => { if (!n) return ''; const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+const tcolor = n => { let x = 0; for (const ch of String(n)) x = (x * 31 + ch.charCodeAt(0)) % 360; return `hsl(${x} 42% 36%)`; };
+const abbrOf = (name, a) => a || String(name).replace(/[^A-Za-z ]/g, '').trim().slice(0, 3).toUpperCase();
+function tileHtml(c) {
+  const hA = abbrOf(c.home, c.hAbbr), aA = abbrOf(c.away, c.aAbbr);
+  const p = c.v2 ? c.v2.p : null, pick = c.v2 ? c.v2.pick : null;
+  const top = p ? Math.max(...p) : 0;
+  const cls = top >= 55 ? 'p-strong' : top >= 45 ? 'p-light' : 'p-lean';
+  const hit = c.grade ? c.grade.v2.outcomeHit : null;
+  const mark = hit == null ? '' : `<span class="sb-mark ${hit ? 'y' : 'n'}">${hit ? '✓' : '✗'}</span>`;
+  const row = (name, ab, rank, isPick, pr) => `<div class="sb-row ${isPick ? cls + ' pick' : ''}"><span class="sb-badge" style="--tc:${tcolor(name)}">${esc(ab)}</span>
+    <div style="min-width:0">${rank ? `<div class="sb-rec">${ord(rank)}</div>` : ''}<div class="sb-nm">${esc(name)}${isPick ? ` • ${pr}%${top < 45 ? ' <span class="sb-lean">LEAN</span>' : ''}` : ''}</div></div>${isPick ? mark : ''}</div>`;
+  const rows = row(c.home, hA, c.hRank, pick === 'H', p && p[0]) + row(c.away, aA, c.aRank, pick === 'A', p && p[2]) +
+    (pick === 'D' ? `<div class="sb-draw ${cls}">Draw ${p[1]}%${mark}</div>` : '');
+  const side = c.final
+    ? `<div class="sb-side"><div class="sb-final">Final</div><div class="sb-pred"><span>${esc(hA)} <b>${c.final.h}</b></span><span>${esc(aA)} <b>${c.final.a}</b></span></div></div>`
+    : `<div class="sb-side"><div class="sb-time">${esc(c.ko)}</div>${c.v2 ? `<div class="sb-pred"><span class="plab">Top score</span><b>${esc(c.v2.scores[0][0])}</b></div>` : `<div class="sb-tv">No data</div>`}</div>`;
+  return `<button type="button" class="sb-tile" data-id="${esc(c.id)}" aria-expanded="${openId === c.id}"><div class="sb-rows">${rows}</div>${side}</button>`;
+}
+function board(cs) {
+  return `<div class="sb-board">${cs.map(c => tileHtml(c) + (openId === c.id ? `<div class="sb-panel">${card(c)}</div>` : '')).join('')}</div>`;
+}
+
 /* ---------- panels ---------- */
 const byLeague = key => day.cards.filter(c => c.leagueKey === key);
 function bestBets() {
@@ -111,7 +137,7 @@ function bestBets() {
 function empty(msg) { return `<div class="no-fixtures">${msg}</div>`; }
 function byKickoff() {
   const cs = day.cards.slice().sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
-  return cs.length ? cs.map(card).join('') : empty('No matches for this day yet.');
+  return cs.length ? board(cs) : empty('No matches for this day yet.');
 }
 
 function tile(label, m, k) {
@@ -142,16 +168,16 @@ function results() {
 }
 
 function renderTabs() {
-  const keys = [...cfg.tabs.map(t => ({ key: t.key, name: t.name })),
+  const keys = [...cfg.tabs.filter(t => byLeague(t.key).length).map(t => ({ key: t.key, name: t.name })),
     { key: 'bestbets', name: 'Best Bets' }, { key: 'bykickoff', name: 'By Kickoff' }, { key: 'results', name: 'Track Results' }];
-  if (!tab) tab = (cfg.tabs.find(t => byLeague(t.key).length) || { key: 'bestbets' }).key;
+  if (!tab || !keys.some(k => k.key === tab)) tab = (cfg.tabs.find(t => byLeague(t.key).length) || { key: 'bestbets' }).key;
   $('#tabs').innerHTML = keys.map(k => `<button role="tab" data-tab="${k.key}" aria-selected="${k.key === tab}" class="${k.key === tab ? 'active' : ''}">${esc(k.name)}${byLeague(k.key).length ? ` (${byLeague(k.key).length})` : ''}</button>`).join('');
-  document.querySelectorAll('#tabs button').forEach(b => b.onclick = async () => { tab = b.dataset.tab; if (tab === 'results' && !tally) { tally = await api('/api/tally'); } renderTabs(); });
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = async () => { tab = b.dataset.tab; openId = null; if (tab === 'results' && !tally) { tally = await api('/api/tally'); } renderTabs(); });
   let html;
   if (tab === 'bestbets') html = bestBets();
   else if (tab === 'bykickoff') html = byKickoff();
   else if (tab === 'results') html = results();
-  else { const cs = byLeague(tab); html = cs.length ? cs.map(card).join('') : empty('No matches for this league on this day. Tap <b>Analyze this day</b> if you haven’t yet.'); }
+  else { const cs = byLeague(tab); html = cs.length ? board(cs.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))) : empty('No matches for this league on this day. Tap <b>Analyze this day</b> if you haven’t yet.'); }
   $('#panels').innerHTML = `<section class="league-panel active">${html}</section>`;
 }
 
@@ -159,7 +185,7 @@ async function loadDay() {
   const date = $('#matchday-date').value;
   $('#date-kicker').textContent = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   day = await api('/api/day?date=' + date);
-  tab = null; renderTabs();
+  tab = null; openId = null; renderTabs();
   say(day.analyzedAt ? 'Last analyzed ' + new Date(day.analyzedAt).toLocaleString() : '');
 }
 
@@ -205,6 +231,8 @@ async function runAll(kind) {
 const shift = n => { const d = new Date($('#matchday-date').value + 'T12:00:00'); d.setDate(d.getDate() + n); $('#matchday-date').value = d.toISOString().slice(0, 10); loadDay(); };
 $('#date-prev').onclick = () => shift(-1); $('#date-next').onclick = () => shift(1); $('#matchday-date').onchange = loadDay;
 $('#btn-analyze').onclick = () => runAll('analyze'); $('#btn-grade').onclick = () => runAll('grade');
+
+$('#panels').addEventListener('click', e => { const t = e.target.closest('.sb-tile'); if (!t) return; openId = openId === t.dataset.id ? null : t.dataset.id; renderTabs(); });
 
 (async () => { cfg = await api('/api/config'); $('#matchday-date').value = cfg.today; await loadDay(); })();
 </script>
