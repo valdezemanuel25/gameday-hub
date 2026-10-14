@@ -9,7 +9,8 @@ const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 const BASE_V2 = 'https://site.api.espn.com/apis/v2/sports/soccer';
 export const TZ = 'America/Chicago';
 const DAY = 86400000;
-const STORE_V = 2; // bump to discard cached results/contexts built by older code
+const LOOKBACK_DAYS = 80; // international breaks + midweek cups: 36 days left some clubs with <5 league games
+const STORE_V = 3; // bump to discard cached results/contexts built by older code
 
 // Same order as the Hub's tabs. ls = league-strength key. calendar = season runs Jan-Dec.
 export const LEAGUES = [
@@ -93,7 +94,7 @@ export async function syncLeague(league, env, now = new Date(), debug) {
   // Stores written by earlier builds (v missing) may be empty because ESPN rejected date ranges: start over.
   const st = old && old.v === STORE_V ? old : { v: STORE_V, through: null, games: [] };
   const dbg = debug || [];
-  const start = st.through ? new Date(new Date(st.through).getTime() - DAY) : new Date(now.getTime() - 36 * DAY);
+  const start = st.through ? new Date(new Date(st.through).getTime() - DAY) : new Date(now.getTime() - LOOKBACK_DAYS * DAY);
   const end = new Date(Math.min(now.getTime(), start.getTime() + 12 * DAY));
   const evs = await scoreboard(league.slug, start, end, dbg);
   // A failed request is not "no games": don't advance, so the same window is retried.
@@ -105,7 +106,7 @@ export async function syncLeague(league, env, now = new Date(), debug) {
     }
   }
   st.through = end.toISOString();
-  const cutoff = now.getTime() - 50 * DAY;
+  const cutoff = now.getTime() - (LOOKBACK_DAYS + 20) * DAY;
   st.games = st.games.filter(g => new Date(g[1]).getTime() >= cutoff);
   await env.HUB.put(key, JSON.stringify(st));
 
