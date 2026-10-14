@@ -9,6 +9,7 @@ const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 const BASE_V2 = 'https://site.api.espn.com/apis/v2/sports/soccer';
 export const TZ = 'America/Chicago';
 const DAY = 86400000;
+const STORE_V = 2; // bump to discard cached results/contexts built by older code
 
 // Same order as the Hub's tabs. ls = league-strength key. calendar = season runs Jan-Dec.
 export const LEAGUES = [
@@ -76,10 +77,15 @@ export async function scoreboard(slug, from, to, debug) {
 // ---------------------------------------------------------------------------------------------
 export async function syncLeague(league, env, now = new Date(), debug) {
   const key = `res:${league.slug}`;
-  const st = (await env.HUB.get(key, 'json')) || { through: null, games: [] };
+  const old = await env.HUB.get(key, 'json');
+  // Stores written by earlier builds (v missing) may be empty because ESPN rejected date ranges: start over.
+  const st = old && old.v === STORE_V ? old : { v: STORE_V, through: null, games: [] };
+  const dbg = debug || [];
   const start = st.through ? new Date(new Date(st.through).getTime() - DAY) : new Date(now.getTime() - 36 * DAY);
   const end = new Date(Math.min(now.getTime(), start.getTime() + 12 * DAY));
-  const evs = await scoreboard(league.slug, start, end, debug);
+  const evs = await scoreboard(league.slug, start, end, dbg);
+  // A failed request is not "no games": don't advance, so the same window is retried.
+  if (dbg.length) return { caughtUp: false, games: st.games.length, context: false, error: dbg.join('; ') };
   const seen = new Set(st.games.map(g => g[0]));
   for (const e of evs) {
     if (e.done && e.home.score != null && !seen.has(e.id)) {
@@ -172,7 +178,7 @@ export async function buildContext(league, env, now = new Date(), debug) {
       form: { gf: last5.reduce((x, g) => x + g.gf, 0), ga: last5.reduce((x, g) => x + g.ga, 0), n: last5.length },
     };
   }
-  const ctx = { slug: league.slug, leagueAvg, teams, builtAt: now.getTime() };
+  const ctx = { v: STORE_V, slug: league.slug, leagueAvg, teams, builtAt: now.getTime() };
   await env.HUB.put(`ctx:${league.slug}`, JSON.stringify(ctx));
   return ctx;
 }
@@ -180,7 +186,8 @@ export async function buildContext(league, env, now = new Date(), debug) {
 // Read a cached context. Never builds (building is the sync step's job). `memo` avoids repeat KV reads.
 export async function getContext(league, env, memo) {
   if (memo?.has(league.slug)) return memo.get(league.slug);
-  const ctx = await env.HUB.get(`ctx:${league.slug}`, 'json');
+  let ctx = await env.HUB.get(`ctx:${league.slug}`, 'json');
+  if (ctx && ctx.v !== STORE_V) ctx = null;
   memo?.set(league.slug, ctx);
   return ctx;
 }
