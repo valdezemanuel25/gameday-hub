@@ -143,16 +143,12 @@ const S = { date: '', tab: 'board', league: 'all', top: false, open: null };
 const counts = {};
 
 /* ---------- admin token (protects Analyze / Update so strangers can't use your free quota) ---------- */
-function token() {
-  let t = ''; try { t = localStorage.getItem('hubToken') || ''; } catch (e) {}
-  if (!t) { t = prompt('Admin token (asked once per device):') || ''; try { localStorage.setItem('hubToken', t); } catch (e) {} }
-  return t;
-}
+/* The browser's own login box (shown once per device) is the password; every request carries it automatically. */
 async function parse(r) { const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error(`Server replied ${r.status}: ${t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) || 'empty response'}`); } }
 async function api(path) { return parse(await fetch(path)); }
 async function post(path) {
-  const r = await fetch(path, { method: 'POST', headers: { 'x-admin-token': token() } });
-  if (r.status === 401) { try { localStorage.removeItem('hubToken'); } catch (e) {} throw new Error('Wrong admin token. Try again.'); }
+  const r = await fetch(path, { method: 'POST' });
+  if (r.status === 401) throw new Error('Signed out. Reload the page and sign in again.');
   return parse(r);
 }
 const say = (m, ready) => { const s = $('#status'); s.textContent = m; s.className = 'st' + (ready ? ' ready' : ''); };
@@ -352,6 +348,7 @@ async function runAll(kind) {
           for (const slug of r.needsSync) { const m = cfg.leagues.find(l => l.slug === slug); await syncUntilCaughtUp(slug, m ? m.name : slug, at.split('/')[0], list.length); }
           r = await post(`/api/analyze?league=${lg.slug}&date=${date}&partial=1${lo}`);
         }
+        if (r.feedError) failed.push(lg.name + ' (games feed)');
         done += r.cards || 0; skipped += r.skipped || 0;
         if (r.cards) { try { say(`SportsMole predictions: ${lg.name} (${at})…`); const s = await post(`/api/sm?league=${lg.slug}&date=${date}`); smFound += s.found || 0; } catch (e) { /* optional */ } }
       } else {
