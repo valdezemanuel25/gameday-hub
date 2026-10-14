@@ -39,6 +39,18 @@ export const LEAGUES = [
   { slug: 'aut.1', key: 'aut', name: 'Austrian Bundesliga', ls: null, support: true },
   { slug: 'sui.1', key: 'sui', name: 'Swiss Super League', ls: null, support: true },
   { slug: 'den.1', key: 'den', name: 'Danish Superliga', ls: null, support: true },
+  { slug: 'ukr.1', key: 'ukr', name: 'Ukrainian Premier League', ls: null, support: true },
+  { slug: 'svk.1', key: 'svk', name: 'Slovak Super Liga', ls: null, support: true },
+  { slug: 'cro.1', key: 'cro', name: 'Croatian HNL', ls: null, support: true },
+  { slug: 'srb.1', key: 'srb', name: 'Serbian SuperLiga', ls: null, support: true },
+  { slug: 'isr.1', key: 'isr', name: 'Israeli Premier League', ls: null, support: true },
+  { slug: 'pol.1', key: 'pol', name: 'Ekstraklasa', ls: null, support: true },
+  { slug: 'cyp.1', key: 'cyp', name: 'Cypriot First Division', ls: null, support: true },
+  { slug: 'bul.1', key: 'bul', name: 'Bulgarian First League', ls: null, support: true },
+  { slug: 'rou.1', key: 'rou', name: 'Romanian Liga I', ls: null, support: true },
+  { slug: 'hun.1', key: 'hun', name: 'Hungarian NB I', ls: null, support: true },
+  { slug: 'kaz.1', key: 'kaz', name: 'Kazakhstan Premier League', ls: null, calendar: true, support: true },
+  { slug: 'aze.1', key: 'aze', name: 'Azerbaijan Premier League', ls: 'AZE', support: true },
 ];
 export const VISIBLE = LEAGUES.filter(l => !l.support);
 export const DOMESTIC = LEAGUES.filter(l => !l.cup);
@@ -134,11 +146,12 @@ function seasonYear(league, now) {
 }
 
 async function standings(league, season, env, debug) {
-  const key = `std2:${league.slug}:${season}`;
+  const key = `std3:${league.slug}:${season}`;
   const cached = await env.HUB.get(key, 'json');
   if (cached) return cached;
   const j = await getJson(`${BASE_V2}/${league.slug}/standings?season=${season}`, debug);
-  const entries = j?.children?.[0]?.standings?.entries || j?.standings?.entries || [];
+  // MLS (and some other tables) come as several groups (East / West): read ALL of them, not just the first.
+  const entries = (j?.children?.length ? j.children.flatMap(c => c?.standings?.entries || []) : []).concat(j?.standings?.entries || []);
   const out = {};
   for (const e of entries) {
     const stat = n => e.stats?.find(s => s.name === n)?.value;
