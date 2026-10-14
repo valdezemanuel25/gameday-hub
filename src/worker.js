@@ -335,10 +335,14 @@ export default {
       if (!authed(req, env)) return json({ error: 'Bad or missing admin token' }, 401);
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
-      if (p === '/api/sync') return json({ ok: true, ...(await syncLeague(league, env)) });
-      if (p === '/api/analyze') return json({ ok: true, ...(await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1', leftover: q('leftover') === '1' })) });
-      if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
-      return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
+      try {
+        if (p === '/api/sync') return json({ ok: true, ...(await syncLeague(league, env)) });
+        if (p === '/api/analyze') return json({ ok: true, ...(await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1', leftover: q('leftover') === '1' })) });
+        if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
+        return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
+      } catch (e) {
+        return json({ error: `${league.name} (${p.slice(5)}): ${e && e.message ? e.message : e}` }, 500);
+      }
     }
     return env.ASSETS.fetch(req);
   },
