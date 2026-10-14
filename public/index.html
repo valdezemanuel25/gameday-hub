@@ -91,7 +91,7 @@ details.how p{margin-top:6px;line-height:1.5}
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:10;padding:10px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--bg) 72%,rgba(11,18,16,0))}
 .dock .in{max-width:520px;margin:0 auto}
 .dock .btns{display:flex;gap:10px;margin-top:6px}
-.btn{flex:1;text-align:center;padding:12px 0;border-radius:12px;font-weight:650;font-size:14px;background:var(--ink);color:#0B1210}
+.btn{flex:1;text-align:center;padding:12px 4px;line-height:1.2;border-radius:12px;font-weight:650;font-size:14px;background:var(--ink);color:#0B1210}
 .btn.g{background:transparent;color:var(--ink);border:1px solid #35514a}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .sec{padding:16px 18px 2px;font-size:14px;font-weight:650}
@@ -130,7 +130,7 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 </div>
 <div class="dock"><div class="in">
   <div class="st" id="status"></div>
-  <div class="btns"><button type="button" class="btn" id="btn-analyze">Analyze this day</button><button type="button" class="btn g" id="btn-grade">Update results</button></div>
+  <div class="btns"><button type="button" class="btn" id="btn-analyze">Analyze this day</button><button type="button" class="btn g" id="btn-left">Analyze leftover games</button><button type="button" class="btn g" id="btn-grade">Update results</button></div>
 </div></div>
 
 <script>
@@ -331,18 +331,25 @@ async function syncUntilCaughtUp(slug, name, i, n) {
   }
 }
 async function runAll(kind) {
-  const buttons = ['#btn-analyze', '#btn-grade'].map($); buttons.forEach(b => b.disabled = true);
+  const buttons = ['#btn-analyze', '#btn-left', '#btn-grade'].map($); buttons.forEach(b => b.disabled = true);
   const date = S.date; let done = 0, skipped = 0, graded = 0, smFound = 0; failed = [];
   try {
-    for (let i = 0; i < cfg.leagues.length; i++) {
-      const lg = cfg.leagues[i], at = `${i + 1}/${cfg.leagues.length}`;
-      if (kind === 'analyze') {
+    let list = cfg.leagues;
+    if (kind === 'leftover') {
+      const need = new Set(day.cards.filter(c => !c.v2).map(c => c.league)), seen = day.analyzed || {};
+      list = cfg.leagues.filter(l => need.has(l.slug) || !seen[l.slug]);
+      if (!list.length) { say('Every game for this day already has a prediction.', true); buttons.forEach(b => b.disabled = false); return; }
+    }
+    for (let i = 0; i < list.length; i++) {
+      const lg = list[i], at = `${i + 1}/${list.length}`;
+      if (kind !== 'grade') {
+        const lo = kind === 'leftover' ? '&leftover=1' : '';
         say(`Analyzing ${lg.name} (${at})…`);
-        let r = await post(`/api/analyze?league=${lg.slug}&date=${date}`);
+        let r = await post(`/api/analyze?league=${lg.slug}&date=${date}${lo}`);
         if (r.error) throw new Error(r.error);
         if (r.needsSync) {
-          for (const slug of r.needsSync) { const m = cfg.leagues.find(l => l.slug === slug); await syncUntilCaughtUp(slug, m ? m.name : slug, at.split('/')[0], cfg.leagues.length); }
-          r = await post(`/api/analyze?league=${lg.slug}&date=${date}&partial=1`);
+          for (const slug of r.needsSync) { const m = cfg.leagues.find(l => l.slug === slug); await syncUntilCaughtUp(slug, m ? m.name : slug, at.split('/')[0], list.length); }
+          r = await post(`/api/analyze?league=${lg.slug}&date=${date}&partial=1${lo}`);
         }
         done += r.cards || 0; skipped += r.skipped || 0;
         if (r.cards) { try { say(`SportsMole predictions: ${lg.name} (${at})…`); const s = await post(`/api/sm?league=${lg.slug}&date=${date}`); smFound += s.found || 0; } catch (e) { /* optional */ } }
@@ -355,7 +362,7 @@ async function runAll(kind) {
     }
     delete counts[date]; tally = null;
     await loadDay();
-    say(kind === 'analyze' ? `Done: ${done} matches${skipped ? ` (${skipped} skipped, not enough form data)` : ''}.${smFound ? ` SportsMole predictions found: ${smFound}.` : ''}${failed.length ? ` Couldn't load: ${[...new Set(failed)].join(', ')}.` : ''}` : `Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
+    say(kind !== 'grade' ? `Done: ${done} matches${kind === 'leftover' ? ' checked' : ''}${skipped ? ` (${skipped} skipped, not enough form data)` : ''}.${smFound ? ` SportsMole predictions found: ${smFound}.` : ''}${failed.length ? ` Couldn't load: ${[...new Set(failed)].join(', ')}.` : ''}` : `Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
   } catch (err) { say(err.message); }
   buttons.forEach(b => b.disabled = false);
 }
@@ -370,6 +377,7 @@ document.addEventListener('click', async e => {
   if (t.classList.contains('hd')) { S.open = S.open === t.dataset.id ? null : t.dataset.id; return render(); }
 });
 $('#btn-analyze').onclick = () => runAll('analyze');
+$('#btn-left').onclick = () => runAll('leftover');
 $('#btn-grade').onclick = () => runAll('grade');
 
 (async () => { cfg = await api('/api/config'); S.date = cfg.today; await loadDay(); })();
