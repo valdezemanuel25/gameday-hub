@@ -63,6 +63,11 @@ function split(label, a, b, leadFirst) {
     <div class="split-side ${leadFirst ? 'lead' : ''}"><div class="sl">${label[1]}</div><div class="sv">${a}%</div></div>
     <div class="split-side ${leadFirst ? '' : 'lead'}"><div class="sl">${label[2]}</div><div class="sv">${b}%</div></div></div></div>`;
 }
+function smLine(c) {
+  if (!c.sm) return '';
+  const g = c.smGrade ? ` &nbsp;${badge(c.smGrade.outcomeHit, '1X2')} ${badge(c.smGrade.scoreHit, 'Score')} ${badge(c.smGrade.ouHit, 'O/U')} ${badge(c.smGrade.bttsHit, 'BTTS')}` : '';
+  return `<div class="note-block"><b>SportsMole predicts:</b> <b>${esc(c.sm.text)}</b> (“We say” scoreline from SportsMole's preview).${g}</div>`;
+}
 function card(c) {
   const when = new Date(c.kickoff).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Chicago' });
   const head = `<div class="match-head"><div class="fixture">${esc(c.home)} vs ${esc(c.away)}</div>
@@ -96,7 +101,7 @@ function card(c) {
       ${c.crossLeague ? `<div class="factor"><div class="fname">Cross-league caveat</div><div class="fnote">${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment; v3 applies rough tiers.</div></div>` : ''}
       <div class="factor"><div class="fname">Method — v2</div><div class="fnote">Shrinkage-to-prior + Poisson score matrix: league-average prior <b>1.56</b>, home <b>1.17×</b>, away <b>0.83×</b>, form weighted 0.6.</div></div>
       <div class="factor"><div class="fname">Expected goals (λ)</div><div class="fnote">${esc(c.home)} ${c.v2.lam[0]} · ${esc(c.away)} ${c.v2.lam[1]}</div></div>
-    </div></details>${grade}</div>`;
+    </div></details>${smLine(c)}${grade}</div>`;
 }
 
 
@@ -167,16 +172,39 @@ function results() {
     `<details style="margin-top:14px"><summary class="meta" style="cursor:pointer">Earlier results carried over (${t.earlier.length})</summary><div style="margin-top:10px">${old}</div></details>`;
 }
 
+
+function smTile(label, k, n) { return `<div class="scorecard-tile"><div class="stat-label">${label}</div><div class="stat-pct">${n ? Math.round(100 * k / n) : 0}%</div><div class="stat-frac">${k} / ${n}</div></div>`; }
+const yn = (ok, l) => badge(!!ok, l);
+function smView() {
+  if (!tally) return empty('Loading…');
+  const s = tally.smCompare, n = s.n;
+  const live = s.recent.map(r => `<div class="pick-row"><div class="pr-head"><div class="pr-match">${esc(r.home)} vs ${esc(r.away)}</div><div class="pr-score">${r.final.h}–${r.final.a}</div></div>
+    <div class="meta">Model: ${OUT[r.modelPick]} ${yn(r.hit.outcomeHit, '1X2')} ${yn(r.hit.ouHit, 'O/U')} ${yn(r.hit.bttsHit, 'BTTS')}</div>
+    <div class="meta" style="margin-top:4px">SportsMole: ${esc(r.sm)} ${yn(r.smHit.outcomeHit, '1X2')} ${yn(r.smHit.scoreHit, 'Score')} ${yn(r.smHit.ouHit, 'O/U')} ${yn(r.smHit.bttsHit, 'BTTS')}</div></div>`).join('');
+  const old = s.earlier.map(r => `<div class="pick-row"><div class="pr-head"><div class="pr-match">${esc(r.match)}</div><div class="pr-score">${esc(r.finalScore)}</div></div>
+    <div class="meta">Model: ${esc(r.modelPick)} ${yn(r.modelHit, '1X2')} ${yn(r.modelOuHit, 'O/U')} ${yn(r.modelBttsHit, 'BTTS')}</div>
+    <div class="meta" style="margin-top:4px">SportsMole: ${esc(r.sportsmolePredict)} ${yn(r.sportsmoleOutcomeHit, '1X2')} ${yn(r.sportsmoleScoreHit, 'Score')} ${yn(r.smOuHit, 'O/U')} ${yn(r.smBttsHit, 'BTTS')}</div>
+    <div class="meta" style="margin-top:2px;font-size:11px">${esc(r.matchday)}</div></div>`).join('');
+  return `<div class="track-banner">Tracks <b>SportsMole's</b> published “We say” predictions against final results, head to head with this site's v2 model: ${s.importedMatches} matches carried over from the old Hub plus ${s.newMatches} tracked here since. New SportsMole predictions are fetched automatically when a game is analyzed.</div>
+    <div class="nl-group-title">Model (v2) · ${n} matches</div>
+    <div class="scorecard">${smTile('Model Outcome', s.model.outcome, n)}${smTile('Model Over/Under', s.model.ou, n)}${smTile('Model BTTS', s.model.btts, n)}</div>
+    <div class="nl-group-title">SportsMole · ${n} matches</div>
+    <div class="scorecard">${smTile('SportsMole Outcome', s.sm.outcome, n)}${smTile('SportsMole Over/Under', s.sm.ou, n)}${smTile('SportsMole BTTS', s.sm.btts, n)}${smTile('Exact score', s.sm.score, n)}</div>
+    ${live ? `<div class="nl-group-title" style="margin:20px 0 10px">Tracked here</div>${live}` : ''}
+    <details style="margin-top:14px"><summary class="meta" style="cursor:pointer">Carried over from the old Hub (${s.earlier.length})</summary><div style="margin-top:10px">${old}</div></details>`;
+}
+
 function renderTabs() {
   const keys = [...cfg.tabs.filter(t => byLeague(t.key).length).map(t => ({ key: t.key, name: t.name })),
-    { key: 'bestbets', name: 'Best Bets' }, { key: 'bykickoff', name: 'By Kickoff' }, { key: 'results', name: 'Track Results' }];
+    { key: 'bestbets', name: 'Best Bets' }, { key: 'bykickoff', name: 'By Kickoff' }, { key: 'results', name: 'Track Results' }, { key: 'sourcecompare', name: 'Model vs SportsMole' }];
   if (!tab || !keys.some(k => k.key === tab)) tab = (cfg.tabs.find(t => byLeague(t.key).length) || { key: 'bestbets' }).key;
   $('#tabs').innerHTML = keys.map(k => `<button role="tab" data-tab="${k.key}" aria-selected="${k.key === tab}" class="${k.key === tab ? 'active' : ''}">${esc(k.name)}${byLeague(k.key).length ? ` (${byLeague(k.key).length})` : ''}</button>`).join('');
-  document.querySelectorAll('#tabs button').forEach(b => b.onclick = async () => { tab = b.dataset.tab; openId = null; if (tab === 'results' && !tally) { tally = await api('/api/tally'); } renderTabs(); });
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = async () => { tab = b.dataset.tab; openId = null; if ((tab === 'results' || tab === 'sourcecompare') && !tally) { tally = await api('/api/tally'); } renderTabs(); });
   let html;
   if (tab === 'bestbets') html = bestBets();
   else if (tab === 'bykickoff') html = byKickoff();
   else if (tab === 'results') html = results();
+  else if (tab === 'sourcecompare') html = smView();
   else { const cs = byLeague(tab); html = cs.length ? board(cs.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))) : empty('No matches for this league on this day. Tap <b>Analyze this day</b> if you haven’t yet.'); }
   $('#panels').innerHTML = `<section class="league-panel active">${html}</section>`;
 }
@@ -201,7 +229,7 @@ async function syncUntilCaughtUp(slug, name, i, n) {
 }
 async function runAll(kind) {
   const buttons = ['#btn-analyze', '#btn-grade'].map($); buttons.forEach(b => b.disabled = true);
-  const date = $('#matchday-date').value; let done = 0, skipped = 0, graded = 0; failed = [];
+  const date = $('#matchday-date').value; let done = 0, skipped = 0, graded = 0, smFound = 0; failed = [];
   try {
     for (let i = 0; i < cfg.leagues.length; i++) {
       const lg = cfg.leagues[i], at = `${i + 1}/${cfg.leagues.length}`;
@@ -214,6 +242,7 @@ async function runAll(kind) {
           r = await post(`/api/analyze?league=${lg.slug}&date=${date}&partial=1`);
         }
         done += r.cards || 0; skipped += r.skipped || 0;
+        if (r.cards) { try { say(`SportsMole predictions: ${lg.name} (${at})…`); const s = await post(`/api/sm?league=${lg.slug}&date=${date}`); smFound += s.found || 0; } catch (e) { /* optional */ } }
       } else {
         say(`Checking ${lg.name} results (${at})…`);
         const r = await post(`/api/grade?league=${lg.slug}&date=${date}`);
@@ -221,7 +250,7 @@ async function runAll(kind) {
         graded += r.graded || 0;
       }
     }
-    say(kind === 'analyze' ? `Done: ${done} matches${skipped ? ` (${skipped} skipped, not enough form data)` : ''}.${failed.length ? ` Couldn't load: ${[...new Set(failed)].join(', ')}.` : ''}` : `Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
+    say(kind === 'analyze' ? `Done: ${done} matches${skipped ? ` (${skipped} skipped, not enough form data)` : ''}.${smFound ? ` SportsMole predictions found: ${smFound}.` : ''}${failed.length ? ` Couldn't load: ${[...new Set(failed)].join(', ')}.` : ''}` : `Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
     tally = null; await loadDay();
     if (kind !== 'analyze') say(`Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
   } catch (err) { say(err.message); }
