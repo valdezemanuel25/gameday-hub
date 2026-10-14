@@ -1,0 +1,23 @@
+name = "gameday-hub"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# Let the Worker handle /api/* before static files
+run_worker_first = ["/api/*"]
+
+# Storage: the KV namespace "HUB" (already created in your Cloudflare account).
+[[kv_namespaces]]
+binding = "HUB"
+id = "3afff88abc944771a4c7bfdd78f05a36"
+
+# Every 10 minutes the Worker does ONE small job for ONE league, rotating:
+#   sync results -> grade (a league is graded GAME_HOURS + GRADE_DELAY_HOURS after its last kickoff) -> analyze.
+[triggers]
+crons = ["*/10 * * * *"]
+
+[vars]
+GAME_HOURS = "2"          # assumed length of a game
+GRADE_DELAY_HOURS = "3"   # wait this long after a league's games finish before grading it

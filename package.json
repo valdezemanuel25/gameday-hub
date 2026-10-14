@@ -1,0 +1,13 @@
+{
+  "name": "gameday-hub",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/verify.mjs && node test/parity.mjs && node test/worker.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

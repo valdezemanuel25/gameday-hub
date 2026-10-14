@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Game Day Hub</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="header-text">
+      <p class="kicker" id="date-kicker"></p>
+      <h1>Matchday Model</h1>
+      <p class="sub">Probability-weighted soccer predictions. <b>v2</b> is the official model; <b>v3</b> runs alongside as a shadow test. Fixtures, picks and grading run on a schedule.</p>
+    </div>
+    <div class="date-picker-wrap">
+      <label for="matchday-date">Matchday</label>
+      <div class="date-nav">
+        <button type="button" id="date-prev" aria-label="Previous day">‹</button>
+        <input type="date" id="matchday-date">
+        <button type="button" id="date-next" aria-label="Next day">›</button>
+      </div>
+    </div>
+  </header>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+    <button type="button" class="analyze-btn" id="btn-analyze" style="margin-left:0">Analyze this day ▸</button>
+    <button type="button" class="analyze-btn" id="btn-grade" style="margin-left:0">Update results ▸</button>
+  </div>
+  <div class="analyze-status" id="status" style="margin-bottom:12px"></div>
+
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <div id="panels"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const OUT = { H: 'home win', D: 'draw', A: 'away win' };
+let cfg = null, day = { cards: [] }, tab = null, tally = null;
+
+/* ---------- admin token (protects Analyze / Update so strangers can't use your free quota) ---------- */
+function token() {
+  let t = ''; try { t = localStorage.getItem('hubToken') || ''; } catch (e) {}
+  if (!t) { t = prompt('Admin token (asked once per device):') || ''; try { localStorage.setItem('hubToken', t); } catch (e) {} }
+  return t;
+}
+async function api(path) { return (await fetch(path)).json(); }
+async function post(path) {
+  const r = await fetch(path, { method: 'POST', headers: { 'x-admin-token': token() } });
+  if (r.status === 401) { try { localStorage.removeItem('hubToken'); } catch (e) {} throw new Error('Wrong admin token. Try again.'); }
+  return r.json();
+}
+const say = (m, ready) => { const s = $('#status'); s.textContent = m; s.className = 'analyze-status' + (ready ? ' ready' : ''); };
+
+/* ---------- card markup: same classes as the original Hub ---------- */
+const badge = (ok, label) => `<span class="badge ${ok ? 'hit' : 'miss'}">${label}</span>`;
+function split(label, a, b, leadFirst) {
+  return `<div class="market"><div class="label">${label[0]}</div><div class="value split">
+    <div class="split-side ${leadFirst ? 'lead' : ''}"><div class="sl">${label[1]}</div><div class="sv">${a}%</div></div>
+    <div class="split-side ${leadFirst ? '' : 'lead'}"><div class="sl">${label[2]}</div><div class="sv">${b}%</div></div></div></div>`;
+}
+function card(c) {
+  const when = new Date(c.kickoff).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Chicago' });
+  const head = `<div class="match-head"><div class="fixture">${esc(c.home)} vs ${esc(c.away)}</div>
+    <div class="meta">${esc(c.leagueName)} · ${when} · ${esc(c.ko)} CT${c.final ? ` · <b>Final ${c.final.h}–${c.final.a}</b>` : ''}</div></div>`;
+  if (!c.v2) return `<div class="match-card">${head}<div class="meta">${esc(c.skipped || 'No prediction yet.')}</div></div>`;
+  const [h, d, a] = c.v2.p;
+  const v3 = c.v3, v3pick = OUT[v3.pick];
+  const grade = c.grade ? `<div class="meta" style="margin-top:12px">v2 ${badge(c.grade.v2.outcomeHit, '1X2')} ${badge(c.grade.v2.ouHit, 'O/U')} ${badge(c.grade.v2.bttsHit, 'BTTS')}
+    &nbsp; v3 ${badge(c.grade.v3.outcomeHit, '1X2')} ${badge(c.grade.v3.ouHit, 'O/U')} ${badge(c.grade.v3.bttsHit, 'BTTS')}</div>` : '';
+  return `<div class="match-card">${head}
+    <span class="model-tag">Poisson model v2 (recalibrated)</span>
+    <div class="prob-row">
+      <div class="prob-seg" style="width:${h}%;background:var(--turf);">${h}%</div>
+      <div class="prob-seg" style="width:${d}%;background:var(--line);color:var(--text);">${d}%</div>
+      <div class="prob-seg" style="width:${a}%;background:var(--text-faint);">${a}%</div>
+    </div>
+    <div class="prob-labels"><span>${esc(c.home)} win</span><span>Draw</span><span>${esc(c.away)} win</span></div>
+    <div class="best-bet"><div><div class="label">Best bet</div><div class="pick">${esc(c.v2.best.pick)}</div></div><div class="pct">${c.v2.best.p}%</div></div>
+    <div class="markets">
+      ${split(['2.5 Goals', 'Over', 'Under'], c.v2.over, 100 - c.v2.over, c.v2.over >= 50)}
+      ${split(['Both teams to score', 'Yes', 'No'], c.v2.btts, 100 - c.v2.btts, c.v2.btts >= 50)}
+      <div class="market"><div class="label">Most likely scores</div><div class="value scores">${c.v2.scores.slice(0, 2).map(s => `${s[0]} <span class="p">${s[1]}%</span>`).join('<br>')}</div></div>
+    </div>
+    <div class="v3-shadow">
+      <div class="v3-head"><span class="v3-tag">v3 · shadow test</span>${v3.drawRisk ? '<span class="v3-chip">draw risk</span>' : ''}</div>
+      <div class="v3-line">${esc(c.home)} ${v3.p[0]}% · Draw ${v3.p[1]}% · ${esc(c.away)} ${v3.p[2]}% — v3 pick: <b>${v3pick}</b></div>
+      <div class="v3-line">Over 2.5 ${v3.over}% · BTTS ${v3.btts}%</div>
+    </div>
+    <details class="factors"><summary>How the model got here</summary><div class="factor-grid">
+      <div class="factor"><div class="fname">Inputs</div><div class="fnote">Last 5 domestic-league games. ${esc(c.home)}: ${esc(c.form.home)}. ${esc(c.away)}: ${esc(c.form.away)}.</div></div>
+      ${c.crossLeague ? `<div class="factor"><div class="fname">Cross-league caveat</div><div class="fnote">${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment; v3 applies rough tiers.</div></div>` : ''}
+      <div class="factor"><div class="fname">Method — v2</div><div class="fnote">Shrinkage-to-prior + Poisson score matrix: league-average prior <b>1.56</b>, home <b>1.17×</b>, away <b>0.83×</b>, form weighted 0.6.</div></div>
+      <div class="factor"><div class="fname">Expected goals (λ)</div><div class="fnote">${esc(c.home)} ${c.v2.lam[0]} · ${esc(c.away)} ${c.v2.lam[1]}</div></div>
+    </div></details>${grade}</div>`;
+}
+
+/* ---------- panels ---------- */
+const byLeague = key => day.cards.filter(c => c.leagueKey === key);
+function bestBets() {
+  const top = day.cards.filter(c => c.v2).sort((a, b) => b.v2.best.p - a.v2.best.p).slice(0, 10);
+  if (!top.length) return empty('No picks yet for this day.');
+  return `<div class="nl-group-title" style="margin-bottom:10px;">Top picks — ${esc($('#matchday-date').value)}</div>` +
+    top.map((c, i) => `<div class="bb-card"><div class="bb-rank">${i + 1}</div><div class="bb-body"><div class="bb-league">${esc(c.leagueName)}</div>
+      <div class="bb-match">${esc(c.home)} vs ${esc(c.away)}</div><div class="bb-pick">${esc(c.v2.best.pick)}</div></div><div class="bb-pct">${c.v2.best.p}%</div></div>`).join('');
+}
+function empty(msg) { return `<div class="no-fixtures">${msg}</div>`; }
+function byKickoff() {
+  const cs = day.cards.slice().sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+  return cs.length ? cs.map(card).join('') : empty('No matches for this day yet.');
+}
+
+function tile(label, m, k) {
+  return `<div class="scorecard-tile"><div class="stat-label">${label}</div><div class="stat-frac">${m[k]}/${m.n}</div><div class="stat-pct">${m.n ? Math.round(100 * m[k] / m.n) : 0}%</div></div>`;
+}
+function scoreboard(title, m) {
+  return `<div class="nl-group-title" style="margin:16px 0 8px">${title} · ${m.n} graded</div>
+    <div class="scorecard">${tile('Outcome', m, 'outcome')}${tile('Over / Under 2.5', m, 'ou')}${tile('Both teams to score', m, 'btts')}</div>
+    <div class="meta" style="margin:-10px 0 14px">Brier score ${m.brier ?? '–'} (lower is better; 0.667 is a random guess)</div>`;
+}
+function results() {
+  if (!tally) return empty('Loading results…');
+  const t = tally;
+  const rows = t.recent.map(c => `<div class="pick-row"><div class="pr-head"><div class="pr-match">${esc(c.home)} vs ${esc(c.away)}</div><div class="pr-score">${c.final.h}–${c.final.a}</div></div>
+    <div class="pick-grid">
+      <div class="pick-cell"><div class="pc-label">Outcome</div><div class="pc-val"><span>${OUT[c.v2.pick]}</span>${badge(c.grade.v2.outcomeHit, c.grade.v2.outcomeHit ? 'HIT' : 'MISS')}</div></div>
+      <div class="pick-cell"><div class="pc-label">Over / Under 2.5</div><div class="pc-val"><span>${c.v2.over >= 50 ? 'Over' : 'Under'}</span>${badge(c.grade.v2.ouHit, c.grade.v2.ouHit ? 'HIT' : 'MISS')}</div></div>
+      <div class="pick-cell"><div class="pc-label">BTTS</div><div class="pc-val"><span>${c.v2.btts >= 50 ? 'Yes' : 'No'}</span>${badge(c.grade.v2.bttsHit, c.grade.v2.bttsHit ? 'HIT' : 'MISS')}</div></div>
+    </div></div>`).join('');
+  const old = t.earlier.map(r => `<div class="pick-row"><div class="pr-head"><div class="pr-match">${esc(r.match)}</div><div class="pr-score">${esc(r.actual)}</div></div>
+    <div class="meta">${badge(r.outcomeHit, '1X2')} ${badge(r.ouHit, 'O/U')} ${badge(r.bttsHit, 'BTTS')}</div></div>`).join('');
+  return scoreboard('v2 official · all results', t.v2) +
+    `<div class="meta" style="margin-bottom:6px">Includes ${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
+    `<div class="nl-group-title" style="margin:20px 0 4px">v2 vs v3 shadow test</div><div class="meta" style="margin-bottom:6px">Both models on the same matches only.</div>` +
+    scoreboard('v2', t.h2h.v2) + scoreboard('v3 (shadow)', t.h2h.v3) +
+    `<div class="nl-group-title" style="margin:20px 0 10px">Recent results</div>` + (rows || empty('Nothing new graded yet. Results fill in automatically a few hours after each league finishes.')) +
+    `<details style="margin-top:14px"><summary class="meta" style="cursor:pointer">Earlier results carried over (${t.earlier.length})</summary><div style="margin-top:10px">${old}</div></details>`;
+}
+
+function renderTabs() {
+  const keys = [...cfg.tabs.map(t => ({ key: t.key, name: t.name })),
+    { key: 'bestbets', name: 'Best Bets' }, { key: 'bykickoff', name: 'By Kickoff' }, { key: 'results', name: 'Track Results' }];
+  if (!tab) tab = (cfg.tabs.find(t => byLeague(t.key).length) || { key: 'bestbets' }).key;
+  $('#tabs').innerHTML = keys.map(k => `<button role="tab" data-tab="${k.key}" aria-selected="${k.key === tab}" class="${k.key === tab ? 'active' : ''}">${esc(k.name)}${byLeague(k.key).length ? ` (${byLeague(k.key).length})` : ''}</button>`).join('');
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = async () => { tab = b.dataset.tab; if (tab === 'results' && !tally) { tally = await api('/api/tally'); } renderTabs(); });
+  let html;
+  if (tab === 'bestbets') html = bestBets();
+  else if (tab === 'bykickoff') html = byKickoff();
+  else if (tab === 'results') html = results();
+  else { const cs = byLeague(tab); html = cs.length ? cs.map(card).join('') : empty('No matches for this league on this day. Tap <b>Analyze this day</b> if you haven’t yet.'); }
+  $('#panels').innerHTML = `<section class="league-panel active">${html}</section>`;
+}
+
+async function loadDay() {
+  const date = $('#matchday-date').value;
+  $('#date-kicker').textContent = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  day = await api('/api/day?date=' + date);
+  tab = null; renderTabs();
+  say(day.analyzedAt ? 'Last analyzed ' + new Date(day.analyzedAt).toLocaleString() : '');
+}
+
+/* ---------- Analyze / Update: one league at a time ---------- */
+async function syncUntilCaughtUp(slug, name, i, n) {
+  for (let k = 0; k < 10; k++) {
+    say(`Loading ${name} results (${i}/${n})…`);
+    const r = await post('/api/sync?league=' + slug);
+    if (r.error) throw new Error(r.error);
+    if (r.caughtUp) return;
+  }
+}
+async function runAll(kind) {
+  const buttons = ['#btn-analyze', '#btn-grade'].map($); buttons.forEach(b => b.disabled = true);
+  const date = $('#matchday-date').value; let done = 0, skipped = 0, graded = 0;
+  try {
+    for (let i = 0; i < cfg.leagues.length; i++) {
+      const lg = cfg.leagues[i], at = `${i + 1}/${cfg.leagues.length}`;
+      if (kind === 'analyze') {
+        say(`Analyzing ${lg.name} (${at})…`);
+        let r = await post(`/api/analyze?league=${lg.slug}&date=${date}`);
+        if (r.error) throw new Error(r.error);
+        if (r.needsSync) {
+          for (const slug of r.needsSync) { const m = cfg.leagues.find(l => l.slug === slug); await syncUntilCaughtUp(slug, m ? m.name : slug, at.split('/')[0], cfg.leagues.length); }
+          r = await post(`/api/analyze?league=${lg.slug}&date=${date}`);
+        }
+        done += r.cards || 0; skipped += r.skipped || 0;
+      } else {
+        say(`Checking ${lg.name} results (${at})…`);
+        const r = await post(`/api/grade?league=${lg.slug}&date=${date}`);
+        if (r.error) throw new Error(r.error);
+        graded += r.graded || 0;
+      }
+    }
+    say(kind === 'analyze' ? `Done: ${done} matches${skipped ? ` (${skipped} skipped, not enough form data)` : ''}.` : `Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
+    tally = null; await loadDay();
+    if (kind !== 'analyze') say(`Graded ${graded} match${graded === 1 ? '' : 'es'}.`, true);
+  } catch (err) { say(err.message); }
+  buttons.forEach(b => b.disabled = false);
+}
+
+const shift = n => { const d = new Date($('#matchday-date').value + 'T12:00:00'); d.setDate(d.getDate() + n); $('#matchday-date').value = d.toISOString().slice(0, 10); loadDay(); };
+$('#date-prev').onclick = () => shift(-1); $('#date-next').onclick = () => shift(1); $('#matchday-date').onchange = loadDay;
+$('#btn-analyze').onclick = () => runAll('analyze'); $('#btn-grade').onclick = () => runAll('grade');
+
+(async () => { cfg = await api('/api/config'); $('#matchday-date').value = cfg.today; await loadDay(); })();
+</script>
+</body>
+</html>
