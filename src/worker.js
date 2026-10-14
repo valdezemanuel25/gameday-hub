@@ -37,7 +37,7 @@ function authed(req, env) {
 // ---------------------------------------------------------------------------------------------
 // Analyze ONE league for ONE date: fixtures -> v2 (official) + v3 (shadow) cards.
 // ---------------------------------------------------------------------------------------------
-export async function analyzeLeague(date, slug, env, now = new Date()) {
+export async function analyzeLeague(date, slug, env, now = new Date(), { partial = false } = {}) {
   const league = leagueBySlug(slug);
   if (!league) return { error: `Unknown league ${slug}` };
   const debug = [], memo = new Map();
@@ -101,7 +101,8 @@ export async function analyzeLeague(date, slug, env, now = new Date()) {
   }
 
   // Cup fixture with clubs we haven't synced yet: don't save a half-answer, ask the caller to sync first.
-  if (notReady) return { fixtures: fx.length, needsSync, debug };
+  // partial: some clubs' leagues won't load; save what we can (those clubs stay 'not found').
+  if (notReady && !partial) return { fixtures: fx.length, needsSync, debug };
 
   day.cards = day.cards.filter(c => c.league !== slug).concat(cards);
   day.analyzed[slug] = now.getTime();
@@ -252,7 +253,7 @@ export default {
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
       if (p === '/api/sync') return json({ ok: true, ...(await syncLeague(league, env)) });
-      if (p === '/api/analyze') return json({ ok: true, ...(await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env)) });
+      if (p === '/api/analyze') return json({ ok: true, ...(await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1' })) });
       return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
     }
     return env.ASSETS.fetch(req);
