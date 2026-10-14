@@ -9,6 +9,15 @@ const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
 const HOUR = 3600000;
+// Everything up to and including this date is already in the imported Hub history (legacy.js).
+const LEGACY_THROUGH = '2026-10-13';
+// Form as of kickoff: the last 5 league games played BEFORE this match (never the match itself).
+export function formAt(team, iso) {
+  const t = new Date(iso).getTime();
+  const g = (team.recent || []).filter(x => new Date(x[0]).getTime() < t).slice(-5);
+  if (!g.length) return team.form;
+  return { gf: g.reduce((s, x) => s + x[1], 0), ga: g.reduce((s, x) => s + x[2], 0), n: g.length };
+}
 const today = () => localDate(new Date().toISOString());
 const addDays = (date, n) => new Date(new Date(`${date}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 const round = x => Math.round(x * 100);
@@ -67,15 +76,18 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   let notReady = 0;
   for (const f of fx) {
     const old = prior.get(f.id);
-    if (old?.final) { cards.push(old); continue; } // never overwrite a graded card
+    if (old?.final && date > LEGACY_THROUGH) { cards.push(old); continue; } // never overwrite a graded card
 
     const hint = league.cup ? undefined : slug;
-    const h = await findTeam(f.home.id, env, memo, hint);
-    const a = await findTeam(f.away.id, env, memo, hint);
+    const h0 = await findTeam(f.home.id, env, memo, hint);
+    const a0 = await findTeam(f.away.id, env, memo, hint);
+    const h = h0 && { ...h0, team: { ...h0.team, form: formAt(h0.team, f.date) } };
+    const a = a0 && { ...a0, team: { ...a0.team, form: formAt(a0.team, f.date) } };
     const card = {
       id: f.id, kickoff: f.date, ko: localTime(f.date),
       league: slug, leagueKey: league.key, leagueName: league.name,
       home: f.home.name, away: f.away.name, final: null,
+      hAbbr: f.home.abbr || null, aAbbr: f.away.abbr || null, hRank: h?.team.rank ?? null, aRank: a?.team.rank ?? null,
     };
     if (!h || !a) {
       if (needsSync.length) notReady++;
@@ -91,6 +103,10 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     const r3 = v3(mk(h.team, h.league, h.ctx), mk(a.team, a.league, a.ctx));
     card.v2 = slim(r2);
     card.v3 = slim(r3);
+    if (f.done && date <= LEGACY_THROUGH) { // old day: show the real result against the pre-kickoff prediction
+      card.final = { h: f.home.score, a: f.away.score };
+      card.grade = { v2: grade(toPred(card.v2), card.final), v3: grade(toPred(card.v3), card.final) };
+    }
     card.crossLeague = h.league.slug !== a.league.slug;
     card.homeLeague = h.league.name; card.awayLeague = a.league.name;
     card.form = {
@@ -165,7 +181,7 @@ async function tally(env) {
   for (const k of list.keys) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
-      if (!c.grade) continue;
+      if (!c.grade || day.date <= LEGACY_THROUGH) continue;
       add(v2All, c.grade.v2); add(h2hV2, c.grade.v2); add(h2hV3, c.grade.v3);
       live.push({ date: day.date, ...c });
     }

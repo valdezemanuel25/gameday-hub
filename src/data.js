@@ -10,7 +10,8 @@ const BASE_V2 = 'https://site.api.espn.com/apis/v2/sports/soccer';
 export const TZ = 'America/Chicago';
 const DAY = 86400000;
 const LOOKBACK_DAYS = 80; // international breaks + midweek cups: 36 days left some clubs with <5 league games
-const STORE_V = 3; // bump to discard cached results/contexts built by older code
+const STORE_V = 3;
+const CTX_V = 4; // contexts now carry dated history + rank // bump to discard cached results/contexts built by older code
 
 // Same order as the Hub's tabs. ls = league-strength key. calendar = season runs Jan-Dec.
 export const LEAGUES = [
@@ -69,8 +70,8 @@ function parseEvent(ev) {
   const done = !!comp.status?.type?.completed;
   return {
     id: String(ev.id), date: ev.date, done,
-    home: { id: String(h.team.id), name: h.team.displayName || h.team.name, score: done ? Number(h.score) : null },
-    away: { id: String(a.team.id), name: a.team.displayName || a.team.name, score: done ? Number(a.score) : null },
+    home: { id: String(h.team.id), name: h.team.displayName || h.team.name, abbr: h.team.abbreviation, score: done ? Number(h.score) : null },
+    away: { id: String(a.team.id), name: a.team.displayName || a.team.name, abbr: a.team.abbreviation, score: done ? Number(a.score) : null },
   };
 }
 
@@ -133,7 +134,7 @@ function seasonYear(league, now) {
 }
 
 async function standings(league, season, env, debug) {
-  const key = `std:${league.slug}:${season}`;
+  const key = `std2:${league.slug}:${season}`;
   const cached = await env.HUB.get(key, 'json');
   if (cached) return cached;
   const j = await getJson(`${BASE_V2}/${league.slug}/standings?season=${season}`, debug);
@@ -141,9 +142,9 @@ async function standings(league, season, env, debug) {
   const out = {};
   for (const e of entries) {
     const stat = n => e.stats?.find(s => s.name === n)?.value;
-    const gp = stat('gamesPlayed'), gf = stat('pointsFor'), ga = stat('pointsAgainst');
+    const gp = stat('gamesPlayed'), gf = stat('pointsFor'), ga = stat('pointsAgainst'), rank = stat('rank');
     if (e.team?.id != null && gp != null && gf != null && ga != null) {
-      out[String(e.team.id)] = { name: e.team.displayName || e.team.name, gf, ga, gp };
+      out[String(e.team.id)] = { name: e.team.displayName || e.team.name, gf, ga, gp, rank: rank ?? null };
     }
   }
   if (Object.keys(out).length) await env.HUB.put(key, JSON.stringify(out), { expirationTtl: 20 * 3600 });
@@ -161,8 +162,9 @@ export async function buildContext(league, env, now = new Date(), debug) {
 
   const games = st.games.slice().sort((a, b) => new Date(a[1]) - new Date(b[1]));
   const recent = new Map(), names = {};
-  const push = (id, gf, ga) => { if (!recent.has(id)) recent.set(id, []); recent.get(id).push({ gf, ga }); };
-  for (const [, , h, a, hs, as, hn, an] of games) { push(h, hs, as); push(a, as, hs); names[h] = hn; names[a] = an; }
+  let curIso = '';
+  const push = (id, gf, ga) => { if (!recent.has(id)) recent.set(id, []); recent.get(id).push({ gf, ga, t: curIso }); };
+  for (const [, iso, h, a, hs, as, hn, an] of games) { curIso = iso; push(h, hs, as); push(a, as, hs); names[h] = hn; names[a] = an; }
 
   const haveStd = Object.keys(cur).length > 0;
   if (!haveStd) debug?.push(`no standings for ${league.slug} ${season}: season totals approximated from last ~50 days`);
@@ -189,9 +191,12 @@ export async function buildContext(league, env, now = new Date(), debug) {
       // promotion penalty (attack x0.85, defence x1.15). Rough, not fitted.
       last: p ? { gf: p.gf, ga: p.ga, gp: p.gp } : { gf: leagueAvg * 0.85 * 20, ga: leagueAvg * 1.15 * 20, gp: 20 },
       form: { gf: last5.reduce((x, g) => x + g.gf, 0), ga: last5.reduce((x, g) => x + g.ga, 0), n: last5.length },
+      // dated history so a card can use only games played BEFORE its kickoff
+      recent: (recent.get(id) || []).slice(-8).map(g => [g.t, g.gf, g.ga]),
+      rank: cur[id]?.rank ?? null,
     };
   }
-  const ctx = { v: STORE_V, slug: league.slug, leagueAvg, teams, builtAt: now.getTime() };
+  const ctx = { v: CTX_V, slug: league.slug, leagueAvg, teams, builtAt: now.getTime() };
   await env.HUB.put(`ctx:${league.slug}`, JSON.stringify(ctx));
   return ctx;
 }
@@ -200,7 +205,7 @@ export async function buildContext(league, env, now = new Date(), debug) {
 export async function getContext(league, env, memo) {
   if (memo?.has(league.slug)) return memo.get(league.slug);
   let ctx = await env.HUB.get(`ctx:${league.slug}`, 'json');
-  if (ctx && ctx.v !== STORE_V) ctx = null;
+  if (ctx && ctx.v !== CTX_V) ctx = null;
   memo?.set(league.slug, ctx);
   return ctx;
 }
