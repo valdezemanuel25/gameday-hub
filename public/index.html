@@ -148,11 +148,12 @@ function token() {
   if (!t) { t = prompt('Admin token (asked once per device):') || ''; try { localStorage.setItem('hubToken', t); } catch (e) {} }
   return t;
 }
-async function api(path) { return (await fetch(path)).json(); }
+async function parse(r) { const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error(`Server replied ${r.status}: ${t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) || 'empty response'}`); } }
+async function api(path) { return parse(await fetch(path)); }
 async function post(path) {
   const r = await fetch(path, { method: 'POST', headers: { 'x-admin-token': token() } });
   if (r.status === 401) { try { localStorage.removeItem('hubToken'); } catch (e) {} throw new Error('Wrong admin token. Try again.'); }
-  return r.json();
+  return parse(r);
 }
 const say = (m, ready) => { const s = $('#status'); s.textContent = m; s.className = 'st' + (ready ? ' ready' : ''); };
 
