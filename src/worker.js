@@ -1,4 +1,5 @@
-import { v2, v3, grade, pickOutcome, bestBet } from './model.js';
+import { v2, grade, pickOutcome, bestBet } from './model.js';
+import { supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings } from './v4.js';
 import {
   TZ, LEAGUES, VISIBLE, DOMESTIC, leagueBySlug, localDate, localTime, syncLeague,
   findTeam, getContext, missingContexts, fixturesForLeague,
@@ -80,7 +81,7 @@ function authed(req, env) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Analyze ONE league for ONE date: fixtures -> v2 (official) + v3 (shadow) cards.
+// Analyze ONE league for ONE date: fixtures -> v2 (official) + v4 (shadow) cards.
 // ---------------------------------------------------------------------------------------------
 export async function analyzeLeague(date, slug, env, now = new Date(), { partial = false, leftover = false } = {}) {
   const league = leagueBySlug(slug);
@@ -113,7 +114,8 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   for (const f of fx) {
     const old = prior.get(f.id);
     if (old?.final && date > LEGACY_THROUGH) { cards.push(old); continue; } // never overwrite a graded card
-    if (leftover && old?.v2) { cards.push(old); continue; } // 'Analyze leftover': keep finished predictions as they are
+    // 'Analyze leftover': keep finished predictions as they are. A card saved before v4 existed (no v4 key yet) still gets analyzed.
+    if (leftover && old?.v2 && 'v4' in old) { cards.push(old); continue; }
 
     const hint = league.cup ? undefined : slug;
     const h0 = await findTeam(f.home.id, env, memo, hint);
@@ -136,16 +138,22 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
       cards.push(card); continue;
     }
     const r2 = v2(h.team.form, a.team.form);
-    const mk = (t, lg, ctx) => ({ ...t, league: lg.ls, leagueAvg: ctx.leagueAvg });
-    const r3 = v3(mk(h.team, h.league, h.ctx), mk(a.team, a.league, a.ctx));
     card.v2 = slim(r2);
-    card.v3 = slim(r3);
+    // v4 shadow: only for league games that haven't been played yet, and only when both clubs have enough history.
+    // (null = v4 has nothing to say: cup game, club not found, or too little history.)
+    let r4 = null;
+    if (!f.done && !league.cup && v4Supports(slug) && h.league.slug === slug && a.league.slug === slug) {
+      const R = await getRatings(league, env, memo);
+      const hn = v4Resolve(slug, f.home.name) || v4Resolve(slug, h.team.name), an = v4Resolve(slug, f.away.name) || v4Resolve(slug, a.team.name);
+      r4 = hn && an ? v4Predict(R, hn, an) : null;
+    }
+    card.v4 = r4 ? slim(r4) : null;
     if (old?.sm) card.sm = old.sm;
     if (old?.note) card.note = old.note;
     if (old?.mine) card.mine = old.mine;
     if (f.done && date <= LEGACY_THROUGH) { // old day: show the real result against the pre-kickoff prediction
       card.final = { h: f.home.score, a: f.away.score };
-      card.grade = { v2: grade(toPred(card.v2), card.final), v3: grade(toPred(card.v3), card.final) };
+      card.grade = { v2: grade(toPred(card.v2), card.final) };
       if (card.sm) card.smGrade = smGrade(card.sm, card.final);
     }
     card.crossLeague = h.league.slug !== a.league.slug;
@@ -189,7 +197,9 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     const f = finals.get(c.id);
     if (!f) { pending++; continue; }
     c.final = { h: f.home.score, a: f.away.score };
-    c.grade = { v2: grade(toPred(c.v2), c.final), v3: grade(toPred(c.v3), c.final) };
+    c.grade = { v2: grade(toPred(c.v2), c.final) };
+    if (c.v3) c.grade.v3 = grade(toPred(c.v3), c.final); // cards predicted before v4 took over keep their v3 grade
+    if (c.v4) c.grade.v4 = grade(toPred(c.v4), c.final);
     if (c.sm) c.smGrade = smGrade(c.sm, c.final);
     graded++;
   }
@@ -233,7 +243,8 @@ export async function smLeague(date, slug, env, now = new Date(), { force = fals
 
 // ---------------------------------------------------------------------------------------------
 // Totals = history imported from the old Hub + everything graded here since.
-//  v2: official model, all graded matches.  h2h: v2 vs v3 on the SAME matches only.
+//  v2: official model, all graded matches.  h2h: v2 vs v4 on the SAME matches only (v4 started 2026-10-14).
+//  h2hOld: the retired v3 shadow test (58 imported matches + any live games predicted before v4 took over).
 // ---------------------------------------------------------------------------------------------
 function blank() { return { n: 0, outcome: 0, ou: 0, btts: 0, brier: 0 }; }
 function add(t, g) { t.n++; t.outcome += g.outcomeHit; t.ou += g.ouHit; t.btts += g.bttsHit; t.brier += g.brier; }
@@ -241,7 +252,7 @@ function fin(t) { return { ...t, brier: t.n ? +(t.brier / t.n).toFixed(3) : null
 
 async function tally(env) {
   const list = await env.HUB.list({ prefix: 'day:' });
-  const v2All = blank(), h2hV2 = blank(), h2hV3 = blank();
+  const v2All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [], mineT = { n: 0, mine: 0, model: 0 };
   const CAL = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60% and up', 60, 101]].map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 }));
   const cal = (p, hit) => { const t = Math.max(...p), b = CAL.find(x => t >= x.lo && t < x.hi); if (!b) return; b.n++; b.hits += hit ? 1 : 0; b.sum += t; };
@@ -251,14 +262,16 @@ async function tally(env) {
   }
   for (const r of legacy.shadow) {
     const [h, a] = r.final.split('–').map(Number);
-    add(h2hV2, grade(toPred(r.v2), { h, a }));
-    add(h2hV3, grade(toPred(r.v3), { h, a }));
+    add(oldV2, grade(toPred(r.v2), { h, a }));
+    add(oldV3, grade(toPred(r.v3), { h, a }));
   }
   for (const k of list.keys) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
       if (!c.grade || day.date <= LEGACY_THROUGH) continue;
-      add(v2All, c.grade.v2); add(h2hV2, c.grade.v2); add(h2hV3, c.grade.v3);
+      add(v2All, c.grade.v2);
+      if (c.grade.v4) { add(h2hV2, c.grade.v2); add(h2hV4, c.grade.v4); }
+      if (c.grade.v3) { add(oldV2, c.grade.v2); add(oldV3, c.grade.v3); }
       cal(c.v2.p, c.grade.v2.outcomeHit);
       if (c.mine && c.final) { mineT.n++; mineT.model += c.grade.v2.outcomeHit ? 1 : 0; mineT.mine += c.mine === (c.final.h > c.final.a ? 'H' : c.final.h === c.final.a ? 'D' : 'A') ? 1 : 0; }
       live.push({ date: day.date, ...c });
@@ -287,7 +300,8 @@ async function tally(env) {
     v2: fin(v2All),
     calibration: CAL.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null })),
     mine: mineT,
-    h2h: { v2: fin(h2hV2), v3: fin(h2hV3) },
+    h2h: { v2: fin(h2hV2), v4: fin(h2hV4) },
+    h2hOld: { v2: fin(oldV2), v3: fin(oldV3) },
     importedMatches: legacy.v2Rows.length,
     newlyGraded: live.length,
     recent: live.slice(0, 200),
@@ -311,6 +325,7 @@ export async function noteCard(date, slug, id, note, mine, env) {
 // Cron: runs every 5 minutes and does ONE small job per run, rotating:
 //   slot 0 = sync the least-recently-synced league   slot 1 = grade the next league that's due
 //   slot 2 = analyze the next league that has no cards yet for today / tomorrow
+//   slots 1 and 3 refresh one league's v4 ratings (about once a day each) when they have nothing else to do
 // ---------------------------------------------------------------------------------------------
 export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTime() / 300000) % 4) {
   const t = localDate(now.toISOString());
@@ -336,7 +351,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
       }
     }
     due.sort((a, b) => a.tried - b.tried || a.last - b.last); // least recently tried first, then oldest games
-    if (!due.length) return { job: 'grade', idle: true };
+    if (!due.length) return { job: 'grade', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
     const d = due[0];
     return { job: 'grade', league: d.slug, date: d.date, ...(await gradeLeague(d.date, d.slug, env, {}, now)) };
   }
@@ -350,7 +365,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
         if (need) return { job: 'sportsmole', league: lg.slug, date, ...(await smLeague(date, lg.slug, env, now)) };
       }
     }
-    return { job: 'sportsmole', idle: true };
+    return { job: 'sportsmole', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
   }
 
   // slot 2: analyze. Domestic leagues first, cups last (cups need domestic data).
@@ -406,13 +421,19 @@ const hub = {
     }
     if (p === '/api/status') {
       const [meta, errs, w] = await Promise.all([env.HUB.get('meta:synced', 'json'), env.HUB.get('meta:errors', 'json'), env.HUB.get('meta:writes', 'json')]);
+      const rated = {}; for (const l of DOMESTIC) if (v4Supports(l.slug)) rated[l.slug] = (await env.HUB.get(`rat:${l.slug}`, 'json'))?.builtAt || null;
       const d = new Date().toISOString().slice(0, 10);
       return json({
         now: Date.now(), writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
-        leagues: DOMESTIC.map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, problem: (errs || {})[l.slug] || null })),
+        leagues: DOMESTIC.map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, problem: (errs || {})[l.slug] || null, v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
 
+    if (req.method === 'POST' && p === '/api/ratings') { // rebuild one league's v4 ratings now (the cron does this about daily)
+      const league = leagueBySlug(q('league'));
+      if (!league || !v4Supports(league.slug)) return json({ error: 'Pass ?league=<slug> for a league that has v4 ratings' }, 400);
+      try { return json({ ok: true, ...(await refreshRatings(env, new Date(), [league.slug], { force: true })) }); } catch (e) { return json({ error: `${league.name} (ratings): ${e && e.message ? e.message : e}` }, 500); }
+    }
     if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm', '/api/note'].includes(p)) {
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
