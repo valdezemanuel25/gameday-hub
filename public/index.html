@@ -305,12 +305,17 @@ function alerts() {
 // Forebet picks entered by hand. Recorded and graded only; no model reads them.
 function fbLine(c) {
   const f = c.fb; if (!f) return '';
-  let res = '';
+  const parts = [], pills = [];
+  if (f.p) { parts.push(`${esc(c.home)} ${f.p[0]}%, draw ${f.p[1]}%, ${esc(c.away)} ${f.p[2]}%${f.score ? `, predicts ${f.score.h}–${f.score.a}` : ''}`); }
+  if (f.over != null) parts.push(`Over 2.5 ${f.over}%`);
+  if (f.btts != null) parts.push(`both score ${f.btts}%`);
   if (c.final) {
-    const o = c.final.h > c.final.a ? 0 : c.final.h === c.final.a ? 1 : 2, top = f.p.indexOf(Math.max(...f.p));
-    res = ` ${pill(top === o, 'Winner')}${f.score ? ' ' + pill(f.score.h === c.final.h && f.score.a === c.final.a, 'Score') : ''}`;
+    const goals = c.final.h + c.final.a, both = c.final.h > 0 && c.final.a > 0;
+    if (f.p) { const o = c.final.h > c.final.a ? 0 : c.final.h === c.final.a ? 1 : 2; pills.push(pill(f.p.indexOf(Math.max(...f.p)) === o, 'Winner')); if (f.score) pills.push(pill(f.score.h === c.final.h && f.score.a === c.final.a, 'Score')); }
+    if (f.over != null) pills.push(pill((f.over > 50) === (goals >= 3), 'O/U'));
+    if (f.btts != null) pills.push(pill((f.btts > 50) === both, 'Both'));
   }
-  return `<div class="small"><b>Forebet</b> (${f.how === 'pasted' ? 'pasted by you' : 'saved before kickoff'}, no model uses it): ${esc(c.home)} ${f.p[0]}%, draw ${f.p[1]}%, ${esc(c.away)} ${f.p[2]}%.${f.score ? ` Predicts ${f.score.h}–${f.score.a}.` : ''}${res}</div>`;
+  return `<div class="small"><b>Forebet</b> (${f.how === 'pasted' ? 'pasted by you' : 'saved before kickoff'}, no model uses it): ${parts.join('. ')}.${pills.length ? ' ' + pills.join('') : ''}</div>`;
 }
 function v4Only(c) {
   const v4 = c.v4; if (!v4) return '';
@@ -399,9 +404,10 @@ function calibrationView(t) {
   return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>Winner picks grouped by how sure the model was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}${mine}</div>`;
 }
 function forebetBlock(t) {
-  const f = t.forebet; if (!f || !f.n) return '';
-  const row = (name, x) => x.n ? `<div class="li"><div class="a"><span>Against ${name}, same ${x.n} games</span></div><div class="b"><span>Winner: Forebet ${x.fbOutcome}, ${name} ${x.outcome}</span><span>Brier: Forebet ${x.fbBrier}, ${name} ${x.brier}</span></div></div>` : '';
-  return `<div class="sec" style="padding-top:20px">Forebet, entered by hand<small>${f.n} graded. Winner ${f.outcome}/${f.n}, exact score ${f.score}/${f.n}, Brier ${f.brier} (lower is better). Recorded only; no model uses it. Small samples swing a lot.</small></div><div class="lst">${row('v2', f.vs.v2)}${row('v4', f.vs.v4)}</div>`;
+  const f = t.forebet; if (!f || !f.any) return '';
+  const pc = (h, n) => n ? `${h}/${n}` : '–';
+  const row = (name, x) => (x.n || x.nOu || x.nBtts) ? `<div class="li"><div class="a"><span>Against ${name}, same games</span></div><div class="b">${x.n ? `<span>Winner (${x.n}): Forebet ${x.fbOutcome}, ${name} ${x.outcome}</span><span>Brier: Forebet ${x.fbBrier}, ${name} ${x.brier}</span>` : ''}${x.nOu ? `<span>Over/under (${x.nOu}): Forebet ${x.fbOu}, ${name} ${x.ou}</span>` : ''}${x.nBtts ? `<span>Both score (${x.nBtts}): Forebet ${x.fbBtts}, ${name} ${x.btts}</span>` : ''}</div></div>` : '';
+  return `<div class="sec" style="padding-top:20px">Forebet, entered by hand<small>Winner ${pc(f.outcome, f.n)}, exact score ${pc(f.score, f.n)}${f.n ? `, Brier ${f.brier}` : ''}; over/under ${pc(f.ou, f.nOu)}; both score ${pc(f.btts, f.nBtts)}. Recorded only; no model uses it. Small samples swing a lot.</small></div><div class="lst">${row('v2', f.vs.v2)}${row('v4', f.vs.v4)}</div>`;
 }
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;
@@ -444,8 +450,9 @@ function statusView() {
 // Paste Forebet's league table (select the table on the page, copy, paste here). Only games that have not kicked off are saved.
 function forebetBox() {
   const opts = (cfg.leagues || []).map(l => `<option value="${esc(l.slug)}"${l.slug === (S.league !== 'all' ? S.league : 'uefa.europa') ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
-  return `<div class="sec" style="padding-top:16px">Forebet picks<small>Copy the league table from forebet.com and paste it here. It is saved for ${esc(S.date)}, only for games that have not started, and only once per game. Nothing uses it except the Results tab.</small></div>
+  return `<div class="sec" style="padding-top:16px">Forebet picks<small>Copy the league table from forebet.com and paste it here. Do it once per tab on Forebet (1X2, Under/Over 2.5, Both teams to score). It is saved for ${esc(S.date)}, only for games that have not started, and only once per game for each table. Nothing uses it except the Results tab.</small></div>
     <div class="pair" style="padding-top:0"><select id="fb-league" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit">${opts}</select>
+    <select id="fb-kind" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit"><option value="1x2">Table: 1X2 (win, draw, loss)</option><option value="ou">Table: Under/Over 2.5</option><option value="btts">Table: Both teams to score</option></select>
     <div class="note"><textarea id="fb-text" placeholder="Paste the table here"></textarea></div><button type="button" class="xbtn" id="btn-fb">Save Forebet picks</button><div class="small" id="fb-msg" style="margin-top:6px"></div></div>`;
 }
 // Tracking only: whether ESPN gives shot counts for finished games. Nothing here feeds a prediction.
@@ -556,10 +563,10 @@ async function runAll(kind) {
 document.addEventListener('click', async e => {
   if (e.target.closest('#btn-export')) return exportAll();
   if (e.target.closest('#btn-fb')) {
-    const msg = $('#fb-msg'), text = $('#fb-text').value, lg = $('#fb-league').value; if (!text.trim()) { msg.textContent = 'Paste the table first.'; return; }
+    const msg = $('#fb-msg'), text = $('#fb-text').value, lg = $('#fb-league').value, kind = $('#fb-kind').value; if (!text.trim()) { msg.textContent = 'Paste the table first.'; return; }
     msg.textContent = 'Saving…';
     try {
-      const r = await post(`/api/forebet?league=${encodeURIComponent(lg)}&date=${S.date}`, { text }); if (r.error) throw new Error(r.error);
+      const r = await post(`/api/forebet?league=${encodeURIComponent(lg)}&date=${S.date}&kind=${kind}`, { text }); if (r.error) throw new Error(r.error);
       msg.textContent = `Saved ${r.saved}. ${r.alreadyHad ? r.alreadyHad + ' already had a pick. ' : ''}${r.started ? r.started + ' already started (skipped). ' : ''}${r.notFound.length ? "Couldn't match: " + r.notFound.join(', ') + '.' : ''}`;
       if (r.saved) { delete counts[S.date]; tally = null; await loadDay(); }
     } catch (er) { msg.textContent = er.message; }

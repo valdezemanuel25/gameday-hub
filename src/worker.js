@@ -4,7 +4,7 @@ import {
   TZ, LEAGUES, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
   findTeam, getContext, missingContexts, fixturesForLeague, shotsCoverage,
 } from './data.js';
-import { parseForebet, seedFb, fbGrade } from './forebet.js';
+import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
 import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
@@ -177,7 +177,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   if (notReady && !partial) return { fixtures: fx.length, needsSync, debug };
 
   // Forebet picks are recorded by hand (never read by a model). Keep them across re-analysis; add the saved ones.
-  for (const c of cards) { if (!c.fb) { const fb = prior.get(c.id)?.fb || seedFb(c, date); if (fb) c.fb = fb; } }
+  for (const c of cards) { if (!c.fb && prior.get(c.id)?.fb) c.fb = prior.get(c.id).fb; mergeSeed(c, date); }
   day.cards = day.cards.filter(c => c.league !== slug).concat(cards);
   day.analyzed[slug] = now.getTime();
   day.analyzedAt = now.getTime();
@@ -206,7 +206,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     const f = finals.get(c.id);
     if (!f) { pending++; continue; }
     c.final = { h: f.home.score, a: f.away.score };
-    if (!c.fb) { const fb = seedFb(c, date); if (fb) c.fb = fb; }
+    mergeSeed(c, date);
     c.grade = {};
     if (c.v2) c.grade.v2 = grade(toPred(c.v2), c.final);
     if (c.v3) c.grade.v3 = grade(toPred(c.v3), c.final); // cards predicted before v4 took over keep their v3 grade
@@ -265,7 +265,7 @@ async function tally(env) {
   const list = await env.HUB.list({ prefix: 'day:' });
   const v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [], mineT = { n: 0, mine: 0, model: 0 };
-  const fbT = { n: 0, outcome: 0, score: 0, brier: 0 }, mk = () => ({ n: 0, fbOutcome: 0, fbBrier: 0, outcome: 0, brier: 0 }), fbVs = { v2: mk(), v4: mk() };
+  const fbT = { n: 0, outcome: 0, score: 0, brier: 0, nOu: 0, ou: 0, nBtts: 0, btts: 0 }, mk = () => ({ n: 0, fbOutcome: 0, fbBrier: 0, outcome: 0, brier: 0, nOu: 0, fbOu: 0, ou: 0, nBtts: 0, fbBtts: 0, btts: 0 }), fbVs = { v2: mk(), v4: mk() };
   const CAL = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60% and up', 60, 101]].map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 }));
   const cal = (p, hit) => { const t = Math.max(...p), b = CAL.find(x => t >= x.lo && t < x.hi); if (!b) return; b.n++; b.hits += hit ? 1 : 0; b.sum += t; };
   for (const r of legacy.v2Rows) {
@@ -283,8 +283,15 @@ async function tally(env) {
       if (!c.grade || day.date <= LEGACY_THROUGH) continue;
       if (c.fb && c.final) { // Forebet (entered by hand) on the same games, next to v2 and v4
         const f = fbGrade(c.fb, c.final);
-        fbT.n++; fbT.outcome += f.outcomeHit; fbT.score += f.scoreHit; fbT.brier += f.brier;
-        for (const [k, g] of [['v2', c.grade.v2], ['v4', c.grade.v4]]) if (g) { const x = fbVs[k]; x.n++; x.fbOutcome += f.outcomeHit; x.fbBrier += f.brier; x.outcome += g.outcomeHit; x.brier += g.brier; }
+        if (f.outcomeHit != null) { fbT.n++; fbT.outcome += f.outcomeHit; fbT.score += f.scoreHit; fbT.brier += f.brier; }
+        if (f.ouHit != null) { fbT.nOu++; fbT.ou += f.ouHit; }
+        if (f.bttsHit != null) { fbT.nBtts++; fbT.btts += f.bttsHit; }
+        for (const [k, g] of [['v2', c.grade.v2], ['v4', c.grade.v4]]) if (g) {
+          const x = fbVs[k];
+          if (f.outcomeHit != null) { x.n++; x.fbOutcome += f.outcomeHit; x.fbBrier += f.brier; x.outcome += g.outcomeHit; x.brier += g.brier; }
+          if (f.ouHit != null) { x.nOu++; x.fbOu += f.ouHit; x.ou += g.ouHit; }
+          if (f.bttsHit != null) { x.nBtts++; x.fbBtts += f.bttsHit; x.btts += g.bttsHit; }
+        }
       }
       if (c.grade.v4) add(v4All, c.grade.v4); // every game v4 predicted, including cup games v2 cannot cover
       if (!c.grade.v2) continue;
@@ -317,7 +324,7 @@ async function tally(env) {
       earlier: legacySm.slice().reverse(),
     },
     v2: fin(v2All),
-    forebet: { ...fbT, brier: fbT.n ? +(fbT.brier / fbT.n).toFixed(3) : null, vs: Object.fromEntries(Object.entries(fbVs).map(([k, x]) => [k, { ...x, fbBrier: x.n ? +(x.fbBrier / x.n).toFixed(3) : null, brier: x.n ? +(x.brier / x.n).toFixed(3) : null }])) },
+    forebet: { ...fbT, brier: fbT.n ? +(fbT.brier / fbT.n).toFixed(3) : null, any: fbT.n + fbT.nOu + fbT.nBtts, vs: Object.fromEntries(Object.entries(fbVs).map(([k, x]) => [k, { ...x, fbBrier: x.n ? +(x.fbBrier / x.n).toFixed(3) : null, brier: x.n ? +(x.brier / x.n).toFixed(3) : null }])) },
     calibration: CAL.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null })),
     mine: mineT,
     h2h: { v2: fin(h2hV2), v4: fin(h2hV4) },
@@ -331,18 +338,21 @@ async function tally(env) {
 }
 
 // Forebet picks pasted from its league table. Only games that have not kicked off, and only once per game.
-export async function forebetPaste(date, slug, text, env, now = new Date()) {
+export async function forebetPaste(date, slug, text, env, now = new Date(), kind = '1x2') {
+  if (!['1x2', 'ou', 'btts'].includes(kind)) return { saved: 0, error: 'Unknown table type' };
   const day = await env.HUB.get(`day:${date}`, 'json');
   const cards = (day?.cards || []).filter(c => c.league === slug);
   if (!cards.length) return { saved: 0, error: 'No games on that day for this league. Analyze the day first.' };
-  const open = cards.filter(c => !c.fb && !c.final && new Date(c.kickoff).getTime() > now.getTime());
-  const { found, missing } = parseForebet(text, open);
-  for (const [id, fb] of found) cards.find(c => c.id === id).fb = { ...fb, at: now.toISOString() };
+  const has = c => kind === '1x2' ? !!c.fb?.p : kind === 'ou' ? c.fb?.over != null : c.fb?.btts != null;
+  const started = c => !!c.final || new Date(c.kickoff).getTime() <= now.getTime();
+  const open = cards.filter(c => !has(c) && !started(c));
+  const { found, missing } = parseForebet(text, open, kind);
+  for (const [id, fb] of found) { const c = cards.find(x => x.id === id); c.fb = { ...(c.fb || {}), ...fb, at: c.fb?.at || now.toISOString(), how: c.fb?.how || fb.how }; }
   if (found.size) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return {
     saved: found.size,
-    alreadyHad: cards.filter(c => c.fb && !found.has(c.id)).length,
-    started: cards.filter(c => !c.fb && (c.final || new Date(c.kickoff).getTime() <= now.getTime())).length,
+    alreadyHad: cards.filter(c => has(c) && !found.has(c.id)).length,
+    started: cards.filter(c => !has(c) && started(c)).length,
     notFound: missing.map(id => { const c = cards.find(x => x.id === id); return `${c.home} vs ${c.away}`; }),
   };
 }
@@ -487,7 +497,7 @@ const hub = {
           else if (r.cards !== undefined) await noteLeague(env, league.slug, 'games', null).catch(() => {});
           return json({ ok: true, ...r });
         }
-        if (p === '/api/forebet') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ } return json({ ok: true, ...(await forebetPaste(q('date'), league.slug, String(b.text || ''), env, new Date())) }); }
+        if (p === '/api/forebet') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ } return json({ ok: true, ...(await forebetPaste(q('date'), league.slug, String(b.text || ''), env, new Date(), q('kind') || '1x2')) }); }
         if (p === '/api/note') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ } return json({ ok: true, ...(await noteCard(q('date'), league.slug, String(b.id || ''), b.note, b.mine, env)) }); }
         if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
         return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });

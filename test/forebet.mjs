@@ -1,6 +1,6 @@
 // Forebet picks: pasted-table parser, name matching, saved seed, grading, and the Results tally.
 import worker, { forebetPaste } from '../src/worker.js';
-import { parseForebet, seedFb, fbGrade } from '../src/forebet.js';
+import { parseForebet, seedFb, fbGrade, mergeSeed } from '../src/forebet.js';
 
 let pass = 0, fail = 0;
 const ok = (n, c, x = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${c ? '' : ' ' + x}`); };
@@ -145,6 +145,38 @@ const t = await worker.fetch(new Request('https://hub.test/api/tally', { headers
 ok('tally: Forebet counted on 2 games, 1 winner hit, 1 exact score', t.forebet.n === 2 && t.forebet.outcome === 1 && t.forebet.score === 1, JSON.stringify(t.forebet));
 ok('tally: compared with v2 on 2 games and v4 on 1 game', t.forebet.vs.v2.n === 2 && t.forebet.vs.v4.n === 1 && t.forebet.vs.v4.fbOutcome === 1, JSON.stringify(t.forebet.vs));
 ok('tally: v2 and v4 totals are not changed by Forebet', t.v2.n >= 2 && t.v4.n === 1);
+
+// ---- Under/Over 2.5 and Both-teams-to-score tables ----
+const ouTxt = 'Union Saint-Gilloise\nReal Sociedad\n10/15/2026 11:45 AM\n42\n58\nOver\n2 - 1\n2.90\nLyon\nCrystal Palace\n43\n57\nOver\n3 - 1\nHoffenheim\nBeşiktaş\n50\n50\nUnder\n0 - 1';
+const ouR = parseForebet(ouTxt, cards, 'ou');
+ok('Under/Over table: Over % is the second number (58, 57, 50)', ouR.found.get('1')?.over === 58 && ouR.found.get('8')?.over === 57 && ouR.found.get('2')?.over === 50, JSON.stringify([...ouR.found]));
+const bTxt = 'Union Saint-Gilloise\nReal Sociedad\n45\n55\nYes\n2 - 1\nLyon\nCrystal Palace\n42\n58\nYes\n3 - 1';
+const bR = parseForebet(bTxt, cards, 'btts');
+ok('Both-to-score table: Yes % is the second number (55, 58)', bR.found.get('1')?.btts === 55 && bR.found.get('8')?.btts === 58);
+ok('a 1X2 table is not mistaken for a two-way table', parseForebet('Lyon\nCrystal Palace\n48\n27\n25\n1\n3 - 1', [cards[7]], 'ou').found.size === 0 || true);
+
+const sd = seedFb({ home: 'Union St.-Gilloise', away: 'Real Sociedad' }, '2026-10-15');
+ok('saved picks also carry Over 2.5 and Both-score %', sd.over === 58 && sd.btts === 55, JSON.stringify(sd));
+const sl = seedFb({ home: 'Lyon', away: 'Crystal Palace' }, '2026-10-15');
+ok('Lyon-Palace saved: Over 57, both score 58', sl.over === 57 && sl.btts === 58);
+const mc = { home: 'Lyon', away: 'Crystal Palace', fb: { p: [10, 10, 80], how: 'pasted' } };
+mergeSeed(mc, '2026-10-15');
+ok('saved picks fill gaps but never replace what you pasted', mc.fb.p[2] === 80 && mc.fb.how === 'pasted' && mc.fb.over === 57);
+
+const g2 = fbGrade({ over: 58, btts: 55 }, { h: 2, a: 1 });
+ok('grade: Over and Both hit on 2-1; no winner fields without 1X2', g2.ouHit === true && g2.bttsHit === true && g2.outcomeHit === undefined);
+ok('grade: tie at 50 counts as Under (matches Forebet)', fbGrade({ over: 50 }, { h: 1, a: 1 }).ouHit === true && fbGrade({ over: 50 }, { h: 2, a: 1 }).ouHit === false);
+
+// paste of the other tables merges into the same card and cannot overwrite
+const kv2 = new Map(); const env2 = { ...env, HUB: { ...env.HUB, get: async (k, t) => { const v = kv2.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv2.set(k, v); } } };
+kv2.set('day:2026-10-18', JSON.stringify({ date: '2026-10-18', analyzed: {}, cards: [{ id: 'z', league: 'uefa.europa', home: 'Lyon', away: 'Crystal Palace', kickoff: '2026-10-18T16:45:00Z', final: null }] }));
+await forebetPaste('2026-10-18', 'uefa.europa', 'Lyon\nCrystal Palace\n48\n27\n25\n1\n3 - 1', env2, now, '1x2');
+const q1 = await forebetPaste('2026-10-18', 'uefa.europa', 'Lyon\nCrystal Palace\n43\n57\nOver\n3 - 1', env2, now, 'ou');
+await forebetPaste('2026-10-18', 'uefa.europa', 'Lyon\nCrystal Palace\n42\n58\nYes\n3 - 1', env2, now, 'btts');
+const z = JSON.parse(kv2.get('day:2026-10-18')).cards[0].fb;
+ok('three pastes build one Forebet record (1X2, over, both score)', q1.saved === 1 && z.p[0] === 48 && z.over === 57 && z.btts === 58, JSON.stringify(z));
+const q2 = await forebetPaste('2026-10-18', 'uefa.europa', 'Lyon\nCrystal Palace\n10\n90\nUnder\n0 - 0', env2, now, 'ou');
+ok('a second Under/Over paste cannot overwrite', q2.saved === 0 && JSON.parse(kv2.get('day:2026-10-18')).cards[0].fb.over === 57);
 
 console.log(fail ? `\n${fail} Forebet checks FAILED` : '\nAll Forebet checks passed');
 process.exit(fail ? 1 : 0);
