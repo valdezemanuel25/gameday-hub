@@ -43,6 +43,12 @@ export const VISIBLE = LEAGUES.filter(l => !l.support);
 export const DOMESTIC = LEAGUES.filter(l => !l.cup);
 // Cups whose results are stored too (res:<slug>) so the v4 cup model can learn from new games. No club context for these.
 export const CUP_MODEL = LEAGUES.filter(l => l.cupModel);
+// How many stored finished games were checked for shots (9th element present) and how many had them.
+export function shotsCoverage(games) {
+  let checked = 0, withShots = 0;
+  for (const g of games || []) { if (g.length >= 9) { checked++; if (g[8]) withShots++; } }
+  return { checked, withShots };
+}
 export const leagueBySlug = slug => LEAGUES.find(l => l.slug === slug);
 
 const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, '');
@@ -62,6 +68,14 @@ async function getJson(url, debug) {
   } catch (e) { debug?.push(`fetch failed ${url}: ${e.message}`); return null; }
 }
 
+// Shots as ESPN reports them per team: [totalShots, shotsOnTarget] or null. A finished game with 0 total
+// shots is a placeholder, not a real count, so it counts as "no shots".
+function teamShots(c) {
+  const v = n => { const s = c.statistics?.find(x => x.name === n); const x = s ? Number(s.value ?? s.displayValue) : NaN; return Number.isFinite(x) ? x : null; };
+  const t = v('totalShots'), o = v('shotsOnTarget');
+  return t != null && t > 0 ? [t, o != null ? o : null] : null;
+}
+
 function parseEvent(ev) {
   const comp = ev.competitions?.[0];
   if (!comp) return null;
@@ -73,6 +87,7 @@ function parseEvent(ev) {
     id: String(ev.id), date: ev.date, done,
     home: { id: String(h.team.id), name: h.team.displayName || h.team.name, abbr: h.team.abbreviation, score: done ? Number(h.score) : null },
     away: { id: String(a.team.id), name: a.team.displayName || a.team.name, abbr: a.team.abbreviation, score: done ? Number(a.score) : null },
+    shots: done ? (sh => (sh.h && sh.a ? [sh.h[0], sh.h[1], sh.a[0], sh.a[1]] : null))({ h: teamShots(h), a: teamShots(a) }) : null,
   };
 }
 
@@ -101,10 +116,15 @@ export async function syncLeague(league, env, now = new Date(), debug) {
   const evs = await scoreboard(league.slug, start, end, dbg);
   // A failed request is not "no games": don't advance, so the same window is retried.
   if (dbg.length) { await touchSynced(league.slug, env, now); return { caughtUp: false, games: st.games.length, context: false, error: dbg.join('; ') }; }
-  const seen = new Set(st.games.map(g => g[0]));
+  const at = new Map(st.games.map((g, i) => [g[0], i]));
   for (const e of evs) {
-    if (e.done && e.home.score != null && !seen.has(e.id)) {
-      st.games.push([e.id, e.date, e.home.id, e.away.id, e.home.score, e.away.score, e.home.name, e.away.name]);
+    if (!e.done || e.home.score == null) continue;
+    // 9th element = shots [homeShots, homeOnTarget, awayShots, awayOnTarget], or null when ESPN gave none.
+    // It is only recorded here (coverage tracking); no model reads it yet.
+    if (!at.has(e.id)) {
+      st.games.push([e.id, e.date, e.home.id, e.away.id, e.home.score, e.away.score, e.home.name, e.away.name, e.shots]);
+    } else if (e.shots && st.games[at.get(e.id)][8] == null) {
+      st.games[at.get(e.id)][8] = e.shots; // backfill a game stored before its shots appeared
     }
   }
   st.through = end.toISOString();

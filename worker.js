@@ -2,7 +2,7 @@ import { v2, grade, pickOutcome, bestBet } from './model.js';
 import { supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
   TZ, LEAGUES, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
-  findTeam, getContext, missingContexts, fixturesForLeague,
+  findTeam, getContext, missingContexts, fixturesForLeague, shotsCoverage,
 } from './data.js';
 import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
@@ -434,9 +434,11 @@ const hub = {
       const rated = {}; for (const l of DOMESTIC) if (v4Supports(l.slug)) rated[l.slug] = (await env.HUB.get(`rat:${l.slug}`, 'json'))?.builtAt || null;
       const cupAt = (await env.HUB.get('rat:cup', 'json'))?.builtAt || null; for (const l of CUP_MODEL) rated[l.slug] = cupAt;
       const d = new Date().toISOString().slice(0, 10);
+      // Shot tracking: stored finished games checked for ESPN shots, and how many had them (cups are the open question).
+      const shots = {}; await Promise.all([...DOMESTIC, ...CUP_MODEL].map(async l => { shots[l.slug] = shotsCoverage((await env.HUB.get(`res:${l.slug}`, 'json'))?.games); }));
       return json({
         now: Date.now(), writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
-        leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, problem: (errs || {})[l.slug] || null, v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
+        leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
 

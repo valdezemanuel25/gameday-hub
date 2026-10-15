@@ -419,8 +419,16 @@ function statusView() {
     ${bad.length ? `<div class="sec" style="padding-top:16px">Needs attention<small>${bad.length} league${bad.length === 1 ? '' : 's'} with a problem the last time they ran.</small></div><div class="pair" style="padding-top:0">${bad.map(row).join('')}</div>` : `<div class="banner" style="margin-top:14px">No league problems on record.</div>`}
     <div class="sec" style="padding-top:16px">Leagues<small>When each league's results were last loaded. Each re-syncs about every 8 hours.</small></div>
     <div class="pair" style="padding-top:0">${ok.map(row).join('')}</div>
+    ${shotsBlock()}
     <div class="sec" style="padding-top:16px">Back up your history<small>Downloads every saved day with predictions, results and SportsMole picks, plus the carried-over totals.</small></div>
     <div class="pair" style="padding-top:0"><div class="small" style="margin:0 0 4px;${backupAge() == null || backupAge() >= 7 ? 'color:var(--amber)' : ''}">${backupAge() == null ? 'No backup made from this device yet.' : backupAge() === 0 ? 'Last backup from this device: today.' : `Last backup from this device: ${backupAge()} day${backupAge() === 1 ? '' : 's'} ago.`}</div><button type="button" class="xbtn" id="btn-export">Export data</button></div>`;
+}
+// Tracking only: whether ESPN gives shot counts for finished games. Nothing here feeds a prediction.
+function shotsBlock() {
+  const L = stat.leagues.filter(l => l.shots), cups = L.filter(l => /Champions|Europa/.test(l.name)), rest = L.filter(l => !cups.includes(l) && l.shots.checked > 0);
+  const line = l => { const c = l.shots; return `<div class="lg"><div><span class="nm">${esc(l.name)}</span></div><div class="when">${c.checked ? `shots on ${c.withShots} of ${c.checked} finished games` : 'no finished games checked yet'}</div></div>`; };
+  return `<div class="sec" style="padding-top:16px">Shot data from ESPN<small>Counts finished games saved since tracking started and how many came with shots and shots on target. This is only being recorded; no prediction uses it yet.</small></div>
+    <div class="pair" style="padding-top:0">${cups.map(line).join('')}${rest.map(line).join('')}</div>`;
 }
 async function exportAll() {
   const b = $('#btn-export'); if (b) b.disabled = true;
