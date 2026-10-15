@@ -448,12 +448,19 @@ function statusView() {
     <div class="pair" style="padding-top:0"><div class="small" style="margin:0 0 4px;${backupAge() == null || backupAge() >= 7 ? 'color:var(--amber)' : ''}">${backupAge() == null ? 'No backup made from this device yet.' : backupAge() === 0 ? 'Last backup from this device: today.' : `Last backup from this device: ${backupAge()} day${backupAge() === 1 ? '' : 's'} ago.`}</div><button type="button" class="xbtn" id="btn-export">Export data</button></div>`;
 }
 // Paste Forebet's league table (select the table on the page, copy, paste here). Only games that have not kicked off are saved.
+function forebetReads() {
+  const r = (stat && stat.forebet && stat.forebet.reads) || {}, bad = Object.entries(r).filter(([, v]) => !v.ok);
+  const names = { '1x2': '1X2', ou: 'Under/Over', btts: 'Both score' };
+  const nm = k => { const [slug, kind] = k.split('|'), l = (stat.leagues || []).find(x => x.slug === slug); return `${l ? l.name : slug} ${names[kind] || kind}`; };
+  const last = Object.values(r).map(v => v.at).sort().pop();
+  return `<div class="small" style="margin:0 0 8px">${last ? 'Forebet last read ' + ago(last) + '.' : 'Forebet has not been read yet. It is read about every 20 minutes, one page at a time, for games that have not started.'}${bad.length ? '<br><span style="color:var(--amber)">Problem: ' + bad.map(([k, v]) => `${esc(nm(k))} (${esc(v.msg || 'failed')}, ${ago(v.at)})`).join('; ') + '. Paste the table below instead.</span>' : ''}</div>`;
+}
 function forebetBox() {
   const opts = (cfg.leagues || []).map(l => `<option value="${esc(l.slug)}"${l.slug === (S.league !== 'all' ? S.league : 'uefa.europa') ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
-  return `<div class="sec" style="padding-top:16px">Forebet picks<small>Copy the league table from forebet.com and paste it here. Do it once per tab on Forebet (1X2, Under/Over 2.5, Both teams to score). It is saved for ${esc(S.date)}, only for games that have not started, and only once per game for each table. Nothing uses it except the Results tab.</small></div>
-    <div class="pair" style="padding-top:0"><select id="fb-league" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit">${opts}</select>
+  return `<div class="sec" style="padding-top:16px">Forebet picks<small>The Hub reads Forebet's league pages by itself for games that have not started. If a page can't be read, copy the league table from forebet.com and paste it here. Do it once per tab on Forebet (1X2, Under/Over 2.5, Both teams to score). It is saved for ${esc(S.date)}, only for games that have not started, and only once per game for each table. Nothing uses it except the Results tab.</small></div>
+    <div class="pair" style="padding-top:0">${forebetReads()}<select id="fb-league" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit">${opts}</select>
     <select id="fb-kind" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit"><option value="1x2">Table: 1X2 (win, draw, loss)</option><option value="ou">Table: Under/Over 2.5</option><option value="btts">Table: Both teams to score</option></select>
-    <div class="note"><textarea id="fb-text" placeholder="Paste the table here"></textarea></div><button type="button" class="xbtn" id="btn-fb">Save Forebet picks</button><div class="small" id="fb-msg" style="margin-top:6px"></div></div>`;
+    <div class="note"><textarea id="fb-text" placeholder="Paste the table here"></textarea></div><button type="button" class="xbtn" id="btn-fb">Save pasted picks</button><button type="button" class="xbtn" id="btn-fbget">Read this league from Forebet now</button><div class="small" id="fb-msg" style="margin-top:6px"></div></div>`;
 }
 // Tracking only: whether ESPN gives shot counts for finished games. Nothing here feeds a prediction.
 function shotsBlock() {
@@ -562,6 +569,15 @@ async function runAll(kind) {
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
   if (e.target.closest('#btn-export')) return exportAll();
+  if (e.target.closest('#btn-fbget')) {
+    const msg = $('#fb-msg'), lg = $('#fb-league').value, kind = $('#fb-kind').value; msg.textContent = 'Reading Forebet…';
+    try {
+      const r = await post(`/api/forebet?league=${encodeURIComponent(lg)}&kind=${kind}`, { fetch: true }); if (r.error) throw new Error(r.error);
+      msg.textContent = r.skipped ? 'Nothing to fill: every game already has this table, or none have cards yet.' : `Read ${r.rows} games from Forebet, saved ${r.saved}.`;
+      if (r.saved) { delete counts[S.date]; tally = null; await loadDay(); }
+    } catch (er) { msg.textContent = er.message; }
+    return;
+  }
   if (e.target.closest('#btn-fb')) {
     const msg = $('#fb-msg'), text = $('#fb-text').value, lg = $('#fb-league').value, kind = $('#fb-kind').value; if (!text.trim()) { msg.textContent = 'Paste the table first.'; return; }
     msg.textContent = 'Saving…';

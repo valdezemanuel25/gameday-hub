@@ -177,7 +177,7 @@ ok('re-analyzing never overwrites a graded card', !!kept.final && !!kept.grade, 
   ok('an unknown club: no prediction, still listed', !c3.v2 && c3.v4 === undefined && !!c3.skipped);
   ok('cup tabs: Europa League is on the Hub', (await call('/api/config')).tabs.some(x => x.slug === 'uefa.europa' && x.key === 'uel'));
   const cron = await runSlot(env, new Date('2026-10-14T20:00:00Z'), 1);
-  ok('cron grade slot ignores games that have not finished', cron.job === 'grade');
+  ok('cron grade slot ignores games that have not finished (an idle slot may read Forebet instead)', (cron.job === 'grade' || cron.job === 'forebet') && !cron.graded);
   // grade the v4-only card after the game: only v4 is graded, v2 totals do not move
   const t0 = await call('/api/tally');
   elDone = true;

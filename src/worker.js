@@ -5,6 +5,7 @@ import {
   findTeam, getContext, missingContexts, fixturesForLeague, shotsCoverage,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
+import { forebetStep, forebetFetch, FB_PAGES } from './forebetpage.js';
 import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
@@ -399,7 +400,11 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
       }
     }
     due.sort((a, b) => a.tried - b.tried || a.last - b.last); // least recently tried first, then oldest games
-    if (!due.length) return { job: 'grade', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
+    if (!due.length) {
+      const fbr = await forebetStep(env, now);
+      if (fbr) return { job: 'forebet', ...fbr };
+      return { job: 'grade', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
+    }
     const d = due[0];
     return { job: 'grade', league: d.slug, date: d.date, ...(await gradeLeague(d.date, d.slug, env, {}, now)) };
   }
@@ -413,6 +418,8 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
         if (need) return { job: 'sportsmole', league: lg.slug, date, ...(await smLeague(date, lg.slug, env, now)) };
       }
     }
+    const fbr = await forebetStep(env, now); // Forebet's own pages: one page per run, never read by a model
+    if (fbr) return { job: 'forebet', ...fbr };
     return { job: 'sportsmole', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
   }
 
@@ -468,14 +475,14 @@ const hub = {
       return json({ days: out.sort() });
     }
     if (p === '/api/status') {
-      const [meta, errs, w] = await Promise.all([env.HUB.get('meta:synced', 'json'), env.HUB.get('meta:errors', 'json'), env.HUB.get('meta:writes', 'json')]);
+      const [meta, errs, w, fbMeta] = await Promise.all([env.HUB.get('meta:synced', 'json'), env.HUB.get('meta:errors', 'json'), env.HUB.get('meta:writes', 'json'), env.HUB.get('meta:fb', 'json')]);
       const rated = {}; for (const l of DOMESTIC) if (v4Supports(l.slug)) rated[l.slug] = (await env.HUB.get(`rat:${l.slug}`, 'json'))?.builtAt || null;
       const cupAt = (await env.HUB.get('rat:cup', 'json'))?.builtAt || null; for (const l of CUP_MODEL) rated[l.slug] = cupAt;
       const d = new Date().toISOString().slice(0, 10);
       // Shot tracking: stored finished games checked for ESPN shots, and how many had them (cups are the open question).
       const shots = {}; await Promise.all([...DOMESTIC, ...CUP_MODEL].map(async l => { shots[l.slug] = shotsCoverage((await env.HUB.get(`res:${l.slug}`, 'json'))?.games); }));
       return json({
-        now: Date.now(), writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        now: Date.now(), forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
@@ -497,7 +504,8 @@ const hub = {
           else if (r.cards !== undefined) await noteLeague(env, league.slug, 'games', null).catch(() => {});
           return json({ ok: true, ...r });
         }
-        if (p === '/api/forebet') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ } return json({ ok: true, ...(await forebetPaste(q('date'), league.slug, String(b.text || ''), env, new Date(), q('kind') || '1x2')) }); }
+        if (p === '/api/forebet') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ }
+          if (b.fetch) { const kind = q('kind') || '1x2'; if (!FB_PAGES[league.slug]) return json({ error: `No Forebet page is set up for ${league.name}` }, 400); return json({ ok: true, ...(await forebetFetch(env, league.slug, kind, new Date())) }); } return json({ ok: true, ...(await forebetPaste(q('date'), league.slug, String(b.text || ''), env, new Date(), q('kind') || '1x2')) }); }
         if (p === '/api/note') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ } return json({ ok: true, ...(await noteCard(q('date'), league.slug, String(b.id || ''), b.note, b.mine, env)) }); }
         if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
         return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
