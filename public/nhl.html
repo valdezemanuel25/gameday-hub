@@ -41,6 +41,20 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .p.hi{background:rgba(76,141,255,.2);box-shadow:inset 0 0 0 1px rgba(76,141,255,.55)}
 .y{color:var(--good);font-weight:700}.x{color:var(--bad);font-weight:700}
 .note{font-size:11.5px;color:var(--faint);margin-top:7px;line-height:1.4}
+.rail{position:relative;margin:14px 18px 0;padding-left:64px}
+.rail:before{content:"";position:absolute;left:52px;top:0;bottom:0;width:2px;background:var(--line);border-radius:2px}
+.slot{position:relative;margin-bottom:12px}
+.slot .t{position:absolute;left:-64px;top:2px;width:44px;text-align:right;font-size:12px;font-weight:600;color:var(--mut)}
+.slot .t small{display:block;font-weight:500;color:var(--faint);font-size:10.5px}
+.slot:before{content:"";position:absolute;left:-16px;top:7px;width:9px;height:9px;border-radius:50%;background:var(--bg);border:2px solid #3b5688}
+.slot.done:before{background:#3b5688}
+.now{position:relative;margin:2px 0 14px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--blue);font-weight:600}
+.now:before{content:"";position:absolute;left:-17px;top:50%;width:11px;height:11px;margin-top:-5px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(76,141,255,.2)}
+.now:after{content:"";flex:1;height:1px;background:rgba(76,141,255,.4)}
+.rail .card{padding:11px 10px 9px;margin-bottom:8px}
+.rail .g{grid-template-columns:62px minmax(0,1fr) minmax(0,1.15fr);gap:5px}
+.rail .g .n{font-size:11.5px;white-space:nowrap}.rail .p{padding:6px 6px;font-size:12px}.rail .p b{font-size:13px}
+.rail .hd h3{font-size:16px}
 .empty{padding:26px 18px;text-align:center;color:var(--mut);font-size:13.5px;line-height:1.5}
 .seg{display:flex;gap:6px;padding:12px 18px 0}
 .seg button{font-size:12.5px;padding:7px 12px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
@@ -105,7 +119,7 @@ function fbRow(c, g) {
 }
 function card(c) {
   const g = c.grade || {}, f = c.final;
-  const head = f ? 'Final' + (f.last !== 'REG' ? ' (' + f.last + ')' : '') : esc(c.ko);
+  const head = f ? 'Final' + (f.last !== 'REG' ? ' (' + f.last + ')' : '') : '';
   return `<div class="card"><div class="hd"><h3>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</h3><span>${head}</span></div>
   <div class="g h"><span></span><span>Winner</span><span>Over/Under 5.5 · score</span></div>
   ${modelRow('v2 model', c.v2, c, g.v2)}${modelRow('v4 shadow', c.v4, c, g.v4)}${fbRow(c, g.fb)}
@@ -114,7 +128,17 @@ function card(c) {
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
-  return `<div class="pad">${list.map(card).join('')}</div>`;
+  const slots = new Map();
+  for (const c of list) { if (!slots.has(c.kickoff)) slots.set(c.kickoff, []); slots.get(c.kickoff).push(c); }
+  const isToday = S.date === fmt(new Date()), now = Date.now(), ct = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date());
+  let nowDone = !isToday, html = '';
+  for (const [iso, cs] of slots) {
+    const t = new Date(iso).getTime(), done = cs.every(c => c.final);
+    if (!nowDone && t > now) { nowDone = true; if (html) html += `<div class="now">Now, ${esc(ct)}</div>`; }
+    const [hm, ap] = String(cs[0].ko).split(' ');
+    html += `<div class="slot${done ? ' done' : ''}"><div class="t">${esc(hm)}<small>${esc(ap || '')}</small></div>${cs.map(card).join('')}</div>`;
+  }
+  return `<div class="rail">${html}</div>`;
 }
 function cell(m, key, other) {
   const v = pct(m.hit, m.n);
