@@ -224,19 +224,26 @@ function expanded(c) {
   const sm = c.sm
     ? `<div class="src s1"><small>SportsMole said</small><b>${esc(c.sm.text.replace(/^.*?(\d+–\d+).*$/, '$1'))}</b><small>${esc(c.sm.text)}</small>${c.smGrade ? `<div class="hits">${pill(c.smGrade.outcomeHit, 'Winner')}${pill(c.smGrade.scoreHit, 'Score')}${pill(c.smGrade.ouHit, 'O/U')}${pill(c.smGrade.bttsHit, 'Both')}</div>` : ''}</div>`
     : `<div class="src s0"><small>SportsMole</small>No prediction found yet</div>`;
-  const v3 = c.v3;
-  return `<div class="ex"><div class="in">
+  const v4 = c.v4, v3 = c.v3;
+  const shadow = v4
+    ? `<div class="small"><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. It picks <b>${OUT[v4.pick]}</b>${v4.pick === v.pick ? ', same as v2' : `, <b>not</b> v2's pick (${OUT[v.pick]})`}. Over 2.5 ${v4.over}%, both score ${v4.btts}%.
+      ${g && g.v4 ? `<br>v4 result: ${pill(g.v4.outcomeHit, 'Winner')} ${pill(g.v4.ouHit, 'O/U')} ${pill(g.v4.bttsHit, 'Both')}` : ''}</div>`
+    : v3
+      ? `<div class="small"><b>v3 (retired shadow test)</b>${v3.drawRisk ? ' (draw risk)' : ''}: ${esc(c.home)} ${v3.p[0]}%, draw ${v3.p[1]}%, ${esc(c.away)} ${v3.p[2]}%. It picks <b>${OUT[v3.pick]}</b>. Over 2.5 ${v3.over}%, both score ${v3.btts}%.
+      ${g && g.v3 ? `<br>v3 result: ${pill(g.v3.outcomeHit, 'Winner')} ${pill(g.v3.ouHit, 'O/U')} ${pill(g.v3.bttsHit, 'Both')}` : ''}</div>`
+      : c.v4 === null && !c.final ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game (a cup game, or a club with too little league history).</div>` : '';
+  return `<div class="ex"><div class="in"><div class="in">
     <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
     <div class="two">${mdl}${sm}</div>
     <div class="box f">Most likely scores<b style="font-size:13px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b></div>
     <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
-    <div class="small"><b>v3 shadow test</b>${v3.drawRisk ? ' (draw risk)' : ''}: ${esc(c.home)} ${v3.p[0]}%, draw ${v3.p[1]}%, ${esc(c.away)} ${v3.p[2]}%. It picks <b>${OUT[v3.pick]}</b>. Over 2.5 ${v3.over}%, both score ${v3.btts}%.
-      ${g ? `<br>v3 result: ${pill(g.v3.outcomeHit, 'Winner')} ${pill(g.v3.ouHit, 'O/U')} ${pill(g.v3.bttsHit, 'Both')}` : ''}</div>
+    ${shadow}
     <div class="box f note">Your note<textarea id="note-${esc(c.id)}" maxlength="500" placeholder="Injuries, rotation, anything the model can't see">${esc(c.note || '')}</textarea>
       <div class="rw"><select id="mine-${esc(c.id)}" aria-label="Your pick">${[['', 'No pick of my own'], ['H', c.home + ' win'], ['D', 'Draw'], ['A', c.away + ' win']].map(([v, l]) => `<option value="${v}" ${(c.mine || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><button type="button" class="sv" data-save="${esc(c.id)}">Save</button></div></div>
     <details class="how"><summary>How the model got here</summary>
       <p>Last 5 domestic league games per club (before kickoff). Expected goals: ${esc(c.home)} ${v.lam[0]}, ${esc(c.away)} ${v.lam[1]}. Official model v2: league-average prior 1.56, home 1.17×, away 0.83×, form weight 0.6.</p>
-      ${c.crossLeague ? `<p>${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment; v3 applies rough tiers.</p>` : ''}
+      ${c.crossLeague ? `<p>${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment, and v4 doesn't predict cup games.</p>` : ''}
+      ${c.v4 ? `<p>v4 shadow model: attack and defence ratings for every club from about 2.5 years of league games, with recent games counting more and each result judged against the opposition faced. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Over 2.5 and both-score are pulled toward the league's recent scoring rate. It is tracked next to v2 and never changes v2's picks.</p>` : ''}
     </details></div></div>`;
 }
 const GAME_MS = 2 * 3600000;
@@ -381,8 +388,10 @@ function results() {
     <div class="b"><span>Winner <b class="${r.outcomeHit ? 'ok' : 'no'}">${r.outcomeHit ? '✓' : '✗'}</b></span><span>O/U <b class="${r.ouHit ? 'ok' : 'no'}">${r.ouHit ? '✓' : '✗'}</b></span><span>Both <b class="${r.bttsHit ? 'ok' : 'no'}">${r.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
     resultsBlock('v2 official, all results', t.v2) + calibrationView(t) +
-    `<div class="sec" style="padding-top:20px">v2 vs v3 shadow test<small>Both models on the same matches only.</small></div>` +
-    resultsBlock('v2', t.h2h.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (shadow)', t.h2h.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') +
+    `<div class="sec" style="padding-top:20px">v2 vs v4 shadow test<small>Both models on the same matches only. v4 started on Oct 14, 2026, so this fills in as games finish.</small></div>` +
+    (t.h2h.v4.n ? resultsBlock('v2', t.h2h.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v4 (shadow)', t.h2h.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') : '<div class="small" style="padding:6px 16px">No v4 games graded yet. Results fill in a few hours after each league finishes.</div>') +
+    `<details class="old"><summary>Retired v3 shadow test (${t.h2hOld.v3.n} games)</summary>` +
+    resultsBlock('v2', t.h2hOld.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (retired)', t.h2hOld.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` +
     `<div class="sec" style="padding-top:20px">Recent results</div><div class="lst">${rows || '<div class="small">Nothing new graded yet. Results fill in automatically a few hours after each league finishes.</div>'}</div>` +
     `<details class="old"><summary>Earlier results carried over (${t.earlier.length})</summary><div class="lst" style="padding:0">${old}</div></details>`;
 }
@@ -395,7 +404,7 @@ function statusView() {
   if (!stat) return `<div class="empty">Loading…</div>`;
   const w = stat.writes, pct = Math.min(100, Math.round(100 * w.used / w.limit)), cls = pct >= 90 ? 'x' : pct >= 70 ? 'w' : '';
   const bad = stat.leagues.filter(l => l.problem), ok = stat.leagues.filter(l => !l.problem);
-  const row = l => `<div class="lg ${l.problem ? 'bad' : ''}"><div><span class="nm">${esc(l.name)}</span>${l.support ? ' <span class="fnt">(background)</span>' : ''}${l.problem ? `<small>${l.problem.kind === 'sync' ? 'Results won\'t load' : 'Game list won\'t load'}: ${esc(l.problem.msg)}</small>` : ''}</div><div class="when">${l.lastSync ? 'synced ' + ago(l.lastSync) : 'never synced'}</div></div>`;
+  const row = l => `<div class="lg ${l.problem ? 'bad' : ''}"><div><span class="nm">${esc(l.name)}</span>${l.support ? ' <span class="fnt">(background)</span>' : ''}${l.problem ? `<small>${l.problem.kind === 'sync' ? 'Results won\'t load' : 'Game list won\'t load'}: ${esc(l.problem.msg)}</small>` : ''}</div><div class="when">${l.lastSync ? 'synced ' + ago(l.lastSync) : 'never synced'}${l.v4 ? `<br><span class="fnt">v4 ratings ${l.v4.ratingsAt ? ago(l.v4.ratingsAt) : 'from the bundled history'}</span>` : ''}</div></div>`;
   return `<div class="sec">Saves used today<small>${w.used} of ${w.limit}. The free plan stops saving at the limit and resets at 7:00 PM Central. This is a close estimate.</small></div>
     <div class="pair" style="padding-top:0"><div class="meter ${cls}"><i style="width:${pct}%"></i></div>${pct >= 90 ? '<div class="small" style="color:var(--miss)">Almost out. Avoid Analyze this day until the reset.</div>' : pct >= 70 ? '<div class="small" style="color:var(--amber)">Getting high. Use Analyze leftover games instead of a full run.</div>' : ''}</div>
     ${bad.length ? `<div class="sec" style="padding-top:16px">Needs attention<small>${bad.length} league${bad.length === 1 ? '' : 's'} with a problem the last time they ran.</small></div><div class="pair" style="padding-top:0">${bad.map(row).join('')}</div>` : `<div class="banner" style="margin-top:14px">No league problems on record.</div>`}
