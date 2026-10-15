@@ -166,6 +166,23 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .cal.few{opacity:.55}
 .cal small{display:block;color:var(--faint);font-size:11.5px;margin-top:3px}
 .dotm{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-left:5px;vertical-align:middle}
+
+.seg{display:flex;gap:6px;padding:12px 18px 0}
+.seg button{font-size:12.5px;padding:7px 12px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+.seg button.on{background:var(--panel2);color:var(--ink);border-color:#35514a}
+.bd{margin:12px 18px 0;border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden}
+.bd .r{display:grid;grid-template-columns:84px repeat(3,minmax(0,1fr));gap:6px;padding:13px 12px;border-top:1px solid var(--line);align-items:center}
+.bd .r.h{border-top:0;padding:10px 12px 8px;font-size:11.5px;color:var(--dim);align-items:end}
+.bd .r.h b{display:block;color:var(--ink);font-size:13px;font-weight:650}.bd .r.h .fb b{color:var(--sm)}
+.bd .lab{font-size:13px;font-weight:600}.bd .lab small{display:block;font-weight:400;font-size:11px;color:var(--faint);margin-top:1px}
+.bd .c .p{font-size:21px;font-weight:700;letter-spacing:-.02em;color:var(--dim)}
+.bd .c .f{font-size:11.5px;color:var(--faint);margin-top:1px}
+.bd .c .tr{height:4px;border-radius:4px;background:#1c2b25;margin-top:6px;overflow:hidden}.bd .c .tr i{display:block;height:100%;background:#4a6157}
+.bd .c.best .p{color:var(--grass)}.bd .c.best .tr i{background:var(--grass)}
+.bd .r.br{font-size:12px;color:var(--dim);padding:10px 12px}.bd .r.br b{color:var(--ink);font-weight:600}.bd .r.br b.best{color:var(--grass)}
+.bdn{margin:10px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.45}
+.tri{display:grid;grid-template-columns:84px repeat(3,minmax(0,1fr));gap:4px 6px;margin-top:7px;font-size:12px;color:var(--dim)}
+.tri span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tri .hh{color:var(--faint)}
 </style>
 </head>
 <body>
@@ -412,28 +429,50 @@ function calibrationView(t) {
   const mine = t.mine && t.mine.n ? `<div class="small" style="margin-top:10px">Your own picks on ${t.mine.n} games: you got ${t.mine.mine}, the model got ${t.mine.model}.</div>` : '';
   return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>Winner picks grouped by how sure the model was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}${mine}</div>`;
 }
-function forebetBlock(t) {
-  const f = t.forebet; if (!f || !f.any) return '';
-  const pc = (h, n) => n ? `${h}/${n}` : '–';
-  const row = (name, x) => (x.n || x.nOu || x.nBtts) ? `<div class="li"><div class="a"><span>Against ${name}, same games</span></div><div class="b">${x.n ? `<span>Winner (${x.n}): Forebet ${x.fbOutcome}, ${name} ${x.outcome}</span><span>Brier: Forebet ${x.fbBrier}, ${name} ${x.brier}</span>` : ''}${x.nOu ? `<span>Over/under (${x.nOu}): Forebet ${x.fbOu}, ${name} ${x.ou}</span>` : ''}${x.nBtts ? `<span>Both score (${x.nBtts}): Forebet ${x.fbBtts}, ${name} ${x.btts}</span>` : ''}</div></div>` : '';
-  return `<div class="sec" style="padding-top:20px">Forebet, entered by hand<small>Winner ${pc(f.outcome, f.n)}, exact score ${pc(f.score, f.n)}${f.n ? `, Brier ${f.brier}` : ''}; over/under ${pc(f.ou, f.nOu)}; both score ${pc(f.btts, f.nBtts)}. Recorded only; no model uses it. Small samples swing a lot.</small></div><div class="lst">${row('v2', f.vs.v2)}${row('v4', f.vs.v4)}</div>`;
+const RB = { same: 'Same games', all: 'All games each model has' };
+function boardBlock(t) {
+  const bd = t.board; if (!bd) return '';
+  const view = S.rb === 'all' ? 'all' : 'same', M = bd[view].models;
+  const cell = (m, k, best) => { const [h, n] = M[m][k]; return n ? `<div class="c ${best ? 'best' : ''}"><div class="p">${Math.round(100 * h / n)}%</div><div class="f">${h} of ${n}</div><div class="tr"><i style="width:${Math.round(100 * h / n)}%"></i></div></div>` : `<div class="c"><div class="p">–</div><div class="f">no games yet</div></div>`; };
+  const row = (k, name, sub) => {
+    const pcts = ['v2', 'v4', 'fb'].map(m => { const [h, n] = M[m][k]; return n ? h / n : null; }), top = Math.max(...pcts.filter(x => x != null)), many = pcts.filter(x => x != null).length > 1;
+    return `<div class="r"><div class="lab">${name}<small>${sub}</small></div>${['v2', 'v4', 'fb'].map((m, i) => cell(m, k, many && pcts[i] === top)).join('')}</div>`;
+  };
+  const br = ['v2', 'v4', 'fb'].map(m => M[m].brier), bl = Math.min(...br.filter(x => x != null));
+  const n = view === 'same' ? bd.same.n : null;
+  return `<div class="sec">Hit rate, side by side<small>${view === 'same' ? 'Every model scored on the same games, so the numbers are a fair comparison.' : 'Each model on every game it has been graded on, so the game counts differ.'} Green marks the best in each row.</small></div>
+    <div class="seg">${['same', 'all'].map(v => `<button type="button" data-rb="${v}" class="${v === view ? 'on' : ''}">${RB[v]}${v === 'same' && view === 'same' ? ` (${n})` : ''}</button>`).join('')}</div>
+    <div class="bd"><div class="r h"><div></div><div><b>v2</b>official</div><div><b>v4</b>shadow</div><div class="fb"><b>Forebet</b>tracked only</div></div>
+      ${row('outcome', 'Winner', 'home, draw, away')}${row('ou', 'Over/under', '2.5 goals')}${row('btts', 'Both score', 'both teams')}
+      <div class="r br"><div>Brier score<br><span class="fnt">lower is better</span></div>${br.map(x => `<div>${x == null ? '–' : `<b class="${x === bl && br.filter(y => y != null).length > 1 ? 'best' : ''}">${x}</b>`}</div>`).join('')}</div></div>
+    <div class="bdn">Small samples swing a lot. Forebet is recorded and graded only; no model uses it. A random guess scores 0.667 on Brier.${view === 'same' && !n ? ' No game has all three models graded yet.' : ''}</div>`;
+}
+// What each model picked for one graded game, and whether it hit.
+function fbPicks(c) {
+  const f = c.fb, fin = c.final; if (!f || !fin) return null;
+  const o = fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2, goals = fin.h + fin.a, both = fin.h > 0 && fin.a > 0, nm = i => i === 0 ? c.home : i === 1 ? 'Draw' : c.away;
+  const w = f.p ? f.p.indexOf(Math.max(...f.p)) : null;
+  return { w: w == null ? null : [nm(w), w === o], ou: f.over == null ? null : [f.over > 50 ? 'Over' : 'Under', (f.over > 50) === (goals >= 3)], bt: f.btts == null ? null : [f.btts > 50 ? 'Yes' : 'No', (f.btts > 50) === both] };
+}
+function triRows(c) {
+  const nm = p => ({ H: c.home, D: 'Draw', A: c.away })[p];
+  const mk = (m, g) => m && g ? { w: [nm(m.pick), g.outcomeHit], ou: [m.over >= 50 ? 'Over' : 'Under', g.ouHit], bt: [m.btts >= 50 ? 'Yes' : 'No', g.bttsHit] } : null;
+  const cols = [mk(c.v2, c.grade && c.grade.v2), mk(c.v4, c.grade && c.grade.v4), fbPicks(c)];
+  const cl = x => x ? `${esc(x[0])} <b class="${x[1] ? 'ok' : 'no'}">${x[1] ? '✓' : '✗'}</b>` : '<span class="fnt">–</span>';
+  const line = (label, key) => `<span>${label}</span>${cols.map(x => `<span>${cl(x && x[key])}</span>`).join('')}`;
+  return `<div class="tri"><span></span><span class="hh">v2</span><span class="hh">v4</span><span class="hh">Forebet</span>${line('Winner', 'w')}${line('Over/under', 'ou')}${line('Both score', 'bt')}</div>`;
 }
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;
   const t = tally;
-  const rows = t.recent.map(c => `<div class="li"><div class="a"><span>${esc(c.home)} vs ${esc(c.away)}</span><span>${c.final.h}–${c.final.a}</span></div>
-    <div class="b"><span>${OUT[c.v2.pick]} <b class="${c.grade.v2.outcomeHit ? 'ok' : 'no'}">${c.grade.v2.outcomeHit ? '✓' : '✗'}</b></span><span>${c.v2.over >= 50 ? 'Over' : 'Under'} <b class="${c.grade.v2.ouHit ? 'ok' : 'no'}">${c.grade.v2.ouHit ? '✓' : '✗'}</b></span><span>Both score ${c.v2.btts >= 50 ? 'yes' : 'no'} <b class="${c.grade.v2.bttsHit ? 'ok' : 'no'}">${c.grade.v2.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
+  const rows = t.recent.map(c => `<div class="li"><div class="a"><span>${esc(c.home)} vs ${esc(c.away)}</span><span>${c.final.h}–${c.final.a}</span></div>${triRows(c)}</div>`).join('');
   const old = t.earlier.map(r => `<div class="li"><div class="a"><span>${esc(r.match)}</span><span>${esc(r.actual)}</span></div>
     <div class="b"><span>Winner <b class="${r.outcomeHit ? 'ok' : 'no'}">${r.outcomeHit ? '✓' : '✗'}</b></span><span>O/U <b class="${r.ouHit ? 'ok' : 'no'}">${r.ouHit ? '✓' : '✗'}</b></span><span>Both <b class="${r.bttsHit ? 'ok' : 'no'}">${r.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
-    resultsBlock('v2 official, all results', t.v2) + calibrationView(t) +
-    `<div class="sec" style="padding-top:20px">v2 vs v4 shadow test<small>Both models on the same matches only. v4 started on Oct 14, 2026, so this fills in as games finish.</small></div>` +
-    (t.v4 && t.v4.n ? resultsBlock('v4 (shadow), every game it predicted', t.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') : '') +
-    (t.h2h.v4.n ? resultsBlock('v2', t.h2h.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v4 (shadow)', t.h2h.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') : '<div class="small" style="padding:6px 16px">No v4 games graded yet. Results fill in a few hours after each league finishes.</div>') +
-    forebetBlock(t) +
+    boardBlock(t) + calibrationView(t) +
     `<details class="old"><summary>Retired v3 shadow test (${t.h2hOld.v3.n} games)</summary>` +
     resultsBlock('v2', t.h2hOld.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (retired)', t.h2hOld.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` +
-    `<div class="sec" style="padding-top:20px">Recent results</div><div class="lst">${rows || '<div class="small">Nothing new graded yet. Results fill in automatically a few hours after each league finishes.</div>'}</div>` +
+    `<div class="sec" style="padding-top:20px">Recent games<small>Each model's pick and whether it hit.</small></div><div class="lst">${rows || '<div class="small">Nothing new graded yet. Results fill in automatically a few hours after each league finishes.</div>'}</div>` +
     `<details class="old"><summary>Earlier results carried over (${t.earlier.length})</summary><div class="lst" style="padding:0">${old}</div></details>`;
 }
 
@@ -606,7 +645,8 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],.hd'); if (!t) return;
+  if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
     if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }

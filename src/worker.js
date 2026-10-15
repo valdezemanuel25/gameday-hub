@@ -268,6 +268,8 @@ async function tally(env) {
   const v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [], mineT = { n: 0, mine: 0, model: 0 };
   const fbT = { n: 0, outcome: 0, score: 0, brier: 0, nOu: 0, ou: 0, nBtts: 0, btts: 0 }, mk = () => ({ n: 0, fbOutcome: 0, fbBrier: 0, outcome: 0, brier: 0, nOu: 0, fbOu: 0, ou: 0, nBtts: 0, fbBtts: 0, btts: 0 }), fbVs = { v2: mk(), v4: mk() };
+  // Same-games table for the Results tab: a metric counts a game only when v2, v4 and Forebet all have it.
+  const SB = { outcome: { n: 0, v2: 0, v4: 0, fb: 0 }, ou: { n: 0, v2: 0, v4: 0, fb: 0 }, btts: { n: 0, v2: 0, v4: 0, fb: 0 }, brier: { n: 0, v2: 0, v4: 0, fb: 0 } };
   const CAL = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60% and up', 60, 101]].map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 }));
   const cal = (p, hit) => { const t = Math.max(...p), b = CAL.find(x => t >= x.lo && t < x.hi); if (!b) return; b.n++; b.hits += hit ? 1 : 0; b.sum += t; };
   for (const r of legacy.v2Rows) {
@@ -288,6 +290,12 @@ async function tally(env) {
         if (f.outcomeHit != null) { fbT.n++; fbT.outcome += f.outcomeHit; fbT.score += f.scoreHit; fbT.brier += f.brier; }
         if (f.ouHit != null) { fbT.nOu++; fbT.ou += f.ouHit; }
         if (f.bttsHit != null) { fbT.nBtts++; fbT.btts += f.bttsHit; }
+        if (c.grade.v2 && c.grade.v4) {
+          const g2 = c.grade.v2, g4 = c.grade.v4;
+          if (f.outcomeHit != null) { const o = SB.outcome, b = SB.brier; o.n++; o.v2 += g2.outcomeHit; o.v4 += g4.outcomeHit; o.fb += f.outcomeHit; b.n++; b.v2 += g2.brier; b.v4 += g4.brier; b.fb += f.brier; }
+          if (f.ouHit != null) { const o = SB.ou; o.n++; o.v2 += g2.ouHit; o.v4 += g4.ouHit; o.fb += f.ouHit; }
+          if (f.bttsHit != null) { const o = SB.btts; o.n++; o.v2 += g2.bttsHit; o.v4 += g4.bttsHit; o.fb += f.bttsHit; }
+        }
         for (const [k, g] of [['v2', c.grade.v2], ['v4', c.grade.v4]]) if (g) {
           const x = fbVs[k];
           if (f.outcomeHit != null) { x.n++; x.fbOutcome += f.outcomeHit; x.fbBrier += f.brier; x.outcome += g.outcomeHit; x.brier += g.brier; }
@@ -319,7 +327,15 @@ async function tally(env) {
     smT.model.outcome += c.grade.v2.outcomeHit; smT.model.ou += c.grade.v2.ouHit; smT.model.btts += c.grade.v2.bttsHit;
     smT.sm.outcome += c.smGrade.outcomeHit; smT.sm.ou += c.smGrade.ouHit; smT.sm.btts += c.smGrade.bttsHit; smT.sm.score += c.smGrade.scoreHit;
   }
+  const avg = (x, n) => (n ? +(x / n).toFixed(3) : null);
+  const mAll = x => ({ outcome: [x.outcome, x.n], ou: [x.ou, x.n], btts: [x.btts, x.n], brier: x.brier });
+  const board = {
+    same: { n: SB.outcome.n, models: Object.fromEntries(['v2', 'v4', 'fb'].map(m => [m, {
+      outcome: [SB.outcome[m], SB.outcome.n], ou: [SB.ou[m], SB.ou.n], btts: [SB.btts[m], SB.btts.n], brier: avg(SB.brier[m], SB.brier.n) }])) },
+    all: { models: { v2: mAll(fin(v2All)), v4: mAll(fin(v4All)), fb: { outcome: [fbT.outcome, fbT.n], ou: [fbT.ou, fbT.nOu], btts: [fbT.btts, fbT.nBtts], brier: avg(fbT.brier, fbT.n) } } },
+  };
   return {
+    board,
     smCompare: {
       ...smT, importedMatches: legacySm.length, newMatches: smLive.length,
       recent: smLive.slice(0, 100).map(c => ({ date: c.date, home: c.home, away: c.away, final: c.final, modelPick: c.v2.pick, modelP: c.v2.p, sm: c.sm.text, hit: c.grade.v2, smHit: c.smGrade })),
