@@ -8,15 +8,16 @@ const UA = { 'user-agent': 'Mozilla/5.0 (compatible; gameday-hub/1.0)' };
 
 const ALIAS = [
   [/paris saint germain|paris sg/g, 'psg'],
+  [/union saint gilloise|union st gilloise|union sg/g, 'unionsg'],
   [/manchester/g, 'man'],
   [/internazionale/g, 'inter'],
   [/united/g, 'utd'],
   [/wolverhampton wanderers|wolverhampton/g, 'wolves'],
   [/sheffield/g, 'sheff'],
-  [/\b(fc|cf|ac|as|ssc|sc|afc|cd|ud|sv|vfb|vfl|fk|ca|club|real|sporting|rc|rb|1 fc)\b/g, ' '],
+  [/\b(fc|cf|ac|as|ssc|sc|afc|cd|ud|sv|vfb|vfl|fk|ca|club|real|sporting|rc|rb|1 fc|tsg|tsv|fsv|bsc|sk|ks|gnk|nk|hnk|ofk)\b/g, ' '],
 ];
 export function norm(s) {
-  let x = String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ');
+  let x = String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
   for (const [re, to] of ALIAS) x = x.replace(re, to);
   return x.replace(/\s+/g, '');
 }
