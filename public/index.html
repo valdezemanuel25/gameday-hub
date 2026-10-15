@@ -582,7 +582,7 @@ document.addEventListener('click', async e => {
     const msg = $('#fb-msg'), lg = $('#fb-league').value, kind = $('#fb-kind').value; msg.textContent = 'Reading Forebet…';
     try {
       const r = await post(`/api/forebet?league=${encodeURIComponent(lg)}&kind=${kind}`, { fetch: true }); if (r.error) throw new Error(r.error);
-      msg.textContent = r.skipped ? 'Nothing to fill: every game already has this table, or none have cards yet.' : `Read ${r.rows} games from Forebet, saved ${r.saved}.`;
+      msg.textContent = r.skipped ? 'Nothing to fill: every game already has this table, or none have cards yet.' : `Read ${r.rows} games from Forebet, saved ${r.saved}.${r.note ? ' ' + r.note : ''}`;
       if (r.saved) { delete counts[S.date]; tally = null; await loadDay(); }
     } catch (er) { msg.textContent = er.message; }
     return;

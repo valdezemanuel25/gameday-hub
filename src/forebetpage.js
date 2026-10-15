@@ -128,7 +128,7 @@ export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = 
   for (const r of rows) if (!used.has(r) && work.some(w => w.date === r.date)) unmatched.push(`${r.home}–${r.away}`);
   meta[key] = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, ...(unmatched.length ? { unmatched: unmatched.slice(0, 6) } : {}), msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/<div class="rcnt/g) || []).length} match blocks, ${(html.match(/startDate/g) || []).length} dates, ${/captcha|challenge|cf-browser|Just a moment|consent/i.test(html) ? 'looks like a check page' : 'no check page'})` };
   await env.HUB.put('meta:fb', JSON.stringify(meta));
-  return { slug, kind, rows: rows.length, saved };
+  return { slug, kind, rows: rows.length, saved, ...(meta[key].msg ? { note: meta[key].msg } : {}) };
 }
 
 // Cron step: the page whose open games kick off soonest, not read in the last 3 hours (6 after a failure).
