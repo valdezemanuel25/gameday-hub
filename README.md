@@ -4,10 +4,10 @@ Runs on Cloudflare's free tier and opens on your phone like the Hub in Claude. N
 
 ## What it does
 
-- **Same look as the Hub.** It uses the Hub's own stylesheet and card layout: league tabs, match cards, Best Bets, By Kickoff, Track Results, and the v3 shadow row on every card.
+- **Same look as the Hub.** It uses the Hub's own stylesheet and card layout: league tabs, match cards, Best Bets, By Kickoff, Track Results, and the v4 shadow row on every card.
 - **Analyze button:** goes through the leagues **one at a time** (progress shows "Analyzing Bundesliga (3/13)…"). Each request handles a single league.
 - **Automatic grading:** a cron job runs every 10 minutes and does ONE small job for ONE league, rotating between *sync results*, *grade*, and *analyze*. A league is graded only after its last kickoff of the day + 2 hours (game length) + 3 hours (delay). Leagues are graded one by one, and a league whose games aren't final yet can't block the others.
-- **Your history is built in:** 280 graded matches and the 58-match v2 vs v3 shadow test.
+- **Your history is built in:** 280 graded matches and the retired 58-match v2 vs v3 shadow test.
 
 Change the timing in `wrangler.toml` under `[vars]`: `GAME_HOURS` and `GRADE_DELAY_HOURS`. If you meant "3 hours after the *kickoff*", set `GAME_HOURS = "0"`.
 
@@ -37,14 +37,17 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 - `npm test` runs all three:
   - `test/verify.mjs`: the v2 math against your Arsenal–Lille card from Oct 13.
   - `test/parity.mjs`: the v2 model against **120 real cards from the old Hub** (expected goals, win/draw/loss, over/under, BTTS, top two scores). All 120 match.
+  - `test/v4.mjs`: v4 club names line up with ESPN's, numbers match the research run, ratings cache and refresh.
   - `test/worker.mjs`: end-to-end with fake data (one league per request, sync, cup fixtures, delayed grading, cron rotation, imported totals).
 
 ## Known limits (read before trusting it)
 
 - **ESPN feed untested live.** It follows ESPN's public format but could not be run from the build environment. On first deploy, run Analyze for a day with games. If cards come back empty or skipped, open the browser console: the response lists any URL that failed. The standings feed is the most likely place for a mismatch; if it's missing, season totals fall back to the last ~50 days of results.
-- **v2 is verified, v3 is not.** v2 reproduces 120 of 120 old Hub cards exactly. The Hub's cards print each club's last-5 results but not the season-long numbers v3 needs, so v3 can only be built from your written method (below) and can't be matched to old cards.
-- **v3 is built from your written method** (65% season / 35% form, last season as 8 games, 20% shrink to 44/27/29, draw-risk flag, league-strength tiers). Your Hub cards don't show the season inputs, so v3 numbers can't be matched to old cards. v2 can, and does.
-- **No xG yet.** ESPN has no expected-goals data, so the live script runs plain v3. The 70% xG / 30% goals blend is in the model (`v3(..., {xg: true})`), but it needs an xG source added.
+- **v2 is verified.** v2 reproduces 120 of 120 old Hub cards exactly and is never changed.
+- **v4 is the shadow model (it replaced v3 on Oct 14, 2026).** It rates every club's attack and defence from about 2.5 years of league games (recent games count more, each result is judged against the opposition), turns that into a Poisson score grid like v2, and pulls Over 2.5 / both-score toward the league's recent scoring rate. In earlier-season tests it picked 2 to 4 points more winners than v2 and had lower log loss in Europe, MLS and Liga MX. It uses no betting odds. It covers the 11 league tabs (not cup games, and not a club with fewer than 8 games of history); everything else shows "no v4 prediction".
+- **Where v4's history lives.** `src/v4seed.js` holds the game history from your CSV files (through Oct 12-14, 2026) and ratings fitted on it. The Hub adds the games it syncs afterwards, and a spare cron slot rebuilds one league's ratings about once a day (`rat:<league>` in KV, shown on the Status tab). Analyze only reads ratings, so it stays inside the free plan's 10 ms CPU limit. To rebuild the seed from newer CSVs: `node tools/make-v4-seed.mjs "<folder>"` (optional).
+- **The old v3 is retired.** Its 58-match record and any games it had already predicted stay under "Retired v3 shadow test" in Results. The v2 vs v4 record starts fresh on Oct 14, 2026.
+- **No xG.** ESPN has no expected-goals data, so v4 works from goals only. (Your 2026-27 CSVs for Europe do carry xG columns, but only for this season, which is too little to train on yet.)
 - **Promoted clubs** use a rough stand-in for last season (league average, attack x0.85, defence x1.15). Not fitted.
 - **Cup games** (Champions League, Nations League) use each club's domestic form. A club outside the supported leagues is skipped with a note on the card.
 - **Not carried over from the Hub:** NHL, the Model vs SportsMole tab, scorer picks, and the old per-match result links. Old history rows have no kickoff times or leagues, so they show as a plain list.
