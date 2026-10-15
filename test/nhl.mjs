@@ -1,4 +1,5 @@
 // NHL section: model sanity, finished games teaching the ratings, cards, Forebet hockey reader, grading, Results board.
+import { readFileSync } from 'node:fs';
 import { freshState, predict, applyGame, nhlStep, nhlTally, parseForebetHockey, fbFor, probs } from '../src/nhl.js';
 
 const kv = new Map(), writes = [];
@@ -32,21 +33,21 @@ const dayStr = h => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicag
 const ev = (id, h, hn, ha, an, aa, done, hs, as, det) => ({ id, date: iso(h), competitions: [{ status: { type: { completed: done, shortDetail: det || (done ? 'Final' : '7:00 PM') } }, competitors: [{ homeAway: 'home', score: String(hs ?? 0), team: { displayName: hn, abbreviation: ha } }, { homeAway: 'away', score: String(as ?? 0), team: { displayName: an, abbreviation: aa } }] }] });
 const feed = {};
 const today = dayStr(0);
-feed[today.replace(/-/g, '')] = [ev('9001', 5, 'Tampa Bay Lightning', 'TB', 'Philadelphia Flyers', 'PHI', false), ev('9000', -30, 'Boston Bruins', 'BOS', 'Ottawa Senators', 'OTT', true, 3, 4, 'Final/OT')];
+feed[today.replace(/-/g, '')] = [ev('9001', 5, 'Vegas Golden Knights', 'VGK', 'Calgary Flames', 'CGY', false), ev('9000', -30, 'Boston Bruins', 'BOS', 'Ottawa Senators', 'OTT', true, 3, 4, 'Final/OT')];
 let calls = 0;
 const fetchFn = async url => {
   calls++;
     const d = /dates=(\d{8})/.exec(url)[1];
   return { ok: true, json: async () => ({ events: (feed[d] || []).filter(e => dayStr(0).replace(/-/g, '') === d || true) }) };
 };
-const FB2 = `<div class="rcnt"><span itemprop="homeTeam" itemscope><span itemprop="name">Tampa Bay Lightning</span></span><time itemprop="startDate" datetime="${today}T23:00:00">x</time><span itemprop="awayTeam" itemscope><span itemprop="name">Philadelphia Flyers</span></span><div class="fprc"><span>62</span><span>38</span></div><span class="forepr"><span>1</span></span><div class="avg_sc">6.2</div></div>`;
-const rows = parseForebetHockey(FB2, today);
-ok('Forebet hockey row read: both names, two-way pick and average goals', rows.length === 1 && rows[0].p.join('/') === '62/38' && rows[0].avg === 6.2, JSON.stringify(rows));
-const card = { home: 'Tampa Bay Lightning', away: 'Philadelphia Flyers' };
+const FB2 = readFileSync(new URL('./fixtures/forebet-nhl.html', import.meta.url), 'utf8');
+const rows = parseForebetHockey(FB2);
+ok('Forebet hockey row read: both names, two-way pick and average goals', rows.length === 4 && rows[0].home === 'Anaheim Ducks' && rows[0].p.join('/') === '48/52' && rows[0].pred === '2' && rows[0].avg === 6.1 && rows[0].date === '2026-10-16', JSON.stringify(rows));
+const card = { home: 'Vegas Golden Knights', away: 'Calgary Flames' };
 const f = fbFor(card, rows);
-ok('Forebet record: home pick, Over because 6.2 is above 5.5', f.pick === 'H' && f.over === true && f.avg === 6.2);
-ok('swapped home and away flips the pick', fbFor({ home: 'Philadelphia Flyers', away: 'Tampa Bay Lightning' }, rows).pick === 'A');
-ok('average of exactly 5.5 makes no Over/Under call', fbFor(card, [{ ...rows[0], avg: 5.5 }]).over === null);
+ok('Forebet record: home pick, Over because 6.6 is above 5.5', f.pick === 'H' && f.over === true && f.avg === 6.6);
+ok('swapped home and away flips the pick', fbFor({ home: 'Calgary Flames', away: 'Vegas Golden Knights' }, rows).pick === 'A');
+ok('average of exactly 5.5 makes no Over/Under call', fbFor(card, [{ ...rows[2], avg: 5.5 }]).over === null);
 
 const fetchFn2 = async (url, o) => url.includes('forebet') ? { ok: true, text: async () => FB2 } : fetchFn(url, o);
 // the finished BOS game is not in the seed's card list and is dated after the seed, so it teaches the ratings
@@ -62,7 +63,7 @@ const r2 = await nhlStep(env, new Date(), fetchFn2);
 ok('a second run with nothing new writes nothing', writes.length === w1 && r2.created === 0 && r2.graded === 0, JSON.stringify(r2));
 
 // game finishes
-feed[today.replace(/-/g, '')] = [ev('9001', 5, 'Tampa Bay Lightning', 'TB', 'Philadelphia Flyers', 'PHI', true, 3, 2, 'Final/OT')];
+feed[today.replace(/-/g, '')] = [ev('9001', 5, 'Vegas Golden Knights', 'VGK', 'Calgary Flames', 'CGY', true, 3, 2, 'Final/OT')];
 const clock = new Date(Date.now() + 8 * 3600000);
 const fetchLater = async (url, o) => url.includes('forebet') ? { ok: true, text: async () => FB2 } : fetchFn(url, o);
 const r3 = await nhlStep(env, clock, fetchLater);
@@ -71,9 +72,9 @@ ok('finished game graded with total, OT flag and all three models', r3.graded ==
 ok('Forebet graded: pick home won, Over missed (total 5)', c3.grade.fb.win === 1 && c3.grade.fb.ou === 0);
 ok('v2 over/under is graded at 5.5', c3.grade.v2.ou === ((c3.v2.o >= 50) === false ? 1 : 0));
 const st = JSON.parse(kv.get('nhl:state'));
-ok('ratings state saved with the game applied once', st.applied.includes('9001') && st.teams.TBL.n === freshState().teams.TBL.n + 1);
+ok('ratings state saved with the game applied once', st.applied.includes('9001') && st.teams.VGK.n === freshState().teams.VGK.n + 1);
 const r4 = await nhlStep(env, clock, fetchLater);
-ok('re-running does not grade or count the game twice', r4.graded === 0 && JSON.parse(kv.get('nhl:state')).teams.TBL.n === st.teams.TBL.n);
+ok('re-running does not grade or count the game twice', r4.graded === 0 && JSON.parse(kv.get('nhl:state')).teams.VGK.n === st.teams.VGK.n);
 
 const t = await nhlTally(env);
 ok('results board counts the graded game for each model', t.graded === 1 && t.all.win.v2.n === 1 && t.all.win.fb.n === 1 && t.same.win.v4.n === 1 && t.recent.length === 1);

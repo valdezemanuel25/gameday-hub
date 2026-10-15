@@ -71,23 +71,23 @@ export function applyGame(S, hc, ac, h, a, last) {
 
 // ---- Forebet (hockey) --------------------------------------------------------------------------
 // Pick and win chance as Forebet prints them. Its "Avg. goals" is compared with 5.5 for Over/Under (it prints no O/U chance).
-export function parseForebetHockey(html, fromDate) {
-  const starts = [], reH = /itemprop=["']?homeTeam/g; let m;
-  while ((m = reH.exec(html))) starts.push(m.index);
-  const name = (chunk, at) => { const k = /<span itemprop=["']?name["']?>([^<]*)<\/span>/.exec(chunk.slice(at)); return k ? k[1].replace(/&amp;/g, '&').trim() : null; };
-  const rows = [];
+export function parseForebetHockey(html) {
+  // Hockey rows differ from the football pages: <span class="homeTeam"><span>Name</span></span>, the date as plain text
+  // (mm/dd/yyyy), two win-chance numbers (the picked side carries class="fpr"), the pick in .forepr and "Avg. goals" in .avg_sc.
+  const rows = [], starts = [], reR = /<div class="rcnt/g; let m;
+  while ((m = reR.exec(html))) starts.push(m.index);
   for (let n = 0; n < starts.length; n++) {
-    const chunk = html.slice(starts[n], starts[n + 1] ?? starts[n] + 6000);
-    const dm = /itemprop=["']?startDate["']?\s+datetime=["']?(\d{4}-\d\d-\d\d)/.exec(chunk), date = dm && dm[1];
-    if (!date || (fromDate && date < fromDate)) continue;
-    const aAt = chunk.search(/itemprop=["']?awayTeam/), home = name(chunk, 0), away = aAt < 0 ? null : name(chunk, aAt);
-    if (!home || !away) continue;
-    const im = /class=["']?fprc["']?>([\s\S]*?)<\/div>/.exec(chunk);
-    const nums = im ? [...im[1].matchAll(/>(\d{1,3})</g)].map(x => +x[1]) : [];
-    const row = { home, away, date };
-    if (nums.length >= 2) { const t = nums.reduce((s, x) => s + x, 0); if (t >= 97 && t <= 103) row.p = nums.length === 2 ? nums : [nums[0], nums[nums.length - 1]]; }
+    const chunk = html.slice(starts[n], starts[n + 1] ?? starts[n] + 5000);
+    if (!/\/hockey\/matches\//.test(chunk)) continue; // skips the football "Pick of the day" blocks
+    const hm = /class=["']?homeTeam["']?><span>([^<]*)<\/span>/.exec(chunk), am = /class=["']?awayTeam["']?><span>([^<]*)<\/span>/.exec(chunk);
+    const dm = /date_bah["']?>(\d\d)\/(\d\d)\/(\d{4})/.exec(chunk);
+    if (!hm || !am || !dm) continue;
+    const ent = x => x.replace(/&amp;/g, '&').replace(/&#0?39;|&apos;/g, "'").trim();
+    const row = { home: ent(hm[1]), away: ent(am[1]), date: `${dm[3]}-${dm[1]}-${dm[2]}` };
+    const im = /class=["']?fprc[^>]*>([\s\S]*?)<\/div>/.exec(chunk), nums = im ? [...im[1].matchAll(/>(\d{1,3})</g)].map(x => +x[1]) : [];
+    if (nums.length === 2 && nums[0] + nums[1] >= 97 && nums[0] + nums[1] <= 103) row.p = nums;
     const pr = /class=["']?forepr["']?><span>([^<]*)<\/span>/.exec(chunk); if (pr && /^[12X]$/.test(pr[1])) row.pred = pr[1];
-    const av = /class=["']?avg_sc[^"'>]*["']?>\s*([\d.]+)\s*</.exec(chunk); if (av) row.avg = +av[1];
+    const av = /class=["']?avg_sc[^>]*>\s*([\d.]+)\s*</.exec(chunk); if (av) row.avg = +av[1];
     if (row.p || row.avg != null) rows.push(row);
   }
   return rows;
@@ -199,7 +199,7 @@ async function forebetRead(env, work, now, fetchFn) {
     const m = { at: now.toISOString(), ok: false, msg: String(e.message || e).slice(0, 80) };
     await env.HUB.put('nhl:fbmeta', JSON.stringify(m)); return { error: m.msg };
   }
-  const rows = parseForebetHockey(html, work[0].date);
+  const rows = parseForebetHockey(html);
   let saved = 0;
   for (const { date, day, open } of work) {
     let dirty = false;
