@@ -99,15 +99,15 @@ function modelRow(label, m, c, g) {
 function fbRow(c, g) {
   const f = c.fb;
   if (!f) return `<div class="g r"><div class="n">Forebet</div><div class="p">Not read yet</div><div class="p">Not read yet</div></div>`;
-  const w = f.pick ? `<b>${esc(f.pick === 'H' ? c.hAbbr : c.aAbbr)}${f.p ? ' ' + Math.max(...f.p) + '%' : ''}</b>${mark(g && g.win)}` : 'No pick';
-  const o = f.over == null ? (f.avg != null ? `avg ${f.avg}` : 'No pick') : `<b>${f.over ? 'Over' : 'Under'}</b>${mark(g && g.ou)} · avg ${f.avg}`;
-  return `<div class="g r"><div class="n">Forebet</div><div class="p${f.pick ? ' hi' : ''}">${w}</div><div class="p${f.over != null ? ' hi' : ''}">${o}</div></div>`;
+  const w = f.pick ? `<b>${esc(f.pick === 'H' ? c.hAbbr : c.aAbbr)}${f.p ? ' ' + (f.pick === 'H' ? f.p[0] : f.p[1]) + '%' : ''}</b>${mark(g && g.win)}` : 'No pick';
+  const sc = f.score ? `<b>${esc(c.aAbbr)} ${f.score.a} – ${f.score.h} ${esc(c.hAbbr)}</b>` : 'No score';
+  return `<div class="g r"><div class="n">Forebet</div><div class="p${f.pick ? ' hi' : ''}">${w}</div><div class="p">${sc}</div></div>`;
 }
 function card(c) {
   const g = c.grade || {}, f = c.final;
   const head = f ? 'Final' + (f.last !== 'REG' ? ' (' + f.last + ')' : '') : esc(c.ko);
   return `<div class="card"><div class="hd"><h3>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</h3><span>${head}</span></div>
-  <div class="g h"><span></span><span>Winner</span><span>Over / Under 5.5</span></div>
+  <div class="g h"><span></span><span>Winner</span><span>Over/Under 5.5 · score</span></div>
   ${modelRow('v2 model', c.v2, c, g.v2)}${modelRow('v4 shadow', c.v4, c, g.v4)}${fbRow(c, g.fb)}
   <div class="note">${f ? `${esc(c.aAbbr)} ${f.a}, ${esc(c.hAbbr)} ${f.h}${f.last !== 'REG' ? ' (' + f.last + ')' : ''} · total ${f.total} · graded at 5.5` : c.skipped ? esc(c.skipped) : 'Blue = a confident pick. v4 is a shadow test and never changes v2.'}</div></div>`;
 }
@@ -122,7 +122,7 @@ function cell(m, key, other) {
 }
 function bestOf(models, key) {
   const v = ['v2', 'v4', 'fb'].map(k => { const m = models[k]; return m.n ? m.hit / m.n : -1; }), mx = Math.max(...v);
-  return v.map(x => x === mx && mx >= 0 && v.filter(y => y === mx).length < 3 ? ' class="best"' : '');
+  return v.map(x => x === mx && mx >= 0 && v.filter(y => y === mx).length < v.filter(y => y >= 0).length ? ' class="best"' : '');
 }
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;
@@ -133,13 +133,13 @@ function results() {
   const bb = B.brier.n ? (B.brier.v4 < B.brier.v2 ? [ '', ' class="best"', '' ] : B.brier.v2 < B.brier.v4 ? [' class="best"', '', ''] : ['', '', '']) : ['', '', ''];
   return `${seg}<table><tr><th></th><th>v2</th><th>v4 shadow</th><th>Forebet</th></tr>
   <tr><td>Winner</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.win[k], 'win', bw[i])).join('')}</tr>
-  <tr><td>Over/Under 5.5</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}</tr>
+  <tr><td>Over/Under 5.5</td>${['v2', 'v4'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}<td>–</td></tr>
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
-  <div class="nt">${S.scope === 'same' ? 'Only games all three models have a pick for.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Forebet gives no Over/Under chance, so its Over is called when its average goals is above 5.5. Market odds are never used.</div>
+  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Forebet is graded on the winner only; its predicted score is shown on the cards. Market odds are never used.</div>
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
     const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${m.o >= 50 ? 'Over' : 'Under'}${mark(g && g.ou)}` : '–';
     const c = { h: r.hAbbr, a: r.aAbbr };
-    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.over == null ? '–' : (r.fb.over ? 'Over' : 'Under') + mark(gr.fb && gr.fb.ou)}` : '–';
+    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.score ? r.fb.score.a + '–' + r.fb.score.h : '–'}` : '–';
     return `<div class="rg"><b>${esc(r.aAbbr)} @ ${esc(r.hAbbr)}</b><span>${f.a}–${f.h}${f.last !== 'REG' ? ' ' + f.last : ''}</span><span>${one(r.v2, gr.v2, c)}</span><span>${one(r.v4, gr.v4, c)}</span><span>${fb}</span></div>`;
   }).join('')}</div>`;
 }

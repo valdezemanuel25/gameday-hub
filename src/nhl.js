@@ -70,7 +70,7 @@ export function applyGame(S, hc, ac, h, a, last) {
 }
 
 // ---- Forebet (hockey) --------------------------------------------------------------------------
-// Pick and win chance as Forebet prints them. Its "Avg. goals" is compared with 5.5 for Over/Under (it prints no O/U chance).
+// Forebet hockey: only its pick, the win chance of that pick and its predicted score are kept (no Over/Under).
 export function parseForebetHockey(html) {
   // Hockey rows differ from the football pages: <span class="homeTeam"><span>Name</span></span>, the date as plain text
   // (mm/dd/yyyy), two win-chance numbers (the picked side carries class="fpr"), the pick in .forepr and "Avg. goals" in .avg_sc.
@@ -87,20 +87,21 @@ export function parseForebetHockey(html) {
     const im = /class=["']?fprc[^>]*>([\s\S]*?)<\/div>/.exec(chunk), nums = im ? [...im[1].matchAll(/>(\d{1,3})</g)].map(x => +x[1]) : [];
     if (nums.length === 2 && nums[0] + nums[1] >= 97 && nums[0] + nums[1] <= 103) row.p = nums;
     const pr = /class=["']?forepr["']?><span>([^<]*)<\/span>/.exec(chunk); if (pr && /^[12X]$/.test(pr[1])) row.pred = pr[1];
-    const av = /class=["']?avg_sc[^>]*>\s*([\d.]+)\s*</.exec(chunk); if (av) row.avg = +av[1];
-    if (row.p || row.avg != null) rows.push(row);
+    const sc = /class=["']?ex_sc tabonly["']?>([\s\S]*?)<\/div>/.exec(chunk), sn = sc ? [...sc[1].matchAll(/\d+/g)].map(x => +x[0]) : [];
+    if (sn.length === 2) row.score = { h: sn[0], a: sn[1] };
+    if (row.p || row.score) rows.push(row);
   }
   return rows;
 }
 const same = (a, b) => { const n = s => String(s).toLowerCase().replace(/[^a-z]/g, ''); const x = n(a), y = n(b); return x === y || (Math.min(x.length, y.length) >= 5 && (x.includes(y) || y.includes(x))); };
-// One Forebet record per card: p = [home %, away %], pick = 'H' | 'A', avg goals, over = avg > 5.5 (null at exactly 5.5).
+// One Forebet record per card: p = [home %, away %], pick = 'H' | 'A', score = predicted { h, a }.
 export function fbFor(card, rows) {
   for (const r of rows) {
     const fwd = same(r.home, card.home) && same(r.away, card.away), rev = !fwd && same(r.home, card.away) && same(r.away, card.home);
     if (!fwd && !rev) continue;
     const p = r.p ? (rev ? [r.p[1], r.p[0]] : r.p) : null;
     const pick = p ? (p[0] > p[1] ? 'H' : p[1] > p[0] ? 'A' : null) : r.pred === '1' ? (rev ? 'A' : 'H') : r.pred === '2' ? (rev ? 'H' : 'A') : null;
-    return { p, pick, avg: r.avg ?? null, over: r.avg == null || r.avg === LINE ? null : r.avg > LINE };
+    return { p, pick, score: r.score ? (rev ? { h: r.score.a, a: r.score.h } : r.score) : null };
   }
   return null;
 }
@@ -128,7 +129,7 @@ export function gradeCard(c) {
   const win = f.h > f.a ? 'H' : 'A', over = f.total > LINE;
   const g = {};
   for (const k of ['v2', 'v4']) if (c[k]) g[k] = { win: (c[k].w >= 50 ? 'H' : 'A') === win ? 1 : 0, ou: (c[k].o >= 50) === over ? 1 : 0, brier: +((c[k].w / 100 - (win === 'H' ? 1 : 0)) ** 2).toFixed(4) };
-  if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null, ou: c.fb.over == null ? null : (c.fb.over === over ? 1 : 0) };
+  if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null };
   c.grade = g;
 }
 
@@ -228,9 +229,9 @@ export async function nhlTally(env) {
         if (g[m]?.ou != null) { all.ou[m].n++; all.ou[m].hit += g[m].ou; }
       }
       for (const m of ['v2', 'v4']) if (g[m]) { all.brier.n += m === 'v2' ? 1 : 0; all.brier[m] += g[m].brier; }
-      if (g.v2 && g.v4 && g.fb && g.fb.win != null && g.fb.ou != null) {
+      if (g.v2 && g.v4 && g.fb && g.fb.win != null) {
         same.brier.n++; same.brier.v2 += g.v2.brier; same.brier.v4 += g.v4.brier;
-        for (const m of M) { same.win[m].n++; same.win[m].hit += g[m].win; same.ou[m].n++; same.ou[m].hit += g[m].ou; }
+        for (const m of M) { same.win[m].n++; same.win[m].hit += g[m].win; if (m !== 'fb') { same.ou[m].n++; same.ou[m].hit += g[m].ou; } }
       }
       if (recent.length < 60) recent.push({ date: d.date, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, v2: c.v2, v4: c.v4, fb: c.fb || null, grade: g });
     }

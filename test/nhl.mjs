@@ -42,12 +42,12 @@ const fetchFn = async url => {
 };
 const FB2 = readFileSync(new URL('./fixtures/forebet-nhl.html', import.meta.url), 'utf8');
 const rows = parseForebetHockey(FB2);
-ok('Forebet hockey row read: both names, two-way pick and average goals', rows.length === 4 && rows[0].home === 'Anaheim Ducks' && rows[0].p.join('/') === '48/52' && rows[0].pred === '2' && rows[0].avg === 6.1 && rows[0].date === '2026-10-16', JSON.stringify(rows));
+ok('Forebet hockey row read: both names, two-way pick and average goals', rows.length === 4 && rows[0].home === 'Anaheim Ducks' && rows[0].p.join('/') === '48/52' && rows[0].pred === '2' && rows[0].score.h === 3 && rows[0].score.a === 8 && rows[0].date === '2026-10-16', JSON.stringify(rows));
 const card = { home: 'Vegas Golden Knights', away: 'Calgary Flames' };
 const f = fbFor(card, rows);
-ok('Forebet record: home pick, Over because 6.6 is above 5.5', f.pick === 'H' && f.over === true && f.avg === 6.6);
-ok('swapped home and away flips the pick', fbFor({ home: 'Calgary Flames', away: 'Vegas Golden Knights' }, rows).pick === 'A');
-ok('average of exactly 5.5 makes no Over/Under call', fbFor(card, [{ ...rows[2], avg: 5.5 }]).over === null);
+ok('Forebet record: home pick, its win chance and predicted score', f.pick === 'H' && f.p[0] === 70 && f.score && f.score.h > 0);
+ok('swapped home and away flips the pick', fbFor({ home: 'Calgary Flames', away: 'Vegas Golden Knights' }, rows).pick === 'A' && fbFor({ home: 'Calgary Flames', away: 'Vegas Golden Knights' }, rows).score.a === f.score.h);
+ok('no Over/Under is kept from Forebet', !('over' in f) && !('avg' in f));
 
 const fetchFn2 = async (url, o) => url.includes('forebet') ? { ok: true, text: async () => FB2 } : fetchFn(url, o);
 // the finished BOS game is not in the seed's card list and is dated after the seed, so it teaches the ratings
@@ -56,7 +56,7 @@ ok('step made a card for tonight\'s game', r1.created === 1, JSON.stringify(r1))
 const dayKey = `nhl:day:${today}`;
 const d1 = JSON.parse(kv.get(dayKey));
 ok('card has v2, v4 and a stored time', d1.cards[0].v2 && d1.cards[0].v4 && d1.cards[0].ko);
-ok('Forebet filled onto the card in the same run', d1.cards[0].fb && d1.cards[0].fb.pick === 'H' && d1.cards[0].fb.over === true, JSON.stringify(r1.forebet));
+ok('Forebet filled onto the card in the same run', d1.cards[0].fb && d1.cards[0].fb.pick === 'H', JSON.stringify(r1.forebet));
 ok('soccer keys are never touched', [...kv.keys()].every(k => k.startsWith('nhl:')));
 const w1 = writes.length;
 const r2 = await nhlStep(env, new Date(), fetchFn2);
@@ -69,7 +69,7 @@ const fetchLater = async (url, o) => url.includes('forebet') ? { ok: true, text:
 const r3 = await nhlStep(env, clock, fetchLater);
 const d3 = JSON.parse(kv.get(dayKey)); const c3 = d3.cards.find(c => c.id === '9001');
 ok('finished game graded with total, OT flag and all three models', r3.graded === 1 && c3.final.total === 5 && c3.final.last === 'OT' && c3.grade.v2 && c3.grade.v4 && c3.grade.fb, JSON.stringify(c3.final));
-ok('Forebet graded: pick home won, Over missed (total 5)', c3.grade.fb.win === 1 && c3.grade.fb.ou === 0);
+ok('Forebet graded on the winner only', c3.grade.fb.win === 1 && !('ou' in c3.grade.fb));
 ok('v2 over/under is graded at 5.5', c3.grade.v2.ou === ((c3.v2.o >= 50) === false ? 1 : 0));
 const st = JSON.parse(kv.get('nhl:state'));
 ok('ratings state saved with the game applied once', st.applied.includes('9001') && st.teams.VGK.n === freshState().teams.VGK.n + 1);
