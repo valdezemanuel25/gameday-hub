@@ -235,7 +235,7 @@ function expanded(c) {
   return `<div class="ex"><div class="in"><div class="in">
     <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
     <div class="two">${mdl}${sm}</div>
-    <div class="box f">Most likely scores<b style="font-size:13px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b></div>
+    <div class="two"><div class="box">Most likely scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b></div>${fbBox(c)}</div>
     <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
     ${shadow}
     ${fbLine(c)}
@@ -303,6 +303,15 @@ function alerts() {
 /* ---------- board ---------- */
 // v4 shadow line for a game v2 could not cover (no v2 card, but the v4 cup model had a prediction)
 // Forebet picks entered by hand. Recorded and graded only; no model reads them.
+function fbBox(c) {
+  const f = c.fb;
+  if (!f) return `<div class="box">Forebet<small>Not read yet</small></div>`;
+  const big = f.score ? `${f.score.h}–${f.score.a}` : (f.p ? OUT['HDA'[f.p.indexOf(Math.max(...f.p))]] : '');
+  const sub = [];
+  if (f.p) sub.push(`${f.p[0]}% / ${f.p[1]}% / ${f.p[2]}%`);
+  const extra = [f.over != null ? `Over ${f.over}%` : '', f.btts != null ? `Both ${f.btts}%` : ''].filter(Boolean).join(' · ');
+  return `<div class="box" style="border-color:#3d5a7a">Forebet said<b>${esc(big)}</b><small>${sub.join('')}</small>${extra ? `<small>${extra}</small>` : ''}</div>`;
+}
 function fbLine(c) {
   const f = c.fb; if (!f) return '';
   const parts = [], pills = [];
