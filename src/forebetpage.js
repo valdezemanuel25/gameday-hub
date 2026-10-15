@@ -29,26 +29,27 @@ const between = (s, a, b, from = 0) => { const i = s.indexOf(a, from); if (i < 0
 // Each match sits in <div class="rcnt ...">. Cheap string scanning (the Worker has ~10 ms of CPU); rows before
 // `fromDate` (finished games further down the page) are skipped without being read.
 export function parseForebetHtml(html, kind, fromDate) {
-  const rows = [];
-  let pos = 0;
-  for (;;) {
-    const i = html.indexOf('<div class="rcnt', pos); if (i < 0) break;
-    const nx = html.indexOf('<div class="rcnt', i + 10);
-    const chunk = html.slice(i, nx < 0 ? html.length : nx); pos = i + 10;
-    const date = between(chunk, 'startDate" datetime="', '"');
+  // Forebet serves the page with or without quotes around simple attribute values (class=rcnt or
+  // class="rcnt"), so every pattern allows both. A match is the stretch from one home-team tag to the next.
+  const rows = [], starts = [], reH = /itemprop=["']?homeTeam/g;
+  let m; while ((m = reH.exec(html))) starts.push(m.index);
+  const nameAfter = (chunk, at) => { const k = /<span itemprop=["']?name["']?>([^<]*)<\/span>/.exec(chunk.slice(at)); return k ? k[1] : null; };
+  for (let n = 0; n < starts.length; n++) {
+    const chunk = html.slice(starts[n], starts[n + 1] ?? starts[n] + 6000);
+    const dm = /itemprop=["']?startDate["']?\s+datetime=["']?(\d{4}-\d\d-\d\d)/.exec(chunk);
+    const date = dm && dm[1];
     if (!date || (fromDate && date < fromDate)) continue;
-    const hAt = chunk.indexOf('itemprop="homeTeam"'), aAt = chunk.indexOf('itemprop="awayTeam"');
-    if (hAt < 0 || aAt < 0) continue;
-    const home = between(chunk, '<span itemprop="name">', '</span>', hAt), away = between(chunk, '<span itemprop="name">', '</span>', aAt);
-    const inner = between(chunk, 'class="fprc">', '</div>');
+    const aAt = chunk.search(/itemprop=["']?awayTeam/);
+    const home = nameAfter(chunk, 0), away = aAt < 0 ? null : nameAfter(chunk, aAt);
+    const im = /class=["']?fprc["']?>([\s\S]*?)<\/div>/.exec(chunk), inner = im && im[1];
     if (!home || !away || !inner) continue;
-    const nums = [...inner.matchAll(/>(\d{1,3})</g)].map(m => +m[1]);
+    const nums = [...inner.matchAll(/>(\d{1,3})</g)].map(x => +x[1]);
     const row = { home: ent(home), away: ent(away), date };
     if (kind === '1x2') {
       if (nums.length !== 3 || nums[0] + nums[1] + nums[2] < 97 || nums[0] + nums[1] + nums[2] > 103) continue;
       row.p = nums;
-      const pr = between(chunk, 'class="forepr"><span>', '</span>'); if (pr && /^[1X2]$/.test(pr)) row.pred = pr;
-      const sc = /^(\d{1,2})\s*-\s*(\d{1,2})$/.exec((between(chunk, 'class="ex_sc tabonly">', '<') || '').trim());
+      const pr = /class=["']?forepr["']?><span>([^<]*)<\/span>/.exec(chunk); if (pr && /^[1X2]$/.test(pr[1])) row.pred = pr[1];
+      const sc = /class=["']?ex_sc tabonly["']?>\s*(\d{1,2})\s*-\s*(\d{1,2})\s*</.exec(chunk);
       if (sc) row.score = { h: +sc[1], a: +sc[2] };
     } else {
       if (nums.length !== 2 || nums[0] + nums[1] < 97 || nums[0] + nums[1] > 103) continue;
@@ -126,7 +127,7 @@ export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = 
   const used = new Set(); for (const { day } of work) for (const c of day.cards.filter(x => x.league === slug)) for (const r of rows) if (is(r.home, c.home) && is(r.away, c.away) || is(r.home, c.away) && is(r.away, c.home)) used.add(r);
   const unmatched = [];
   for (const r of rows) if (!used.has(r) && work.some(w => w.date === r.date)) unmatched.push(`${r.home}–${r.away}`);
-  meta[key] = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, ...(unmatched.length ? { unmatched: unmatched.slice(0, 6) } : {}), msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/<div class="rcnt/g) || []).length} match blocks, ${(html.match(/startDate/g) || []).length} dates, ${/captcha|challenge|cf-browser|Just a moment|consent/i.test(html) ? 'looks like a check page' : 'no check page'})` };
+  meta[key] = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, ...(unmatched.length ? { unmatched: unmatched.slice(0, 6) } : {}), msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/itemprop=["']?homeTeam/g) || []).length} home-team tags, ${(html.match(/startDate/g) || []).length} dates, ${/captcha|challenge|cf-browser|Just a moment|Access denied/i.test(html) ? 'looks like a check page' : 'no check page'})` };
   await env.HUB.put('meta:fb', JSON.stringify(meta));
   return { slug, kind, rows: rows.length, saved, ...(meta[key].msg ? { note: meta[key].msg } : {}) };
 }

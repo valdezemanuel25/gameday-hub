@@ -73,5 +73,14 @@ ok('all nine league pages are set up', Object.keys(FB_PAGES).length === 10);
   ok('short Forebet names match full club names', true);
 }
 
+// Forebet sometimes serves the page with the quotes removed from simple attributes (class=rcnt)
+{
+  const { readFileSync } = await import('node:fs');
+  const quoted = readFileSync(new URL('./fixtures/fb-1x2.html', import.meta.url), 'utf8');
+  const plain = quoted.replace(/="([A-Za-z0-9_.\/:-]+)"/g, '=$1');
+  const a = parseForebetHtml(quoted, '1x2', ''), b = parseForebetHtml(plain, '1x2', '');
+  ok('a page without attribute quotes reads the same games', plain !== quoted && a.length > 0 && JSON.stringify(a) === JSON.stringify(b));
+}
+
 console.log(fail ? `\n${fail} Forebet page checks FAILED` : '\nAll Forebet page checks passed');
 process.exit(fail ? 1 : 0);
