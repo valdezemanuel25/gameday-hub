@@ -30,7 +30,7 @@ const entry = (id, name, gp, gf, ga) => ({
   stats: [{ name: 'gamesPlayed', value: gp }, { name: 'pointsFor', value: gf }, { name: 'pointsAgainst', value: ga }],
 });
 
-let fixtureDone = false;
+let fixtureDone = false, elDone = false;
 const history = [];
 // Arsenal (359) last 5: 2-1, 0-3, 2-0, 2-1, 1-0 (7 scored, 5 conceded). Brighton (331): 7 scored, 4 conceded.
 [[2, 1], [0, 3], [2, 0], [2, 1], [1, 0]].forEach(([f, a], i) =>
@@ -59,6 +59,13 @@ globalThis.fetch = async url => {
     return send({ events: [
       ev('ucl1', '2026-10-14T19:00:00Z', [359, 'Arsenal'], [331, 'Brighton'], 0, 0, false),
       ev('ucl2', '2026-10-15T19:00:00Z', [777, 'Unknown FC'], [359, 'Arsenal'], 0, 0, false),
+    ] });
+  }
+  if (u.includes('/uefa.europa/scoreboard')) {
+    return send({ events: [
+      ev('el1', '2026-10-15T19:00:00Z', [1929, 'Benfica'], [256, 'Celtic'], elDone ? 2 : 0, elDone ? 0 : 0, elDone),
+      ev('el2', '2026-10-15T16:45:00Z', [167, 'Lyon'], [384, 'Crystal Palace'], 0, 0, false),
+      ev('el3', '2026-10-15T16:45:00Z', [9999, 'Nobody FC'], [256, 'Celtic'], 0, 0, false),
     ] });
   }
   return send({ events: [] });
@@ -158,6 +165,41 @@ await call('/api/analyze?league=eng.1&date=2026-10-14', 'POST', 'secret');
 const kept = (await call('/api/day?date=2026-10-14')).cards.find(x => x.id === 'fx1');
 ok('re-analyzing never overwrites a graded card', !!kept.final && !!kept.grade, JSON.stringify(kept.final));
 
+
+// ---- Europa League + v4 cup shadow: games v2 cannot cover still get a v4 prediction ----
+{
+  const el = await call('/api/analyze?league=uefa.europa&date=2026-10-15&partial=1', 'POST', 'secret');
+  ok('Europa League is a league the Hub analyzes', el.fixtures === 3 && el.cards === 3, JSON.stringify(el));
+  const d = (await call('/api/day?date=2026-10-15')).cards;
+  const c1 = d.find(x => x.id === 'el1'), c2 = d.find(x => x.id === 'el2'), c3 = d.find(x => x.id === 'el3');
+  ok('Benfica v Celtic: no v2 (leagues not kept), but a v4 cup prediction', !c1.v2 && !!c1.skipped && c1.v4 && c1.v4.p.length === 3 && Math.abs(c1.v4.p.reduce((x, y) => x + y) - 100) <= 1 && c1.leagueKey === 'uel', JSON.stringify(c1.v4));
+  ok('Lyon v Crystal Palace: v4 cup prediction too', !!c2.v4 && c2.v4.lam.length === 2 && c2.v4.scores.length === 3);
+  ok('an unknown club: no prediction, still listed', !c3.v2 && c3.v4 === undefined && !!c3.skipped);
+  ok('cup tabs: Europa League is on the Hub', (await call('/api/config')).tabs.some(x => x.slug === 'uefa.europa' && x.key === 'uel'));
+  const cron = await runSlot(env, new Date('2026-10-14T20:00:00Z'), 1);
+  ok('cron grade slot ignores games that have not finished', cron.job === 'grade');
+  // grade the v4-only card after the game: only v4 is graded, v2 totals do not move
+  const t0 = await call('/api/tally');
+  elDone = true;
+  const g = await gradeLeague('2026-10-15', 'uefa.europa', env, { force: true }, new Date('2026-10-16T05:00:00Z'));
+  const gd = JSON.parse(kv.get('day:2026-10-15')).cards.find(x => x.id === 'el1');
+  ok('a v4-only card is graded (v4 only)', g.graded === 1 && gd.final.h === 2 && gd.grade.v4 && gd.grade.v2 === undefined, JSON.stringify(gd.grade));
+  const t1 = await call('/api/tally');
+  ok('tally: v4 counts every game it predicted, v2 totals and the head-to-head do not move', t1.v4.n === t0.v4.n + 1 && t1.v2.n === t0.v2.n && t1.h2h.v4.n === t0.h2h.v4.n, JSON.stringify([t1.v4, t1.v2.n, t1.h2h.v4.n]));
+  ok('recent list only has v2 games', t1.recent.every(x => x.grade.v2));
+  // leftover: a cup card whose v4 was null gets analyzed again; one with a prediction stays
+  const r2 = await call('/api/analyze?league=uefa.europa&date=2026-10-15&partial=1&leftover=1', 'POST', 'secret');
+  ok('leftover on the cup keeps the graded card', JSON.parse(kv.get('day:2026-10-15')).cards.find(x => x.id === 'el1').final.h === 2 && r2.cards === 3);
+  // status shows the cups and cup rating state
+  const st = await call('/api/status');
+  ok('status lists the cups with their v4 ratings state', st.leagues.some(l => l.slug === 'uefa.europa' && l.v4 && 'ratingsAt' in l.v4) && st.leagues.some(l => l.slug === 'uefa.champions'));
+  // a forced rebuild of the cup ratings from the Status tab
+  const rb = await call('/api/ratings?league=cup', 'POST', 'secret');
+  ok('POST /api/ratings?league=cup rebuilds the cup ratings', rb.ok && rb.league === 'cup' && kv.has('rat:cup'), JSON.stringify(rb));
+  // the cup results store: sync works for a cup, builds no club context
+  let sc, n = 0; do { sc = await call('/api/sync?league=uefa.europa', 'POST', 'secret'); n++; } while (!sc.caughtUp && n < 10);
+  ok('syncing a cup stores results but builds no club context', sc.caughtUp && sc.context === false && kv.has('res:uefa.europa') && !kv.has('ctx:uefa.europa'), JSON.stringify(sc));
+}
 
 // ---- form never includes the match being predicted (or anything after kickoff) ----
 const { formAt } = await import('../src/worker.js');

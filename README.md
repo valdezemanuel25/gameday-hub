@@ -52,3 +52,13 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 - **Cup games** (Champions League, Nations League) use each club's domestic form. A club outside the supported leagues is skipped with a note on the card.
 - **Not carried over from the Hub:** NHL, the Model vs SportsMole tab, scorer picks, and the old per-match result links. Old history rows have no kickoff times or leagues, so they show as a plain list.
 - **Mobile looks like the Hub but isn't pixel-tested.** Open it on your phone after deploy and tell me what looks off.
+
+## v4 cup shadow test (Champions League + Europa League)
+
+* Europa League is now a tab (slug `uefa.europa`). Analyze it like any other league.
+* `src/v4cup.js` is the cup model: each club's domestic v4 rating x a strength factor per league x a small correction from its own cup games (last 3 seasons of both cups). Clubs from leagues the Hub does not keep (Portugal, Turkey, Scotland ...) rest on the league factor and their cup games and need at least 2 of them, otherwise "no prediction".
+* A cup game v2 cannot cover (a club not in a synced league) still gets a v4 prediction. It is listed under "games not covered by v2" with the v4 line, graded after the game, and counted in Results under "v4 (shadow), every game it predicted". v2's totals and the v2-vs-v4 head-to-head only use games v2 also predicted.
+* History: `src/v4cupseed.js` (810 games through Oct 14, 2026), made by `node tools/make-v4-cupseed.mjs "<folder with the cup CSVs>"`. Results played after the files were exported go in `tools/v4-cup-extra.json`. Newer games come from the stored cup results (`res:uefa.champions`, `res:uefa.europa`), which the background sync now keeps too. Club spellings: `src/v4cupnames.js`.
+* Ratings are rebuilt about daily by the spare cron slots (3 warm passes, a few ms) and saved as `rat:cup`. `POST /api/ratings?league=cup` forces a rebuild.
+* Over 2.5 / both-score are the raw model numbers (no pull toward the base rate: it tested slightly better raw on cups).
+* Test (settings chosen on Nov 2024-Aug 2025 cup games, scored on Sep 2025-Oct 13 2026): on the 127 games v2 can also predict, log-loss 0.918 vs 0.999-1.014 for v2 (about 2.3 standard errors better); on all 380 covered games 0.941 vs 1.016 for always guessing the base rates. Over/both-score gain is small. Unknown club names show in the analyze response's debug list as `v4 cup: unknown club "..."`.

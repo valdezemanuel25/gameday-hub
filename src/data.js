@@ -15,7 +15,8 @@ const CTX_V = 4; // contexts now carry dated history + rank // bump to discard c
 
 // Same order as the Hub's tabs. ls = league-strength key. calendar = season runs Jan-Dec.
 export const LEAGUES = [
-  { slug: 'uefa.champions', key: 'ucl', name: 'Champions League', cup: true },
+  { slug: 'uefa.champions', key: 'ucl', name: 'Champions League', cup: true, cupModel: true },
+  { slug: 'uefa.europa', key: 'uel', name: 'Europa League', cup: true, cupModel: true },
   { slug: 'eng.1', key: 'epl', name: 'Premier League', ls: 'ENG' },
   { slug: 'ger.1', key: 'bundesliga', name: 'Bundesliga', ls: 'GER' },
   { slug: 'esp.1', key: 'laliga', name: 'La Liga', ls: 'ESP' },
@@ -33,27 +34,15 @@ export const LEAGUES = [
   { slug: 'tur.1', key: 'tur', name: 'Süper Lig', ls: 'TUR', support: true },
   { slug: 'bel.1', key: 'bel', name: 'Belgian Pro League', ls: 'BEL', support: true },
   { slug: 'nor.1', key: 'nor', name: 'Eliteserien', ls: 'NOR', calendar: true, support: true },
-  { slug: 'cze.1', key: 'cze', name: 'Czech First League', ls: 'CZE', support: true },
   { slug: 'sco.1', key: 'sco', name: 'Scottish Premiership', ls: null, support: true },
   { slug: 'gre.1', key: 'gre', name: 'Greek Super League', ls: null, support: true },
   { slug: 'aut.1', key: 'aut', name: 'Austrian Bundesliga', ls: null, support: true },
-  { slug: 'sui.1', key: 'sui', name: 'Swiss Super League', ls: null, support: true },
   { slug: 'den.1', key: 'den', name: 'Danish Superliga', ls: null, support: true },
-  { slug: 'ukr.1', key: 'ukr', name: 'Ukrainian Premier League', ls: null, support: true },
-  { slug: 'svk.1', key: 'svk', name: 'Slovak Super Liga', ls: null, support: true },
-  { slug: 'cro.1', key: 'cro', name: 'Croatian HNL', ls: null, support: true },
-  { slug: 'srb.1', key: 'srb', name: 'Serbian SuperLiga', ls: null, support: true },
-  { slug: 'isr.1', key: 'isr', name: 'Israeli Premier League', ls: null, support: true },
-  { slug: 'pol.1', key: 'pol', name: 'Ekstraklasa', ls: null, support: true },
-  { slug: 'cyp.1', key: 'cyp', name: 'Cypriot First Division', ls: null, support: true },
-  { slug: 'bul.1', key: 'bul', name: 'Bulgarian First League', ls: null, support: true },
-  { slug: 'rou.1', key: 'rou', name: 'Romanian Liga I', ls: null, support: true },
-  { slug: 'hun.1', key: 'hun', name: 'Hungarian NB I', ls: null, support: true },
-  { slug: 'kaz.1', key: 'kaz', name: 'Kazakhstan Premier League', ls: null, calendar: true, support: true },
-  { slug: 'aze.1', key: 'aze', name: 'Azerbaijan Premier League', ls: 'AZE', support: true },
 ];
 export const VISIBLE = LEAGUES.filter(l => !l.support);
 export const DOMESTIC = LEAGUES.filter(l => !l.cup);
+// Cups whose results are stored too (res:<slug>) so the v4 cup model can learn from new games. No club context for these.
+export const CUP_MODEL = LEAGUES.filter(l => l.cupModel);
 export const leagueBySlug = slug => LEAGUES.find(l => l.slug === slug);
 
 const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, '');
@@ -125,7 +114,7 @@ export async function syncLeague(league, env, now = new Date(), debug) {
 
   const caughtUp = end.getTime() >= now.getTime();
   let ctx = null;
-  if (caughtUp) ctx = await buildContext(league, env, now, debug);
+  if (caughtUp && !league.cup) ctx = await buildContext(league, env, now, debug);
   await touchSynced(league.slug, env, now);
   return { caughtUp, games: st.games.length, context: !!ctx };
 }

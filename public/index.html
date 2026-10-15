@@ -231,7 +231,7 @@ function expanded(c) {
     : v3
       ? `<div class="small"><b>v3 (retired shadow test)</b>${v3.drawRisk ? ' (draw risk)' : ''}: ${esc(c.home)} ${v3.p[0]}%, draw ${v3.p[1]}%, ${esc(c.away)} ${v3.p[2]}%. It picks <b>${OUT[v3.pick]}</b>. Over 2.5 ${v3.over}%, both score ${v3.btts}%.
       ${g && g.v3 ? `<br>v3 result: ${pill(g.v3.outcomeHit, 'Winner')} ${pill(g.v3.ouHit, 'O/U')} ${pill(g.v3.bttsHit, 'Both')}` : ''}</div>`
-      : c.v4 === null && !c.final ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game (a cup game, or a club with too little league history).</div>` : '';
+      : c.v4 === null && !c.final ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game (a club with too little history).</div>` : '';
   return `<div class="ex"><div class="in"><div class="in">
     <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
     <div class="two">${mdl}${sm}</div>
@@ -242,8 +242,8 @@ function expanded(c) {
       <div class="rw"><select id="mine-${esc(c.id)}" aria-label="Your pick">${[['', 'No pick of my own'], ['H', c.home + ' win'], ['D', 'Draw'], ['A', c.away + ' win']].map(([v, l]) => `<option value="${v}" ${(c.mine || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><button type="button" class="sv" data-save="${esc(c.id)}">Save</button></div></div>
     <details class="how"><summary>How the model got here</summary>
       <p>Last 5 domestic league games per club (before kickoff). Expected goals: ${esc(c.home)} ${v.lam[0]}, ${esc(c.away)} ${v.lam[1]}. Official model v2: league-average prior 1.56, home 1.17×, away 0.83×, form weight 0.6.</p>
-      ${c.crossLeague ? `<p>${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment, and v4 doesn't predict cup games.</p>` : ''}
-      ${c.v4 ? `<p>v4 shadow model: attack and defence ratings for every club from about 2.5 years of league games, with recent games counting more and each result judged against the opposition faced. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Over 2.5 and both-score are pulled toward the league's recent scoring rate. It is tracked next to v2 and never changes v2's picks.</p>` : ''}
+      ${c.crossLeague ? `<p>${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment; the v4 cup model does.</p>` : ''}
+      ${c.v4 && (c.leagueKey === 'ucl' || c.leagueKey === 'uel') ? `<p>v4 cup shadow model: each club's rating from its own league, a strength factor for each league, and a small correction from its Champions League and Europa League games of the last three seasons. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Tracked next to v2; it never changes v2's picks.</p>` : c.v4 ? `<p>v4 shadow model: attack and defence ratings for every club from about 2.5 years of league games, with recent games counting more and each result judged against the opposition faced. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Over 2.5 and both-score are pulled toward the league's recent scoring rate. It is tracked next to v2 and never changes v2's picks.</p>` : ''}
     </details></div></div>`;
 }
 const GAME_MS = 2 * 3600000;
@@ -300,10 +300,18 @@ function alerts() {
 }
 
 /* ---------- board ---------- */
+// v4 shadow line for a game v2 could not cover (no v2 card, but the v4 cup model had a prediction)
+function v4Only(c) {
+  const v4 = c.v4; if (!v4) return '';
+  const g = c.grade && c.grade.v4;
+  return `<small><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. Picks <b>${OUT[v4.pick]}</b>. Over 2.5 ${v4.over}%, both score ${v4.btts}%. Most likely ${esc(v4.scores[0][0])}.` +
+    (c.final ? ` Final ${c.final.h}–${c.final.a}${g ? ` ${pill(g.outcomeHit, 'Winner')} ${pill(g.ouHit, 'O/U')} ${pill(g.bttsHit, 'Both')}` : ''}` : '') + `</small>`;
+}
 function uncovered(list) {
   if (!list.length) return '';
-  return `<details class="unc"><summary>${list.length} game${list.length === 1 ? '' : 's'} not covered</summary>` +
-    list.map(c => `<div class="u">${esc(c.home)} vs ${esc(c.away)}<small>${esc(c.leagueName)}, ${esc(c.ko)}. ${esc(c.skipped || 'No prediction yet.')}</small></div>`).join('') + `</details>`;
+  const n4 = list.filter(c => c.v4).length;
+  return `<details class="unc" ${n4 ? 'open' : ''}><summary>${list.length} game${list.length === 1 ? '' : 's'} not covered by v2${n4 ? `, ${n4} with a v4 shadow prediction` : ''}</summary>` +
+    list.map(c => `<div class="u">${esc(c.home)} vs ${esc(c.away)}<small>${esc(c.leagueName)}, ${esc(c.ko)}. ${esc(c.skipped || 'No prediction yet.')}</small>${v4Only(c)}</div>`).join('') + `</details>`;
 }
 const alertBox = () => { const a = alerts(); return a.length ? `<div class="alert">${a.join('<br>')}</div>` : ''; };
 function board() {
@@ -389,6 +397,7 @@ function results() {
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
     resultsBlock('v2 official, all results', t.v2) + calibrationView(t) +
     `<div class="sec" style="padding-top:20px">v2 vs v4 shadow test<small>Both models on the same matches only. v4 started on Oct 14, 2026, so this fills in as games finish.</small></div>` +
+    (t.v4 && t.v4.n ? resultsBlock('v4 (shadow), every game it predicted', t.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') : '') +
     (t.h2h.v4.n ? resultsBlock('v2', t.h2h.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v4 (shadow)', t.h2h.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') : '<div class="small" style="padding:6px 16px">No v4 games graded yet. Results fill in a few hours after each league finishes.</div>') +
     `<details class="old"><summary>Retired v3 shadow test (${t.h2hOld.v3.n} games)</summary>` +
     resultsBlock('v2', t.h2hOld.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (retired)', t.h2hOld.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` +

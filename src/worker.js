@@ -1,7 +1,7 @@
 import { v2, grade, pickOutcome, bestBet } from './model.js';
-import { supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings } from './v4.js';
+import { supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
-  TZ, LEAGUES, VISIBLE, DOMESTIC, leagueBySlug, localDate, localTime, syncLeague,
+  TZ, LEAGUES, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
   findTeam, getContext, missingContexts, fixturesForLeague,
 } from './data.js';
 import legacy from './legacy.js';
@@ -115,7 +115,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     const old = prior.get(f.id);
     if (old?.final && date > LEGACY_THROUGH) { cards.push(old); continue; } // never overwrite a graded card
     // 'Analyze leftover': keep finished predictions as they are. A card saved before v4 existed (no v4 key yet) still gets analyzed.
-    if (leftover && old?.v2 && 'v4' in old) { cards.push(old); continue; }
+    if (leftover && old?.v2 && 'v4' in old && !(league.cupModel && old.v4 === null)) { cards.push(old); continue; }
 
     const hint = league.cup ? undefined : slug;
     const h0 = await findTeam(f.home.id, env, memo, hint);
@@ -128,13 +128,18 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
       home: f.home.name, away: f.away.name, final: null,
       hAbbr: f.home.abbr || null, aAbbr: f.away.abbr || null, hRank: h?.team.rank ?? null, aRank: a?.team.rank ?? null,
     };
+    // v4 cup shadow (Champions League / Europa League): works from the cup model's own ratings, so it can
+    // still predict a game v2 cannot (a club from a league the Hub does not keep).
+    const r4cup = !f.done && league.cupModel ? await cupForecast(league, f, h0, a0, env, memo, debug) : null;
     if (!h || !a) {
       if (needsSync.length) notReady++;
-      card.skipped = 'Club not found in any synced league yet';
+      card.skipped = 'Club not found in any synced league yet (v2 needs its league results)';
+      if (r4cup) card.v4 = slim(r4cup);
       cards.push(card); continue;
     }
     if (h.team.form.n < 3 || a.team.form.n < 3) {
-      card.skipped = 'Not enough recent league results for one or both teams';
+      card.skipped = 'Not enough recent league results for one or both teams (v2 needs them)';
+      if (r4cup) card.v4 = slim(r4cup);
       cards.push(card); continue;
     }
     const r2 = v2(h.team.form, a.team.form);
@@ -147,6 +152,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
       const hn = v4Resolve(slug, f.home.name) || v4Resolve(slug, h.team.name), an = v4Resolve(slug, f.away.name) || v4Resolve(slug, a.team.name);
       r4 = hn && an ? v4Predict(R, hn, an) : null;
     }
+    if (league.cupModel) r4 = r4cup;
     card.v4 = r4 ? slim(r4) : null;
     if (old?.sm) card.sm = old.sm;
     if (old?.note) card.note = old.note;
@@ -182,7 +188,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
 export async function gradeLeague(date, slug, env, { force = false } = {}, now = new Date()) {
   const league = leagueBySlug(slug);
   const day = await env.HUB.get(`day:${date}`, 'json');
-  const open = (day?.cards || []).filter(c => c.league === slug && !c.final && c.v2);
+  const open = (day?.cards || []).filter(c => c.league === slug && !c.final && (c.v2 || c.v4));
   if (!league || !open.length) return { graded: 0, pending: 0 };
 
   if (!force) {
@@ -197,10 +203,11 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     const f = finals.get(c.id);
     if (!f) { pending++; continue; }
     c.final = { h: f.home.score, a: f.away.score };
-    c.grade = { v2: grade(toPred(c.v2), c.final) };
+    c.grade = {};
+    if (c.v2) c.grade.v2 = grade(toPred(c.v2), c.final);
     if (c.v3) c.grade.v3 = grade(toPred(c.v3), c.final); // cards predicted before v4 took over keep their v3 grade
     if (c.v4) c.grade.v4 = grade(toPred(c.v4), c.final);
-    if (c.sm) c.smGrade = smGrade(c.sm, c.final);
+    if (c.sm && c.v2) c.smGrade = smGrade(c.sm, c.final);
     graded++;
   }
   // Remember the attempt so a league whose games aren't final yet (postponed, feed lagging) can't
@@ -252,7 +259,7 @@ function fin(t) { return { ...t, brier: t.n ? +(t.brier / t.n).toFixed(3) : null
 
 async function tally(env) {
   const list = await env.HUB.list({ prefix: 'day:' });
-  const v2All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
+  const v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [], mineT = { n: 0, mine: 0, model: 0 };
   const CAL = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60% and up', 60, 101]].map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 }));
   const cal = (p, hit) => { const t = Math.max(...p), b = CAL.find(x => t >= x.lo && t < x.hi); if (!b) return; b.n++; b.hits += hit ? 1 : 0; b.sum += t; };
@@ -269,6 +276,8 @@ async function tally(env) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
       if (!c.grade || day.date <= LEGACY_THROUGH) continue;
+      if (c.grade.v4) add(v4All, c.grade.v4); // every game v4 predicted, including cup games v2 cannot cover
+      if (!c.grade.v2) continue;
       add(v2All, c.grade.v2);
       if (c.grade.v4) { add(h2hV2, c.grade.v2); add(h2hV4, c.grade.v4); }
       if (c.grade.v3) { add(oldV2, c.grade.v2); add(oldV3, c.grade.v3); }
@@ -301,6 +310,7 @@ async function tally(env) {
     calibration: CAL.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null })),
     mine: mineT,
     h2h: { v2: fin(h2hV2), v4: fin(h2hV4) },
+    v4: fin(v4All),
     h2hOld: { v2: fin(oldV2), v3: fin(oldV3) },
     importedMatches: legacy.v2Rows.length,
     newlyGraded: live.length,
@@ -332,7 +342,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
 
   if (slot === 0) {
     const meta = (await env.HUB.get('meta:synced', 'json')) || {};
-    const next = [...DOMESTIC].sort((a, b) => (meta[a.slug] || '').localeCompare(meta[b.slug] || ''))[0];
+    const next = [...DOMESTIC, ...CUP_MODEL].sort((a, b) => (meta[a.slug] || '').localeCompare(meta[b.slug] || ''))[0];
     // Free plan allows 1,000 KV writes a day: don't re-sync a league that was synced in the last 8 hours.
     if (meta[next.slug] && now.getTime() - new Date(meta[next.slug]).getTime() < 8 * 3600000) return { job: 'sync', idle: true };
     const r = await syncLeague(next, env, now); await syncNote(env, next, r);
@@ -344,7 +354,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     for (const date of [t, addDays(t, -1), addDays(t, -2)]) {
       const day = await env.HUB.get(`day:${date}`, 'json');
       for (const lg of LEAGUES) {
-        const open = (day?.cards || []).filter(c => c.league === lg.slug && !c.final && c.v2);
+        const open = (day?.cards || []).filter(c => c.league === lg.slug && !c.final && (c.v2 || c.v4));
         if (!open.length) continue;
         const last = Math.max(...open.map(c => new Date(c.kickoff).getTime()));
         if (now.getTime() >= last + gradeDelayMs(env)) due.push({ date, slug: lg.slug, last, tried: day.gradeTried?.[lg.slug] || 0 });
@@ -422,17 +432,19 @@ const hub = {
     if (p === '/api/status') {
       const [meta, errs, w] = await Promise.all([env.HUB.get('meta:synced', 'json'), env.HUB.get('meta:errors', 'json'), env.HUB.get('meta:writes', 'json')]);
       const rated = {}; for (const l of DOMESTIC) if (v4Supports(l.slug)) rated[l.slug] = (await env.HUB.get(`rat:${l.slug}`, 'json'))?.builtAt || null;
+      const cupAt = (await env.HUB.get('rat:cup', 'json'))?.builtAt || null; for (const l of CUP_MODEL) rated[l.slug] = cupAt;
       const d = new Date().toISOString().slice(0, 10);
       return json({
         now: Date.now(), writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
-        leagues: DOMESTIC.map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, problem: (errs || {})[l.slug] || null, v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
+        leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, problem: (errs || {})[l.slug] || null, v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
 
     if (req.method === 'POST' && p === '/api/ratings') { // rebuild one league's v4 ratings now (the cron does this about daily)
       const league = leagueBySlug(q('league'));
-      if (!league || !v4Supports(league.slug)) return json({ error: 'Pass ?league=<slug> for a league that has v4 ratings' }, 400);
-      try { return json({ ok: true, ...(await refreshRatings(env, new Date(), [league.slug], { force: true })) }); } catch (e) { return json({ error: `${league.name} (ratings): ${e && e.message ? e.message : e}` }, 500); }
+      const target = q('league') === 'cup' || (league && league.cupModel) ? 'cup' : league && v4Supports(league.slug) ? league.slug : null;
+      if (!target) return json({ error: 'Pass ?league=<slug> for a league that has v4 ratings (or cup for the Champions / Europa League ratings)' }, 400);
+      try { return json({ ok: true, ...(await refreshRatings(env, new Date(), [target], { force: true })) }); } catch (e) { return json({ error: `${league ? league.name : "Cup"} (ratings): ${e && e.message ? e.message : e}` }, 500); }
     }
     if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm', '/api/note'].includes(p)) {
       const league = leagueBySlug(q('league'));
