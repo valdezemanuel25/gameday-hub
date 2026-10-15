@@ -7,7 +7,10 @@ import { localDate } from './data.js';
 const BASE = 'https://www.forebet.com/en/';
 // Hub league slug -> Forebet page. Add the Champions League once its page address is known.
 export const FB_PAGES = {
+  'uefa.champions': 'predictions-europe/uefa-champions-league',
   'uefa.europa': 'predictions-europe/uefa-europa-league',
+  'esp.2': 'football-tips-and-predictions-for-spain/segunda-division',
+  'eng.2': 'football-tips-and-predictions-for-england/championship',
   'eng.1': 'football-tips-and-predictions-for-england/premier-league',
   'esp.1': 'football-tips-and-predictions-for-spain/primera-division',
   'ger.1': 'football-tips-and-predictions-for-germany/bundesliga',

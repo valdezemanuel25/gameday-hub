@@ -62,7 +62,7 @@ const s2 = await forebetStep(env, new Date(now.getTime() + 3600000), ffetch);
 ok('the next run reads a different table (the first was read within 3 hours)', s2 && s2.kind !== '1x2');
 kv.delete('meta:fb'); save('2026-10-16', []);
 ok('nothing to fill: the step does nothing', (await forebetStep(env, now, ffetch)) === null);
-ok('all nine league pages are set up', Object.keys(FB_PAGES).length === 10);
+ok('all nine league pages are set up', Object.keys(FB_PAGES).length === 13);
 
 // Short Forebet names against full ESPN names (2. Bundesliga and similar)
 {
