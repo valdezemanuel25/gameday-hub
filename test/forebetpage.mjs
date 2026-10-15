@@ -64,5 +64,14 @@ kv.delete('meta:fb'); save('2026-10-16', []);
 ok('nothing to fill: the step does nothing', (await forebetStep(env, now, ffetch)) === null);
 ok('all nine league pages are set up', Object.keys(FB_PAGES).length === 10);
 
+// Short Forebet names against full ESPN names (2. Bundesliga and similar)
+{
+  const { is } = await import('../src/forebetpage.js');
+  const pairs = [['Düsseldorf', 'Fortuna Düsseldorf'], ['Dresden', 'Dynamo Dresden'], ['Bielefeld', 'Arminia Bielefeld'], ['Nürnberg', '1. FC Nürnberg'], ['Münster', 'Preußen Münster'], ['Braunschweig', 'Eintracht Braunschweig'], ['Energie Cottbus', 'Energie Cottbus'], ['Darmstadt', 'SV Darmstadt 98']];
+  for (const [a, b] of pairs) if (!is(a, b)) { ok('short name '+a, false); }
+  if (is('Dresden', 'Hannover 96') || is('Bochum', 'Bochum II') === false) { ok('name guard', false); }
+  ok('short Forebet names match full club names', true);
+}
+
 console.log(fail ? `\n${fail} Forebet page checks FAILED` : '\nAll Forebet page checks passed');
 process.exit(fail ? 1 : 0);

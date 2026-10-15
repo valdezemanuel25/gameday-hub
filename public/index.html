@@ -462,7 +462,7 @@ function forebetReads() {
   const names = { '1x2': '1X2', ou: 'Under/Over', btts: 'Both score' };
   const nm = k => { const [slug, kind] = k.split('|'), l = (stat.leagues || []).find(x => x.slug === slug); return `${l ? l.name : slug} ${names[kind] || kind}`; };
   const last = Object.values(r).map(v => v.at).sort().pop();
-  return `<div class="small" style="margin:0 0 8px">${last ? 'Forebet last read ' + ago(last) + '.' : 'Forebet has not been read yet. It is read about every 20 minutes, one page at a time, for games that have not started.'}${bad.length ? '<br><span style="color:var(--amber)">Problem: ' + bad.map(([k, v]) => `${esc(nm(k))} (${esc(v.msg || 'failed')}, ${ago(v.at)})`).join('; ') + '. Paste the table below instead.</span>' : ''}</div>`;
+  return `<div class="small" style="margin:0 0 8px">${last ? 'Forebet last read ' + ago(last) + '.' : 'Forebet has not been read yet. It is read about every 20 minutes, one page at a time, for games that have not started.'}${bad.length ? '<br><span style="color:var(--amber)">Problem: ' + bad.map(([k, v]) => `${esc(nm(k))} (${esc(v.msg || 'failed')}, ${ago(v.at)})`).join('; ') + '. Paste the table below instead.</span>' : ''}${Object.entries(r).filter(([, v]) => v.unmatched && v.unmatched.length).map(([k, v]) => `<br><span style="color:var(--amber)">${esc(nm(k))}: no card matched ${v.unmatched.map(esc).join(', ')}</span>`).join('')}</div>`;
 }
 function forebetBox() {
   const opts = (cfg.leagues || []).map(l => `<option value="${esc(l.slug)}"${l.slug === (S.league !== 'all' ? S.league : 'uefa.europa') ? ' selected' : ''}>${esc(l.name)}</option>`).join('');

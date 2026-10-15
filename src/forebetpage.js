@@ -59,7 +59,15 @@ export function parseForebetHtml(html, kind, fromDate) {
   return rows;
 }
 
-const is = (a, b) => sameTeam(norm(a), norm(b));
+// Forebet writes short names (Dresden, Düsseldorf, Bielefeld) where ESPN writes the full club name
+// (Dynamo Dresden, Fortuna Düsseldorf, Arminia Bielefeld). Both clubs of a game must match, so a name
+// that merely sits inside the other (5+ letters) is safe here.
+export const is = (a, b) => {
+  const x = norm(a), y = norm(b);
+  if (sameTeam(x, y)) return true;
+  const [sh, lg] = x.length <= y.length ? [x, y] : [y, x];
+  return sh.length >= 5 && lg.includes(sh);
+};
 // Match page rows to cards by team names. A home/away swap flips the 1X2 numbers.
 export function matchRows(rows, cards, kind) {
   const out = new Map();
@@ -114,7 +122,11 @@ export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = 
     for (const [id, f] of found) { const c = day.cards.find(x => x.id === id); c.fb = { ...(c.fb || {}), ...f, at: c.fb?.at || now.toISOString(), how: c.fb?.how || 'read from Forebet' }; saved++; }
     if (found.size) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   }
-  meta[key] = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, msg: rows.length ? null : 'page loaded but no games could be read' };
+  // Games on the page that no open card matched, shown on the Status tab so a naming gap is visible.
+  const used = new Set(); for (const { day } of work) for (const c of day.cards.filter(x => x.league === slug)) for (const r of rows) if (is(r.home, c.home) && is(r.away, c.away) || is(r.home, c.away) && is(r.away, c.home)) used.add(r);
+  const unmatched = [];
+  for (const r of rows) if (!used.has(r) && work.some(w => w.date === r.date)) unmatched.push(`${r.home}–${r.away}`);
+  meta[key] = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, ...(unmatched.length ? { unmatched: unmatched.slice(0, 6) } : {}), msg: rows.length ? null : 'page loaded but no games could be read' };
   await env.HUB.put('meta:fb', JSON.stringify(meta));
   return { slug, kind, rows: rows.length, saved };
 }
