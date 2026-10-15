@@ -238,6 +238,7 @@ function expanded(c) {
     <div class="box f">Most likely scores<b style="font-size:13px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b></div>
     <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
     ${shadow}
+    ${fbLine(c)}
     <div class="box f note">Your note<textarea id="note-${esc(c.id)}" maxlength="500" placeholder="Injuries, rotation, anything the model can't see">${esc(c.note || '')}</textarea>
       <div class="rw"><select id="mine-${esc(c.id)}" aria-label="Your pick">${[['', 'No pick of my own'], ['H', c.home + ' win'], ['D', 'Draw'], ['A', c.away + ' win']].map(([v, l]) => `<option value="${v}" ${(c.mine || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><button type="button" class="sv" data-save="${esc(c.id)}">Save</button></div></div>
     <details class="how"><summary>How the model got here</summary>
@@ -301,6 +302,16 @@ function alerts() {
 
 /* ---------- board ---------- */
 // v4 shadow line for a game v2 could not cover (no v2 card, but the v4 cup model had a prediction)
+// Forebet picks entered by hand. Recorded and graded only; no model reads them.
+function fbLine(c) {
+  const f = c.fb; if (!f) return '';
+  let res = '';
+  if (c.final) {
+    const o = c.final.h > c.final.a ? 0 : c.final.h === c.final.a ? 1 : 2, top = f.p.indexOf(Math.max(...f.p));
+    res = ` ${pill(top === o, 'Winner')}${f.score ? ' ' + pill(f.score.h === c.final.h && f.score.a === c.final.a, 'Score') : ''}`;
+  }
+  return `<div class="small"><b>Forebet</b> (${f.how === 'pasted' ? 'pasted by you' : 'saved before kickoff'}, no model uses it): ${esc(c.home)} ${f.p[0]}%, draw ${f.p[1]}%, ${esc(c.away)} ${f.p[2]}%.${f.score ? ` Predicts ${f.score.h}–${f.score.a}.` : ''}${res}</div>`;
+}
 function v4Only(c) {
   const v4 = c.v4; if (!v4) return '';
   const g = c.grade && c.grade.v4;
@@ -311,7 +322,7 @@ function uncovered(list) {
   if (!list.length) return '';
   const n4 = list.filter(c => c.v4).length;
   return `<details class="unc" ${n4 ? 'open' : ''}><summary>${list.length} game${list.length === 1 ? '' : 's'} not covered by v2${n4 ? `, ${n4} with a v4 shadow prediction` : ''}</summary>` +
-    list.map(c => `<div class="u">${esc(c.home)} vs ${esc(c.away)}<small>${esc(c.leagueName)}, ${esc(c.ko)}. ${esc(c.skipped || 'No prediction yet.')}</small>${v4Only(c)}</div>`).join('') + `</details>`;
+    list.map(c => `<div class="u">${esc(c.home)} vs ${esc(c.away)}<small>${esc(c.leagueName)}, ${esc(c.ko)}. ${esc(c.skipped || 'No prediction yet.')}</small>${v4Only(c)}${fbLine(c)}</div>`).join('') + `</details>`;
 }
 const alertBox = () => { const a = alerts(); return a.length ? `<div class="alert">${a.join('<br>')}</div>` : ''; };
 function board() {
@@ -387,6 +398,11 @@ function calibrationView(t) {
   const mine = t.mine && t.mine.n ? `<div class="small" style="margin-top:10px">Your own picks on ${t.mine.n} games: you got ${t.mine.mine}, the model got ${t.mine.model}.</div>` : '';
   return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>Winner picks grouped by how sure the model was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}${mine}</div>`;
 }
+function forebetBlock(t) {
+  const f = t.forebet; if (!f || !f.n) return '';
+  const row = (name, x) => x.n ? `<div class="li"><div class="a"><span>Against ${name}, same ${x.n} games</span></div><div class="b"><span>Winner: Forebet ${x.fbOutcome}, ${name} ${x.outcome}</span><span>Brier: Forebet ${x.fbBrier}, ${name} ${x.brier}</span></div></div>` : '';
+  return `<div class="sec" style="padding-top:20px">Forebet, entered by hand<small>${f.n} graded. Winner ${f.outcome}/${f.n}, exact score ${f.score}/${f.n}, Brier ${f.brier} (lower is better). Recorded only; no model uses it. Small samples swing a lot.</small></div><div class="lst">${row('v2', f.vs.v2)}${row('v4', f.vs.v4)}</div>`;
+}
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;
   const t = tally;
@@ -399,6 +415,7 @@ function results() {
     `<div class="sec" style="padding-top:20px">v2 vs v4 shadow test<small>Both models on the same matches only. v4 started on Oct 14, 2026, so this fills in as games finish.</small></div>` +
     (t.v4 && t.v4.n ? resultsBlock('v4 (shadow), every game it predicted', t.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') : '') +
     (t.h2h.v4.n ? resultsBlock('v2', t.h2h.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v4 (shadow)', t.h2h.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') : '<div class="small" style="padding:6px 16px">No v4 games graded yet. Results fill in a few hours after each league finishes.</div>') +
+    forebetBlock(t) +
     `<details class="old"><summary>Retired v3 shadow test (${t.h2hOld.v3.n} games)</summary>` +
     resultsBlock('v2', t.h2hOld.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (retired)', t.h2hOld.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` +
     `<div class="sec" style="padding-top:20px">Recent results</div><div class="lst">${rows || '<div class="small">Nothing new graded yet. Results fill in automatically a few hours after each league finishes.</div>'}</div>` +
@@ -420,8 +437,16 @@ function statusView() {
     <div class="sec" style="padding-top:16px">Leagues<small>When each league's results were last loaded. Each re-syncs about every 8 hours.</small></div>
     <div class="pair" style="padding-top:0">${ok.map(row).join('')}</div>
     ${shotsBlock()}
+    ${forebetBox()}
     <div class="sec" style="padding-top:16px">Back up your history<small>Downloads every saved day with predictions, results and SportsMole picks, plus the carried-over totals.</small></div>
     <div class="pair" style="padding-top:0"><div class="small" style="margin:0 0 4px;${backupAge() == null || backupAge() >= 7 ? 'color:var(--amber)' : ''}">${backupAge() == null ? 'No backup made from this device yet.' : backupAge() === 0 ? 'Last backup from this device: today.' : `Last backup from this device: ${backupAge()} day${backupAge() === 1 ? '' : 's'} ago.`}</div><button type="button" class="xbtn" id="btn-export">Export data</button></div>`;
+}
+// Paste Forebet's league table (select the table on the page, copy, paste here). Only games that have not kicked off are saved.
+function forebetBox() {
+  const opts = (cfg.leagues || []).map(l => `<option value="${esc(l.slug)}"${l.slug === (S.league !== 'all' ? S.league : 'uefa.europa') ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
+  return `<div class="sec" style="padding-top:16px">Forebet picks<small>Copy the league table from forebet.com and paste it here. It is saved for ${esc(S.date)}, only for games that have not started, and only once per game. Nothing uses it except the Results tab.</small></div>
+    <div class="pair" style="padding-top:0"><select id="fb-league" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit">${opts}</select>
+    <div class="note"><textarea id="fb-text" placeholder="Paste the table here"></textarea></div><button type="button" class="xbtn" id="btn-fb">Save Forebet picks</button><div class="small" id="fb-msg" style="margin-top:6px"></div></div>`;
 }
 // Tracking only: whether ESPN gives shot counts for finished games. Nothing here feeds a prediction.
 function shotsBlock() {
@@ -530,6 +555,16 @@ async function runAll(kind) {
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
   if (e.target.closest('#btn-export')) return exportAll();
+  if (e.target.closest('#btn-fb')) {
+    const msg = $('#fb-msg'), text = $('#fb-text').value, lg = $('#fb-league').value; if (!text.trim()) { msg.textContent = 'Paste the table first.'; return; }
+    msg.textContent = 'Saving…';
+    try {
+      const r = await post(`/api/forebet?league=${encodeURIComponent(lg)}&date=${S.date}`, { text }); if (r.error) throw new Error(r.error);
+      msg.textContent = `Saved ${r.saved}. ${r.alreadyHad ? r.alreadyHad + ' already had a pick. ' : ''}${r.started ? r.started + ' already started (skipped). ' : ''}${r.notFound.length ? "Couldn't match: " + r.notFound.join(', ') + '.' : ''}`;
+      if (r.saved) { delete counts[S.date]; tally = null; await loadDay(); }
+    } catch (er) { msg.textContent = er.message; }
+    return;
+  }
   const sv = e.target.closest('[data-save]');
   if (sv) {
     const id = sv.dataset.save, c = day.cards.find(x => x.id === id); if (!c) return;

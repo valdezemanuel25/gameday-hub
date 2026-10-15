@@ -8,20 +8,24 @@ const UA = { 'user-agent': 'Mozilla/5.0 (compatible; gameday-hub/1.0)' };
 
 const ALIAS = [
   [/paris saint germain|paris sg/g, 'psg'],
+  [/olympique/g, ' '],
+  [/stade rennais/g, 'rennes'],
+  [/praha/g, 'prague'],
+  [/creta/g, 'crete'],
   [/union saint gilloise|union st gilloise|union sg/g, 'unionsg'],
   [/manchester/g, 'man'],
   [/internazionale/g, 'inter'],
   [/united/g, 'utd'],
   [/wolverhampton wanderers|wolverhampton/g, 'wolves'],
   [/sheffield/g, 'sheff'],
-  [/\b(fc|cf|ac|as|ssc|sc|afc|cd|ud|sv|vfb|vfl|fk|ca|club|real|sporting|rc|rb|1 fc|tsg|tsv|fsv|bsc|sk|ks|gnk|nk|hnk|ofk)\b/g, ' '],
+  [/\b(fc|cf|ac|as|ssc|sc|afc|cd|ud|sv|vfb|vfl|fk|ca|club|real|sporting|rc|rb|1 fc|tsg|tsv|fsv|bsc|sk|ks|gnk|nk|hnk|ofk|sl|nec|uniao)\b/g, ' '],
 ];
 export function norm(s) {
-  let x = String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  let x = String(s).toLowerCase().replace(/ø/g, 'o').replace(/æ/g, 'ae').replace(/å/g, 'a').replace(/ł/g, 'l').replace(/đ/g, 'd').replace(/ß/g, 'ss').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
   for (const [re, to] of ALIAS) x = x.replace(re, to);
   return x.replace(/\s+/g, '');
 }
-function sameTeam(a, b) {
+export function sameTeam(a, b) {
   if (!a || !b) return false;
   const [sh, lg] = a.length <= b.length ? [a, b] : [b, a];
   return sh.length >= 3 && lg.startsWith(sh); // 'psv' ~ 'psveindhoven', 'bayern' ~ 'bayernmunich'
