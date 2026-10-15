@@ -49,6 +49,9 @@ ok('Forebet record: home pick, its win chance and predicted score', f.pick === '
 ok('swapped home and away flips the pick', fbFor({ home: 'Calgary Flames', away: 'Vegas Golden Knights' }, rows).pick === 'A' && fbFor({ home: 'Calgary Flames', away: 'Vegas Golden Knights' }, rows).score.a === f.score.h);
 ok('no Over/Under is kept from Forebet', !('over' in f) && !('avg' in f));
 
+const UQ = readFileSync(new URL('./fixtures/forebet-nhl-unquoted.html', import.meta.url), 'utf8');
+const rq = parseForebetHockey(UQ);
+ok('a page served without attribute quotes reads the same games', rq.length === 4 && rq[0].p.join('/') === '48/52' && rq[0].score.a === 8 && rq[3].home === 'Edmonton Oilers', JSON.stringify(rq[0]));
 const fetchFn2 = async (url, o) => url.includes('forebet') ? { ok: true, text: async () => FB2 } : fetchFn(url, o);
 // the finished BOS game is not in the seed's card list and is dated after the seed, so it teaches the ratings
 const r1 = await nhlStep(env, new Date(), fetchFn2);

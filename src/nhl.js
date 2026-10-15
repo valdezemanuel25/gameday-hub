@@ -72,21 +72,23 @@ export function applyGame(S, hc, ac, h, a, last) {
 // ---- Forebet (hockey) --------------------------------------------------------------------------
 // Forebet hockey: only its pick, the win chance of that pick and its predicted score are kept (no Over/Under).
 export function parseForebetHockey(html) {
-  // Hockey rows differ from the football pages: <span class="homeTeam"><span>Name</span></span>, the date as plain text
-  // (mm/dd/yyyy), two win-chance numbers (the picked side carries class="fpr"), the pick in .forepr and "Avg. goals" in .avg_sc.
-  const rows = [], starts = [], reR = /<div class="rcnt/g; let m;
-  while ((m = reR.exec(html))) starts.push(m.index);
+  // Hockey rows differ from the football pages: the home/away names sit in <span class="homeTeam"><span>Name</span></span>, the
+  // date is plain text (mm/dd/yyyy), the two win chances are in .fprc, the pick in .forepr, the predicted score in .ex_sc.
+  // Forebet serves the page with or without quotes around simple attribute values, and rows are found by their match link,
+  // not by the wrapping <div>, so a change in the wrapper markup does not matter.
+  const rows = [], starts = [], seen = new Set(), reA = /href=["']?\/en\/hockey\/matches\//g; let m;
+  while ((m = reA.exec(html))) starts.push(m.index);
+  const ent = x => x.replace(/&amp;/g, '&').replace(/&#0?39;|&apos;/g, "'").trim();
   for (let n = 0; n < starts.length; n++) {
-    const chunk = html.slice(starts[n], starts[n + 1] ?? starts[n] + 5000);
-    if (!/\/hockey\/matches\//.test(chunk)) continue; // skips the football "Pick of the day" blocks
-    const hm = /class=["']?homeTeam["']?><span>([^<]*)<\/span>/.exec(chunk), am = /class=["']?awayTeam["']?><span>([^<]*)<\/span>/.exec(chunk);
-    const dm = /date_bah["']?>(\d\d)\/(\d\d)\/(\d{4})/.exec(chunk);
+    const chunk = html.slice(starts[n], Math.min(starts[n + 1] ?? Infinity, starts[n] + 5000));
+    const hm = /class=["']?homeTeam["']?[^>]*><span[^>]*>([^<]*)<\/span>/.exec(chunk), am = /class=["']?awayTeam["']?[^>]*><span[^>]*>([^<]*)<\/span>/.exec(chunk);
+    const dm = /date_bah["']?>\s*(\d\d)\/(\d\d)\/(\d{4})/.exec(chunk);
     if (!hm || !am || !dm) continue;
-    const ent = x => x.replace(/&amp;/g, '&').replace(/&#0?39;|&apos;/g, "'").trim();
     const row = { home: ent(hm[1]), away: ent(am[1]), date: `${dm[3]}-${dm[1]}-${dm[2]}` };
-    const im = /class=["']?fprc[^>]*>([\s\S]*?)<\/div>/.exec(chunk), nums = im ? [...im[1].matchAll(/>(\d{1,3})</g)].map(x => +x[1]) : [];
+    const key = `${row.home}|${row.away}|${row.date}`; if (seen.has(key)) continue; seen.add(key);
+    const im = /class=["']?fprc[^>]*>([\s\S]*?)<\/div>/.exec(chunk), nums = im ? [...im[1].matchAll(/>\s*(\d{1,3})\s*</g)].map(x => +x[1]) : [];
     if (nums.length === 2 && nums[0] + nums[1] >= 97 && nums[0] + nums[1] <= 103) row.p = nums;
-    const pr = /class=["']?forepr["']?><span>([^<]*)<\/span>/.exec(chunk); if (pr && /^[12X]$/.test(pr[1])) row.pred = pr[1];
+    const pr = /class=["']?forepr["']?>\s*<span>([^<]*)<\/span>/.exec(chunk); if (pr && /^[12X]$/.test(pr[1])) row.pred = pr[1];
     const sc = /class=["']?ex_sc tabonly["']?>([\s\S]*?)<\/div>/.exec(chunk), sn = sc ? [...sc[1].matchAll(/\d+/g)].map(x => +x[0]) : [];
     if (sn.length === 2) row.score = { h: sn[0], a: sn[1] };
     if (row.p || row.score) rows.push(row);
@@ -207,7 +209,8 @@ async function forebetRead(env, work, now, fetchFn) {
     for (const c of open) { const f = fbFor(c, rows); if (f) { c.fb = { ...f, at: now.toISOString(), how: 'read from Forebet' }; dirty = true; saved++; } }
     if (dirty) await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day));
   }
-  const m = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/itemprop=["']?homeTeam/g) || []).length} home-team tags, ${/captcha|challenge|cf-browser|Just a moment|Access denied/i.test(html) ? 'looks like a check page' : 'no check page'})` };
+  const i0 = html.search(/\/en\/hockey\/matches\//), snip = i0 < 0 ? '' : html.slice(Math.max(0, i0 - 60), i0 + 420).replace(/\s+/g, ' ');
+  const m = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/\/en\/hockey\/matches\//g) || []).length} hockey match links, ${(html.match(/homeTeam/g) || []).length} homeTeam marks, ${/captcha|cf-browser|Just a moment|Access denied|Attention Required/i.test(html) ? 'looks like a check page' : 'not a check page'}). First row: ${snip.slice(0, 380)}` };
   await env.HUB.put('nhl:fbmeta', JSON.stringify(m));
   return { rows: rows.length, saved, ...(m.msg ? { note: m.msg } : {}) };
 }
