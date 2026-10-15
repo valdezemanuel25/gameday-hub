@@ -183,9 +183,15 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .bdn{margin:10px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.45}
 .tri{display:grid;grid-template-columns:84px repeat(3,minmax(0,1fr));gap:4px 6px;margin-top:7px;font-size:12px;color:var(--dim)}
 .tri span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tri .hh{color:var(--faint)}
+#hub-bar{position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:#0f1612;border-bottom:1px solid var(--line)}
+#hub-bar .sw{display:flex;gap:4px;background:var(--panel2);border-radius:999px;padding:4px;width:100%;max-width:360px}
+#hub-bar a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px;color:var(--dim)}
+#hub-bar a.on{background:var(--grass);color:#0B1210}
+body{padding-top:56px}
 </style>
 </head>
 <body>
+<div id="hub-bar"><div class="sw"><a href="/" class="on">⚽ Soccer</a><a href="/nhl">🏒 NHL</a></div></div>
 <div class="wrap">
   <div class="top">
     <div class="title" id="title"></div>

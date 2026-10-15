@@ -8,6 +8,7 @@ import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
 import { forebetStep, forebetFetch, FB_PAGES } from './forebetpage.js';
 import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
+import { nhlStep, nhlTally, nhlStatus } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
 const json = (data, status = 200) =>
@@ -400,7 +401,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     const meta = (await env.HUB.get('meta:synced', 'json')) || {};
     const next = [...DOMESTIC, ...CUP_MODEL].sort((a, b) => (meta[a.slug] || '').localeCompare(meta[b.slug] || ''))[0];
     // Free plan allows 1,000 KV writes a day: don't re-sync a league that was synced in the last 8 hours.
-    if (meta[next.slug] && now.getTime() - new Date(meta[next.slug]).getTime() < 8 * 3600000) return { job: 'sync', idle: true };
+    if (meta[next.slug] && now.getTime() - new Date(meta[next.slug]).getTime() < 8 * 3600000) return await safeNhl(env, now);
     const r = await syncLeague(next, env, now); await syncNote(env, next, r);
     return { job: 'sync', league: next.slug, ...r };
   }
@@ -453,8 +454,11 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
       return { job: 'analyze', league: lg.slug, date, ...r };
     }
   }
-  return { job: 'analyze', idle: true };
+  return await safeNhl(env, now);
 }
+
+// NHL work only runs in spare slots, and a failure there can never break the soccer jobs.
+const safeNhl = async (env, now) => { try { return await nhlStep(env, now); } catch (e) { return { job: 'nhl', error: String(e && e.message || e).slice(0, 120) }; } };
 
 const hub = {
   async fetch(req, env0) {
@@ -486,6 +490,10 @@ const hub = {
       return json((await env.HUB.get(`day:${date}`, 'json')) || { date, cards: [] });
     }
     if (p === '/api/tally') return json(await tally(env));
+    if (p === '/api/nhl/day') { const date = q('date') || today(); return json((await env.HUB.get(`nhl:day:${date}`, 'json')) || { date, cards: [] }); }
+    if (p === '/api/nhl/tally') return json(await nhlTally(env));
+    if (p === '/api/nhl/status') return json(await nhlStatus(env));
+    if (req.method === 'POST' && p === '/api/nhl/run') { try { return json({ ok: true, ...(await nhlStep(env, new Date(), fetch, { force: true })) }); } catch (e) { return json({ error: `NHL: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/days') { // every saved day, for the Export button
       const out = []; let cursor;
       do { const r = await env.HUB.list({ prefix: 'day:', cursor }); out.push(...r.keys.map(k => k.name.slice(4))); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);

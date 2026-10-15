@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f17">
+<title>Game Day Hub · NHL</title>
+<style>
+:root{--bg:#0b0f17;--bar:#0f141c;--s:#141b27;--s2:#1b2433;--ink:#eef2f8;--mut:#9aa6b8;--faint:#6c7a90;--line:#2a3546;--blue:#4c8dff;--chip:#1f2a3b;--good:#5ee08f;--bad:#ff7b6b;--amber:#f0c35a}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;padding-top:56px;padding-bottom:100px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#hub-bar{position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+#hub-bar .sw{display:flex;gap:4px;background:var(--s2);border-radius:999px;padding:4px;width:100%;max-width:360px}
+#hub-bar a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px;color:var(--mut)}
+#hub-bar a.on{background:var(--blue);color:#fff}
+.wrap{max-width:520px;margin:0 auto}
+.top{padding:20px 18px 4px}
+.title{font-size:26px;font-weight:700;letter-spacing:-.02em}.title span{color:var(--blue)}
+.sub{font-size:13px;color:var(--mut);margin-top:2px;line-height:1.45}
+.days{display:flex;gap:8px;margin:16px 0 2px}
+.day{flex:1;text-align:center;padding:8px 0 7px;border-radius:12px;background:var(--s);border:1px solid var(--line);font-size:12px;color:var(--mut)}
+.day b{display:block;font-size:17px;color:var(--ink);font-weight:650;margin:1px 0}
+.day.on{background:var(--blue);border-color:var(--blue);color:#dbe8ff}.day.on b{color:#fff}
+.tabs{display:flex;gap:6px;padding:0 18px;margin-top:10px;border-bottom:1px solid var(--line)}
+.tab{padding:9px 6px;font-size:13.5px;color:var(--mut);margin-right:10px;border-bottom:2px solid transparent}
+.tab.on{color:var(--ink);border-bottom-color:var(--blue);font-weight:600}
+.pad{padding:14px 18px 0}
+.card{background:var(--s);border:1px solid var(--line);border-radius:14px;padding:13px 13px 11px;margin-bottom:10px}
+.hd{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.hd h3{font-size:18px;font-weight:700;letter-spacing:-.01em}
+.hd span{font-size:12.5px;color:var(--mut)}
+.g{display:grid;grid-template-columns:66px minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:center}
+.g.h{margin:10px 0 4px;font-size:11px;color:var(--faint)}
+.g.r{padding:5px 0;border-top:1px solid var(--line)}
+.g .n{font-size:12px;color:var(--mut);font-weight:600}
+.p{background:var(--chip);border-radius:8px;padding:6px 8px;font-size:13px;color:var(--mut);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p b{font-size:14.5px;color:var(--ink);font-weight:650}
+.p.hi{background:rgba(76,141,255,.2);box-shadow:inset 0 0 0 1px rgba(76,141,255,.55)}
+.y{color:var(--good);font-weight:700}.x{color:var(--bad);font-weight:700}
+.note{font-size:11.5px;color:var(--faint);margin-top:7px;line-height:1.4}
+.empty{padding:26px 18px;text-align:center;color:var(--mut);font-size:13.5px;line-height:1.5}
+.seg{display:flex;gap:6px;padding:12px 18px 0}
+.seg button{font-size:12.5px;padding:7px 12px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
+.seg button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+table{width:calc(100% - 36px);margin:12px 18px 0;border-collapse:collapse;background:var(--s);border:1px solid var(--line);border-radius:14px;overflow:hidden;font-variant-numeric:tabular-nums}
+th,td{padding:11px 10px;text-align:left;border-bottom:1px solid var(--line);font-size:14px}
+tr:last-child td{border-bottom:0}
+th{font-size:11px;color:var(--mut);font-weight:600}
+td small{display:block;color:var(--faint);font-size:11px;margin-top:1px}
+td.best{color:var(--blue);font-weight:700}
+.nt{margin:10px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.5}
+h4{margin:20px 18px 6px;font-size:14px}
+.rg{display:grid;grid-template-columns:minmax(0,1.15fr) 52px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:4px;padding:9px 12px;border-top:1px solid var(--line);font-size:11.5px;align-items:start;color:var(--mut)}
+.rg b{color:var(--ink);font-weight:600;font-size:12.5px}
+.rl{margin:0 18px;border:1px solid var(--line);border-radius:14px;background:var(--s);overflow:hidden}
+.rl .rg:first-child{border-top:0;color:var(--faint)}
+.dock{position:fixed;left:0;right:0;bottom:0;background:var(--bar);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+.dock .in{max-width:520px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.btn{flex:none;padding:11px 16px;border-radius:12px;background:var(--blue);color:#fff;font-weight:650;font-size:14px}
+.btn[disabled]{opacity:.55}
+#st{flex:1;min-width:0;font-size:12px;color:var(--mut);line-height:1.35}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:13px}.kv span:first-child{color:var(--mut)}
+</style>
+</head>
+<body>
+<div id="hub-bar"><div class="sw"><a href="/">⚽ Soccer</a><a href="/nhl" class="on">🏒 NHL</a></div></div>
+<div class="wrap">
+  <div class="top">
+    <div class="title">NHL <span>Model</span></div>
+    <div class="sub">Winner and Over/Under 5.5 only. Overtime and shootout wins count. Times are Central.</div>
+    <div class="days" id="days"></div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div id="view"></div>
+</div>
+<div class="dock"><div class="in"><div id="st"></div><button type="button" class="btn" id="run">Update NHL now</button></div></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const TZ = 'America/Chicago';
+const fmt = d => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(d);
+const addDays = (d, n) => new Date(new Date(d + 'T12:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);
+const S = { date: fmt(new Date()), tab: 'board', scope: 'same' };
+let day = { cards: [] }, tally = null, status = null;
+const api = async p => { const r = await fetch(p); const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error('Server replied ' + r.status); } };
+const pct = (h, n) => n ? Math.round(100 * h / n) : null;
+const mark = v => v == null ? '' : v ? ' <span class="y">✓</span>' : ' <span class="x">✗</span>';
+
+function pickWin(m, c) { const h = m.w >= 50; return { team: h ? c.hAbbr : c.aAbbr, p: h ? m.w : 100 - m.w, strong: Math.abs(m.w - 50) >= 8 }; }
+function pickOu(m) { const o = m.o >= 50; return { side: o ? 'Over' : 'Under', p: o ? m.o : 100 - m.o, strong: Math.abs(m.o - 50) >= 7 }; }
+function modelRow(label, m, c, g) {
+  if (!m) return `<div class="g r"><div class="n">${label}</div><div class="p">No pick</div><div class="p">No pick</div></div>`;
+  const w = pickWin(m, c), o = pickOu(m);
+  return `<div class="g r"><div class="n">${label}</div><div class="p${w.strong ? ' hi' : ''}"><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div><div class="p${o.strong ? ' hi' : ''}"><b>${o.side} ${o.p}%</b>${mark(g && g.ou)}</div></div>`;
+}
+function fbRow(c, g) {
+  const f = c.fb;
+  if (!f) return `<div class="g r"><div class="n">Forebet</div><div class="p">Not read yet</div><div class="p">Not read yet</div></div>`;
+  const w = f.pick ? `<b>${esc(f.pick === 'H' ? c.hAbbr : c.aAbbr)}${f.p ? ' ' + Math.max(...f.p) + '%' : ''}</b>${mark(g && g.win)}` : 'No pick';
+  const o = f.over == null ? (f.avg != null ? `avg ${f.avg}` : 'No pick') : `<b>${f.over ? 'Over' : 'Under'}</b>${mark(g && g.ou)} · avg ${f.avg}`;
+  return `<div class="g r"><div class="n">Forebet</div><div class="p${f.pick ? ' hi' : ''}">${w}</div><div class="p${f.over != null ? ' hi' : ''}">${o}</div></div>`;
+}
+function card(c) {
+  const g = c.grade || {}, f = c.final;
+  const head = f ? 'Final' + (f.last !== 'REG' ? ' (' + f.last + ')' : '') : esc(c.ko);
+  return `<div class="card"><div class="hd"><h3>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</h3><span>${head}</span></div>
+  <div class="g h"><span></span><span>Winner</span><span>Over / Under 5.5</span></div>
+  ${modelRow('v2 model', c.v2, c, g.v2)}${modelRow('v4 shadow', c.v4, c, g.v4)}${fbRow(c, g.fb)}
+  <div class="note">${f ? `${esc(c.aAbbr)} ${f.a}, ${esc(c.hAbbr)} ${f.h}${f.last !== 'REG' ? ' (' + f.last + ')' : ''} · total ${f.total} · graded at 5.5` : c.skipped ? esc(c.skipped) : 'Blue = a confident pick. v4 is a shadow test and never changes v2.'}</div></div>`;
+}
+function board() {
+  const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
+  return `<div class="pad">${list.map(card).join('')}</div>`;
+}
+function cell(m, key, other) {
+  const v = pct(m.hit, m.n);
+  return v == null ? '<td>–</td>' : `<td${other}>${v}%<small>${m.hit}/${m.n}</small></td>`;
+}
+function bestOf(models, key) {
+  const v = ['v2', 'v4', 'fb'].map(k => { const m = models[k]; return m.n ? m.hit / m.n : -1; }), mx = Math.max(...v);
+  return v.map(x => x === mx && mx >= 0 && v.filter(y => y === mx).length < 3 ? ' class="best"' : '');
+}
+function results() {
+  if (!tally) return `<div class="empty">Loading…</div>`;
+  const B = tally[S.scope];
+  const seg = `<div class="seg"><button data-sc="same" class="${S.scope === 'same' ? 'on' : ''}">Same games</button><button data-sc="all" class="${S.scope === 'all' ? 'on' : ''}">All games</button></div>`;
+  if (!tally.graded) return seg + `<div class="empty">No graded NHL games yet. Results appear here once finished games are graded.</div>`;
+  const bw = bestOf(B.win, 'win'), bo = bestOf(B.ou, 'ou');
+  const bb = B.brier.n ? (B.brier.v4 < B.brier.v2 ? [ '', ' class="best"', '' ] : B.brier.v2 < B.brier.v4 ? [' class="best"', '', ''] : ['', '', '']) : ['', '', ''];
+  return `${seg}<table><tr><th></th><th>v2</th><th>v4 shadow</th><th>Forebet</th></tr>
+  <tr><td>Winner</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.win[k], 'win', bw[i])).join('')}</tr>
+  <tr><td>Over/Under 5.5</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}</tr>
+  <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
+  <div class="nt">${S.scope === 'same' ? 'Only games all three models have a pick for.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Forebet gives no Over/Under chance, so its Over is called when its average goals is above 5.5. Market odds are never used.</div>
+  <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
+    const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${m.o >= 50 ? 'Over' : 'Under'}${mark(g && g.ou)}` : '–';
+    const c = { h: r.hAbbr, a: r.aAbbr };
+    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.over == null ? '–' : (r.fb.over ? 'Over' : 'Under') + mark(gr.fb && gr.fb.ou)}` : '–';
+    return `<div class="rg"><b>${esc(r.aAbbr)} @ ${esc(r.hAbbr)}</b><span>${f.a}–${f.h}${f.last !== 'REG' ? ' ' + f.last : ''}</span><span>${one(r.v2, gr.v2, c)}</span><span>${one(r.v4, gr.v4, c)}</span><span>${fb}</span></div>`;
+  }).join('')}</div>`;
+}
+function statusView() {
+  if (!status) return `<div class="empty">Loading…</div>`;
+  const fb = status.forebet;
+  return `<div class="pad"><div class="card"><div class="kv"><span>Ratings include games through</span><span>${esc(status.through)}</span></div>
+  <div class="kv"><span>2026-27 games in the ratings</span><span>${status.gamesThisSeason}</span></div>
+  <div class="kv"><span>Teams rated</span><span>${status.teams}</span></div>
+  <div class="kv"><span>Forebet last read</span><span>${fb ? (fb.ok ? `${fb.rows} games, ${fb.saved} saved` : 'failed') : 'not yet'}</span></div>
+  ${fb && fb.msg ? `<div class="note">${esc(fb.msg)}</div>` : ''}
+  <div class="note">Backtest on 2,428 games from 3 seasons: winner picks hit about 55% (v2) and 56% (v4) against 54% for always picking the home team. Over/Under 5.5 only beats the 55% Over rate when the model is confident. Goalie ratings did not help, so they are not used yet.</div></div></div>`;
+}
+function renderDays() {
+  const t = fmt(new Date()), list = [[addDays(t, -1), 'Yesterday'], [t, 'Today'], [addDays(t, 1), 'Tomorrow']];
+  $('#days').innerHTML = list.map(([d, l]) => `<button type="button" class="day${d === S.date ? ' on' : ''}" data-d="${d}">${l}<b>${+d.slice(8)}</b></button>`).join('');
+  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
+}
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : statusView(); }
+async function load() {
+  try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
+  render();
+  try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
+}
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run'); if (!t) return;
+  if (t.dataset.d) { S.date = t.dataset.d; await load(); }
+  else if (t.dataset.tab) { S.tab = t.dataset.tab; render(); }
+  else if (t.dataset.sc) { S.scope = t.dataset.sc; render(); }
+  else if (t.id === 'run') {
+    t.disabled = true; $('#st').textContent = 'Updating…';
+    try { const r = await (await fetch('/api/nhl/run', { method: 'POST' })).json();
+      $('#st').textContent = r.error ? r.error : `${r.created || 0} new, ${r.graded || 0} graded${r.forebet ? ', Forebet ' + (r.forebet.error || r.forebet.note || r.forebet.saved + ' saved') : ''}`;
+      await load(); } catch (err) { $('#st').textContent = err.message; }
+    t.disabled = false;
+  }
+});
+load();
+</script>
+</body>
+</html>
