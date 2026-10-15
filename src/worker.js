@@ -217,8 +217,9 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   }
   // Remember the attempt so a league whose games aren't final yet (postponed, feed lagging) can't
   // block the others: the cron rotates by least-recently-tried.
-  day.gradeTried = { ...(day.gradeTried || {}), [slug]: now.getTime() };
-  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  // Saved only when something was graded: a league still waiting on ESPN used to cost a KV write on every
+  // try. The cron now rotates through due leagues by the clock instead (see slot 1), so nothing is stored.
+  if (graded) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { graded, pending };
 }
 
@@ -396,16 +397,16 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
         const open = (day?.cards || []).filter(c => c.league === lg.slug && !c.final && (c.v2 || c.v4));
         if (!open.length) continue;
         const last = Math.max(...open.map(c => new Date(c.kickoff).getTime()));
-        if (now.getTime() >= last + gradeDelayMs(env)) due.push({ date, slug: lg.slug, last, tried: day.gradeTried?.[lg.slug] || 0 });
+        if (now.getTime() >= last + gradeDelayMs(env)) due.push({ date, slug: lg.slug, last });
       }
     }
-    due.sort((a, b) => a.tried - b.tried || a.last - b.last); // least recently tried first, then oldest games
+    due.sort((a, b) => a.last - b.last || (a.slug < b.slug ? -1 : 1)); // oldest games first, then rotate by the clock
     if (!due.length) {
       const fbr = await forebetStep(env, now);
       if (fbr) return { job: 'forebet', ...fbr };
       return { job: 'grade', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
     }
-    const d = due[0];
+    const d = due[Math.floor(now.getTime() / 1200000) % due.length]; // one league per 20-minute turn, no stored state
     return { job: 'grade', league: d.slug, date: d.date, ...(await gradeLeague(d.date, d.slug, env, {}, now)) };
   }
 
