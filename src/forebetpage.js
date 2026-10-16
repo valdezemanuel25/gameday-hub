@@ -1,7 +1,7 @@
 // Reads Forebet's own league pages (the 1X2, Under/Over 2.5 and Both-teams-to-score tabs) and fills each
 // card's `fb` record. Forebet is only RECORDED and graded: no model reads it. One page per cron run, at most
 // once per 3 hours per page, and only games that have not kicked off and still lack that table's numbers.
-import { norm, sameTeam } from './sportsmole.js';
+import { norm, sameTeam, words } from './sportsmole.js';
 import { localDate } from './data.js';
 import { getUnm, saveUnm, likeness } from './verify.js';
 
@@ -83,7 +83,7 @@ export function parseForebetHtml(html, kind, fromDate) {
 // that merely sits inside the other (5+ letters) is safe here.
 export const is = (a, b) => {
   const x = norm(a), y = norm(b);
-  if (sameTeam(x, y)) return true;
+  if (sameTeam(x, y) || words(a) === words(b)) return true;
   const [sh, lg] = x.length <= y.length ? [x, y] : [y, x];
   return sh.length >= 5 && lg.includes(sh);
 };

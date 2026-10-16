@@ -28,6 +28,8 @@ export function norm(s) {
   for (const [re, to] of ALIAS) x = x.replace(re, to);
   return x.replace(/\s+/g, '');
 }
+// Same words in a different order: "UNAM Pumas" and "Pumas UNAM".
+export const words = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w && !['fc', 'cf', 'club', 'de', 'cd', 'ac', 'sc'].includes(w)).sort().join('');
 export function sameTeam(a, b) {
   if (!a || !b) return false;
   const [sh, lg] = a.length <= b.length ? [a, b] : [b, a];

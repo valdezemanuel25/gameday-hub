@@ -24,6 +24,9 @@ ok('rows match ESPN-style names (TSG, SL, Praha/Prague, Lillestrøm)', m.size ==
 const sw = matchRows(r1, [mk('9', 'Real Sociedad', 'Union St.-Gilloise', '2026-10-15T16:45:00Z')], '1x2').get('9');
 ok('home/away swapped on the page flips the numbers', JSON.stringify(sw.p) === '[33,28,39]' && sw.score.h === 1 && sw.pred === '2');
 
+const wo = matchRows([{ home: 'Atlante FC', away: 'UNAM Pumas', date: '2026-10-16', p: [31, 37, 32] }], [mk('7', 'Atlante', 'Pumas UNAM', '2026-10-17T03:00:00Z')], '1x2').get('7');
+ok('word order differs (UNAM Pumas / Pumas UNAM) and still matches', !!wo && JSON.stringify(wo.p) === '[31,37,32]');
+
 // fake KV, count reads
 const kv = new Map(); let reads = 0, fetches = [];
 const env = { HUB: { get: async (k, t) => { reads++; const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv.set(k, v); } } };
