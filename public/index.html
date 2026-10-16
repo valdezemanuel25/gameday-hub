@@ -620,7 +620,7 @@ function sourceBoard() {
     const sm = l.sm ? (l.sm.total ? cell(l.sm.tried ? 'ok' : 'none', mins(l.sm.tried), `${l.sm.found}/${l.sm.total}`, 360) : cell('none', 0, 'no games')) : cell('na');
     const fb = ['1x2', 'ou', 'btts'].map(k => {
       if (!l.fb) return cell('na');
-      const m = l.fb[k]; if (!m) return cell('none');
+      const m = l.fb[k]; if (!m) return cell('none', 0, '', 0, `data-refetch="${esc(l.slug)}" data-kind="${k}"`);
       const cov = m.cov && m.cov[1] ? `${m.cov[0]}/${m.cov[1]}` : '';
       return m.ok ? cell('ok', mins(m.at), cov, 360) : cell('bad', mins(m.at), short(mins(m.at)), 0, `data-refetch="${esc(l.slug)}" data-kind="${k}"`, errCode(m.msg));
     }).join('</td><td>');
