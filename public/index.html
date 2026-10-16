@@ -258,20 +258,29 @@ body{padding-top:56px}
 .sb td.n.pt small{color:#9ddcb4;font-weight:600}
 .sb tr.off td{opacity:.42}
 .sb tr.sep td{padding:8px 0 2px;font-size:10.5px;color:var(--faint);font-weight:650;opacity:1}
-/* wide screens: leagues in a list on the left (the swipe row stays for phones) */
-.lsb{display:none}
+/* leagues in a list down the left: a slim code strip on phones, full names on wide screens */
+.bdy{display:grid;grid-template-columns:54px minmax(0,1fr);gap:8px;align-items:start;padding:0 10px 0 8px}
+.bdy .chips{display:none}
+.lsb{position:sticky;top:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:5px 3px;margin-top:12px}
+.lsb .it{display:flex;flex-direction:column;align-items:center;gap:1px;width:100%;padding:7px 0;border-radius:10px;color:var(--dim);font-size:11px;font-weight:650;letter-spacing:.02em}
+.lsb .it i{font-style:normal;font-size:10.5px;color:var(--faint);font-weight:500}
+.lsb .it .nm{display:none}
+.lsb .it.on{background:var(--panel2);color:var(--ink);box-shadow:inset 3px 0 0 var(--grass)}
+.lsb .it.amber{color:var(--amber)}
+.lsb .it.off{opacity:.35;cursor:default}
+.lsb .lsp{height:1px;background:var(--line);margin:5px 6px;font-size:0;padding:0}
+.bdy .rail{margin:10px 0 0;padding-left:0}.bdy .rail:before,.bdy .slot:before{display:none}
+.bdy .slot .t{position:static;width:auto;text-align:left;margin:0 0 4px 4px;font-size:11.5px}.bdy .slot .t small{display:inline;margin-left:3px}
 @media(min-width:900px){
   .wrap:has(.bdy){max-width:960px}
-  .bdy{display:grid;grid-template-columns:210px minmax(0,1fr);gap:18px;align-items:start;padding:0 18px}
-  .bdy .chips{display:none}
-  .lsb{display:block;position:sticky;top:64px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;margin-top:12px}
-  .lsb .it{display:flex;justify-content:space-between;width:100%;text-align:left;padding:8px 11px;border-radius:9px;color:var(--dim);font-size:13.5px}
-  .lsb .it i{font-style:normal;color:var(--faint)}
+  .bdy{grid-template-columns:210px minmax(0,1fr);gap:18px;padding:0 18px}
+  .lsb{top:64px;padding:8px}
+  .lsb .it{flex-direction:row;justify-content:space-between;text-align:left;padding:8px 11px;font-size:13.5px;font-weight:500;letter-spacing:0}
+  .lsb .it .cd{display:none}.lsb .it .nm{display:inline}
   .lsb .it:hover{background:rgba(255,255,255,.03)}
-  .lsb .it.on{background:var(--panel2);color:var(--ink);box-shadow:inset 3px 0 0 var(--grass)}
-  .lsb .it.amber{color:var(--amber)}
-  .lsb .it.off{opacity:.38;cursor:default}
-  .lsb .sp{padding:10px 11px 3px;font-size:11px;color:var(--faint);font-weight:650}
+  .lsb .lsp{height:auto;background:none;margin:0;padding:10px 11px 3px;font-size:11px;color:var(--faint);font-weight:650}
+  .bdy .rail{margin:10px 0 0 0;padding-left:64px}.bdy .rail:before,.bdy .slot:before{display:block}
+  .bdy .slot .t{position:absolute;left:-64px;width:44px;text-align:right;margin:0;font-size:12px}.bdy .slot .t small{display:block;margin:0}
 }
 </style>
 </head>
@@ -520,13 +529,15 @@ function board() {
   return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + `<div class="rail">${html}</div>` + uncovered(uncShown) + `</div></div>`;
 }
 // Left league list for wide screens: leagues with games first, the rest dimmed underneath.
+const LCODE = { bundesliga: 'BUN', laliga: 'LAL', laliga2: 'LL2', seriea: 'SA', eredivisie: 'ERE', bundesliga2: 'BL2', ligue1: 'L1', championship: 'CHA', ligamx: 'MX', brasileirao: 'BRA', epl: 'EPL', mls: 'MLS', ucl: 'UCL', uel: 'UEL', nationsleague: 'NL' };
 function sidebar(leagues) {
   const n = k => day.cards.filter(c => c.v2 && c.leagueKey === k).length, on = k => S.league === k && !S.top ? 'on' : '';
+  const lab = (k, nm) => `<span class="cd">${LCODE[k] || esc(String(nm).slice(0, 3).toUpperCase())}</span><span class="nm">${esc(nm)}</span>`;
   const idle = ((cfg && cfg.leagues) || []).filter(l => !l.cup && !leagues.some(([k]) => k === l.key));
-  return `<aside class="lsb"><button type="button" class="it ${S.league === 'all' && !S.top ? 'on' : ''}" data-league="all">All<i>${day.cards.filter(c => c.v2).length}</i></button>` +
-    `<button type="button" class="it amber ${S.top ? 'on' : ''}" data-top="1">Top picks</button>` +
-    leagues.map(([k, nm]) => `<button type="button" class="it ${on(k)}" data-league="${k}">${esc(nm)}<i>${n(k)}</i></button>`).join('') +
-    (idle.length ? `<div class="sp">No games on this day</div>` + idle.map(l => `<div class="it off">${esc(l.name)}<i>0</i></div>`).join('') : '') + `</aside>`;
+  return `<aside class="lsb"><button type="button" class="it ${S.league === 'all' && !S.top ? 'on' : ''}" data-league="all"><span class="cd">ALL</span><span class="nm">All</span><i>${day.cards.filter(c => c.v2).length}</i></button>` +
+    `<button type="button" class="it amber ${S.top ? 'on' : ''}" data-top="1"><span class="cd">TOP</span><span class="nm">Top picks</span></button>` +
+    leagues.map(([k, nm]) => `<button type="button" class="it ${on(k)}" data-league="${k}" aria-label="${esc(nm)}">${lab(k, nm)}<i>${n(k)}</i></button>`).join('') +
+    (idle.length ? `<div class="lsp">No games on this day</div>` + idle.map(l => `<div class="it off" aria-label="${esc(l.name)}">${lab(l.key, l.name)}<i>0</i></div>`).join('') : '') + `</aside>`;
 }
 
 /* ---------- Model vs SportsMole ---------- */
