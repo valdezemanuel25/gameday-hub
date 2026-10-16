@@ -44,6 +44,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .now:after{content:"";flex:1;height:1px;background:rgba(240,181,74,.35)}
 .m{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:8px}
 .m.open{background:var(--panel2);border-color:#35514a}
+.m.all,.m.open.all{border-color:#ffb81c;box-shadow:0 0 0 1px #ffb81c,0 0 14px rgba(255,150,0,.38)}
 .m .hd{display:block;width:100%;text-align:left;padding:11px 12px;border-radius:14px}
 .tag{font-size:10.5px;color:var(--faint);margin-bottom:5px}
 .row{display:flex;align-items:center;gap:10px}
@@ -275,6 +276,9 @@ function expanded(c) {
     </details></div></div>`;
 }
 const GAME_MS = 2 * 3600000;
+const SECOND_DIV = ['laliga2', 'bundesliga2', 'championship'];
+// Neon outline once every model for the game is in: v2, v4, Forebet, plus SportsMole (not needed in second divisions).
+const allIn = c => !!(c.v2 && c.v4 && c.fb && (SECOND_DIV.includes(c.leagueKey) || c.sm));
 const why = c => {
   if (c.v2.pick === 'D') return '';
   const f = t => { const m = /(\d+) scored, (\d+) conceded in last (\d+)/.exec(t || ''); return m ? { gf: +m[1], ga: +m[2], n: +m[3] } : null; };
@@ -303,7 +307,7 @@ function game(c) {
   }
   const nums = `<div class="nums"><span>${esc(c.home)} ${h}</span><span>Draw ${d}</span><span>${esc(c.away)} ${a}</span></div>`;
   const pickName = pickText(c), pp = v.pick === 'H' ? h : v.pick === 'A' ? a : d;
-  return `<div class="m ${open ? 'open' : ''} ${pending ? 'pn' : ''}"><button type="button" class="hd" data-id="${esc(c.id)}" aria-expanded="${open}">
+  return `<div class="m ${open ? 'open' : ''} ${pending ? 'pn' : ''} ${allIn(c) ? 'all' : ''}"><button type="button" class="hd" data-id="${esc(c.id)}" aria-expanded="${open}">
     <div class="row"><div class="teams"><div class="tag">${esc(c.leagueName)}${c.note ? ' <span class="nt">· note</span>' : ''}${c.mine ? ` <span class="you">· you: ${OUT[c.mine]}</span>` : ''}</div>
       <div class="pk ${pcls}"><b>${esc(pickName)}<i>${pp}%</i></b><span class="cf ${ccls}">${cl}</span></div>
       <div class="vs">${esc(c.home)}${rank(c.hRank)} vs ${esc(c.away)}${rank(c.aRank)}</div>
