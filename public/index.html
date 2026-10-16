@@ -284,6 +284,14 @@ body{padding-top:56px}
   .bdy .rail{margin:10px 0 0 0;padding-left:64px}.bdy .rail:before,.bdy .slot:before{display:block}
   .bdy .slot .t{position:absolute;left:-64px;width:44px;text-align:right;margin:0;font-size:12px}.bdy .slot .t small{display:block;margin:0}
 }
+
+.tpk{margin-top:9px;padding:8px 10px;border-radius:10px;background:rgba(88,178,122,.09);border:1px solid rgba(88,178,122,.35)}
+.tpk .tl{font-size:10.5px;font-weight:700;color:var(--grass);margin-bottom:4px}
+.tpk .tr{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+.tpk .tr b{font-weight:700;color:var(--ink);min-width:0}
+.tpk .tm{display:flex;align-items:baseline;gap:5px;white-space:nowrap;font-size:12px;color:var(--faint)}
+.tpk .tm u{text-decoration:none;font-size:10px;margin-left:4px}.tpk .tm span{color:var(--dim);font-weight:600}.tpk .tm span.hi{color:var(--grass)}
+.tpk .tr:first-of-type b{color:#6fe0a0}
 </style>
 </head>
 <body>
@@ -331,6 +339,20 @@ const pickText = c => c.v2.pick === 'D' ? 'Draw' : sideName(c, c.v2.pick);
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const pill = (ok, l) => `<span class="hit ${ok ? 'y' : 'n'}">${l}</span>`;
 const isTop = c => c.v2 && (c.v2.best.p >= 62 || Math.max(...c.v2.p) >= 55);
+// What makes a game a top pick: v2's winner at 55%+ and/or a goals market at 62%+, with what v4 and Forebet say about the same pick.
+function topPicks(c) {
+  const v = c.v2, out = [], f = c.fb || {}, v4 = c.v4 || {}, mx = Math.max(...v.p), i = v.p.indexOf(mx);
+  if (mx >= 55) out.push({ label: `${i === 0 ? c.home : i === 2 ? c.away : 'Draw'} to ${i === 1 ? 'draw' : 'win'}`, p: mx, v4: v4.p ? v4.p[i] : null, fb: f.p ? f.p[i] : null });
+  const mk = (label, p, a, b, flip) => { if (p >= 62) out.push({ label, p, v4: a == null ? null : flip ? 100 - a : a, fb: b == null ? null : flip ? 100 - b : b }); };
+  mk('Over 2.5 goals', v.over, v4.over, f.over); mk('Under 2.5 goals', 100 - v.over, v4.over, f.over, true);
+  mk('Both teams score', v.btts, v4.btts, f.btts); mk('Not both teams score', 100 - v.btts, v4.btts, f.btts, true);
+  return out.sort((a, b) => b.p - a.p);
+}
+function topBox(c) {
+  const t = topPicks(c); if (!t.length) return '';
+  const pc = n => n == null ? '' : `<span class="${n >= 55 ? 'hi' : ''}">${n}%</span>`;
+  return `<div class="tpk"><div class="tl">Top ${t.length === 1 ? 'pick' : 'picks'}</div>${t.map(x => `<div class="tr"><b>${esc(x.label)}</b><span class="tm"><u>v2</u>${pc(x.p)}${x.v4 != null ? `<u>v4</u>${pc(x.v4)}` : ''}${x.fb != null ? `<u>FB</u>${pc(x.fb)}` : ''}</span></div>`).join('')}</div>`;
+}
 const nowCT = () => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date());
 
 /* ---------- one game ---------- */
@@ -439,7 +461,7 @@ function game(c) {
     <div class="xt"><div class="xk">${xcrest(c.home, cons.strong && cons.side === 'H')}<div><b>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away, cons.strong && cons.side === 'A')}<div><b>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
     <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'H' ? 'cg' : ''}">${h}%</b></span><span class="mid"><b>Draw ${d}%</b></span><span class="${fav === 'a' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'A' ? 'cg' : ''}">${a}%</b></span></div>
       <div class="b"><i class="h ${fav === 'h' ? 'f' : ''}" style="flex:${h}"></i><i class="d ${fav === 'd' ? 'f' : ''}" style="flex:${d}"></i><i class="a ${fav === 'a' ? 'f' : ''}" style="flex:${a}"></i></div></div>
-    ${chips(c)}${open ? '' : extra}</button>${open ? expanded(c) : ''}</div>`;
+    ${S.top ? topBox(c) : ''}${chips(c)}${open ? '' : extra}</button>${open ? expanded(c) : ''}</div>`;
 }
 
 /* ---------- alerts ---------- */
@@ -517,14 +539,15 @@ function board() {
   const uncShown = S.top ? [] : unc.filter(c => S.league === 'all' || c.leagueKey === S.league);
   if (S.top) cs = cs.filter(isTop);
   if (!cs.length) return chips + `<div class="empty">No games with a prediction match this filter.</div>` + uncovered(uncShown);
-  cs.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+  if (S.top) cs.sort((a, b) => Math.max(...topPicks(b).map(x => x.p), 0) - Math.max(...topPicks(a).map(x => x.p), 0));
+  else cs.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
   const slots = new Map();
-  for (const c of cs) { if (!slots.has(c.kickoff)) slots.set(c.kickoff, []); slots.get(c.kickoff).push(c); }
+  for (const c of cs) { const k = S.top ? c.id : c.kickoff; if (!slots.has(k)) slots.set(k, []); slots.get(k).push(c); }
   const isToday = S.date === cfg.today, now = Date.now();
   let nowDone = !isToday, html = '';
-  for (const [iso, list] of slots) {
-    const t = new Date(iso).getTime(), done = list.every(c => c.final);
-    if (!nowDone && t > now) { nowDone = true; if (html) html += `<div class="now">Now, ${esc(nowCT())}</div>`; }
+  for (const [, list] of slots) {
+    const iso = list[0].kickoff, t = new Date(iso).getTime(), done = list.every(c => c.final);
+    if (!S.top && !nowDone && t > now) { nowDone = true; if (html) html += `<div class="now">Now, ${esc(nowCT())}</div>`; }
     const [hm, ap] = list[0].ko.split(' ');
     html += `<div class="slot ${done ? 'done' : ''}"><div class="t">${esc(hm)}<small>${esc(ap || '')}</small></div>${list.map(game).join('')}</div>`;
   }
