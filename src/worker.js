@@ -549,10 +549,11 @@ const hub = {
       // Shot tracking: stored finished games checked for ESPN shots, and how many had them (cups are the open question).
       const shots = {}; await Promise.all([...DOMESTIC, ...CUP_MODEL].map(async l => { shots[l.slug] = shotsCoverage((await env.HUB.get(`res:${l.slug}`, 'json'))?.games); }));
       // What each league has from SportsMole and Forebet for the games still to come (today and tomorrow).
-      const nowMs = Date.now(), per = {};
-      for (const d of [today(), addDays(today(), 1)]) {
+      const nowMs = Date.now(), per = {}, games = {};
+      for (const [di, d] of [today(), addDays(today(), 1)].entries()) {
         const dd = await env.HUB.get(`day:${d}`, 'json');
         for (const c of dd?.cards || []) {
+          (games[c.league] || (games[c.league] = [0, 0]))[di]++; // games on the board today / tomorrow, whatever their state
           if (c.final || !c.v2 || new Date(c.kickoff).getTime() <= nowMs) continue;
           const o = per[c.league] || (per[c.league] = { n: 0, sm: 0, tried: 0, fb: { '1x2': 0, ou: 0, btts: 0 } });
           o.n++; if (c.sm) o.sm++;
@@ -563,7 +564,7 @@ const hub = {
       const srcOf = l => {
         const o = per[l.slug] || { n: 0, sm: 0, tried: 0, fb: {} }, fb = {};
         if (FB_PAGES[l.slug]) for (const k of ['1x2', 'ou', 'btts']) { const m = (fbMeta || {})[`${l.slug}|${k}`]; if (m) fb[k] = { at: m.at, ok: !!m.ok, msg: m.msg || null, cov: [o.fb[k] || 0, o.n] }; }
-        return { sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
+        return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
         now: Date.now(), forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },

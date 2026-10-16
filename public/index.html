@@ -253,6 +253,10 @@ body{padding-top:56px}
 .mr .run em{color:var(--amber)}.mr .ok em{color:var(--grass)}.mr .bad em{color:#ff9d84}
 .mb{display:flex;gap:10px;margin-top:14px}.mb button{flex:1;padding:12px;border-radius:12px;font-weight:650;font-size:14px;border:1px solid #35514a}
 .mb .mgo{background:var(--grass);border-color:var(--grass);color:#06130c}.mb button:disabled{opacity:.6}
+.sb td.n.pt{border-left:3px solid var(--grass);padding-left:8px;border-radius:8px 0 0 8px;background:linear-gradient(90deg,rgba(88,178,122,.16),rgba(88,178,122,0))}
+.sb td.n.pt small{color:#9ddcb4;font-weight:600}
+.sb tr.off td{opacity:.42}
+.sb tr.sep td{padding:8px 0 2px;font-size:10.5px;color:var(--faint);font-weight:650;opacity:1}
 </style>
 </head>
 <body>
@@ -610,7 +614,7 @@ function cell(kind, m, extra, staleAfter, tap, code) { // kind: ok | old | bad |
 const errCode = msg => { const m = /HTTP (\d+)/.exec(msg || ''); return m ? m[1] : 'fail'; };
 function sourceBoard() {
   const L = stat.leagues.filter(l => !l.support && l.slug !== 'uefa.nations');
-  const rows = L.map(l => {
+  const row = l => {
     const e = l.problem && l.problem.kind === 'sync' ? cell('bad', 0, 'ESPN') : l.lastSync ? cell('ok', mins(l.lastSync), '', 600) : cell('none');
     const v = l.v4 ? (l.v4.ratingsAt ? cell('ok', mins(l.v4.ratingsAt), '', 1800) : cell('none')) : cell('na');
     const sm = l.sm ? (l.sm.total ? cell(l.sm.tried ? 'ok' : 'none', mins(l.sm.tried), `${l.sm.found}/${l.sm.total}`, 360) : cell('none', 0, 'no games')) : cell('na');
@@ -620,14 +624,17 @@ function sourceBoard() {
       const cov = m.cov && m.cov[1] ? `${m.cov[0]}/${m.cov[1]}` : '';
       return m.ok ? cell('ok', mins(m.at), cov, 360) : cell('bad', mins(m.at), short(mins(m.at)), 0, `data-refetch="${esc(l.slug)}" data-kind="${k}"`, errCode(m.msg));
     }).join('</td><td>');
-    return `<tr><td class="n">${esc(l.name)}</td><td>${e}</td><td>${v}</td><td>${sm}</td><td>${fb}</td></tr>`;
-  }).join('');
-  const bads = L.map(l => ({ l, ks: l.fb ? ['1x2', 'ou', 'btts'].filter(k => l.fb[k] && !l.fb[k].ok) : [] })).filter(x => x.ks.length);
-  return `<div class="sec">Data by league<small>Each box is the last time that source was fetched for that league. Where it applies, a second line shows games covered (found / games today and tomorrow). Tap a red box to fetch that league from Forebet again.</small></div>
+    const g = l.games || { today: 0, tomorrow: 0 }, on = g.today > 0;
+    return `<tr class="${on ? '' : 'off'}"><td class="n${on ? ' pt' : ''}">${esc(l.name)}<small>${on ? g.today + (g.today === 1 ? ' game today' : ' games today') : 'no games today'}${g.tomorrow ? ` · ${g.tomorrow} tomorrow` : ''}</small></td><td>${e}</td><td>${v}</td><td>${sm}</td><td>${fb}</td></tr>`;
+  };
+  const playing = L.filter(l => l.games && l.games.today > 0), idle = L.filter(l => !(l.games && l.games.today > 0));
+  const rows = playing.map(row).join('') + (idle.length ? `<tr class="sep"><td colspan="7">No games today: nothing to worry about here</td></tr>` + idle.map(row).join('') : '');
+  const bads = playing.map(l => ({ l, ks: l.fb ? ['1x2', 'ou', 'btts'].filter(k => l.fb[k] && !l.fb[k].ok) : [] })).filter(x => x.ks.length);
+  return `<div class="sec">Data by league<small>Leagues with games today are at the top and highlighted: those should have every model and source up to date. Each box is the last time that source was fetched for that league. Where it applies, a second line shows games covered (found / games today and tomorrow). Tap a red box to fetch that league from Forebet again.</small></div>
   <div class="pair" style="padding-top:0"><table class="sb"><tr><th></th><th>ESPN<br>results</th><th>v4<br>ratings</th><th>Sports<br>Mole</th><th class="g" colspan="3">Forebet</th></tr>
     <tr><th></th><th></th><th></th><th></th><th>1X2</th><th>O/U</th><th>Both</th></tr>${rows}</table>
-    <div class="sbl"><span><i style="background:rgba(88,178,122,.5)"></i>fresh</span><span><i style="background:rgba(240,181,74,.6)"></i>getting old</span><span><i style="background:rgba(224,122,95,.7)"></i>blocked or failed</span><span><i style="border:1px dashed var(--faint)"></i>not fetched yet</span></div></div>
-  ${bads.length ? `<div class="sec" style="padding-top:16px">Needs a re-fetch<small>${bads.length} league${bads.length === 1 ? '' : 's'} with Forebet pages that came back blocked. v2, v4 and SportsMole are not affected.</small></div>
+    <div class="sbl"><span><i style="background:rgba(88,178,122,.5)"></i>fresh</span><span><i style="background:rgba(240,181,74,.6)"></i>getting old</span><span><i style="background:rgba(224,122,95,.7)"></i>blocked or failed</span><span><i style="border:1px dashed var(--faint)"></i>not fetched yet</span><span><i style="background:var(--grass)"></i>games today</span></div></div>
+  ${bads.length ? `<div class="sec" style="padding-top:16px">Needs a re-fetch<small>${bads.length} league${bads.length === 1 ? '' : 's'} playing today with Forebet pages that came back blocked. v2, v4 and SportsMole are not affected.</small></div>
   <div class="pair" style="padding-top:0">${bads.map(x => `<div class="rc"><div>${esc(x.l.name)}<small>${x.ks.map(k => KN[k] + ' ' + esc(x.l.fb[k].msg || 'failed') + ' ' + short(mins(x.l.fb[k].at)) + ' ago').join(' · ')}</small></div><button type="button" data-refetch="${esc(x.l.slug)}">Fetch again</button></div>`).join('')}</div>` : ''}`;
 }
 
