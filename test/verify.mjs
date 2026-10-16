@@ -1,33 +1,60 @@
-import { v2, v2Lambdas, grade, pickOutcome } from '../src/model.js';
+// Verify and assign: games a fetch could not match by name are kept as suggestions and can be assigned to a card.
+import worker from '../src/worker.js';
+import { forebetFetch } from '../src/forebetpage.js';
 
-const pct = x => Math.round(x * 100);
-let failures = 0;
-const check = (name, got, want) => {
-  const ok = got === want;
-  if (!ok) failures++;
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}: got ${got}, Hub card says ${want}`);
-};
+const kv = new Map();
+const env = { ADMIN_TOKEN: 's', ASSETS: { fetch: () => new Response('a') }, HUB: {
+  get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv.set(k, v); },
+  list: async ({ prefix }) => ({ keys: [...kv.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })) }) } };
+let fail = 0;
+const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) fail++; };
+const call = async (path, body) => (await worker.fetch(new Request('https://x' + path, { method: body ? 'POST' : 'GET', body: body ? JSON.stringify(body) : undefined, headers: { 'x-admin-token': 's' } }), env)).json();
 
-// Arsenal (home) vs Lille (away), card from the Hub, Oct 13.
-// Arsenal last 5: scored 7, conceded 5. Lille last 5: scored 7, conceded 4.
-const r = v2({ gf: 7, ga: 5, n: 5 }, { gf: 7, ga: 4, n: 5 });
-check('Arsenal λ', r.lambda.home.toFixed(2), '1.21');
-check('Lille λ', r.lambda.away.toFixed(2), '0.95');
-check('Over 2.5 %', pct(r.over25), 37);
-check('Under 2.5 %', pct(r.under25), 63);
-check('BTTS yes %', pct(r.bttsYes), 43);
-check('BTTS no %', pct(r.bttsNo), 57);
-check('Top score 1–0', r.topScores[0].score, '1–0');
-check('Top score 1–0 %', pct(r.topScores[0].p), 14);
-check('2nd score', r.topScores[1].score, '1–1');
-check('2nd score %', pct(r.topScores[1].p), 13);
-console.log('1X2:', pct(r.home), pct(r.draw), pct(r.away), '(Hub card does not print v2 1X2 in the lines I read)');
-
-// grading sanity
-const g = grade(r, { h: 2, a: 1 });
-check('grade outcome', g.outcome, 'H');
-check('grade over/under hit (3 goals, model says U)', g.ouHit, false);
-check('grade BTTS hit (model says N, was Y)', g.bttsHit, false);
-
-console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');
-process.exit(failures ? 1 : 0);
+const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+const ko = new Date(Date.now() + 30 * 3600000).toISOString();
+const dayKey = 'day:' + date;
+kv.set(dayKey, JSON.stringify({ date, analyzed: {}, cards: [
+  { id: '1', league: 'ger.1', home: 'Eintracht Frankfurt', away: 'Totally Different FC', kickoff: ko, final: null, v2: { p: [40, 30, 30], pick: 'H', over: 50, btts: 50, scores: [['1–1', 10]], lam: [1, 1], best: { pick: 'x', p: 50 } } },
+  { id: '2', league: 'ger.1', home: 'Mainz', away: 'Bochum', kickoff: ko, final: null, v2: { p: [40, 30, 30], pick: 'H', over: 50, btts: 50, scores: [['1–1', 10]], lam: [1, 1], best: { pick: 'x', p: 50 } } },
+] }));
+const row = (h, a, p, pr) => `<div class="rcnt"><span itemprop="homeTeam"><span itemprop="name">${h}</span></span><span itemprop="awayTeam"><span itemprop="name">${a}</span></span><time itemprop="startDate" datetime="${date}">x</time><div class="fprc"><span>${p[0]}</span><span>${p[1]}</span><span>${p[2]}</span></div><span class="forepr"><span>${pr}</span></span></div>`;
+// Forebet lists Mainz–Bochum (matches) and Frankfurt against a name we cannot match
+const html = row('Mainz', 'Bochum', [50, 25, 25], '1') + row('Eintracht Frankfurt', 'Koeln Neustadt', [45, 28, 27], '1');
+const r = await forebetFetch(env, 'ger.1', '1x2', new Date(), async () => ({ ok: true, text: async () => html }));
+ok('the matching game is saved on its card', r.saved === 1 && JSON.parse(kv.get(dayKey)).cards[1].fb?.p[0] === 50, JSON.stringify(r));
+let c = await call('/api/candidates?date=' + date);
+ok('the leftover row is offered for the card that has no Forebet data', c.items.length === 1 && c.items[0].cardId === '1' && /Frankfurt/.test(c.items[0].title), JSON.stringify(c));
+const w0 = [...kv.keys()].length;
+await forebetFetch(env, 'ger.1', '1x2', new Date(), async () => ({ ok: true, text: async () => html }));
+ok('the same suggestions are not stored again', JSON.stringify(JSON.parse(kv.get('meta:unm')).items.length) === '1');
+const a = await call('/api/assign', { date, league: 'ger.1', id: '1', key: c.items[0].key });
+const card = JSON.parse(kv.get(dayKey)).cards[0];
+ok('assigning puts the Forebet numbers on the card', a.assigned && card.fb.p.join('/') === '45/28/27' && card.fb.how === 'assigned by you', JSON.stringify(a));
+c = await call('/api/candidates?date=' + date);
+ok('the suggestion is gone once assigned', c.items.length === 0);
+// dismiss
+kv.set('meta:unm', JSON.stringify({ items: [{ src: 'fb', key: 'k1', cardId: '2', date, slug: 'ger.1', kind: '1x2', title: 'X vs Y', row: { home: 'X', away: 'Y', date, p: [34, 33, 33] } }] }));
+const d = await call('/api/assign', { date, league: 'ger.1', id: '2', key: 'k1', dismiss: true });
+ok('dismissing removes a wrong suggestion and changes no card', d.dismissed && (await call('/api/candidates?date=' + date)).items.length === 0);
+// started game
+kv.set(dayKey, JSON.stringify({ date, cards: [{ id: '3', league: 'ger.1', home: 'A', away: 'B', kickoff: new Date(Date.now() - 3600000).toISOString(), final: null }] }));
+kv.set('meta:unm', JSON.stringify({ items: [{ src: 'fb', key: 'k2', cardId: '3', date, slug: 'ger.1', kind: '1x2', title: 'A vs B', row: { home: 'A', away: 'B', date, p: [34, 33, 33] } }] }));
+const s2 = await call('/api/assign', { date, league: 'ger.1', id: '3', key: 'k2' });
+ok('a game that already started is refused', /already started/.test(s2.error || ''), JSON.stringify(s2));
+// SportsMole: no name match, but a preview with one matching club is suggested; assigning reads its "We say" line
+{
+  const { smLeague } = await import('../src/worker.js');
+  kv.set(dayKey, JSON.stringify({ date, cards: [{ id: '4', league: 'ger.1', home: 'Eintracht Frankfurt', away: 'Zebra United', kickoff: ko, final: null, v2: { p: [40, 30, 30], pick: 'H', over: 50, btts: 50, scores: [['1–1', 10]], lam: [1, 1], best: { pick: 'x', p: 50 } } }] }));
+  kv.delete('sm:list'); kv.delete('sm:seen'); kv.set('meta:unm', JSON.stringify({ items: [] }));
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async url => url.includes('/preview/') && !url.includes('_123') ? { ok: true, text: async () => '<a href="/football/preview/eintracht-frankfurt-vs-fc-koln-prediction-team-news-lineups_123.html">x</a>' } : { ok: true, text: async () => '<h2>We say: Eintracht Frankfurt 2-1 FC Koln</h2>' };
+  const r = await smLeague(date, 'ger.1', env, new Date(), { force: true });
+  const c = await call('/api/candidates?date=' + date);
+  ok('SportsMole: the unmatched preview is offered', r.found === 0 && c.items.length === 1 && c.items[0].src === 'sm' && /Frankfurt/.test(c.items[0].title), JSON.stringify(c));
+  const a = await call('/api/assign', { date, league: 'ger.1', id: '4', key: c.items[0].key });
+  const card = JSON.parse(kv.get(dayKey)).cards[0];
+  ok('SportsMole: assigning reads and saves the "We say" score', a.assigned && card.sm && card.sm.h === 2 && card.sm.a === 1, JSON.stringify(a));
+  globalThis.fetch = realFetch;
+}
+console.log(fail ? `\n${fail} verify checks FAILED` : '\nAll verify checks passed');
+process.exit(fail ? 1 : 0);

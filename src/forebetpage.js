@@ -3,6 +3,7 @@
 // once per 3 hours per page, and only games that have not kicked off and still lack that table's numbers.
 import { norm, sameTeam } from './sportsmole.js';
 import { localDate } from './data.js';
+import { getUnm, saveUnm, likeness } from './verify.js';
 
 const BASE = 'https://www.forebet.com/en/';
 // Hub league slug -> Forebet page. Add the Champions League once its page address is known.
@@ -130,6 +131,17 @@ export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = 
   const used = new Set(); for (const { day } of work) for (const c of day.cards.filter(x => x.league === slug)) for (const r of rows) if (is(r.home, c.home) && is(r.away, c.away) || is(r.home, c.away) && is(r.away, c.home)) used.add(r);
   const unmatched = [];
   for (const r of rows) if (!used.has(r) && work.some(w => w.date === r.date)) unmatched.push(`${r.home}–${r.away}`);
+  // Cards that still lack this table: offer the leftover page rows of the same day for you to verify and assign.
+  const unm = await getUnm(env), before = JSON.stringify(unm);
+  unm.items = unm.items.filter(i => !(i.src === 'fb' && i.slug === slug && i.kind === kind));
+  for (const { date, day, open } of work) {
+    const left = rows.filter(r => !used.has(r) && r.date === date);
+    for (const c of day.cards.filter(x => open.some(o => o.id === x.id) && !has(x, kind))) {
+      left.map(r => ({ r, s: likeness(c, r.home, r.away) })).sort((a, b) => b.s - a.s).slice(0, 3)
+        .forEach(({ r }, i) => unm.items.push({ src: 'fb', key: `fb|${slug}|${kind}|${c.id}|${i}`, cardId: c.id, date, slug, kind, title: `${r.home} vs ${r.away}`, row: r }));
+    }
+  }
+  await saveUnm(env, unm, before, localDate(now.toISOString()));
   meta[key] = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, ...(unmatched.length ? { unmatched: unmatched.slice(0, 6) } : {}), msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/itemprop=["']?homeTeam/g) || []).length} home-team tags, ${(html.match(/startDate/g) || []).length} dates, ${/captcha|challenge|cf-browser|Just a moment|Access denied/i.test(html) ? 'looks like a check page' : 'no check page'})` };
   await env.HUB.put('meta:fb', JSON.stringify(meta));
   return { slug, kind, rows: rows.length, saved, ...(meta[key].msg ? { note: meta[key].msg } : {}) };

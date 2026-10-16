@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/verify.mjs && node test/parity.mjs && node test/v4.mjs && node test/worker.mjs && node test/sm.mjs && node test/shots.mjs && node test/forebet.mjs && node test/forebetpage.mjs && node test/board.mjs && node test/nhl.mjs",
+    "test": "node test/verify.mjs && node test/parity.mjs && node test/v4.mjs && node test/worker.mjs && node test/sm.mjs && node test/shots.mjs && node test/forebet.mjs && node test/forebetpage.mjs && node test/board.mjs && node test/nhl.mjs && node test/verify.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },

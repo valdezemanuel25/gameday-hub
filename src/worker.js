@@ -5,9 +5,10 @@ import {
   findTeam, getContext, missingContexts, fixturesForLeague, shotsCoverage,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
-import { forebetStep, forebetFetch, FB_PAGES } from './forebetpage.js';
+import { forebetStep, forebetFetch, FB_PAGES, matchRows, is as isName } from './forebetpage.js';
 import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
+import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { nhlStep, nhlTally, nhlStatus } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -236,21 +237,29 @@ export async function smLeague(date, slug, env, now = new Date(), { force = fals
   let links;
   try { links = await getListing(env, now.getTime()); } catch (e) { return { error: `SportsMole list: ${e.message}`, found: 0 }; }
   let found = 0, missed = 0, fetched = 0;
-  const errors = [];
+  const errors = [], missedCards = [];
   for (const c of todo) {
     const link = matchLink(c.home, c.away, links);
     day.smTried[c.id] = now.getTime();
-    if (!link) { missed++; continue; }
+    if (!link) { missed++; missedCards.push(c); continue; }
     if (fetched >= 6) { delete day.smTried[c.id]; continue; } // keep each request small; the next run continues
     fetched++;
     try {
       const w = parseWeSay(await fetchText(link.url));
-      if (!w) { missed++; continue; }
+      if (!w) { missed++; missedCards.push(c); continue; }
       c.sm = { h: w.h, a: w.a, text: w.text, url: link.url };
       if (c.final) c.smGrade = smGrade(c.sm, c.final);
       found++;
     } catch (e) { errors.push(e.message); delete day.smTried[c.id]; }
   }
+  // Cards with no SportsMole match: keep the closest previews on its list so you can verify one and assign it.
+  const unm = await getUnm(env), before = JSON.stringify(unm), gone = new Set(missedCards.map(c => c.id));
+  unm.items = unm.items.filter(i => !(i.src === 'sm' && (gone.has(i.cardId) || todo.some(c => c.id === i.cardId && c.sm))));
+  for (const c of missedCards) {
+    links.map(l => { const t = slugTitle(l.url); return t && { l, t, sc: likeness(c, t.home, t.away) }; }).filter(x => x && x.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 3)
+      .forEach(({ l, t }) => unm.items.push({ src: 'sm', key: `sm|${c.id}|${l.id}`, cardId: c.id, date, slug, title: `${t.home} vs ${t.away}`, url: l.url }));
+  }
+  await saveUnm(env, unm, before, today());
   await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { found, missed, listed: links.length, ...(errors.length ? { errors } : {}) };
 }
@@ -376,6 +385,37 @@ export async function forebetPaste(date, slug, text, env, now = new Date(), kind
   };
 }
 
+// Verify and assign: the suggestions kept for one day, and a tap to attach one to its card.
+export async function candidates(date, env) {
+  const unm = await getUnm(env);
+  return { items: unm.items.filter(i => i.date === date).map(({ row, ...i }) => i) };
+}
+export async function assignCandidate(date, slug, id, key, env, now = new Date(), { dismiss = false } = {}) {
+  const unm = await getUnm(env), before = JSON.stringify(unm);
+  const it = unm.items.find(i => i.key === key && i.cardId === id && i.date === date);
+  if (!it) return { error: 'That suggestion is no longer available. Reload the day.' };
+  if (dismiss) { unm.items = unm.items.filter(i => i.key !== key); await saveUnm(env, unm, before, today()); return { dismissed: true }; }
+  const day = await env.HUB.get(`day:${date}`, 'json');
+  const c = day?.cards?.find(x => x.league === slug && x.id === id);
+  if (!c) return { error: 'Game not found on that day' };
+  if (c.final || new Date(c.kickoff).getTime() <= now.getTime()) return { error: 'That game has already started, so a new prediction is not recorded.' };
+  if (it.src === 'fb') {
+    const row = it.row, rev = isName(row.home, c.away) && !isName(row.home, c.home);
+    const synth = { id: 'x', home: rev ? row.away : row.home, away: rev ? row.home : row.away };
+    const f = matchRows([row], [synth], it.kind).get('x');
+    if (!f) return { error: 'That Forebet row has nothing usable.' };
+    c.fb = { ...(c.fb || {}), ...f, at: c.fb?.at || now.toISOString(), how: 'assigned by you' };
+  } else {
+    const w = parseWeSay(await fetchText(it.url));
+    if (!w) return { error: 'No "We say" line on that SportsMole page yet.' };
+    c.sm = { h: w.h, a: w.a, text: w.text, url: it.url, how: 'assigned by you' };
+  }
+  unm.items = unm.items.filter(i => !(i.cardId === id && i.src === it.src && (it.src === 'sm' || i.kind === it.kind)));
+  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  await saveUnm(env, unm, before, today());
+  return { assigned: true, src: it.src, title: it.title };
+}
+
 // A note (and optional own pick) saved on one card. One small write.
 export async function noteCard(date, slug, id, note, mine, env) {
   const day = await env.HUB.get(`day:${date}`, 'json');
@@ -490,6 +530,8 @@ const hub = {
       return json((await env.HUB.get(`day:${date}`, 'json')) || { date, cards: [] });
     }
     if (p === '/api/tally') return json(await tally(env));
+    if (p === '/api/candidates') return json(await candidates(q('date') || today(), env));
+    if (req.method === 'POST' && p === '/api/assign') { try { const b = await req.json(); const lg = leagueBySlug(String(b.league || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ ok: true, ...(await assignCandidate(String(b.date || ''), lg.slug, String(b.id || ''), String(b.key || ''), env, new Date(), { dismiss: !!b.dismiss })) }); } catch (e) { return json({ error: `Assign: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/day') { const date = q('date') || today(); return json((await env.HUB.get(`nhl:day:${date}`, 'json')) || { date, cards: [] }); }
     if (p === '/api/nhl/tally') return json(await nhlTally(env));
     if (p === '/api/nhl/status') return json(await nhlStatus(env));

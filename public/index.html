@@ -183,6 +183,9 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .bdn{margin:10px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.45}
 .tri{display:grid;grid-template-columns:84px repeat(3,minmax(0,1fr));gap:4px 6px;margin-top:7px;font-size:12px;color:var(--dim)}
 .tri span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tri .hh{color:var(--faint)}
+.cand{border-color:#5b4a22}.cand small{display:block;color:var(--amber);font-size:11.5px;margin-bottom:2px}
+.cr{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-top:5px}.cr span{flex:1;min-width:0;overflow-wrap:anywhere}
+.cr button{flex:none;padding:5px 11px;border-radius:99px;border:1px solid #35514a;font-size:12px;font-weight:650}.cr button.no{padding:5px 8px;color:var(--dim)}
 #hub-bar{position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:#0f1612;border-bottom:1px solid var(--line)}
 #hub-bar .sw{display:flex;gap:4px;background:var(--panel2);border-radius:999px;padding:4px;width:100%;max-width:360px}
 #hub-bar a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px;color:var(--dim)}
@@ -211,7 +214,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const OUT = { H: 'home win', D: 'draw', A: 'away win' };
 const TZ = 'America/Chicago';
-let cfg = null, day = { cards: [] }, tally = null;
+let cfg = null, day = { cards: [] }, tally = null, cands = [];
 const S = { date: '', tab: 'board', league: 'all', top: false, open: null };
 const counts = {};
 try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); if (['board', 'results', 'compare', 'status'].includes(v.tab)) S.tab = v.tab; if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }
@@ -259,6 +262,7 @@ function expanded(c) {
     <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
     <div class="two">${mdl}${sm}</div>
     <div class="two"><div class="box">Most likely scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b></div>${fbBox(c)}</div>
+    ${candBox(c)}
     <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
     ${shadow}
     ${fbLine(c)}
@@ -326,6 +330,12 @@ function alerts() {
 /* ---------- board ---------- */
 // v4 shadow line for a game v2 could not cover (no v2 card, but the v4 cup model had a prediction)
 // Forebet picks entered by hand. Recorded and graded only; no model reads them.
+/* Games a fetch could not match by name: verify the pair, then assign it to this card. */
+function candBox(c) {
+  const list = cands.filter(i => i.cardId === c.id);
+  if (!list.length || c.final || new Date(c.kickoff).getTime() <= Date.now()) return '';
+  return `<div class="box cand"><small>Possible matches. Check the teams, then tap Use to give this card the prediction.</small>${list.map(i => `<div class="cr"><span><b>${i.src === 'fb' ? 'Forebet' : 'SportsMole'}</b> ${esc(i.title)}</span><button type="button" data-assign="${esc(i.key)}" data-card="${esc(c.id)}">Use</button><button type="button" class="no" data-assign="${esc(i.key)}" data-card="${esc(c.id)}" data-dismiss="1" aria-label="Not this game">✕</button></div>`).join('')}</div>`;
+}
 function fbBox(c) {
   const f = c.fb;
   if (!f) return `<div class="box">Forebet<small>Not read yet</small></div>`;
@@ -561,6 +571,7 @@ function render() {
 async function loadCounts() {
   const ds = [-2, -1, 0, 1, 2].map(o => addDays(S.date, o)).filter(d => counts[d] == null || d === S.date);
   await Promise.all(ds.map(async d => { try { const j = await api('/api/day?date=' + d); counts[d] = j.cards.length; if (d === S.date) day = j; } catch (e) {} }));
+  try { cands = (await api('/api/candidates?date=' + S.date)).items || []; } catch (e) { cands = []; }
 }
 async function loadDay(date) {
   if (date) S.date = date;
@@ -640,6 +651,15 @@ document.addEventListener('click', async e => {
       msg.textContent = `Saved ${r.saved}. ${r.alreadyHad ? r.alreadyHad + ' already had a pick. ' : ''}${r.started ? r.started + ' already started (skipped). ' : ''}${r.notFound.length ? "Couldn't match: " + r.notFound.join(', ') + '.' : ''}`;
       if (r.saved) { delete counts[S.date]; tally = null; await loadDay(); }
     } catch (er) { msg.textContent = er.message; }
+    return;
+  }
+  const as = e.target.closest('[data-assign]');
+  if (as) {
+    const c = day.cards.find(x => x.id === as.dataset.card); if (!c) return;
+    as.disabled = true;
+    try { const r = await post('/api/assign', { date: S.date, league: c.league, id: c.id, key: as.dataset.assign, dismiss: !!as.dataset.dismiss }); if (r.error) throw new Error(r.error);
+      say(r.dismissed ? 'Suggestion removed.' : `Assigned: ${r.title}`, true); delete counts[S.date]; tally = null; await loadDay(); S.open = c.id; render(); }
+    catch (er) { say(er.message); as.disabled = false; }
     return;
   }
   const sv = e.target.closest('[data-save]');
