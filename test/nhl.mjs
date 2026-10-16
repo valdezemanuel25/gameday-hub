@@ -1,6 +1,6 @@
 // NHL section: model sanity, finished games teaching the ratings, cards, Forebet hockey reader, grading, Results board.
 import { readFileSync } from 'node:fs';
-import { freshState, predict, applyGame, nhlStep, nhlTally, parseForebetHockey, fbFor, probs } from '../src/nhl.js';
+import { fbOu, freshState, predict, applyGame, nhlStep, nhlTally, parseForebetHockey, fbFor, probs } from '../src/nhl.js';
 
 const kv = new Map(), writes = [];
 const env = { HUB: {
@@ -72,7 +72,7 @@ const fetchLater = async (url, o) => url.includes('forebet') ? { ok: true, text:
 const r3 = await nhlStep(env, clock, fetchLater);
 const d3 = JSON.parse(kv.get(dayKey)); const c3 = d3.cards.find(c => c.id === '9001');
 ok('finished game graded with total, OT flag and all three models', r3.graded === 1 && c3.final.total === 5 && c3.final.last === 'OT' && c3.grade.v2 && c3.grade.v4 && c3.grade.fb, JSON.stringify(c3.final));
-ok('Forebet graded on the winner only', c3.grade.fb.win === 1 && !('ou' in c3.grade.fb));
+ok('Forebet graded on the winner and on Over/Under from its predicted score', c3.grade.fb.win === 1 && c3.grade.fb.ou === (((c3.fb.score.a + c3.fb.score.h) > 5.5) === (c3.final.total > 5.5) ? 1 : 0), JSON.stringify(c3.grade.fb));
 ok('v2 over/under is graded at 5.5', c3.grade.v2.ou === ((c3.v2.o >= 50) === false ? 1 : 0));
 const st = JSON.parse(kv.get('nhl:state'));
 ok('ratings state saved with the game applied once', st.applied.includes('9001') && st.teams.VGK.n === freshState().teams.VGK.n + 1);
@@ -81,5 +81,18 @@ ok('re-running does not grade or count the game twice', r4.graded === 0 && JSON.
 
 const t = await nhlTally(env);
 ok('results board counts the graded game for each model', t.graded === 1 && t.all.win.v2.n === 1 && t.all.win.fb.n === 1 && t.same.win.v4.n === 1 && t.recent.length === 1);
+ok('Forebet O/U: predicted 4-3 (7) vs final 2-0 is a miss', fbOu({ score: { a: 3, h: 4 } }, { total: 2 }) === 0);
+ok('Forebet O/U: predicted 4-3 (7) vs final 5-4 is a hit', fbOu({ score: { a: 3, h: 4 } }, { total: 9 }) === 1);
+ok('Forebet O/U: predicted 3-2 (5) vs final 2-1 is a hit (both Under)', fbOu({ score: { a: 2, h: 3 } }, { total: 3 }) === 1);
+ok('Forebet O/U: predicted 3-3 (6) is Over', fbOu({ score: { a: 3, h: 3 } }, { total: 7 }) === 1);
+ok('Forebet O/U: no predicted score means no grade', fbOu({ pick: 'H' }, { total: 7 }) === null);
+ok('results board counts Forebet Over/Under', t.all.ou.fb.n === 1 && t.same.ou.fb.n === 1, JSON.stringify(t.all.ou.fb));
+{ // a game graded before Forebet O/U existed is filled in when the board is built, with nothing rewritten
+  const k = [...kv.keys()].find(x => x.startsWith('nhl:day:')), d = JSON.parse(kv.get(k));
+  for (const c of d.cards) if (c.grade && c.grade.fb) delete c.grade.fb.ou;
+  kv.set(k, JSON.stringify(d));
+  const t2 = await nhlTally(env);
+  ok('older graded games are counted for Forebet Over/Under too', t2.all.ou.fb.n === 1 && t2.recent[0].grade.fb.ou != null, JSON.stringify(t2.all.ou.fb));
+}
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);

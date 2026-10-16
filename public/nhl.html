@@ -101,7 +101,14 @@ h4{margin:20px 18px 6px;font-size:14px}
 .mt .o{font-size:11.5px;color:var(--mut);white-space:nowrap;border-top:1px solid rgba(255,255,255,.07);padding-top:5px}.mt .o b{color:var(--ink);font-weight:650;font-size:12.5px}.mt .o.hi b{color:#9ec1ff}
 .mt .sc2{font-size:12.5px;color:var(--ink);font-weight:700;white-space:nowrap}
 .mt.none{opacity:.55}
-</style>
+.xh{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;font-size:10.5px;color:var(--faint)}
+.xh .cfx{font-size:11px;font-weight:750;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
+.xh .cfx.s{background:rgba(56,182,255,.14);border-color:#38b6ff;color:#38b6ff;box-shadow:0 0 10px rgba(56,182,255,.55),inset 0 0 6px rgba(56,182,255,.2);text-shadow:0 0 6px rgba(56,182,255,.6)}
+.xh .cfx.sp{background:rgba(255,230,0,.12);border-color:#ffe600;color:#ffe600;box-shadow:0 0 10px rgba(255,230,0,.5),inset 0 0 6px rgba(255,230,0,.18);text-shadow:0 0 6px rgba(255,230,0,.55)}
+.cr.win{box-shadow:0 0 0 2px var(--s),0 0 0 4px #38b6ff,0 0 14px rgba(56,182,255,.7)}
+.ag.gl{background:rgba(56,182,255,.14);color:#8fd4ff}
+.mt .o .sc3{color:var(--faint);font-size:11px;margin-left:3px}
+.sp+.ml{margin-top:11px}</style>
 </head>
 <body>
 <div id="hub-bar"><div class="sw"><a href="/">⚽ Soccer</a><a href="/nhl" class="on">🏒 NHL</a></div></div>
@@ -141,9 +148,10 @@ function fbRow(c, g) {
   const sc = f.score ? `<b>${esc(c.aAbbr)} ${f.score.a} – ${f.score.h} ${esc(c.hAbbr)}</b>` : 'No score';
   return `<div class="g r"><div class="n">Forebet</div><div class="p${f.pick ? ' hi' : ''}">${w}</div><div class="p">${sc}</div></div>`;
 }
+const LINE = 5.5;
 const TC={ANA:'#F47A38',BOS:'#FFB81C',BUF:'#3f7be0',CGY:'#D2001C',CAR:'#E0202e',CHI:'#E0283f',COL:'#9a3f66',CBJ:'#2f64b8',DAL:'#1c9a6a',DET:'#E0283f',EDM:'#FF6a1f',FLA:'#D8203e',LAK:'#8f979a',MIN:'#2f8a64',MTL:'#C0283a',NSH:'#FFB81C',NJD:'#E0283f',NYI:'#2f78c8',NYR:'#3469d8',OTT:'#D03045',PHI:'#F76a2b',PIT:'#E8AE1c',SJS:'#1a8f98',SEA:'#6fc3c9',STL:'#3a6bd0',TBL:'#3a6bc9',TOR:'#3a68c4',UTA:'#6CACE4',VAN:'#1c9a58',VGK:'#B4975A',WSH:'#D8203e',WPG:'#3f67aa'};
 const tcol = a => TC[a] || '#4c8dff';
-const crest = a => `<i class="cr" style="--tc:${tcol(a)}">${esc(a)}</i>`;
+const crest = (a, win) => `<i class="cr${win ? ' win' : ''}" style="--tc:${tcol(a)}">${esc(a)}</i>`;
 function sideOf(m, c, kind) { return kind === 'fb' ? m.pick : (m.w >= 50 ? 'H' : 'A'); }
 function tile(label, m, c, g, kind) {
   if (!m) return `<div class="mt none"><div class="lb">${label}</div><div class="w">${kind === 'fb' ? 'Not read yet' : 'No pick'}</div></div>`;
@@ -151,18 +159,19 @@ function tile(label, m, c, g, kind) {
     const side = m.pick, p = m.p && side ? (side === 'H' ? m.p[0] : m.p[1]) : null;
     return `<div class="mt${side ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${side ? esc(side === 'H' ? c.hAbbr : c.aAbbr) : '–'}${p ? ' ' + p + '%' : ''}</b>${mark(g && g.win)}</div>
       <div class="cf"><i style="width:${p ? Math.max(0, (p - 50) * 2) : 0}%"></i></div>
-      <div class="o">${m.score ? `<span class="sc2">${esc(c.aAbbr)} ${m.score.a}–${m.score.h} ${esc(c.hAbbr)}</span>` : 'No score'}</div></div>`;
+      <div class="o">${m.score ? (() => { const tot = m.score.a + m.score.h, ov = tot > LINE; return `<b>${ov ? 'Over' : 'Under'}</b><span class="sc3">${m.score.a}–${m.score.h}</span>${mark(g && g.ou)}`; })() : 'No score'}</div></div>`;
   }
   const w = pickWin(m, c), o = pickOu(m);
   return `<div class="mt${w.strong ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div>
     <div class="cf"><i style="width:${Math.max(0, (w.p - 50) * 2)}%"></i></div>
     <div class="o${o.strong ? ' hi' : ''}"><b>${o.side} ${o.p}%</b>${mark(g && g.ou)}</div></div>`;
 }
-function agreeBadge(c) {
-  const sides = [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), c.fb && c.fb.pick].filter(Boolean);
-  if (sides.length < 2) return '';
-  const same = sides.every(x => x === sides[0]), nm = sides[0] === 'H' ? c.hAbbr : c.aAbbr;
-  return same ? `<div class="ag y">All ${sides.length} models pick ${esc(nm)}</div>` : `<div class="ag">Models split on the winner</div>`;
+function sidesOf(c) { return [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), c.fb && c.fb.pick].filter(Boolean); }
+function consensus(c) { const p = sidesOf(c); return { n: p.length, same: p.length >= 3 && p.every(x => x === p[0]), side: p[0], split: p.length >= 2 && !p.every(x => x === p[0]) }; }
+function goalsPill(c) {
+  const vals = [c.v2 ? c.v2.o >= 50 : null, c.v4 ? c.v4.o >= 50 : null, c.fb && c.fb.score ? (c.fb.score.a + c.fb.score.h) > LINE : null].filter(x => x !== null);
+  if (vals.length < 3) return '';
+  return vals.every(Boolean) ? '<div class="ag gl">All say Over 5.5</div>' : vals.every(x => !x) ? '<div class="ag gl">All say Under 5.5</div>' : '';
 }
 function card(c) {
   const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
@@ -171,9 +180,10 @@ function card(c) {
   const mid = f ? `<div class="mid sc">${f.a}–${f.h}${f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : '<small>FINAL</small>'}</div>` : `<div class="mid">@</div>`;
   const split = hp == null ? '' : `<div class="sp"><div class="nums"><span class="${hf ? 'dim' : ''}"><b>${ap}%</b> ${esc(c.aAbbr)}</span><span class="${hf ? '' : 'dim'}">${esc(c.hAbbr)} <b>${hp}%</b></span></div>
     <div class="bar"><i class="${hf ? '' : 'fav'}" style="flex:${ap};--c:${tcol(c.aAbbr)}"></i><i class="${hf ? 'fav' : ''}" style="flex:${hp};--c:${tcol(c.hAbbr)}"></i></div></div>`;
-  const all = c.v2 && c.v4 && c.fb;
-  return `<div class="card${all ? ' all' : ''}"><div class="mu"><div class="tm">${crest(c.aAbbr)}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr)}</div></div>
-  ${split}${agreeBadge(c)}
+  const all = c.v2 && c.v4 && c.fb, cs = consensus(c);
+  const lab = cs.same ? '<span class="cfx s">Consensus</span>' : cs.split ? '<span class="cfx sp">Split</span>' : '';
+  return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL</span>${lab}</div><div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
+  ${split}${goalsPill(c)}
   <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>
   <div class="note">${f ? `Total ${f.total} · graded at 5.5` : c.skipped ? esc(c.skipped) : 'Top row: winner pick. Bottom row: Over/Under 5.5 (Forebet: predicted score). Blue marks a confident pick.'}</div></div>`;
 }
@@ -209,13 +219,13 @@ function results() {
   const bb = B.brier.n ? (B.brier.v4 < B.brier.v2 ? [ '', ' class="best"', '' ] : B.brier.v2 < B.brier.v4 ? [' class="best"', '', ''] : ['', '', '']) : ['', '', ''];
   return `${seg}<table><tr><th></th><th>v2</th><th>v4 shadow</th><th>Forebet</th></tr>
   <tr><td>Winner</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.win[k], 'win', bw[i])).join('')}</tr>
-  <tr><td>Over/Under 5.5</td>${['v2', 'v4'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}<td>–</td></tr>
+  <tr><td>Over/Under 5.5</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}</tr>
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
-  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Forebet is graded on the winner only; its predicted score is shown on the cards. Market odds are never used.</div>
+  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Forebet's Over/Under is taken from its predicted score: a total of 6 or more counts as Over 5.5. Market odds are never used.</div>
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
     const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${m.o >= 50 ? 'Over' : 'Under'}${mark(g && g.ou)}` : '–';
     const c = { h: r.hAbbr, a: r.aAbbr };
-    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.score ? r.fb.score.a + '–' + r.fb.score.h : '–'}` : '–';
+    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.score ? r.fb.score.a + '–' + r.fb.score.h + ' ' + (r.fb.score.a + r.fb.score.h > 5.5 ? 'Over' : 'Under') + mark(gr.fb && gr.fb.ou) : '–'}` : '–';
     return `<div class="rg"><b>${esc(r.aAbbr)} @ ${esc(r.hAbbr)}</b><span>${f.a}–${f.h}${f.last !== 'REG' ? ' ' + f.last : ''}</span><span>${one(r.v2, gr.v2, c)}</span><span>${one(r.v4, gr.v4, c)}</span><span>${fb}</span></div>`;
   }).join('')}</div>`;
 }

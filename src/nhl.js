@@ -126,12 +126,17 @@ async function scoreboard(date, fetchFn, debug) {
 }
 
 // ---- grading -----------------------------------------------------------------------------------
+// Forebet's Over/Under 5.5 is read from its predicted score: a predicted total above the line is Over.
+export function fbOu(fb, f) {
+  if (!fb || !fb.score || !f || f.total == null) return null;
+  return ((fb.score.a + fb.score.h) > LINE) === (f.total > LINE) ? 1 : 0;
+}
 export function gradeCard(c) {
   const f = c.final; if (!f) return;
   const win = f.h > f.a ? 'H' : 'A', over = f.total > LINE;
   const g = {};
   for (const k of ['v2', 'v4']) if (c[k]) g[k] = { win: (c[k].w >= 50 ? 'H' : 'A') === win ? 1 : 0, ou: (c[k].o >= 50) === over ? 1 : 0, brier: +((c[k].w / 100 - (win === 'H' ? 1 : 0)) ** 2).toFixed(4) };
-  if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null };
+  if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null, ou: fbOu(c.fb, f) };
   c.grade = g;
 }
 
@@ -226,7 +231,8 @@ export async function nhlTally(env) {
   for (const d of days.filter(Boolean).sort((a, b) => b.date.localeCompare(a.date))) {
     for (const c of d.cards.filter(x => x.final && x.grade).sort((a, b) => b.kickoff.localeCompare(a.kickoff))) {
       graded++;
-      const g = c.grade;
+      let g = c.grade;
+      if (g.fb && g.fb.ou == null) { const o = fbOu(c.fb, c.final); if (o != null) g = { ...g, fb: { ...g.fb, ou: o } }; } // games graded before Forebet O/U existed
       for (const m of M) {
         if (g[m]?.win != null) { all.win[m].n++; all.win[m].hit += g[m].win; }
         if (g[m]?.ou != null) { all.ou[m].n++; all.ou[m].hit += g[m].ou; }
@@ -234,7 +240,7 @@ export async function nhlTally(env) {
       for (const m of ['v2', 'v4']) if (g[m]) { all.brier.n += m === 'v2' ? 1 : 0; all.brier[m] += g[m].brier; }
       if (g.v2 && g.v4 && g.fb && g.fb.win != null) {
         same.brier.n++; same.brier.v2 += g.v2.brier; same.brier.v4 += g.v4.brier;
-        for (const m of M) { same.win[m].n++; same.win[m].hit += g[m].win; if (m !== 'fb') { same.ou[m].n++; same.ou[m].hit += g[m].ou; } }
+        for (const m of M) { same.win[m].n++; same.win[m].hit += g[m].win; if (m !== 'fb' || g.fb.ou != null) { same.ou[m].n++; same.ou[m].hit += g[m].ou; } }
       }
       if (recent.length < 60) recent.push({ date: d.date, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, v2: c.v2, v4: c.v4, fb: c.fb || null, grade: g });
     }
