@@ -258,6 +258,21 @@ body{padding-top:56px}
 .sb td.n.pt small{color:#9ddcb4;font-weight:600}
 .sb tr.off td{opacity:.42}
 .sb tr.sep td{padding:8px 0 2px;font-size:10.5px;color:var(--faint);font-weight:650;opacity:1}
+/* wide screens: leagues in a list on the left (the swipe row stays for phones) */
+.lsb{display:none}
+@media(min-width:900px){
+  .wrap:has(.bdy){max-width:960px}
+  .bdy{display:grid;grid-template-columns:210px minmax(0,1fr);gap:18px;align-items:start;padding:0 18px}
+  .bdy .chips{display:none}
+  .lsb{display:block;position:sticky;top:64px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;margin-top:12px}
+  .lsb .it{display:flex;justify-content:space-between;width:100%;text-align:left;padding:8px 11px;border-radius:9px;color:var(--dim);font-size:13.5px}
+  .lsb .it i{font-style:normal;color:var(--faint)}
+  .lsb .it:hover{background:rgba(255,255,255,.03)}
+  .lsb .it.on{background:var(--panel2);color:var(--ink);box-shadow:inset 3px 0 0 var(--grass)}
+  .lsb .it.amber{color:var(--amber)}
+  .lsb .it.off{opacity:.38;cursor:default}
+  .lsb .sp{padding:10px 11px 3px;font-size:11px;color:var(--faint);font-weight:650}
+}
 </style>
 </head>
 <body>
@@ -502,7 +517,16 @@ function board() {
     const [hm, ap] = list[0].ko.split(' ');
     html += `<div class="slot ${done ? 'done' : ''}"><div class="t">${esc(hm)}<small>${esc(ap || '')}</small></div>${list.map(game).join('')}</div>`;
   }
-  return chips + alertBox() + `<div class="rail">${html}</div>` + uncovered(uncShown);
+  return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + `<div class="rail">${html}</div>` + uncovered(uncShown) + `</div></div>`;
+}
+// Left league list for wide screens: leagues with games first, the rest dimmed underneath.
+function sidebar(leagues) {
+  const n = k => day.cards.filter(c => c.v2 && c.leagueKey === k).length, on = k => S.league === k && !S.top ? 'on' : '';
+  const idle = ((cfg && cfg.leagues) || []).filter(l => !l.cup && !leagues.some(([k]) => k === l.key));
+  return `<aside class="lsb"><button type="button" class="it ${S.league === 'all' && !S.top ? 'on' : ''}" data-league="all">All<i>${day.cards.filter(c => c.v2).length}</i></button>` +
+    `<button type="button" class="it amber ${S.top ? 'on' : ''}" data-top="1">Top picks</button>` +
+    leagues.map(([k, nm]) => `<button type="button" class="it ${on(k)}" data-league="${k}">${esc(nm)}<i>${n(k)}</i></button>`).join('') +
+    (idle.length ? `<div class="sp">No games on this day</div>` + idle.map(l => `<div class="it off">${esc(l.name)}<i>0</i></div>`).join('') : '') + `</aside>`;
 }
 
 /* ---------- Model vs SportsMole ---------- */
