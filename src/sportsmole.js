@@ -9,6 +9,9 @@ const UA = { 'user-agent': 'Mozilla/5.0 (compatible; gameday-hub/1.0)' };
 const ALIAS = [
   [/paris saint germain|paris sg/g, 'psg'],
   [/olympique/g, ' '],
+  [/\bcologne\b/g, 'koln'], // ESPN says FC Cologne; Forebet and SportsMole say Köln
+  [/\bein\b/g, 'eintracht'], // Forebet's short 'Ein Frankfurt'
+  [/m gladbach|monchengladbach/g, 'gladbach'],
   [/stade rennais/g, 'rennes'],
   [/praha/g, 'prague'],
   [/creta/g, 'crete'],

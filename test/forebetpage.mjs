@@ -83,4 +83,8 @@ ok('all nine league pages are set up', Object.keys(FB_PAGES).length === 13);
 }
 
 console.log(fail ? `\n${fail} Forebet page checks FAILED` : '\nAll Forebet page checks passed');
+{ const { is } = await import('../src/forebetpage.js'); const { norm, sameTeam } = await import('../src/sportsmole.js');
+  ok('FC Cologne (ESPN) matches Köln (Forebet, SportsMole)', is('1. FC Köln', 'FC Cologne') && is('Köln', 'FC Cologne') && sameTeam(norm('FC Cologne'), norm('fc-koln')));
+  ok('Forebet short name Ein Frankfurt matches Eintracht Frankfurt', is('Ein Frankfurt', 'Eintracht Frankfurt'));
+  ok("M'gladbach matches Borussia Mönchengladbach", is("M'gladbach", 'Borussia Mönchengladbach')); }
 process.exit(fail ? 1 : 0);
