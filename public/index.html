@@ -192,6 +192,35 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 #hub-bar a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px;color:var(--dim)}
 #hub-bar a.on{background:var(--grass);color:#0B1210}
 body{padding-top:56px}
+
+.m.x{background:linear-gradient(180deg,#15211c 0%,#111b17 100%)}
+.xh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px;font-size:10.5px;color:var(--faint)}
+.xh .cfx{font-size:11px;font-weight:650;padding:3px 9px;border-radius:99px;border:1px solid #35514a;color:var(--dim)}
+.xh .cfx.s{background:#1e3a2d;border-color:#2c5a42;color:var(--grass)}.xh .cfx.ln{color:var(--amber);border-color:rgba(240,181,74,.4)}
+.xt{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center}
+.xk{display:flex;align-items:center;gap:8px;min-width:0}.xk.r{flex-direction:row-reverse;text-align:right}
+.xk div{min-width:0}.xk b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:14px;font-weight:700;line-height:1.15;overflow:hidden;white-space:normal;word-break:break-word}
+.xk small{display:block;font-size:11px;color:var(--faint);margin-top:1px}
+.xc{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:10.5px;font-weight:800;color:#fff;background:radial-gradient(circle at 30% 25%,hsl(var(--h) 55% 58%),hsl(var(--h) 55% 34%));box-shadow:0 0 0 2px var(--panel),0 0 0 3px hsl(var(--h) 50% 45% / .6)}
+.xm{text-align:center;min-width:40px;font-size:11.5px;color:var(--faint);font-weight:600;line-height:1.25}
+.xm.big{font-size:21px;color:var(--ink);font-weight:750;letter-spacing:-.02em;line-height:1}.xm.big small{display:block;font-size:10.5px;letter-spacing:0;margin-top:4px}
+.xm .live{color:var(--miss);font-weight:700}
+.xp{margin:11px 0 3px}
+.xp .n{display:flex;justify-content:space-between;font-size:11.5px;color:var(--faint);margin-bottom:4px}.xp .n b{font-size:15px;color:var(--ink);font-weight:700}.xp .n .dm b{color:var(--faint);font-weight:600}.xp .n .mid{color:var(--faint)}.xp .n .mid b{font-size:12.5px;font-weight:600}
+.xp .b{display:flex;gap:3px;height:8px}.xp .b i{display:block;border-radius:99px;opacity:.4}
+.xp .b i.f{opacity:1;box-shadow:0 0 10px rgba(88,178,122,.45)}
+.xp .b .h{background:var(--grass)}.xp .b .d{background:#6b7f75}.xp .b .a{background:#7FA6D9}.xp .b .a.f{box-shadow:0 0 10px rgba(127,166,217,.45)}
+.xag{display:inline-flex;align-items:center;gap:6px;margin:10px 0 8px;font-size:11.5px;font-weight:650;padding:4px 9px;border-radius:99px;background:rgba(240,181,74,.12);color:var(--amber)}
+.xag.y{background:rgba(88,178,122,.16);color:#9ddcb4}.xag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.xl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.xl.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.xq{background:#17241f;border-radius:10px;padding:6px 7px 7px;min-width:0}
+.xq .l{font-size:10px;color:var(--faint);font-weight:650;margin-bottom:3px}
+.xq b{display:block;font-size:13.5px;font-weight:750;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xq small{display:block;font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap}
+.xq.sm b{color:var(--sm)}.xq.none{opacity:.5}.xq.none b{font-size:11.5px;font-weight:500;color:var(--faint)}
+.xq .ck{font-size:11px;margin-left:3px}
+.xb{display:flex;justify-content:space-between;align-items:center;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(240,181,74,.1);border:1px solid rgba(240,181,74,.35);font-size:12.5px}.xb b{color:var(--amber);font-weight:650}
 </style>
 </head>
 <body>
@@ -287,31 +316,49 @@ const why = c => {
   return `<div class="why">${esc(H ? c.home : c.away)} scored ${pf.gf} in their last ${pf.n}. ${esc(H ? c.away : c.home)} conceded ${of.ga} in theirs.</div>`;
 };
 const conf = c => { const t = Math.max(...c.v2.p); return t >= 55 ? ['Strong', 's', ''] : t >= 45 ? ['Lean', 'ln', 'lean'] : ['Toss-up', 'tu', 'toss']; };
+const hue = n => { let h = 7; for (const ch of String(n)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
+const strip = n => String(n).replace(/^(fc|afc|sc|ssc|ac|as|rc|ud|cd|sv|vfl|vfb|tsg|1\.)\s+/i, '').replace(/\s+(fc|afc|sc|cf)$/i, '');
+const ab = n => { const w = strip(n).split(/\s+/).filter(Boolean); return (w.length > 1 ? w[0][0] + w[1][0] + (w[2] ? w[2][0] : '') : (w[0] || '?').slice(0, 3)).toUpperCase().slice(0, 3); };
+const xcrest = n => `<i class="xc" style="--h:${hue(n)}">${esc(ab(n))}</i>`;
+const sideName2 = (c, s) => s === 'H' ? ab(c.home) : s === 'A' ? ab(c.away) : 'Draw';
+const sideOfScore = (h, a) => h > a ? 'H' : h < a ? 'A' : 'D';
+function chips(c) {
+  const v = c.v2, g = c.grade || {}, out = [], picks = [];
+  const mk = (cls, label, side, sub, hit) => { picks.push(side); return `<div class="xq ${cls}"><div class="l">${label}</div><b>${esc(sideName2(c, side))}${hit == null ? '' : ` <span class="ck ${hit ? 'ok' : 'no'}">${hit ? '✓' : '✗'}</span>`}</b><small>${sub}</small></div>`; };
+  out.push(mk('', 'v2', v.pick, `${esc(v.scores[0][0])} · ${Math.max(...v.p)}%`, g.v2 ? g.v2.outcomeHit : null));
+  out.push(c.v4 ? mk('', 'v4', c.v4.pick, `${esc(c.v4.scores[0][0])} · ${Math.max(...c.v4.p)}%`, g.v4 ? g.v4.outcomeHit : null) : `<div class="xq none"><div class="l">v4</div><b>No pick</b></div>`);
+  const f = c.fb;
+  if (f && (f.p || f.score)) { const side = f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a); out.push(mk('', 'Forebet', side, `${f.score ? f.score.h + '–' + f.score.a : ''}${f.score && f.p ? ' · ' : ''}${f.p ? Math.max(...f.p) + '%' : ''}`, null)); }
+  else out.push(`<div class="xq none"><div class="l">Forebet</div><b>Not read yet</b></div>`);
+  const second = SECOND_DIV.includes(c.leagueKey);
+  if (!second) {
+    if (c.sm) { const m = /(\d+)[–-](\d+)/.exec(c.sm.text); const side = sideOfScore(c.sm.h, c.sm.a); out.push(mk('sm', 'SportsMole', side, `${c.sm.h}–${c.sm.a}`, c.smGrade ? c.smGrade.outcomeHit : null)); }
+    else out.push(`<div class="xq none"><div class="l">SportsMole</div><b>Not found yet</b></div>`);
+  }
+  const have = picks.filter(Boolean), same = have.length >= 2 && have.every(p => p === have[0]);
+  const tag = have.length < 2 ? '' : same ? `<div class="xag y">All ${have.length} pick ${esc(have[0] === 'D' ? 'a draw' : sideName2(c, have[0]) === ab(c.home) ? c.home : c.away)}</div>` : `<div class="xag">Models split on the result</div>`;
+  return `${tag}<div class="xl ${second ? 'three' : ''}">${out.join('')}</div>`;
+}
 function game(c) {
   const open = S.open === c.id, ko = new Date(c.kickoff).getTime(), now = Date.now();
-  const rank = r => r ? ` <em>${ord(r)}</em>` : '';
-  const v = c.v2, [h, d, a] = v.p, top = Math.max(h, d, a), [cl, ccls, pcls] = conf(c);
-  let rt, pending = false, extra = '';
+  const v = c.v2, [h, d, a] = v.p, top = Math.max(h, d, a), [cl, ccls] = conf(c);
+  let mid, pending = false, extra = '';
   if (c.final) {
     const hit = c.grade ? c.grade.v2.outcomeHit : null;
-    rt = `<div class="rt"><span class="big">${c.final.h}–${c.final.a}</span>${hit == null ? '' : `<span class="mark ${hit ? 'ok' : 'no'}" style="margin:0">${hit ? '✓ correct' : '✗ missed'}</span>`}</div>`;
+    mid = `<div class="xm big">${c.final.h}–${c.final.a}${hit == null ? '' : `<small class="${hit ? 'ok' : 'no'}">${hit ? '✓ correct' : '✗ missed'}</small>`}</div>`;
   } else if (now < ko) {
-    rt = `<div class="rt"><span class="small2">${esc(v.scores[0][0])}</span><span class="sm">likely score</span><span class="sm">${esc(c.ko)}</span></div>`;
-    if (v.best.p >= 60) extra = `<div class="bb"><span>Best bet <b>${esc(v.best.pick)}</b></span><b>${v.best.p}%</b></div>`;
-  } else if (now < ko + GAME_MS) {
-    rt = `<div class="rt"><span class="live">In play</span><span class="sm">kicked off ${esc(c.ko)}</span></div>`;
-  } else {
-    pending = true;
-    const hrs = Math.floor((now - ko - GAME_MS) / 3600000), late = hrs >= 6;
-    rt = `<div class="rt"><span class="pend ${late ? 'late' : ''}">Finished<br>result pending${hrs >= 1 ? `<br>${hrs} h` : ''}</span></div>`;
-  }
-  const nums = `<div class="nums"><span>${esc(c.home)} ${h}</span><span>Draw ${d}</span><span>${esc(c.away)} ${a}</span></div>`;
-  const pickName = pickText(c), pp = v.pick === 'H' ? h : v.pick === 'A' ? a : d;
-  return `<div class="m ${open ? 'open' : ''} ${pending ? 'pn' : ''} ${allIn(c) ? 'all' : ''}"><button type="button" class="hd" data-id="${esc(c.id)}" aria-expanded="${open}">
-    <div class="row"><div class="teams"><div class="tag">${esc(c.leagueName)}${c.note ? ' <span class="nt">· note</span>' : ''}${c.mine ? ` <span class="you">· you: ${OUT[c.mine]}</span>` : ''}</div>
-      <div class="pk ${pcls}"><b>${esc(pickName)}<i>${pp}%</i></b><span class="cf ${ccls}">${cl}</span></div>
-      <div class="vs">${esc(c.home)}${rank(c.hRank)} vs ${esc(c.away)}${rank(c.aRank)}</div>
-      <div class="bar" style="margin-top:0"><i class="h" style="width:${h}%"></i><i class="d" style="width:${d}%"></i><i class="a" style="width:${a}%"></i></div>${nums}${cl === 'Strong' && !c.final ? why(c) : ''}</div>${rt}</div>${open ? '' : extra}</button>${open ? expanded(c) : ''}</div>`;
+    mid = `<div class="xm">vs<br>${esc(c.ko)}</div>`;
+    if (v.best.p >= 60) extra = `<div class="xb"><span>Best bet <b>${esc(v.best.pick)}</b></span><b>${v.best.p}%</b></div>`;
+  } else if (now < ko + GAME_MS) mid = `<div class="xm"><span class="live">In play</span><br>${esc(c.ko)}</div>`;
+  else { pending = true; mid = `<div class="xm">Result<br>pending</div>`; }
+  const fav = h >= d && h >= a ? 'h' : a >= d ? 'a' : 'd';
+  const rk = r => r ? `${ord(r)}` : '';
+  return `<div class="m x ${open ? 'open' : ''} ${pending ? 'pn' : ''} ${allIn(c) ? 'all' : ''}"><button type="button" class="hd" data-id="${esc(c.id)}" aria-expanded="${open}">
+    <div class="xh"><span>${esc(c.leagueName)}${c.note ? ' · note' : ''}${c.mine ? ` · you: ${OUT[c.mine]}` : ''}</span><span class="cfx ${ccls}">${cl}</span></div>
+    <div class="xt"><div class="xk">${xcrest(c.home)}<div><b>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away)}<div><b>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
+    <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b>${h}%</b></span><span class="mid"><b>Draw ${d}%</b></span><span class="${fav === 'a' ? '' : 'dm'}"><b>${a}%</b></span></div>
+      <div class="b"><i class="h ${fav === 'h' ? 'f' : ''}" style="flex:${h}"></i><i class="d ${fav === 'd' ? 'f' : ''}" style="flex:${d}"></i><i class="a ${fav === 'a' ? 'f' : ''}" style="flex:${a}"></i></div></div>
+    ${chips(c)}${open ? '' : extra}</button>${open ? expanded(c) : ''}</div>`;
 }
 
 /* ---------- alerts ---------- */
