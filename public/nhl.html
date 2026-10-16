@@ -77,6 +77,30 @@ h4{margin:20px 18px 6px;font-size:14px}
 .btn[disabled]{opacity:.55}
 #st{flex:1;min-width:0;font-size:12px;color:var(--mut);line-height:1.35}
 .kv{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:13px}.kv span:first-child{color:var(--mut)}
+
+.rail .card{padding:12px 11px 10px;margin-bottom:10px;position:relative;overflow:hidden;background:linear-gradient(180deg,#172033 0%,#131a27 100%)}
+.card.all{border-color:rgba(76,141,255,.7);box-shadow:0 0 0 1px rgba(76,141,255,.45),0 0 18px rgba(76,141,255,.22)}
+.mu{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:6px}
+.tm{display:flex;align-items:center;gap:8px;min-width:0}.tm.r{justify-content:flex-end;text-align:right}
+.tm b{display:block;font-size:19px;font-weight:750;letter-spacing:-.01em;line-height:1.05}
+.tm small{display:block;font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:92px}
+.cr{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:11.5px;font-weight:800;letter-spacing:.02em;color:#fff;background:radial-gradient(circle at 30% 25%,color-mix(in srgb,var(--tc) 100%,#fff 18%),color-mix(in srgb,var(--tc) 70%,#000));box-shadow:0 0 0 2px var(--s),0 0 0 3px color-mix(in srgb,var(--tc) 55%,transparent)}
+.mid{text-align:center;font-size:12px;color:var(--faint);font-weight:600;min-width:34px}
+.mid.sc{font-size:22px;color:var(--ink);font-weight:750;letter-spacing:-.02em;line-height:1}.mid.sc small{display:block;font-size:10.5px;color:var(--blue);font-weight:700;margin-top:3px;letter-spacing:.04em}
+.sp{margin:11px 0 2px}
+.sp .nums{display:flex;justify-content:space-between;font-size:12px;color:var(--faint);margin-bottom:4px}.sp .nums b{font-size:15px;color:var(--ink);font-weight:700}.sp .nums .dim b{color:var(--faint);font-weight:600}
+.sp .bar{display:flex;gap:3px;height:8px}.sp .bar i{display:block;border-radius:99px;background:var(--c);opacity:.38}.sp .bar i.fav{opacity:1;box-shadow:0 0 10px color-mix(in srgb,var(--c) 55%,transparent)}
+.ag{display:inline-flex;align-items:center;gap:6px;margin:10px 0 8px;font-size:11.5px;font-weight:650;padding:4px 9px;border-radius:99px;background:rgba(240,195,90,.12);color:var(--amber)}
+.ag.y{background:rgba(76,141,255,.16);color:#9ec1ff}.ag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.ml{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.mt{background:var(--chip);border-radius:10px;padding:7px 8px 8px;min-width:0}
+.mt .lb{font-size:10.5px;color:var(--faint);font-weight:650;margin-bottom:5px;letter-spacing:.02em}
+.mt .w{font-size:12px;color:var(--mut);white-space:nowrap}.mt .w b{font-size:15px;color:var(--ink);font-weight:750}
+.mt.hi{background:rgba(76,141,255,.16);box-shadow:inset 0 0 0 1px rgba(76,141,255,.5)}
+.mt .cf{height:3px;border-radius:9px;background:rgba(255,255,255,.08);margin:5px 0 6px;overflow:hidden}.mt .cf i{display:block;height:100%;background:var(--blue);border-radius:9px}
+.mt .o{font-size:11.5px;color:var(--mut);white-space:nowrap;border-top:1px solid rgba(255,255,255,.07);padding-top:5px}.mt .o b{color:var(--ink);font-weight:650;font-size:12.5px}.mt .o.hi b{color:#9ec1ff}
+.mt .sc2{font-size:12.5px;color:var(--ink);font-weight:700;white-space:nowrap}
+.mt.none{opacity:.55}
 </style>
 </head>
 <body>
@@ -117,13 +141,41 @@ function fbRow(c, g) {
   const sc = f.score ? `<b>${esc(c.aAbbr)} ${f.score.a} – ${f.score.h} ${esc(c.hAbbr)}</b>` : 'No score';
   return `<div class="g r"><div class="n">Forebet</div><div class="p${f.pick ? ' hi' : ''}">${w}</div><div class="p">${sc}</div></div>`;
 }
+const TC={ANA:'#F47A38',BOS:'#FFB81C',BUF:'#3f7be0',CGY:'#D2001C',CAR:'#E0202e',CHI:'#E0283f',COL:'#9a3f66',CBJ:'#2f64b8',DAL:'#1c9a6a',DET:'#E0283f',EDM:'#FF6a1f',FLA:'#D8203e',LAK:'#8f979a',MIN:'#2f8a64',MTL:'#C0283a',NSH:'#FFB81C',NJD:'#E0283f',NYI:'#2f78c8',NYR:'#3469d8',OTT:'#D03045',PHI:'#F76a2b',PIT:'#E8AE1c',SJS:'#1a8f98',SEA:'#6fc3c9',STL:'#3a6bd0',TBL:'#3a6bc9',TOR:'#3a68c4',UTA:'#6CACE4',VAN:'#1c9a58',VGK:'#B4975A',WSH:'#D8203e',WPG:'#3f67aa'};
+const tcol = a => TC[a] || '#4c8dff';
+const crest = a => `<i class="cr" style="--tc:${tcol(a)}">${esc(a)}</i>`;
+function sideOf(m, c, kind) { return kind === 'fb' ? m.pick : (m.w >= 50 ? 'H' : 'A'); }
+function tile(label, m, c, g, kind) {
+  if (!m) return `<div class="mt none"><div class="lb">${label}</div><div class="w">${kind === 'fb' ? 'Not read yet' : 'No pick'}</div></div>`;
+  if (kind === 'fb') {
+    const side = m.pick, p = m.p && side ? (side === 'H' ? m.p[0] : m.p[1]) : null;
+    return `<div class="mt${side ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${side ? esc(side === 'H' ? c.hAbbr : c.aAbbr) : '–'}${p ? ' ' + p + '%' : ''}</b>${mark(g && g.win)}</div>
+      <div class="cf"><i style="width:${p ? Math.max(0, (p - 50) * 2) : 0}%"></i></div>
+      <div class="o">${m.score ? `<span class="sc2">${esc(c.aAbbr)} ${m.score.a}–${m.score.h} ${esc(c.hAbbr)}</span>` : 'No score'}</div></div>`;
+  }
+  const w = pickWin(m, c), o = pickOu(m);
+  return `<div class="mt${w.strong ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div>
+    <div class="cf"><i style="width:${Math.max(0, (w.p - 50) * 2)}%"></i></div>
+    <div class="o${o.strong ? ' hi' : ''}"><b>${o.side} ${o.p}%</b>${mark(g && g.ou)}</div></div>`;
+}
+function agreeBadge(c) {
+  const sides = [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), c.fb && c.fb.pick].filter(Boolean);
+  if (sides.length < 2) return '';
+  const same = sides.every(x => x === sides[0]), nm = sides[0] === 'H' ? c.hAbbr : c.aAbbr;
+  return same ? `<div class="ag y">All ${sides.length} models pick ${esc(nm)}</div>` : `<div class="ag">Models split on the winner</div>`;
+}
 function card(c) {
-  const g = c.grade || {}, f = c.final;
-  const head = f ? 'Final' + (f.last !== 'REG' ? ' (' + f.last + ')' : '') : '';
-  return `<div class="card"><div class="hd"><h3>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</h3><span>${head}</span></div>
-  <div class="g h"><span></span><span>Winner</span><span>Over/Under 5.5 · score</span></div>
-  ${modelRow('v2 model', c.v2, c, g.v2)}${modelRow('v4 shadow', c.v4, c, g.v4)}${fbRow(c, g.fb)}
-  <div class="note">${f ? `${esc(c.aAbbr)} ${f.a}, ${esc(c.hAbbr)} ${f.h}${f.last !== 'REG' ? ' (' + f.last + ')' : ''} · total ${f.total} · graded at 5.5` : c.skipped ? esc(c.skipped) : 'Blue = a confident pick. v4 is a shadow test and never changes v2.'}</div></div>`;
+  const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
+  const hp = m0 ? m0.w : null, ap = hp == null ? null : 100 - hp;
+  const hf = hp != null && hp >= 50;
+  const mid = f ? `<div class="mid sc">${f.a}–${f.h}${f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : '<small>FINAL</small>'}</div>` : `<div class="mid">@</div>`;
+  const split = hp == null ? '' : `<div class="sp"><div class="nums"><span class="${hf ? 'dim' : ''}"><b>${ap}%</b> ${esc(c.aAbbr)}</span><span class="${hf ? '' : 'dim'}">${esc(c.hAbbr)} <b>${hp}%</b></span></div>
+    <div class="bar"><i class="${hf ? '' : 'fav'}" style="flex:${ap};--c:${tcol(c.aAbbr)}"></i><i class="${hf ? 'fav' : ''}" style="flex:${hp};--c:${tcol(c.hAbbr)}"></i></div></div>`;
+  const all = c.v2 && c.v4 && c.fb;
+  return `<div class="card${all ? ' all' : ''}"><div class="mu"><div class="tm">${crest(c.aAbbr)}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr)}</div></div>
+  ${split}${agreeBadge(c)}
+  <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>
+  <div class="note">${f ? `Total ${f.total} · graded at 5.5` : c.skipped ? esc(c.skipped) : 'Top row: winner pick. Bottom row: Over/Under 5.5 (Forebet: predicted score). Blue marks a confident pick.'}</div></div>`;
 }
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
