@@ -28,6 +28,7 @@ export const LEAGUES = [
   { slug: 'eng.2', key: 'championship', name: 'Championship', ls: 'ENG' },
   { slug: 'usa.1', key: 'mls', name: 'MLS', ls: null, calendar: true },
   { slug: 'mex.1', key: 'ligamx', name: 'Liga MX', ls: null },
+  { slug: 'bra.1', key: 'brasileirao', name: 'Brasileirão', ls: null, calendar: true },
   { slug: 'uefa.nations', key: 'nationsleague', name: 'Nations League', cup: true },
   // Background leagues (no tab): only used to find clubs that play in the Champions League.
   { slug: 'por.1', key: 'por', name: 'Primeira Liga', ls: 'POR', support: true },

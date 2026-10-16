@@ -9,10 +9,13 @@ const DAY = 86400000;
 export const supports = slug => !!(V4.PARAMS[slug] && seed[slug]);
 
 const lookups = new Map();
+// ESPN spellings the word match cannot reach.
+const ALT = { 'bra.1': { 'atletico mineiro': 'Atletico-MG', 'atletico mg': 'Atletico-MG', 'athletico paranaense': 'Athletico-PR', 'athletico pr': 'Athletico-PR' } };
 export function resolve(slug, name) {
   const s = seed[slug]; if (!s) return null;
   if (!lookups.has(slug)) lookups.set(slug, new Map(s.teams.map(t => [norm(t), t])));
   const L = lookups.get(slug), n = norm(name);
+  const al = ALT[slug] && ALT[slug][n]; if (al && L.has(norm(al))) return L.get(norm(al));
   if (L.has(n)) return L.get(n);
   const words = n.split(' ').filter(Boolean);
   const hits = [...L.entries()].filter(([k]) => { const kw = k.split(' '); return words.every(w => kw.includes(w)) || kw.every(w => words.includes(w)); });

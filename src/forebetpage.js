@@ -21,6 +21,7 @@ export const FB_PAGES = {
   'ned.1': 'football-tips-and-predictions-for-netherlands/eredivisie',
   'mex.1': 'football-tips-and-predictions-for-mexico/liga-mx',
   'usa.1': 'football-tips-and-predictions-for-usa/mls',
+  'bra.1': 'football-tips-and-predictions-for-brazil/serie-a',
 };
 const SUFFIX = { '1x2': '', ou: '/under-over', btts: '/bothtoscore' };
 export const KINDS = ['1x2', 'ou', 'btts'];

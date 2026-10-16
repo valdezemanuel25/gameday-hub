@@ -14,7 +14,7 @@ export const V4 = {
   PARAMS: {
     'eng.1': { H: 240, K: 8 }, 'eng.2': { H: 240, K: 8 }, 'ger.1': { H: 240, K: 8 }, 'ger.2': { H: 240, K: 8 },
     'esp.1': { H: 240, K: 8 }, 'esp.2': { H: 240, K: 8 }, 'ita.1': { H: 240, K: 8 }, 'fra.1': { H: 240, K: 8 },
-    'ned.1': { H: 240, K: 8 }, 'usa.1': { H: 120, K: 8 }, 'mex.1': { H: 180, K: 4 },
+    'ned.1': { H: 240, K: 8 }, 'usa.1': { H: 120, K: 8 }, 'mex.1': { H: 180, K: 4 }, 'bra.1': { H: 180, K: 6 },
   },
   MAX_AGE: 900,        // days of history used
   ITER: 20,
