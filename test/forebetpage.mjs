@@ -46,6 +46,12 @@ ok('the three tables build one record per card', day()[0].fb.over === 58 && day(
 const again = await forebetFetch(env, 'uefa.europa', '1x2', now, ffetch);
 ok('once every game has it, nothing is fetched again', again.skipped && fetches.length === 3, JSON.stringify(fetches.length));
 
+// a game Forebet dates one day later than the card (evening kickoff) still gets leftover suggestions
+save('2026-10-14', [{ ...mk('8', 'Foo Town', 'Bar City', '2026-10-14T23:30:00Z'), league: 'eng.1' }]);
+await forebetFetch(env, 'eng.1', '1x2', new Date('2026-10-14T14:00:00Z'), ffetch);
+const unmI = JSON.parse(kv.get('meta:unm') || '{"items":[]}').items.filter(i => i.cardId === '8');
+ok('leftover Forebet rows dated a day later are offered for assigning', unmI.length > 0, JSON.stringify(unmI.length));
+
 // failures are recorded, not hidden
 save('2026-10-16', [mk('7', 'Union St.-Gilloise', 'Real Sociedad', '2026-10-16T16:45:00Z')]);
 const bad = await forebetFetch(env, 'uefa.europa', '1x2', now, async () => new Response('no', { status: 403 }));
