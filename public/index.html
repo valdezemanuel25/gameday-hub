@@ -298,7 +298,7 @@ body{padding-top:56px}
 .xhl .ag{font-size:11px;color:var(--dim);flex-basis:100%}.xhl .ag.all{color:var(--grass)}
 .xag .pt{opacity:.78}
 .rec{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;margin:10px 0 2px 4px;padding:8px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--dim)}
-.rec b{flex-basis:100%;color:var(--ink);font-size:12px}.rec u{text-decoration:none;color:var(--ink);font-weight:700}.rec small{color:var(--faint)}
+.rec b{flex-basis:100%;color:var(--ink);font-size:12px}.rec u{text-decoration:none;color:var(--ink);font-weight:700}.rec small{color:var(--faint)}.rec .rg{display:grid;grid-template-columns:auto repeat(3,auto);justify-content:start;gap:3px 22px;align-items:baseline}.rec .rn{color:var(--ink);font-weight:600}.rec .rg small{font-size:11px}
 .finb{margin:10px 0 0 0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:4px 10px 8px}
 .finb .fh{display:flex;align-items:center;gap:8px;width:100%;padding:10px 2px;font-size:13px;font-weight:650;color:var(--dim)}.finb .fh b{color:var(--faint);font-weight:600}.finb .fh span{margin-left:auto;font-size:12px;color:var(--faint)}
 .finb .fr{display:flex;align-items:center;gap:8px;padding:7px 2px;border-top:1px solid var(--line);font-size:13px}.finb .fr .lg{font-size:10.5px;color:var(--faint);font-weight:650;min-width:30px}.finb .fr b{font-weight:600;color:var(--ink);min-width:0}.finb .fr i{font-style:normal;margin-left:auto;font-weight:700}.finb .fr i.pend{font-weight:500;font-size:11.5px;color:var(--faint)}
@@ -617,7 +617,8 @@ function recordBar() {
     return `<div class="rec"><b>Top picks, last 30 games</b><span>Winner at 55%+ <u>${pc(w.hits, w.n)}</u> <small>${w.hits}/${w.n}</small></span><span>Goals at 62%+ <u>${pc(g.hits, g.n)}</u> <small>${g.hits}/${g.n}</small></span><span>All other winners <u>${pc(r.hits, r.n)}</u> <small>${r.hits}/${r.n}</small></span></div>`;
   }
   if (!l.n) return '';
-  return `<div class="rec"><b>Winner picks, last 30 days</b><span>v2 <u>${pc(l.v2, l.n)}</u></span>${l.v4n ? `<span>v4 <u>${pc(l.v4, l.v4n)}</u></span>` : ''}${l.fbn ? `<span>Forebet <u>${pc(l.fb, l.fbn)}</u></span>` : ''}<small>${l.n} games</small></div>`;
+  const row = (name, x) => x.n ? `<span class="rn">${name}</span><u>${pc(x.w, x.n)}</u><u>${pc(x.ou, x.n)}</u><u>${pc(x.bt, x.n)}</u>` : '';
+  return `<div class="rec"><b>Hit rate</b><div class="rg"><span></span><small>Winner</small><small>Over/Under</small><small>BTTS</small>${row('v2', l.v2)}${row('v4', l.v4)}${row('Forebet', l.fb)}</div><small>${l.n} games</small></div>`;
 }
 function sidebar(leagues) {
   const n = k => day.cards.filter(c => c.v2 && c.leagueKey === k).length, on = k => S.league === k && !S.top ? 'on' : '';

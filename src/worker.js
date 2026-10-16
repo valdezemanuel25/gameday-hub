@@ -284,7 +284,7 @@ async function tally(env) {
   const calAdd = (m, k, pct, hit) => { if (pct == null) return; const b = calG[m][k].find(x => pct >= x.lo && pct < x.hi); if (b) { b.n++; b.hits += hit ? 1 : 0; b.sum += pct; } };
   const lgRow = c => { let r = perLg.get(c.league); if (!r) perLg.set(c.league, r = { slug: c.league, name: c.leagueName || c.league, n: 0, v2: blank(), v4: blank(), fb: blank() }); return r; };
   // Last 30 days (winner hit rate per model) and how the Board's "top picks" have done: winner at 55%+, goals markets at 62%+.
-  const T30 = addDays(today(), -30), last30 = { n: 0, v2: 0, v4n: 0, v4: 0, fbn: 0, fb: 0 }, topT = { win: { n: 0, hits: 0 }, goals: { n: 0, hits: 0 }, rest: { n: 0, hits: 0 } };
+  const mh = () => ({ n: 0, w: 0, ou: 0, bt: 0 }), last30 = { n: 0, v2: mh(), v4: mh(), fb: mh() }, topT = { win: { n: 0, hits: 0 }, goals: { n: 0, hits: 0 }, rest: { n: 0, hits: 0 } };
   const fbT = { n: 0, outcome: 0, score: 0, brier: 0, nOu: 0, ou: 0, nBtts: 0, btts: 0 }, mk = () => ({ n: 0, fbOutcome: 0, fbBrier: 0, outcome: 0, brier: 0, nOu: 0, fbOu: 0, ou: 0, nBtts: 0, fbBtts: 0, btts: 0 }), fbVs = { v2: mk(), v4: mk() };
   // Same-games table for the Results tab: a metric counts a game only when v2, v4 and Forebet all have it.
   const SB = { outcome: { n: 0, v2: 0, v4: 0, fb: 0 }, ou: { n: 0, v2: 0, v4: 0, fb: 0 }, btts: { n: 0, v2: 0, v4: 0, fb: 0 }, brier: { n: 0, v2: 0, v4: 0, fb: 0 } };
@@ -335,11 +335,6 @@ async function tally(env) {
         if (c.v4) { calAdd('over', 'v4', c.v4.over, gs >= 3); calAdd('btts', 'v4', c.v4.btts, bs); }
         if (c.fb) { calAdd('over', 'fb', c.fb.over, gs >= 3); calAdd('btts', 'fb', c.fb.btts, bs); }
       }
-      if (day.date >= T30) {
-        last30.n++; last30.v2 += c.grade.v2.outcomeHit ? 1 : 0;
-        if (c.grade.v4) { last30.v4n++; last30.v4 += c.grade.v4.outcomeHit ? 1 : 0; }
-        if (c.fb && c.final) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { last30.fbn++; last30.fb += f.outcomeHit ? 1 : 0; } }
-      }
       if (c.mine && c.final) { mineT.n++; mineT.model += c.grade.v2.outcomeHit ? 1 : 0; mineT.mine += c.mine === (c.final.h > c.final.a ? 'H' : c.final.h === c.final.a ? 'D' : 'A') ? 1 : 0; }
       live.push({ date: day.date, ...c });
     }
@@ -347,6 +342,11 @@ async function tally(env) {
   live.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''));
   // How top picks did over the 30 most recently graded games: winner at 55%+, goals markets at 62%+, and every other winner pick.
   for (const c of live.slice(0, 30)) {
+    last30.n++;
+    const hit = (x, o) => { x.n++; x.w += o.outcomeHit ? 1 : 0; x.ou += o.ouHit ? 1 : 0; x.bt += o.bttsHit ? 1 : 0; };
+    if (c.grade.v2) hit(last30.v2, c.grade.v2);
+    if (c.grade.v4) hit(last30.v4, c.grade.v4);
+    if (c.fb && c.final) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { last30.fb.n++; last30.fb.w += f.outcomeHit ? 1 : 0; last30.fb.ou += f.ouHit ? 1 : 0; last30.fb.bt += f.bttsHit ? 1 : 0; } }
     if (!c.final || !c.v2 || !c.v2.p) continue;
     const t = topT[Math.max(...c.v2.p) >= 55 ? 'win' : 'rest']; t.n++; t.hits += c.grade.v2.outcomeHit ? 1 : 0;
     const gs = c.final.h + c.final.a, bs = c.final.h > 0 && c.final.a > 0, ov = c.v2.over, bt = c.v2.btts;
