@@ -269,11 +269,13 @@ body{padding-top:56px}
 .lsb .it.amber{color:var(--amber)}
 .lsb .it.off{opacity:.35;cursor:default}
 .lsb .lsp{height:1px;background:var(--line);margin:5px 6px;font-size:0;padding:0}
+.bdy .xl:not(.three){grid-template-columns:repeat(2,minmax(0,1fr))}
 .bdy .rail{margin:10px 0 0;padding-left:0}.bdy .rail:before,.bdy .slot:before{display:none}
 .bdy .slot .t{position:static;width:auto;text-align:left;margin:0 0 4px 4px;font-size:11.5px}.bdy .slot .t small{display:inline;margin-left:3px}
 @media(min-width:900px){
   .wrap:has(.bdy){max-width:960px}
   .bdy{grid-template-columns:210px minmax(0,1fr);gap:18px;padding:0 18px}
+  .bdy .xl:not(.three){grid-template-columns:repeat(4,minmax(0,1fr))}
   .lsb{top:64px;padding:8px}
   .lsb .it{flex-direction:row;justify-content:space-between;text-align:left;padding:8px 11px;font-size:13.5px;font-weight:500;letter-spacing:0}
   .lsb .it .cd{display:none}.lsb .it .nm{display:inline}
@@ -529,7 +531,7 @@ function board() {
   return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + `<div class="rail">${html}</div>` + uncovered(uncShown) + `</div></div>`;
 }
 // Left league list for wide screens: leagues with games first, the rest dimmed underneath.
-const LCODE = { bundesliga: 'BUN', laliga: 'LAL', laliga2: 'LL2', seriea: 'SA', eredivisie: 'ERE', bundesliga2: 'BL2', ligue1: 'L1', championship: 'CHA', ligamx: 'MX', brasileirao: 'BRA', epl: 'EPL', mls: 'MLS', ucl: 'UCL', uel: 'UEL', nationsleague: 'NL' };
+const LCODE = { bundesliga: 'GER', bundesliga2: 'GER2', laliga: 'SP', laliga2: 'SP2', seriea: 'ITA', ligue1: 'FRA', eredivisie: 'NED', epl: 'ENG', championship: 'ENG2', ligamx: 'MEX', mls: 'USA', brasileirao: 'BRA', ucl: 'UCL', uel: 'UEL', nationsleague: 'NL' };
 function sidebar(leagues) {
   const n = k => day.cards.filter(c => c.v2 && c.leagueKey === k).length, on = k => S.league === k && !S.top ? 'on' : '';
   const lab = (k, nm) => `<span class="cd">${LCODE[k] || esc(String(nm).slice(0, 3).toUpperCase())}</span><span class="nm">${esc(nm)}</span>`;
