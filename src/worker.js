@@ -1,7 +1,7 @@
 import { v2, grade, pickOutcome, bestBet } from './model.js';
 import { supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
-  TZ, LEAGUES, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
+  TZ, LEAGUES, UNTRACKED, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
   findTeam, getContext, missingContexts, fixturesForLeague, shotsCoverage,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
@@ -302,7 +302,7 @@ async function tally(env) {
   for (const k of list.keys) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
-      if (!c.grade || day.date <= LEGACY_THROUGH) continue;
+      if (!c.grade || day.date <= LEGACY_THROUGH || UNTRACKED.has(c.league)) continue;
       if (c.fb && c.final) { // Forebet (entered by hand) on the same games, next to v2 and v4
         const f = fbGrade(c.fb, c.final);
         if (f.outcomeHit != null) { fbT.n++; fbT.outcome += f.outcomeHit; fbT.score += f.scoreHit; fbT.brier += f.brier; }

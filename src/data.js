@@ -13,6 +13,9 @@ const LOOKBACK_DAYS = 80; // international breaks + midweek cups: 36 days left s
 const STORE_V = 3;
 const CTX_V = 4; // contexts now carry dated history + rank // bump to discard cached results/contexts built by older code
 
+// Second divisions: cards stay on the Board, but their results are not counted in any record (the model's edge there is a third of the top flights').
+export const UNTRACKED = new Set(['esp.2', 'ger.2', 'eng.2']);
+
 // Same order as the Hub's tabs. ls = league-strength key. calendar = season runs Jan-Dec.
 export const LEAGUES = [
   { slug: 'uefa.champions', key: 'ucl', name: 'Champions League', cup: true, cupModel: true },
