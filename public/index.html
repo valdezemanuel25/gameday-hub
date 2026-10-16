@@ -303,6 +303,12 @@ body{padding-top:56px}
 .finb .fh{display:flex;align-items:center;gap:8px;width:100%;padding:10px 2px;font-size:13px;font-weight:650;color:var(--dim)}.finb .fh b{color:var(--faint);font-weight:600}.finb .fh span{margin-left:auto;font-size:12px;color:var(--faint)}
 .finb .fr{display:flex;align-items:center;gap:8px;padding:7px 2px;border-top:1px solid var(--line);font-size:13px}.finb .fr .lg{font-size:10.5px;color:var(--faint);font-weight:650;min-width:30px}.finb .fr b{font-weight:600;color:var(--ink);min-width:0}.finb .fr i{font-style:normal;margin-left:auto;font-weight:700}.finb .fr i.pend{font-weight:500;font-size:11.5px;color:var(--faint)}
 .finb .m{margin-top:8px}
+
+.lgt{width:100%;border-collapse:separate;border-spacing:0 5px;font-size:12.5px}.lgt th{font-size:11px;color:var(--faint);font-weight:650;text-align:center;padding:0 2px 2px}
+.lgt td{text-align:center;background:var(--panel);padding:7px 3px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.lgt td:first-child{border-left:1px solid var(--line);border-radius:10px 0 0 10px}.lgt td:last-child{border-right:1px solid var(--line);border-radius:0 10px 10px 0}
+.lgt td.n{text-align:left;padding-left:10px;font-weight:600;color:var(--ink)}.lgt td small{display:block;font-size:10.5px;color:var(--faint);font-weight:500;margin-top:1px}
+.lgt td b{font-size:14px;color:var(--ink)}.lgt td.bst b{color:var(--grass)}.lgt td.na{color:var(--faint)}
+.lgt.cg td.over b{color:#ff9d84}.lgt.cg td.under b{color:var(--sm)}.lgt.cg td.ok b{color:var(--grass)}.lgt.cg td.few b,.lgt.cg td.few small{opacity:.5}
 </style>
 </head>
 <body>
@@ -658,6 +664,26 @@ function resultsBlock(title, m) {
   return `<div class="sec">${title}<small>${m.n} graded. Brier score ${m.brier ?? '–'} (lower is better, 0.667 is a random guess).</small></div>
     <div class="tiles">${tile('Winner', m, 'outcome')}${tile('Over/under', m, 'ou')}${tile('Both score', m, 'btts')}</div>`;
 }
+// Winner hit rate and Brier score per league, per model, on every graded game.
+function leagueScorecards(t) {
+  const L = (t.leagues || []).filter(l => l.n >= 1); if (!L.length) return '';
+  const cell = (m, best) => m && m.n ? `<td class="${best ? 'bst' : ''}"><b>${Math.round(100 * m.outcome / m.n)}%</b><small>${m.brier == null ? '' : m.brier.toFixed(2) + ' · '}${m.n}</small></td>` : `<td class="na">–</td>`;
+  const rows = L.map(l => { const bs = ['v2', 'v4', 'fb'].map(k => l[k] && l[k].n >= 5 ? l[k].brier : null), mn = Math.min(...bs.filter(x => x != null)); return `<tr><td class="n">${esc(l.name)}<small>${l.n} games</small></td>${['v2', 'v4', 'fb'].map((k, i) => cell(l[k], bs[i] != null && bs[i] === mn && bs.filter(x => x != null).length > 1)).join('')}</tr>`; }).join('');
+  return `<div class="sec" style="padding-top:20px">Each league, model by model<small>Winner hit rate on top, then Brier score (lower is better) and games. Green is the best Brier in that league once a model has 5+ games.</small></div>
+  <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>v2</th><th>v4</th><th>Forebet</th></tr>${rows}</table></div>`;
+}
+// Over 2.5 and Both-teams-to-score: what each model said, grouped by confidence, against how often it happened.
+function goalsCalibration(t) {
+  if (!t.calGoals) return '';
+  const blocks = [['over', 'Over 2.5 goals'], ['btts', 'Both teams score']].map(([m, name]) => {
+    const rows = t.calGoals[m].v2.map((b, i) => {
+      const cs = ['v2', 'v4', 'fb'].map(k => { const x = t.calGoals[m][k][i]; if (!x.n) return `<td class="na">–</td>`; const act = Math.round(100 * x.hits / x.n), gap = act - x.avg, cls = x.n < 15 ? 'few' : gap <= -8 ? 'over' : gap >= 8 ? 'under' : 'ok'; return `<td class="${cls}"><b>${act}%</b><small>said ${Math.round(x.avg)} · ${x.n}</small></td>`; }).join('');
+      return `<tr><td class="n">${b.label}</td>${cs}</tr>`;
+    }).join('');
+    return `<div class="pair" style="padding-top:6px"><div class="lab"><b style="font-weight:600">${name}</b><span>how often it happened</span></div><table class="lgt cg"><tr><th>Model said</th><th>v2</th><th>v4</th><th>Forebet</th></tr>${rows}</table></div>`;
+  }).join('');
+  return `<div class="sec" style="padding-top:20px">Are the goals percentages honest?<small>Each row groups games by how likely a model said the outcome was, then shows how often it happened (bold) and the average it said. Red means it happens less than it says, blue more. Faded rows have under 15 games.</small></div>${blocks}`;
+}
 function calibrationView(t) {
   if (!t.calibration) return '';
   const rows = t.calibration.filter(b => b.n).map(b => {
@@ -709,7 +735,7 @@ function results() {
   const old = t.earlier.map(r => `<div class="li"><div class="a"><span>${esc(r.match)}</span><span>${esc(r.actual)}</span></div>
     <div class="b"><span>Winner <b class="${r.outcomeHit ? 'ok' : 'no'}">${r.outcomeHit ? '✓' : '✗'}</b></span><span>O/U <b class="${r.ouHit ? 'ok' : 'no'}">${r.ouHit ? '✓' : '✗'}</b></span><span>Both <b class="${r.bttsHit ? 'ok' : 'no'}">${r.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
-    boardBlock(t) + calibrationView(t) +
+    boardBlock(t) + leagueScorecards(t) + calibrationView(t) + goalsCalibration(t) +
     `<details class="old"><summary>Retired v3 shadow test (${t.h2hOld.v3.n} games)</summary>` +
     resultsBlock('v2', t.h2hOld.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (retired)', t.h2hOld.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` +
     `<div class="sec" style="padding-top:20px">Recent games<small>Each model's pick and whether it hit.</small></div><div class="lst">${rows || '<div class="small">Nothing new graded yet. Results fill in automatically a few hours after each league finishes.</div>'}</div>` +

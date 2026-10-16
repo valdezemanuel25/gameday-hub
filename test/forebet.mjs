@@ -145,6 +145,9 @@ const t = await worker.fetch(new Request('https://hub.test/api/tally', { headers
 ok('tally: Forebet counted on 2 games, 1 winner hit, 1 exact score', t.forebet.n === 2 && t.forebet.outcome === 1 && t.forebet.score === 1, JSON.stringify(t.forebet));
 ok('tally: compared with v2 on 2 games and v4 on 1 game', t.forebet.vs.v2.n === 2 && t.forebet.vs.v4.n === 1 && t.forebet.vs.v4.fbOutcome === 1, JSON.stringify(t.forebet.vs));
 ok('tally: v2 and v4 totals are not changed by Forebet', t.v2.n >= 2 && t.v4.n === 1);
+ok('tally: per-league scorecard counts both games, v4 on one', t.leagues.length === 1 && t.leagues[0].n === 2 && t.leagues[0].v2.n === 2 && t.leagues[0].v4.n === 1, JSON.stringify(t.leagues));
+const co = t.calGoals.over.v2.find(b => b.label === '50 to 59%'), cb = t.calGoals.btts.v2.find(b => b.label === '50 to 59%');
+ok('tally: goals calibration buckets (over 2.5 hit once in two, both-score hit once)', co.n === 2 && co.hits === 1 && cb.n === 2 && cb.hits === 1, JSON.stringify([co, cb]));
 
 // ---- Under/Over 2.5 and Both-teams-to-score tables ----
 const ouTxt = 'Union Saint-Gilloise\nReal Sociedad\n10/15/2026 11:45 AM\n42\n58\nOver\n2 - 1\n2.90\nLyon\nCrystal Palace\n43\n57\nOver\n3 - 1\nHoffenheim\nBeşiktaş\n50\n50\nUnder\n0 - 1';
