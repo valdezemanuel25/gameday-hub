@@ -548,9 +548,26 @@ const hub = {
       const d = new Date().toISOString().slice(0, 10);
       // Shot tracking: stored finished games checked for ESPN shots, and how many had them (cups are the open question).
       const shots = {}; await Promise.all([...DOMESTIC, ...CUP_MODEL].map(async l => { shots[l.slug] = shotsCoverage((await env.HUB.get(`res:${l.slug}`, 'json'))?.games); }));
+      // What each league has from SportsMole and Forebet for the games still to come (today and tomorrow).
+      const nowMs = Date.now(), per = {};
+      for (const d of [today(), addDays(today(), 1)]) {
+        const dd = await env.HUB.get(`day:${d}`, 'json');
+        for (const c of dd?.cards || []) {
+          if (c.final || !c.v2 || new Date(c.kickoff).getTime() <= nowMs) continue;
+          const o = per[c.league] || (per[c.league] = { n: 0, sm: 0, tried: 0, fb: { '1x2': 0, ou: 0, btts: 0 } });
+          o.n++; if (c.sm) o.sm++;
+          const tr = dd.smTried && dd.smTried[c.id]; if (tr > o.tried) o.tried = tr;
+          if (c.fb && c.fb.p) o.fb['1x2']++; if (c.fb && c.fb.over != null) o.fb.ou++; if (c.fb && c.fb.btts != null) o.fb.btts++;
+        }
+      }
+      const srcOf = l => {
+        const o = per[l.slug] || { n: 0, sm: 0, tried: 0, fb: {} }, fb = {};
+        if (FB_PAGES[l.slug]) for (const k of ['1x2', 'ou', 'btts']) { const m = (fbMeta || {})[`${l.slug}|${k}`]; if (m) fb[k] = { at: m.at, ok: !!m.ok, msg: m.msg || null, cov: [o.fb[k] || 0, o.n] }; }
+        return { sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
+      };
       return json({
         now: Date.now(), forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
-        leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
+        leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
 

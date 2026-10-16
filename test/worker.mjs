@@ -232,6 +232,7 @@ ok('form excludes the match itself and later games', ff.n === 3 && ff.gf === 3 &
   await call('/api/grade?league=eng.1&date=2026-10-14', 'POST', 'secret'); // may or may not write
   const st = await get('/api/status');
   ok('status: lists leagues with last sync', st.leagues.length > 5 && st.leagues.some(l => l.slug === 'eng.1'));
+  { const L = st.leagues.find(l => l.slug === 'eng.1'); ok('status: each league carries SportsMole and Forebet source info', L && L.sm && 'found' in L.sm && 'total' in L.sm && L.fb && typeof L.fb === 'object'); }
   ok('status: write counter present and limit is 1000', st.writes.limit === 1000 && st.writes.used >= 0, JSON.stringify(st.writes));
   const origFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response('nope', { status: 500 });

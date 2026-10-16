@@ -227,6 +227,24 @@ body{padding-top:56px}
 .xq.sm b{color:var(--sm)}.xq.none{opacity:.5}.xq.none b{font-size:11.5px;font-weight:500;color:var(--faint)}
 .xq .ck{font-size:11px;margin-left:3px}
 .xb{display:flex;justify-content:space-between;align-items:center;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(240,181,74,.1);border:1px solid rgba(240,181,74,.35);font-size:12.5px}.xb b{color:var(--amber);font-weight:650}
+
+.sb{width:100%;border-collapse:separate;border-spacing:0 5px;margin-top:6px}
+.sb th{font-size:10px;color:var(--faint);font-weight:650;text-align:center;padding:0 1px 2px}
+.sb th.g{border-bottom:1px solid var(--line);padding-bottom:3px;color:var(--dim)}
+.sb td.n{font-size:12.5px;font-weight:650;line-height:1.2;padding-right:6px;color:var(--ink)}
+.sb td.n small{display:block;font-weight:500;font-size:10px;color:var(--faint);margin-top:1px}
+.cl{display:block;border-radius:9px;padding:5px 1px 4px;text-align:center;font-size:11.5px;font-weight:650;line-height:1.15;border:1px solid transparent;background:none;color:inherit;width:100%}
+.cl small{display:block;font-size:9.5px;font-weight:500;opacity:.8;margin-top:1px}
+.cl.ok{background:rgba(88,178,122,.13);color:#9ddcb4;border-color:rgba(88,178,122,.35)}
+.cl.old{background:rgba(240,181,74,.12);color:var(--amber);border-color:rgba(240,181,74,.4)}
+.cl.bad{background:rgba(224,122,95,.14);color:#ff9d84;border-color:rgba(224,122,95,.5)}
+.cl.none{color:var(--faint);border:1px dashed var(--line)}
+.cl.na{color:#3e4f47;border:0}
+.sbl{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--dim);margin:10px 0 0}
+.sbl i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.rc{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+.rc small{display:block;color:var(--miss);font-size:11px;margin-top:2px}
+.rc button{flex:none;padding:7px 12px;border-radius:10px;border:1px solid #35514a;font-size:12.5px;font-weight:650}
 </style>
 </head>
 <body>
@@ -571,6 +589,40 @@ function results() {
 /* ---------- Status ---------- */
 let stat = null;
 const ago = iso => { if (!iso) return 'never'; const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+
+const KN = { '1x2': '1X2', ou: 'Over/Under', btts: 'Both score' };
+const mins = iso => iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)) : null;
+const short = m => m == null ? '–' : m < 1 ? 'now' : m < 60 ? m + 'm' : m < 2880 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd';
+function cell(kind, m, extra, staleAfter, tap, code) { // kind: ok | old | bad | none | na; tap = data attributes that make a red box fetch again
+  if (kind === 'na') return `<span class="cl na">–</span>`;
+  const cls = kind === 'bad' ? 'bad' : kind === 'none' ? 'none' : m > staleAfter ? 'old' : 'ok';
+  const inner = `${kind === 'bad' ? esc(code || 'fail') : kind === 'none' ? 'none' : short(m)}<small>${extra || ''}</small>`;
+  return tap ? `<button type="button" class="cl ${cls}" ${tap}>${inner}</button>` : `<span class="cl ${cls}">${inner}</span>`;
+}
+const errCode = msg => { const m = /HTTP (\d+)/.exec(msg || ''); return m ? m[1] : 'fail'; };
+function sourceBoard() {
+  const L = stat.leagues.filter(l => !l.support && l.slug !== 'uefa.nations');
+  const rows = L.map(l => {
+    const e = l.problem && l.problem.kind === 'sync' ? cell('bad', 0, 'ESPN') : l.lastSync ? cell('ok', mins(l.lastSync), '', 600) : cell('none');
+    const v = l.v4 ? (l.v4.ratingsAt ? cell('ok', mins(l.v4.ratingsAt), '', 1800) : cell('none')) : cell('na');
+    const sm = l.sm ? (l.sm.total ? cell(l.sm.tried ? 'ok' : 'none', mins(l.sm.tried), `${l.sm.found}/${l.sm.total}`, 360) : cell('none', 0, 'no games')) : cell('na');
+    const fb = ['1x2', 'ou', 'btts'].map(k => {
+      if (!l.fb) return cell('na');
+      const m = l.fb[k]; if (!m) return cell('none');
+      const cov = m.cov && m.cov[1] ? `${m.cov[0]}/${m.cov[1]}` : '';
+      return m.ok ? cell('ok', mins(m.at), cov, 360) : cell('bad', mins(m.at), short(mins(m.at)), 0, `data-refetch="${esc(l.slug)}" data-kind="${k}"`, errCode(m.msg));
+    }).join('</td><td>');
+    return `<tr><td class="n">${esc(l.name)}</td><td>${e}</td><td>${v}</td><td>${sm}</td><td>${fb}</td></tr>`;
+  }).join('');
+  const bads = L.map(l => ({ l, ks: l.fb ? ['1x2', 'ou', 'btts'].filter(k => l.fb[k] && !l.fb[k].ok) : [] })).filter(x => x.ks.length);
+  return `<div class="sec">Data by league<small>Each box is the last time that source was fetched for that league. Where it applies, a second line shows games covered (found / games today and tomorrow). Tap a red box to fetch that table again.</small></div>
+  <div class="pair" style="padding-top:0"><table class="sb"><tr><th></th><th>ESPN<br>results</th><th>v4<br>ratings</th><th>Sports<br>Mole</th><th class="g" colspan="3">Forebet</th></tr>
+    <tr><th></th><th></th><th></th><th></th><th>1X2</th><th>O/U</th><th>Both</th></tr>${rows}</table>
+    <div class="sbl"><span><i style="background:rgba(88,178,122,.5)"></i>fresh</span><span><i style="background:rgba(240,181,74,.6)"></i>getting old</span><span><i style="background:rgba(224,122,95,.7)"></i>blocked or failed</span><span><i style="border:1px dashed var(--faint)"></i>not fetched yet</span></div></div>
+  ${bads.length ? `<div class="sec" style="padding-top:16px">Needs a re-fetch<small>${bads.length} league${bads.length === 1 ? '' : 's'} with Forebet pages that came back blocked. v2, v4 and SportsMole are not affected.</small></div>
+  <div class="pair" style="padding-top:0">${bads.map(x => `<div class="rc"><div>${esc(x.l.name)}<small>${x.ks.map(k => KN[k] + ' ' + esc(x.l.fb[k].msg || 'failed') + ' ' + short(mins(x.l.fb[k].at)) + ' ago').join(' · ')}</small></div><button type="button" data-refetch="${esc(x.l.slug)}">Fetch again</button></div>`).join('')}</div>` : ''}`;
+}
+
 function statusView() {
   if (!stat) return `<div class="empty">Loading…</div>`;
   const w = stat.writes, pct = Math.min(100, Math.round(100 * w.used / w.limit)), cls = pct >= 90 ? 'x' : pct >= 70 ? 'w' : '';
@@ -579,8 +631,7 @@ function statusView() {
   return `<div class="sec">Saves used today<small>${w.used} of ${w.limit}. The free plan stops saving at the limit and resets at 7:00 PM Central. This is a close estimate.</small></div>
     <div class="pair" style="padding-top:0"><div class="meter ${cls}"><i style="width:${pct}%"></i></div>${pct >= 90 ? '<div class="small" style="color:var(--miss)">Almost out. Avoid Analyze this day until the reset.</div>' : pct >= 70 ? '<div class="small" style="color:var(--amber)">Getting high. Use Analyze leftover games instead of a full run.</div>' : ''}</div>
     ${bad.length ? `<div class="sec" style="padding-top:16px">Needs attention<small>${bad.length} league${bad.length === 1 ? '' : 's'} with a problem the last time they ran.</small></div><div class="pair" style="padding-top:0">${bad.map(row).join('')}</div>` : `<div class="banner" style="margin-top:14px">No league problems on record.</div>`}
-    <div class="sec" style="padding-top:16px">Leagues<small>When each league's results were last loaded. Each re-syncs about every 8 hours.</small></div>
-    <div class="pair" style="padding-top:0">${ok.map(row).join('')}</div>
+    ${sourceBoard()}
     ${shotsBlock()}
     ${forebetBox()}
     <div class="sec" style="padding-top:16px">Back up your history<small>Downloads every saved day with predictions, results and SportsMole picks, plus the carried-over totals.</small></div>
@@ -588,11 +639,8 @@ function statusView() {
 }
 // Paste Forebet's league table (select the table on the page, copy, paste here). Only games that have not kicked off are saved.
 function forebetReads() {
-  const r = (stat && stat.forebet && stat.forebet.reads) || {}, bad = Object.entries(r).filter(([, v]) => !v.ok);
-  const names = { '1x2': '1X2', ou: 'Under/Over', btts: 'Both score' };
-  const nm = k => { const [slug, kind] = k.split('|'), l = (stat.leagues || []).find(x => x.slug === slug); return `${l ? l.name : slug} ${names[kind] || kind}`; };
-  const last = Object.values(r).map(v => v.at).sort().pop();
-  return `<div class="small" style="margin:0 0 8px">${last ? 'Forebet last read ' + ago(last) + '.' : 'Forebet has not been read yet. It is read about every 20 minutes, one page at a time, for games that have not started.'}${bad.length ? '<br><span style="color:var(--amber)">Problem: ' + bad.map(([k, v]) => `${esc(nm(k))} (${esc(v.msg || 'failed')}, ${ago(v.at)})`).join('; ') + '. Paste the table below instead.</span>' : ''}${Object.entries(r).filter(([, v]) => v.unmatched && v.unmatched.length).map(([k, v]) => `<br><span style="color:var(--amber)">${esc(nm(k))}: no card matched ${v.unmatched.map(esc).join(', ')}</span>`).join('')}</div>`;
+  const r = (stat && stat.forebet && stat.forebet.reads) || {}, last = Object.values(r).map(v => v.at).sort().pop();
+  return `<div class="small" style="margin:0 0 8px">${last ? 'Forebet last read ' + ago(last) + '. The grid above shows each league and table.' : 'Forebet has not been read yet. It is read about every 10 minutes, one page at a time, for games that have not started.'} If a page stays blocked, copy the league table from forebet.com and paste it here.</div>`;
 }
 function forebetBox() {
   const opts = (cfg.leagues || []).map(l => `<option value="${esc(l.slug)}"${l.slug === (S.league !== 'all' ? S.league : 'uefa.europa') ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
@@ -708,6 +756,16 @@ async function runAll(kind) {
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
+  const rf = e.target.closest('[data-refetch]');
+  if (rf) { // fetch failed Forebet tables again: one table (a red box) or all of a league's failed ones
+    const slug = rf.dataset.refetch, l = (stat && stat.leagues || []).find(x => x.slug === slug); if (!l) return;
+    const ks = rf.dataset.kind ? [rf.dataset.kind] : ['1x2', 'ou', 'btts'].filter(k => l.fb && l.fb[k] && !l.fb[k].ok);
+    rf.disabled = true; const was = rf.innerHTML; let ok = 0, bad = 0;
+    for (const k of ks) { rf.textContent = rf.dataset.kind ? '…' : `Fetching ${KN[k]}…`; try { const r = await post(`/api/forebet?league=${encodeURIComponent(slug)}&kind=${k}`, { fetch: true }); if (r.error) bad++; else ok++; } catch (er) { bad++; } }
+    try { stat = await api('/api/status'); if (S.tab === 'status') render(); } catch (er) { rf.innerHTML = was; rf.disabled = false; }
+    say(bad ? `${l.name}: ${ok} read, ${bad} still blocked.` : `${l.name}: ${ok} table${ok === 1 ? '' : 's'} read.`);
+    return;
+  }
   if (e.target.closest('#btn-export')) return exportAll();
   if (e.target.closest('#btn-fbget')) {
     const msg = $('#fb-msg'), lg = $('#fb-league').value, kind = $('#fb-kind').value; msg.textContent = 'Reading Forebet…';

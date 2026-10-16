@@ -61,9 +61,13 @@ const d1 = JSON.parse(kv.get(dayKey));
 ok('card has v2, v4 and a stored time', d1.cards[0].v2 && d1.cards[0].v4 && d1.cards[0].ko);
 ok('Forebet filled onto the card in the same run', d1.cards[0].fb && d1.cards[0].fb.pick === 'H', JSON.stringify(r1.forebet));
 ok('soccer keys are never touched', [...kv.keys()].every(k => k.startsWith('nhl:')));
-const w1 = writes.length;
+// Depending on the time of day the ratings can move once more after tonight's card is made (the card is then
+// refreshed on the next run), so let one run settle and check the run after it.
 const r2 = await nhlStep(env, new Date(), fetchFn2);
-ok('a second run with nothing new writes nothing', writes.length === w1 && r2.created === 0 && r2.graded === 0, JSON.stringify(r2));
+ok('the settling run creates and grades nothing', r2.created === 0 && r2.graded === 0, JSON.stringify(r2));
+const w1 = writes.length;
+const rq3 = await nhlStep(env, new Date(), fetchFn2);
+ok('a run with nothing new writes nothing', writes.length === w1 && rq3.created === 0 && rq3.graded === 0 && rq3.refreshed === 0, JSON.stringify(rq3));
 
 // game finishes
 feed[today.replace(/-/g, '')] = [ev('9001', 5, 'Vegas Golden Knights', 'VGK', 'Calgary Flames', 'CGY', true, 3, 2, 'Final/OT')];
