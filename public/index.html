@@ -218,7 +218,7 @@ body{padding-top:56px}
 .xq{background:#17241f;border-radius:10px;padding:6px 7px 7px;min-width:0}
 .xq .l{font-size:10px;color:var(--faint);font-weight:650;margin-bottom:3px}
 .xq b{display:block;font-size:13.5px;font-weight:750;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.xq small{display:block;font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap}
+.xq small{display:block;font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap}.xq small.sc{color:var(--faint);font-size:10.5px}
 .xq .g{margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--faint);line-height:1.55}.xq .g span{display:flex;justify-content:space-between;gap:2px;white-space:nowrap}.xq .g b{display:inline;font-size:11.5px;font-weight:650;color:var(--dim)}.xq .g b.hi{color:var(--grass)}
 .xags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}.xags .xag{margin:0}
 .xag.s{background:var(--grass);color:#07150d;font-weight:750}.xag.s:before{content:"✓";width:auto;height:auto;background:none;font-weight:800}
@@ -474,15 +474,15 @@ function headline(c) {
 function chips(c) {
   const v = c.v2, g = c.grade || {}, out = [], picks = [];
   const gl = (o, b) => `<div class="g"><span>O2.5 ${o == null ? '<b>–</b>' : `<b class="${o >= 55 ? 'hi' : ''}">${o}%</b>`}</span><span>BTTS ${b == null ? '<b>–</b>' : `<b class="${b >= 55 ? 'hi' : ''}">${b}%</b>`}</span></div>`;
-  const mk = (cls, label, side, sub, hit, goals) => { picks.push(side); return `<div class="xq ${cls}"><div class="l">${label}</div><b>${esc(sideName2(c, side))}${hit == null ? '' : ` <span class="ck ${hit ? 'ok' : 'no'}">${hit ? '✓' : '✗'}</span>`}</b><small>${sub}</small>${goals || ''}</div>`; };
-  out.push(mk('', 'v2', v.pick, `${esc(v.scores[0][0])} · ${Math.max(...v.p)}%`, g.v2 ? g.v2.outcomeHit : null, gl(v.over, v.btts)));
-  out.push(c.v4 ? mk('', 'v4', c.v4.pick, `${esc(c.v4.scores[0][0])} · ${Math.max(...c.v4.p)}%`, g.v4 ? g.v4.outcomeHit : null, gl(c.v4.over, c.v4.btts)) : `<div class="xq none"><div class="l">v4</div><b>No pick</b></div>`);
+  const mk = (cls, label, side, pct, score, hit, goals, pre = 'likeliest') => { picks.push(side); return `<div class="xq ${cls}"><div class="l">${label}</div><b>${esc(sideName2(c, side))}${hit == null ? '' : ` <span class="ck ${hit ? 'ok' : 'no'}">${hit ? '✓' : '✗'}</span>`}</b>${pct != null ? `<small>${pct}% ${side === 'D' ? 'draw' : 'win'}</small>` : ''}${score ? `<small class="sc">${pre} ${score}</small>` : ''}${goals || ''}</div>`; };
+  out.push(mk('', 'v2', v.pick, Math.max(...v.p), esc(v.scores[0][0]), g.v2 ? g.v2.outcomeHit : null, gl(v.over, v.btts)));
+  out.push(c.v4 ? mk('', 'v4', c.v4.pick, Math.max(...c.v4.p), esc(c.v4.scores[0][0]), g.v4 ? g.v4.outcomeHit : null, gl(c.v4.over, c.v4.btts)) : `<div class="xq none"><div class="l">v4</div><b>No pick</b></div>`);
   const f = c.fb;
-  if (f && (f.p || f.score)) { const side = f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a); out.push(mk('', 'Forebet', side, `${f.score ? f.score.h + '–' + f.score.a : ''}${f.score && f.p ? ' · ' : ''}${f.p ? Math.max(...f.p) + '%' : ''}`, null, gl(f.over, f.btts))); }
+  if (f && (f.p || f.score)) { const side = f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a); out.push(mk('', 'Forebet', side, f.p ? Math.max(...f.p) : null, f.score ? f.score.h + '–' + f.score.a : '', null, gl(f.over, f.btts), 'predicts')); }
   else out.push(`<div class="xq none"><div class="l">Forebet</div><b>Not read yet</b></div>`);
   const second = SECOND_DIV.includes(c.leagueKey) && !c.sm;
   if (!second) {
-    if (c.sm) { const m = /(\d+)[–-](\d+)/.exec(c.sm.text); const side = sideOfScore(c.sm.h, c.sm.a); out.push(mk('sm', 'SportsMole', side, `${c.sm.h}–${c.sm.a}`, c.smGrade ? c.smGrade.outcomeHit : null)); }
+    if (c.sm) { const m = /(\d+)[–-](\d+)/.exec(c.sm.text); const side = sideOfScore(c.sm.h, c.sm.a); out.push(mk('sm', 'SportsMole', side, null, `${c.sm.h}–${c.sm.a}`, c.smGrade ? c.smGrade.outcomeHit : null, '', 'says')); }
     else out.push(`<div class="xq none"><div class="l">SportsMole</div><b>Not found yet</b></div>`);
   }
   const cs = consensus(c), who = cs.side === 'D' ? 'a draw' : cs.side === 'H' ? c.home : c.away, gc = goalsCons(c);
