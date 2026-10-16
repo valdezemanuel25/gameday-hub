@@ -3,6 +3,7 @@
 //   Forebet = recorded and graded only. Market odds are never read. Lines: Over/Under 5.5 only.
 // Storage: nhl:state (ratings, one write per batch of finished games), nhl:day:<date> (cards), nhl:fbmeta.
 import SEED from './nhlseed.js';
+import { fbHeaders, FB_HV } from './forebetpage.js';
 
 const TZ = 'America/Chicago';
 export const LINE = 5.5;
@@ -185,7 +186,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
   // Forebet: one page read, at most once per 3 hours (6 after a failure), only when a game still lacks its numbers.
   let fb = null;
   const meta = (await env.HUB.get('nhl:fbmeta', 'json')) || {};
-  if (force || !meta.at || now.getTime() - new Date(meta.at).getTime() >= (meta.ok ? 3 : 6) * HOUR) {
+  if (force || !meta.at || (!meta.ok && meta.hv !== FB_HV) || now.getTime() - new Date(meta.at).getTime() >= (meta.ok ? 3 : 6) * HOUR) {
     const work = [];
     for (const d of [t, addDays(t, 1)]) {
       const day = await env.HUB.get(`nhl:day:${d}`, 'json');
@@ -200,11 +201,11 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
 async function forebetRead(env, work, now, fetchFn) {
   let html;
   try {
-    const res = await fetchFn(FB_URL, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; gameday-hub/1.0)', 'accept-language': 'en-US,en;q=0.9' } });
+    const res = await fetchFn(FB_URL, { headers: fbHeaders() });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     html = await res.text();
   } catch (e) {
-    const m = { at: now.toISOString(), ok: false, msg: String(e.message || e).slice(0, 80) };
+    const m = { at: now.toISOString(), ok: false, hv: FB_HV, msg: String(e.message || e).slice(0, 80) };
     await env.HUB.put('nhl:fbmeta', JSON.stringify(m)); return { error: m.msg };
   }
   const rows = parseForebetHockey(html);
@@ -215,7 +216,7 @@ async function forebetRead(env, work, now, fetchFn) {
     if (dirty) await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day));
   }
   const i0 = html.search(/\/en\/hockey\/matches\//), snip = i0 < 0 ? '' : html.slice(Math.max(0, i0 - 60), i0 + 420).replace(/\s+/g, ' ');
-  const m = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/\/en\/hockey\/matches\//g) || []).length} hockey match links, ${(html.match(/homeTeam/g) || []).length} homeTeam marks, ${/captcha|cf-browser|Just a moment|Access denied|Attention Required/i.test(html) ? 'looks like a check page' : 'not a check page'}). First row: ${snip.slice(0, 380)}` };
+  const m = { at: now.toISOString(), ok: rows.length > 0, hv: FB_HV, rows: rows.length, saved, msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/\/en\/hockey\/matches\//g) || []).length} hockey match links, ${(html.match(/homeTeam/g) || []).length} homeTeam marks, ${/captcha|cf-browser|Just a moment|Access denied|Attention Required/i.test(html) ? 'looks like a check page' : 'not a check page'}). First row: ${snip.slice(0, 380)}` };
   await env.HUB.put('nhl:fbmeta', JSON.stringify(m));
   return { rows: rows.length, saved, ...(m.msg ? { note: m.msg } : {}) };
 }

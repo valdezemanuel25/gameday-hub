@@ -29,11 +29,11 @@ export const fbUrl = (slug, kind) => BASE + FB_PAGES[slug] + SUFFIX[kind];
 const ent = s => s.replace(/&#0?39;|&#x27;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').trim();
 const between = (s, a, b, from = 0) => { const i = s.indexOf(a, from); if (i < 0) return null; const j = i + a.length, k = s.indexOf(b, j); return k < 0 ? null : s.slice(j, k); };
 
-// Request headers. The default names the Hub; Serie A is a trial with a standard browser's headers, to see
-// whether Forebet's 403s are about how the request identifies itself. Widen BROWSER_STYLE if it works.
-const BROWSER_STYLE = new Set(['ita.1']);
-export function fbHeaders(slug) {
-  if (!BROWSER_STYLE.has(slug)) return { 'user-agent': 'Mozilla/5.0 (compatible; gameday-hub/1.0)', 'accept-language': 'en-US,en;q=0.9' };
+// Request headers. A standard browser's headers: the Hub's own name ("gameday-hub") got HTTP 403 from Forebet,
+// and a Serie A trial with these headers read fine. FB_HV marks which header set a failure was recorded under,
+// so failures from the old headers are retried at once instead of waiting out the 6-hour back-off.
+export const FB_HV = 2;
+export function fbHeaders() {
   return {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -126,11 +126,11 @@ export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = 
   if (!work.length) return { slug, kind, skipped: 'nothing to fill' };
   let res, html;
   try {
-    res = await fetchFn(url, { headers: fbHeaders(slug) });
+    res = await fetchFn(url, { headers: fbHeaders() });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     html = await res.text();
   } catch (e) {
-    meta[key] = { at: now.toISOString(), ok: false, msg: String(e.message || e).slice(0, 80) };
+    meta[key] = { at: now.toISOString(), ok: false, hv: FB_HV, msg: String(e.message || e).slice(0, 80) };
     await env.HUB.put('meta:fb', JSON.stringify(meta));
     return { slug, kind, error: meta[key].msg };
   }
@@ -156,7 +156,7 @@ export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = 
     }
   }
   await saveUnm(env, unm, before, localDate(now.toISOString()));
-  meta[key] = { at: now.toISOString(), ok: rows.length > 0, rows: rows.length, saved, ...(unmatched.length ? { unmatched: unmatched.slice(0, 6) } : {}), msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/itemprop=["']?homeTeam/g) || []).length} home-team tags, ${(html.match(/startDate/g) || []).length} dates, ${/captcha|challenge|cf-browser|Just a moment|Access denied/i.test(html) ? 'looks like a check page' : 'no check page'})` };
+  meta[key] = { at: now.toISOString(), ok: rows.length > 0, hv: FB_HV, rows: rows.length, saved, ...(unmatched.length ? { unmatched: unmatched.slice(0, 6) } : {}), msg: rows.length ? null : `page loaded but no games could be read (${html.length} bytes, ${(html.match(/itemprop=["']?homeTeam/g) || []).length} home-team tags, ${(html.match(/startDate/g) || []).length} dates, ${/captcha|challenge|cf-browser|Just a moment|Access denied/i.test(html) ? 'looks like a check page' : 'no check page'})` };
   await env.HUB.put('meta:fb', JSON.stringify(meta));
   return { slug, kind, rows: rows.length, saved, ...(meta[key].msg ? { note: meta[key].msg } : {}) };
 }
@@ -167,7 +167,7 @@ export async function forebetStep(env, now = new Date(), fetchFn = fetch) {
   const cand = [], days = await loadDays(env, now);
   for (const slug of Object.keys(FB_PAGES)) for (const kind of KINDS) {
     const m = meta[`${slug}|${kind}`];
-    if (m && now.getTime() - new Date(m.at).getTime() < (m.ok ? 3 : 6) * HOUR) continue;
+    if (m && (m.ok || m.hv === FB_HV) && now.getTime() - new Date(m.at).getTime() < (m.ok ? 3 : 6) * HOUR) continue;
     const work = openCards(days, now, slug, kind);
     if (work.length) cand.push({ slug, kind, ko: Math.min(...work.flatMap(w => w.open.map(c => new Date(c.kickoff).getTime()))) });
   }

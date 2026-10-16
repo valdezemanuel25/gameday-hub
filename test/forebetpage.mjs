@@ -1,6 +1,6 @@
 // Forebet pages: parsed from real saved page source (test/fixtures), matched to cards, filled before kickoff only.
 import fs from 'fs';
-import { fbHeaders, parseForebetHtml, matchRows, forebetFetch, forebetStep, fbUrl, FB_PAGES } from '../src/forebetpage.js';
+import { FB_HV, fbHeaders, parseForebetHtml, matchRows, forebetFetch, forebetStep, fbUrl, FB_PAGES } from '../src/forebetpage.js';
 
 let pass = 0, fail = 0;
 const ok = (n, c, x = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${c ? '' : ' ' + x}`); };
@@ -82,8 +82,17 @@ ok('all nine league pages are set up', Object.keys(FB_PAGES).length === 13);
   ok('a page without attribute quotes reads the same games', plain !== quoted && a.length > 0 && JSON.stringify(a) === JSON.stringify(b));
 }
 
-ok('Serie A is the trial for browser-style headers', /Chrome\//.test(fbHeaders('ita.1')['user-agent']) && !!fbHeaders('ita.1').accept && !!fbHeaders('ita.1').referer);
-ok('other leagues still send the Hub identity', /gameday-hub/.test(fbHeaders('ger.1')['user-agent']));
+ok('Forebet requests use a standard browser identity', /Chrome\//.test(fbHeaders()['user-agent']) && !!fbHeaders().accept && !/gameday-hub/.test(fbHeaders()['user-agent']));
+{ // a failure recorded under the old headers is retried at once; one under the new headers still waits
+  const kv = new Map(), env = { HUB: { get: async (k, t) => kv.has(k) ? JSON.parse(kv.get(k)) : null, put: async (k, v) => { kv.set(k, v); }, list: async () => ({ keys: [] }) } };
+  const now = new Date('2026-10-16T12:00:00Z'), at = new Date(now - 3600000).toISOString();
+  kv.set('meta:fb', JSON.stringify({ 'ita.1|1x2': { at, ok: false, msg: 'HTTP 403' } }));
+  kv.set('day:2026-10-16', JSON.stringify({ date: '2026-10-16', cards: [{ id: '1', league: 'ita.1', kickoff: '2026-10-17T18:00:00Z', home: 'Napoli', away: 'Roma', v2: {} }] }));
+  let calls = 0; const f = async () => { calls++; return { ok: false, status: 403, text: async () => '' }; };
+  await forebetStep(env, now, f); ok('old-header failure is retried straight away', calls === 1, String(calls));
+  kv.set('meta:fb', JSON.stringify({ 'ita.1|1x2': { at, ok: false, hv: FB_HV, msg: 'HTTP 403' }, 'ita.1|ou': { at, ok: true }, 'ita.1|btts': { at, ok: true } }));
+  calls = 0; await forebetStep(env, now, f); ok('a failure under the current headers still waits out the back-off', calls === 0, String(calls));
+}
 console.log(fail ? `\n${fail} Forebet page checks FAILED` : '\nAll Forebet page checks passed');
 { const { is } = await import('../src/forebetpage.js'); const { norm, sameTeam } = await import('../src/sportsmole.js');
   ok('FC Cologne (ESPN) matches Köln (Forebet, SportsMole)', is('1. FC Köln', 'FC Cologne') && is('Köln', 'FC Cologne') && sameTeam(norm('FC Cologne'), norm('fc-koln')));
