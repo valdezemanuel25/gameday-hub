@@ -622,7 +622,7 @@ function sourceBoard() {
       if (!l.fb) return cell('na');
       const m = l.fb[k]; if (!m) return cell('none', 0, '', 0, `data-refetch="${esc(l.slug)}" data-kind="${k}"`);
       const cov = m.cov && m.cov[1] ? `${m.cov[0]}/${m.cov[1]}` : '';
-      return m.ok ? cell('ok', mins(m.at), cov, 360) : cell('bad', mins(m.at), short(mins(m.at)), 0, `data-refetch="${esc(l.slug)}" data-kind="${k}"`, errCode(m.msg));
+      return m.ok ? cell('ok', mins(m.at), cov, 360, `data-refetch="${esc(l.slug)}" data-kind="${k}"`) : cell('bad', mins(m.at), short(mins(m.at)), 0, `data-refetch="${esc(l.slug)}" data-kind="${k}"`, errCode(m.msg));
     }).join('</td><td>');
     const g = l.games || { today: 0, tomorrow: 0 }, on = g.today > 0;
     return `<tr class="${on ? '' : 'off'}"><td class="n${on ? ' pt' : ''}">${esc(l.name)}<small>${on ? g.today + (g.today === 1 ? ' game today' : ' games today') : 'no games today'}${g.tomorrow ? ` · ${g.tomorrow} tomorrow` : ''}</small></td><td>${e}</td><td>${v}</td><td>${sm}</td><td>${fb}</td></tr>`;
