@@ -277,6 +277,8 @@ async function tally(env) {
   const list = await env.HUB.list({ prefix: 'day:' });
   const v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [], mineT = { n: 0, mine: 0, model: 0 };
+  // Last 30 days (winner hit rate per model) and how the Board's "top picks" have done: winner at 55%+, goals markets at 62%+.
+  const T30 = addDays(today(), -30), last30 = { n: 0, v2: 0, v4n: 0, v4: 0, fbn: 0, fb: 0 }, topT = { win: { n: 0, hits: 0 }, goals: { n: 0, hits: 0 }, rest: { n: 0, hits: 0 } };
   const fbT = { n: 0, outcome: 0, score: 0, brier: 0, nOu: 0, ou: 0, nBtts: 0, btts: 0 }, mk = () => ({ n: 0, fbOutcome: 0, fbBrier: 0, outcome: 0, brier: 0, nOu: 0, fbOu: 0, ou: 0, nBtts: 0, fbBtts: 0, btts: 0 }), fbVs = { v2: mk(), v4: mk() };
   // Same-games table for the Results tab: a metric counts a game only when v2, v4 and Forebet all have it.
   const SB = { outcome: { n: 0, v2: 0, v4: 0, fb: 0 }, ou: { n: 0, v2: 0, v4: 0, fb: 0 }, btts: { n: 0, v2: 0, v4: 0, fb: 0 }, brier: { n: 0, v2: 0, v4: 0, fb: 0 } };
@@ -319,11 +321,23 @@ async function tally(env) {
       if (c.grade.v4) { add(h2hV2, c.grade.v2); add(h2hV4, c.grade.v4); }
       if (c.grade.v3) { add(oldV2, c.grade.v2); add(oldV3, c.grade.v3); }
       cal(c.v2.p, c.grade.v2.outcomeHit);
+      if (day.date >= T30) {
+        last30.n++; last30.v2 += c.grade.v2.outcomeHit ? 1 : 0;
+        if (c.grade.v4) { last30.v4n++; last30.v4 += c.grade.v4.outcomeHit ? 1 : 0; }
+        if (c.fb && c.final) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { last30.fbn++; last30.fb += f.outcomeHit ? 1 : 0; } }
+      }
       if (c.mine && c.final) { mineT.n++; mineT.model += c.grade.v2.outcomeHit ? 1 : 0; mineT.mine += c.mine === (c.final.h > c.final.a ? 'H' : c.final.h === c.final.a ? 'D' : 'A') ? 1 : 0; }
       live.push({ date: day.date, ...c });
     }
   }
   live.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''));
+  // How top picks did over the 30 most recently graded games: winner at 55%+, goals markets at 62%+, and every other winner pick.
+  for (const c of live.slice(0, 30)) {
+    if (!c.final || !c.v2 || !c.v2.p) continue;
+    const t = topT[Math.max(...c.v2.p) >= 55 ? 'win' : 'rest']; t.n++; t.hits += c.grade.v2.outcomeHit ? 1 : 0;
+    const gs = c.final.h + c.final.a, bs = c.final.h > 0 && c.final.a > 0, ov = c.v2.over, bt = c.v2.btts;
+    if (ov != null && bt != null) for (const [pp, hit] of [[ov, gs >= 3], [100 - ov, gs < 3], [bt, bs], [100 - bt, !bs]]) if (pp >= 62) { topT.goals.n++; topT.goals.hits += hit ? 1 : 0; }
+  }
   // Model vs SportsMole: the Hub's 141 tracked matches + everything graded here since.
   const smT = { n: 0, model: { outcome: 0, ou: 0, btts: 0 }, sm: { outcome: 0, ou: 0, btts: 0, score: 0 } };
   for (const r of legacySm) {
@@ -345,7 +359,7 @@ async function tally(env) {
     all: { models: { v2: mAll(fin(v2All)), v4: mAll(fin(v4All)), fb: { outcome: [fbT.outcome, fbT.n], ou: [fbT.ou, fbT.nOu], btts: [fbT.btts, fbT.nBtts], brier: avg(fbT.brier, fbT.n) } } },
   };
   return {
-    board,
+    board, last30, top: topT,
     smCompare: {
       ...smT, importedMatches: legacySm.length, newMatches: smLive.length,
       recent: smLive.slice(0, 100).map(c => ({ date: c.date, home: c.home, away: c.away, final: c.final, modelPick: c.v2.pick, modelP: c.v2.p, sm: c.sm.text, hit: c.grade.v2, smHit: c.smGrade })),

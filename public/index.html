@@ -292,6 +292,17 @@ body{padding-top:56px}
 .tpk .tm{display:flex;align-items:baseline;gap:5px;white-space:nowrap;font-size:12px;color:var(--faint)}
 .tpk .tm u{text-decoration:none;font-size:10px;margin-left:4px}.tpk .tm span{color:var(--dim);font-weight:600}.tpk .tm span.hi{color:var(--grass)}
 .tpk .tr:first-of-type b{color:#6fe0a0}
+
+.xhl{display:flex;align-items:baseline;gap:7px;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid var(--line);font-size:13px;flex-wrap:wrap}
+.xhl .k{font-size:10.5px;font-weight:700;color:var(--faint)}.xhl b{color:var(--ink);font-weight:700}.xhl .p{margin-left:auto;font-weight:750;color:var(--grass)}
+.xhl .ag{font-size:11px;color:var(--dim);flex-basis:100%}.xhl .ag.all{color:var(--grass)}
+.xag .pt{opacity:.78}
+.rec{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;margin:10px 0 2px 4px;padding:8px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--dim)}
+.rec b{flex-basis:100%;color:var(--ink);font-size:12px}.rec u{text-decoration:none;color:var(--ink);font-weight:700}.rec small{color:var(--faint)}
+.finb{margin:10px 0 0 0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:4px 10px 8px}
+.finb .fh{display:flex;align-items:center;gap:8px;width:100%;padding:10px 2px;font-size:13px;font-weight:650;color:var(--dim)}.finb .fh b{color:var(--faint);font-weight:600}.finb .fh span{margin-left:auto;font-size:12px;color:var(--faint)}
+.finb .fr{display:flex;align-items:center;gap:8px;padding:7px 2px;border-top:1px solid var(--line);font-size:13px}.finb .fr .lg{font-size:10.5px;color:var(--faint);font-weight:650;min-width:30px}.finb .fr b{font-weight:600;color:var(--ink);min-width:0}.finb .fr i{font-style:normal;margin-left:auto;font-weight:700}
+.finb .m{margin-top:8px}
 </style>
 </head>
 <body>
@@ -316,7 +327,9 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const OUT = { H: 'home win', D: 'draw', A: 'away win' };
 const TZ = 'America/Chicago';
 let cfg = null, day = { cards: [] }, tally = null, cands = [];
-const S = { date: '', tab: 'board', league: 'all', top: false, open: null };
+const S = { date: '', tab: 'board', league: 'all', top: false, open: null, fin: false };
+try { const f = JSON.parse(localStorage.getItem('hubFilter') || 'null'); if (f) { S.league = f.league || 'all'; S.top = !!f.top; } } catch (e) {}
+const keepFilter = () => { try { localStorage.setItem('hubFilter', JSON.stringify({ league: S.league, top: S.top })); } catch (e) {} };
 const counts = {};
 try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); if (['board', 'results', 'compare', 'status'].includes(v.tab)) S.tab = v.tab; if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }
 const saveView = () => { try { localStorage.setItem('hubView', JSON.stringify({ tab: S.tab, league: S.league })); } catch (e) { /* ignore */ } };
@@ -419,10 +432,38 @@ function consensus(c) {
   return { same, strong: same && Math.max(...c.v2.p) >= 55, side: same ? p[0] : null, n: p.length };
 }
 function goalsCons(c) {
-  const col = k => [c.v2[k], c.v4 && c.v4[k], c.fb && c.fb[k]].filter(x => x != null), out = [], ov = col('over'), bt = col('btts');
-  if (ov.length >= 3) { if (ov.every(x => x >= 55)) out.push('All say Over 2.5'); else if (ov.every(x => x <= 45)) out.push('All say Under 2.5'); }
-  if (bt.length >= 3) { if (bt.every(x => x >= 55)) out.push('All say both score'); else if (bt.every(x => x <= 45)) out.push('All say not both'); }
+  const out = [];
+  const mkc = (k, yes, no, both) => {
+    const col = [c.v2[k], c.v4 && c.v4[k], c.fb && c.fb[k]].filter(x => x != null), n = col.length;
+    const y = col.filter(x => x >= 55).length, o = col.filter(x => x <= 45).length;
+    if (n >= 3 && y === n) out.push(`All say ${yes}`); else if (n >= 3 && o === n) out.push(`All say ${no}`);
+    else if (n === 2 && y === 2) out.push(`Both say ${yes}`); else if (n === 2 && o === 2) out.push(`Both say ${no}`);
+    else if (n >= 3 && y === n - 1) out.push(`<span class="pt">${y} of ${n} say ${yes}</span>`); else if (n >= 3 && o === n - 1) out.push(`<span class="pt">${o} of ${n} say ${no}</span>`);
+  };
+  mkc('over', 'Over 2.5', 'Under 2.5'); mkc('btts', 'both score', 'not both');
   return out;
+}
+// Who picks what, in words: "Cottbus (v2) vs Nürnberg (Forebet)".
+function splitText(c) {
+  const by = new Map(), add = (side, m) => { if (!by.has(side)) by.set(side, []); by.get(side).push(m); };
+  add(c.v2.pick, 'v2'); if (c.v4) add(c.v4.pick, 'v4');
+  const f = c.fb; if (f && (f.p || f.score)) add(f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a), 'Forebet');
+  if (c.sm) add(sideOfScore(c.sm.h, c.sm.a), 'SportsMole');
+  const nm = s => s === 'D' ? 'Draw' : esc(strip(s === 'H' ? c.home : c.away));
+  return [...by.entries()].map(([side, ms]) => `${nm(side)} (${ms.join(', ')})`).join(' vs ');
+}
+// The one line a card leads with: the model's strongest pick across the result and the goals markets, and how many models back it.
+function headline(c) {
+  const v = c.v2, v4 = c.v4 || {}, f = c.fb || {}, opts = [];
+  const mx = Math.max(...v.p), wi = v.p.indexOf(mx), ws = 'HDA'[wi];
+  const wm = []; wm.push(['v2', c.v2.pick]); if (c.v4) wm.push(['v4', c.v4.pick]); if (f.p || f.score) wm.push(['Forebet', f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a)]); if (c.sm) wm.push(['SportsMole', sideOfScore(c.sm.h, c.sm.a)]);
+  opts.push({ label: wi === 1 ? 'Draw' : `${esc(strip(wi === 0 ? c.home : c.away))} to win`, p: mx, m: wm.map(([n, x]) => [n, x === ws]) });
+  const mk = (label, p, key, flip) => { const m = [['v2', v[key]], ['v4', v4[key]], ['Forebet', f[key]]].filter(x => x[1] != null).map(([n, x]) => [n, flip ? x <= 50 : x >= 50]); opts.push({ label, p, m }); };
+  mk('Over 2.5 goals', v.over, 'over', false); mk('Under 2.5 goals', 100 - v.over, 'over', true);
+  mk('Both teams score', v.btts, 'btts', false); mk('Not both teams score', 100 - v.btts, 'btts', true);
+  const b = opts.sort((x, y) => y.p - x.p)[0], yes = b.m.filter(x => x[1]).map(x => x[0]), no = b.m.filter(x => !x[1]).map(x => x[0]);
+  const ag = b.m.length < 2 ? '' : !no.length ? `<span class="ag all">All ${b.m.length} models agree</span>` : `<span class="ag">${yes.join(', ')} back${yes.length === 1 ? 's' : ''} it${no.length ? ` · ${no.join(', ')} disagree${no.length === 1 ? 's' : ''}` : ''}</span>`;
+  return `<div class="xhl"><span class="k">${b.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${b.label}</b><span class="p">${b.p}%</span>${ag}</div>`;
 }
 function chips(c) {
   const v = c.v2, g = c.grade || {}, out = [], picks = [];
@@ -439,7 +480,7 @@ function chips(c) {
     else out.push(`<div class="xq none"><div class="l">SportsMole</div><b>Not found yet</b></div>`);
   }
   const cs = consensus(c), who = cs.side === 'D' ? 'a draw' : cs.side === 'H' ? c.home : c.away, gc = goalsCons(c);
-  const tag = `<div class="xags">${cs.strong ? `<div class="xag s">Consensus · ${esc(who)}</div>` : cs.same ? `<div class="xag y">All ${cs.n} pick ${esc(who)}</div>` : cs.n >= 2 ? `<div class="xag">Models split on the result</div>` : ''}${gc.map(t => `<div class="xag gl">${t}</div>`).join('')}</div>`;
+  const tag = `<div class="xags">${cs.strong ? `<div class="xag s">Consensus · ${esc(who)}</div>` : cs.same ? `<div class="xag y">All ${cs.n} pick ${esc(who)}</div>` : cs.n >= 2 ? `<div class="xag">Split: ${splitText(c)}</div>` : ''}${gc.map(t => `<div class="xag gl">${t}</div>`).join('')}</div>`;
   return `${tag}<div class="xl ${second ? 'three' : ''}">${out.join('')}</div>`;
 }
 function game(c) {
@@ -461,7 +502,7 @@ function game(c) {
     <div class="xt"><div class="xk">${xcrest(c.home, cons.strong && cons.side === 'H')}<div><b>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away, cons.strong && cons.side === 'A')}<div><b>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
     <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'H' ? 'cg' : ''}">${h}%</b></span><span class="mid"><b>Draw ${d}%</b></span><span class="${fav === 'a' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'A' ? 'cg' : ''}">${a}%</b></span></div>
       <div class="b"><i class="h ${fav === 'h' ? 'f' : ''}" style="flex:${h}"></i><i class="d ${fav === 'd' ? 'f' : ''}" style="flex:${d}"></i><i class="a ${fav === 'a' ? 'f' : ''}" style="flex:${a}"></i></div></div>
-    ${S.top ? topBox(c) : ''}${chips(c)}${open ? '' : extra}</button>${open ? expanded(c) : ''}</div>`;
+    ${S.top ? topBox(c) : headline(c)}${chips(c)}</button>${open ? expanded(c) : ''}</div>`;
 }
 
 /* ---------- alerts ---------- */
@@ -541,20 +582,36 @@ function board() {
   if (!cs.length) return chips + `<div class="empty">No games with a prediction match this filter.</div>` + uncovered(uncShown);
   if (S.top) cs.sort((a, b) => Math.max(...topPicks(b).map(x => x.p), 0) - Math.max(...topPicks(a).map(x => x.p), 0));
   else cs.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+  const doneCs = !S.top && cs.some(c => !c.final) ? cs.filter(c => c.final) : [];
+  if (doneCs.length) cs = cs.filter(c => !c.final);
   const slots = new Map();
   for (const c of cs) { const k = S.top ? c.id : c.kickoff; if (!slots.has(k)) slots.set(k, []); slots.get(k).push(c); }
   const isToday = S.date === cfg.today, now = Date.now();
   let nowDone = !isToday, html = '';
+  if (!cs.length && doneCs.length) html = '';
   for (const [, list] of slots) {
     const iso = list[0].kickoff, t = new Date(iso).getTime(), done = list.every(c => c.final);
     if (!S.top && !nowDone && t > now) { nowDone = true; if (html) html += `<div class="now">Now, ${esc(nowCT())}</div>`; }
     const [hm, ap] = list[0].ko.split(' ');
     html += `<div class="slot ${done ? 'done' : ''}"><div class="t">${esc(hm)}<small>${esc(ap || '')}</small></div>${list.map(game).join('')}</div>`;
   }
-  return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + `<div class="rail">${html}</div>` + uncovered(uncShown) + `</div></div>`;
+  const fin = doneCs.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${S.fin}">Finished <b>${doneCs.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? doneCs.map(game).join('') : doneCs.map(c => `<div class="fr"><span class="lg">${esc(LCODE[c.leagueKey] || '')}</span><b>${esc(strip(c.home))} ${c.final.h}–${c.final.a} ${esc(strip(c.away))}</b>${c.grade && c.grade.v2 ? `<i class="${c.grade.v2.outcomeHit ? 'ok' : 'no'}">${c.grade.v2.outcomeHit ? '✓' : '✗'}</i>` : ''}</div>`).join('')}</div>` : '';
+  return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + `<div class="rail">${html}</div>` + fin + uncovered(uncShown) + `</div></div>`;
 }
 // Left league list for wide screens: leagues with games first, the rest dimmed underneath.
 const LCODE = { bundesliga: 'GER', bundesliga2: 'GER2', laliga: 'SP', laliga2: 'SP2', seriea: 'ITA', ligue1: 'FRA', eredivisie: 'NED', epl: 'ENG', championship: 'ENG2', ligamx: 'MEX', mls: 'USA', brasileirao: 'BRA', ucl: 'UCL', uel: 'UEL', nationsleague: 'NL' };
+// Last 30 days per model, and (in Top picks) how top picks have done compared with the rest.
+function recordBar() {
+  const t = tally; if (!t || !t.last30) return '';
+  const l = t.last30, pc = (k, n) => n ? `${Math.round(100 * k / n)}%` : '–';
+  if (S.top && t.top) {
+    const w = t.top.win, g = t.top.goals, r = t.top.rest;
+    if (w.n + g.n === 0) return '';
+    return `<div class="rec"><b>Top picks, last 30 games</b><span>Winner at 55%+ <u>${pc(w.hits, w.n)}</u> <small>${w.hits}/${w.n}</small></span><span>Goals at 62%+ <u>${pc(g.hits, g.n)}</u> <small>${g.hits}/${g.n}</small></span><span>All other winners <u>${pc(r.hits, r.n)}</u> <small>${r.hits}/${r.n}</small></span></div>`;
+  }
+  if (!l.n) return '';
+  return `<div class="rec"><b>Winner picks, last 30 days</b><span>v2 <u>${pc(l.v2, l.n)}</u></span>${l.v4n ? `<span>v4 <u>${pc(l.v4, l.v4n)}</u></span>` : ''}${l.fbn ? `<span>Forebet <u>${pc(l.fb, l.fbn)}</u></span>` : ''}<small>${l.n} games</small></div>`;
+}
 function sidebar(leagues) {
   const n = k => day.cards.filter(c => c.v2 && c.leagueKey === k).length, on = k => S.league === k && !S.top ? 'on' : '';
   const lab = (k, nm) => `<span class="cd">${LCODE[k] || esc(String(nm).slice(0, 3).toUpperCase())}</span><span class="nm">${esc(nm)}</span>`;
@@ -794,6 +851,7 @@ function renderHeader() {
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function render() {
+  keepFilter();
   renderHeader();
   $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : compare();
 }
@@ -808,8 +866,11 @@ async function loadDay(date) {
   render();
   await loadCounts();
   render();
+  warmTally();
   say(day.analyzedAt ? 'Updated ' + new Date(day.analyzedAt).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 }
+let tallyTry = false;
+async function warmTally() { if (tally || tallyTry) return; tallyTry = true; try { tally = await api('/api/tally'); if (S.tab === 'board') render(); } catch (e) {} }
 async function ensureTally() { if (!tally) { tally = await api('/api/tally'); } }
 
 /* ---------- Analyze / Update: one league at a time ---------- */
@@ -894,7 +955,8 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],.hd'); if (!t) return;
+  if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
