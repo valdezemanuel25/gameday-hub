@@ -1,6 +1,6 @@
 // Forebet pages: parsed from real saved page source (test/fixtures), matched to cards, filled before kickoff only.
 import fs from 'fs';
-import { parseForebetHtml, matchRows, forebetFetch, forebetStep, fbUrl, FB_PAGES } from '../src/forebetpage.js';
+import { fbHeaders, parseForebetHtml, matchRows, forebetFetch, forebetStep, fbUrl, FB_PAGES } from '../src/forebetpage.js';
 
 let pass = 0, fail = 0;
 const ok = (n, c, x = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${c ? '' : ' ' + x}`); };
@@ -82,6 +82,8 @@ ok('all nine league pages are set up', Object.keys(FB_PAGES).length === 13);
   ok('a page without attribute quotes reads the same games', plain !== quoted && a.length > 0 && JSON.stringify(a) === JSON.stringify(b));
 }
 
+ok('Serie A is the trial for browser-style headers', /Chrome\//.test(fbHeaders('ita.1')['user-agent']) && !!fbHeaders('ita.1').accept && !!fbHeaders('ita.1').referer);
+ok('other leagues still send the Hub identity', /gameday-hub/.test(fbHeaders('ger.1')['user-agent']));
 console.log(fail ? `\n${fail} Forebet page checks FAILED` : '\nAll Forebet page checks passed');
 { const { is } = await import('../src/forebetpage.js'); const { norm, sameTeam } = await import('../src/sportsmole.js');
   ok('FC Cologne (ESPN) matches Köln (Forebet, SportsMole)', is('1. FC Köln', 'FC Cologne') && is('Köln', 'FC Cologne') && sameTeam(norm('FC Cologne'), norm('fc-koln')));

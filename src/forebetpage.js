@@ -29,6 +29,20 @@ export const fbUrl = (slug, kind) => BASE + FB_PAGES[slug] + SUFFIX[kind];
 const ent = s => s.replace(/&#0?39;|&#x27;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').trim();
 const between = (s, a, b, from = 0) => { const i = s.indexOf(a, from); if (i < 0) return null; const j = i + a.length, k = s.indexOf(b, j); return k < 0 ? null : s.slice(j, k); };
 
+// Request headers. The default names the Hub; Serie A is a trial with a standard browser's headers, to see
+// whether Forebet's 403s are about how the request identifies itself. Widen BROWSER_STYLE if it works.
+const BROWSER_STYLE = new Set(['ita.1']);
+export function fbHeaders(slug) {
+  if (!BROWSER_STYLE.has(slug)) return { 'user-agent': 'Mozilla/5.0 (compatible; gameday-hub/1.0)', 'accept-language': 'en-US,en;q=0.9' };
+  return {
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'accept-language': 'en-US,en;q=0.9',
+    referer: BASE,
+    'upgrade-insecure-requests': '1',
+  };
+}
+
 // One row per match on the page: { home, away, date, p?, score?, pred? | over? | btts? }.
 // Each match sits in <div class="rcnt ...">. Cheap string scanning (the Worker has ~10 ms of CPU); rows before
 // `fromDate` (finished games further down the page) are skipped without being read.
@@ -112,7 +126,7 @@ export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = 
   if (!work.length) return { slug, kind, skipped: 'nothing to fill' };
   let res, html;
   try {
-    res = await fetchFn(url, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; gameday-hub/1.0)', 'accept-language': 'en-US,en;q=0.9' } });
+    res = await fetchFn(url, { headers: fbHeaders(slug) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     html = await res.text();
   } catch (e) {
