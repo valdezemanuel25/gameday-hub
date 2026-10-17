@@ -293,6 +293,31 @@ body{padding-top:56px}
 .tpk .tm u{text-decoration:none;font-size:10px;margin-left:4px}.tpk .tm span{color:var(--dim);font-weight:600}.tpk .tm span.hi{color:var(--grass)}
 .tpk .tr:first-of-type b{color:#6fe0a0}
 
+.tseg{display:flex;gap:6px;margin:10px 0 4px 4px;flex-wrap:wrap}
+.tseg button{flex:1 1 0;min-width:0;padding:9px 8px;border-radius:11px;border:1px solid var(--line);background:var(--panel);color:var(--dim);font:inherit;font-size:13px;font-weight:650;cursor:pointer;text-align:center}
+.tseg button i{font-style:normal;font-weight:500;color:var(--faint);margin-left:5px;font-size:12px}
+.tseg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}.tseg button.on i{color:inherit;opacity:.65}
+.tseg .tall{display:none}
+.tcols{display:grid;gap:12px;margin:8px 0 0 4px}
+.tcol{min-width:0}
+.tcol h3{margin:2px 2px 6px;font-size:12px;font-weight:700;color:var(--grass);display:flex;justify-content:space-between;align-items:baseline}
+.tcol h3 small{font-weight:500;color:var(--faint);font-size:11px}
+.tcol[hidden]{display:none}
+.trw{display:flex;flex-direction:column;border-radius:12px;background:var(--panel);border:1px solid var(--line);margin-bottom:6px;overflow:hidden}
+.tr2{display:grid;grid-template-columns:48px 1fr auto;gap:2px 9px;align-items:center;width:100%;text-align:left;padding:9px 11px;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
+.tr2 .pp{font-size:20px;font-weight:800;color:var(--grass);line-height:1}.tr2 .pp small{font-size:11px;font-weight:700;margin-left:1px}
+.tr2 .tx{min-width:0}.tr2 .tx b{display:block;font-size:13.5px;color:var(--ink);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr2 .tx small{display:block;font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tr2 .tx small.mt{color:var(--faint);font-size:11px}
+.tr2 .ag{font-size:11px;color:var(--dim);white-space:nowrap;text-align:right;line-height:1.35}.tr2 .ag u{text-decoration:none;color:var(--faint);margin-right:3px}.tr2 .ag .ok{color:var(--grass);font-weight:700}.tr2 .ag .no{color:#e0786f;font-weight:700}
+.trw.low .pp{color:var(--dim)}.trw.low{opacity:.78}.trw.top1{border-color:rgba(88,178,122,.5);background:rgba(88,178,122,.07)}
+.tmore{display:block;width:100%;margin:2px 0 8px;padding:8px;border-radius:10px;border:1px dashed var(--line);background:none;color:var(--dim);font:inherit;font-size:12px;cursor:pointer}
+.tnone{padding:12px;color:var(--faint);font-size:12.5px;border:1px dashed var(--line);border-radius:12px}
+@media (min-width:900px){
+  .tseg{max-width:560px}.tseg .tall{display:block}
+  .tcols.all{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (max-width:899px){.tcols.all .tcol:not(:first-child){display:none}.tseg .tall{display:none}}
+
 .xhl{display:flex;align-items:baseline;gap:7px;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid var(--line);font-size:13px;flex-wrap:wrap}
 .xhl .k{font-size:10.5px;font-weight:700;color:var(--faint)}.xhl b{color:var(--ink);font-weight:700}.xhl .p{margin-left:auto;font-weight:750;color:var(--grass)}
 .xhl .ag{font-size:11px;color:var(--dim);flex-basis:100%}.xhl .ag.all{color:var(--grass)}
@@ -333,9 +358,9 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const OUT = { H: 'home win', D: 'draw', A: 'away win' };
 const TZ = 'America/Chicago';
 let cfg = null, day = { cards: [] }, tally = null, cands = [];
-const S = { date: '', tab: 'board', league: 'all', top: false, open: null, fin: false };
-try { const f = JSON.parse(localStorage.getItem('hubFilter') || 'null'); if (f) { S.league = f.league || 'all'; S.top = !!f.top; } } catch (e) {}
-const keepFilter = () => { try { localStorage.setItem('hubFilter', JSON.stringify({ league: S.league, top: S.top })); } catch (e) {} };
+const S = { date: '', tab: 'board', league: 'all', top: false, open: null, fin: false, tm: 'all', more: {} };
+try { const f = JSON.parse(localStorage.getItem('hubFilter') || 'null'); if (f) { S.league = f.league || 'all'; S.top = !!f.top; if (f.tm) S.tm = f.tm; } } catch (e) {}
+const keepFilter = () => { try { localStorage.setItem('hubFilter', JSON.stringify({ league: S.league, top: S.top, tm: S.tm })); } catch (e) {} };
 const counts = {};
 try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); if (['board', 'results', 'compare', 'status'].includes(v.tab)) S.tab = v.tab; if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }
 const saveView = () => { try { localStorage.setItem('hubView', JSON.stringify({ tab: S.tab, league: S.league })); } catch (e) { /* ignore */ } };
@@ -371,6 +396,26 @@ function topBox(c) {
   const t = topPicks(c); if (!t.length) return '';
   const pc = n => n == null ? '' : `<span class="${n >= 55 ? 'hi' : ''}">${n}%</span>`;
   return `<div class="tpk"><div class="tl">Top ${t.length === 1 ? 'pick' : 'picks'}</div>${t.map(x => `<div class="tr"><b>${esc(x.label)}</b><span class="tm"><u>v2</u>${pc(x.p)}${x.v4 != null ? `<u>v4</u>${pc(x.v4)}` : ''}${x.fb != null ? `<u>FB</u>${pc(x.fb)}` : ''}</span></div>`).join('')}</div>`;
+}
+
+// Top picks view: one ranked list per market (winner, over/under, both teams score), highest probability first.
+const TMK = [['win', 'Winner', 55], ['ou', 'Over/Under', 62], ['btts', 'Both teams score', 62]];
+function topRows(c, m) {
+  const v = c.v2, f = c.fb || {}, v4 = c.v4 || {}, g = c.grade && c.grade.v2;
+  if (m === 'win') { const mx = Math.max(...v.p), i = v.p.indexOf(mx); return { p: mx, label: i === 1 ? 'Draw' : `${strip(i === 0 ? c.home : c.away)} to win`, v4: v4.p ? v4.p[i] : null, fb: f.p ? f.p[i] : null, hit: g ? g.outcomeHit : null }; }
+  const ov = m === 'ou', raw = ov ? v.over : v.btts, yes = raw >= 50, a = ov ? v4.over : v4.btts, b = ov ? f.over : f.btts, fl = x => x == null ? null : yes ? x : 100 - x;
+  return { p: yes ? raw : 100 - raw, label: ov ? (yes ? 'Over 2.5' : 'Under 2.5') : (yes ? 'BTTS yes' : 'BTTS no'), v4: fl(a), fb: fl(b), hit: g ? (ov ? g.ouHit : g.bttsHit) : null };
+}
+function topView(cs) {
+  const m = S.tm, cols = TMK.filter(([k]) => m === 'all' || m === k);
+  const body = cols.map(([k, name, thr]) => {
+    const all = cs.map(c => ({ c, ...topRows(c, k) })).sort((x, y) => y.p - x.p), q = all.filter(x => x.p >= thr), rest = all.filter(x => x.p < thr), more = !!S.more[k];
+    const row = (x, i, low) => `<div class="trw ${low ? 'low' : ''} ${!low && i === 0 ? 'top1' : ''}"><button type="button" class="hd tr2" data-id="${esc(x.c.id)}" aria-expanded="${S.open === x.c.id}"><span class="pp">${x.p}<small>%</small></span><span class="tx"><b>${esc(x.label)}</b><small>${esc(strip(x.c.home))} vs ${esc(strip(x.c.away))}</small><small class="mt">${esc(LCODE[x.c.leagueKey] || '')} · ${esc(x.c.ko)}</small></span><span class="ag">${x.hit != null ? `<span class="${x.hit ? 'ok' : 'no'}">${x.hit ? '✓' : '✗'}</span> ` : ''}${x.v4 != null ? `<u>v4</u>${x.v4}%` : ''}${x.fb != null ? `<br><u>FB</u>${x.fb}%` : ''}</span></button>${S.open === x.c.id ? `<div class="m x open">${expanded(x.c)}</div>` : ''}</div>`;
+    return `<section class="tcol"><h3>${name}<small>${thr}%+ · ${q.length} ${q.length === 1 ? 'game' : 'games'}</small></h3>${q.length ? q.map((x, i) => row(x, i, false)).join('') : `<div class="tnone">Nothing at ${thr}% or more today.</div>`}${rest.length ? `<button type="button" class="tmore" data-more="${k}">${more ? 'Hide' : 'Show'} ${rest.length} below ${thr}%</button>${more ? rest.map(x => row(x, 1, true)).join('') : ''}` : ''}</section>`;
+  }).join('');
+  const cnt = k => { const thr = TMK.find(t => t[0] === k)[2]; return cs.filter(c => topRows(c, k).p >= thr).length; };
+  const seg = `<div class="tseg"><button type="button" class="tall ${m === 'all' ? 'on' : ''}" data-tm="all">All three</button>${TMK.map(([k, n]) => `<button type="button" class="${m === k ? 'on' : ''}" data-tm="${k}">${k === 'btts' ? 'BTTS' : n}<i>${cnt(k)}</i></button>`).join('')}</div>`;
+  return seg + `<div class="tcols ${m === 'all' ? 'all' : ''}">${body}</div>`;
 }
 const nowCT = () => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date());
 
@@ -584,8 +629,8 @@ function board() {
   if (!day.cards.length) return chips + `<div class="empty">No games analyzed for this day yet.<br>Tap <b>Analyze this day</b> below to load the fixtures and predictions.</div>`;
   if (S.league !== 'all') cs = cs.filter(c => c.leagueKey === S.league);
   const uncShown = S.top ? [] : unc.filter(c => S.league === 'all' || c.leagueKey === S.league);
-  if (S.top) cs = cs.filter(isTop);
   if (!cs.length) return chips + `<div class="empty">No games with a prediction match this filter.</div>` + uncovered(uncShown);
+  if (S.top) return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + topView(cs) + `</div></div>`;
   if (S.top) cs.sort((a, b) => Math.max(...topPicks(b).map(x => x.p), 0) - Math.max(...topPicks(a).map(x => x.p), 0));
   else cs.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
   const ended = c => c.final || Date.now() > new Date(c.kickoff).getTime() + GAME_MS; // finished, or long enough past kickoff that the result is just pending
@@ -983,7 +1028,9 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-more],.hd'); if (!t) return;
+  if (t.dataset.tm) { S.tm = t.dataset.tm; keepFilter(); return render(); }
+  if (t.dataset.more) { S.more[t.dataset.more] = !S.more[t.dataset.more]; return render(); }
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
