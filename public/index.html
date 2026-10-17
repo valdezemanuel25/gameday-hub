@@ -318,6 +318,16 @@ body{padding-top:56px}
 }
 @media (max-width:899px){.tcols.all .tcol:not(:first-child){display:none}.tseg .tall{display:none}}
 
+.asg{padding:10px 11px 8px}.asg .ah{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.asg .ah b{font-size:14px;color:var(--ink)}.asg .ah small{color:var(--faint);font-size:11.5px;white-space:nowrap}
+.asg .src2{margin-top:8px;padding-top:7px;border-top:1px solid var(--line)}
+.asg .sl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--dim)}.asg .sl b{color:var(--ink);font-size:12px;min-width:68px}
+.asg .pl{padding:2px 8px;border-radius:99px;border:1px solid var(--line);font-size:11px;font-weight:650;color:var(--faint)}.asg .pl.y{color:var(--grass);border-color:rgba(88,178,122,.45)}.asg .pl.w{color:var(--amber);border-color:#5b4a22}
+.asg .why{display:block;font-size:11.5px;color:var(--faint);margin-top:3px}
+.asg .box.cand{margin:6px 0 0}
+.asg.has{border-color:#5b4a22}
+.asgd{margin:14px 0 6px 4px;font-size:12px;font-weight:700;color:var(--grass)}
+
 .xhl{display:flex;align-items:baseline;gap:7px;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid var(--line);font-size:13px;flex-wrap:wrap}
 .xhl .k{font-size:10.5px;font-weight:700;color:var(--faint)}.xhl b{color:var(--ink);font-weight:700}.xhl .p{margin-left:auto;font-weight:750;color:var(--grass)}
 .xhl .ag{font-size:11px;color:var(--dim);flex-basis:100%}.xhl .ag.all{color:var(--grass)}
@@ -417,6 +427,51 @@ function topView(cs) {
   const seg = `<div class="tseg"><button type="button" class="tall ${m === 'all' ? 'on' : ''}" data-tm="all">All three</button>${TMK.map(([k, n]) => `<button type="button" class="${m === k ? 'on' : ''}" data-tm="${k}">${k === 'btts' ? 'BTTS' : n}<i>${cnt(k)}</i></button>`).join('')}</div>`;
   return seg + `<div class="tcols ${m === 'all' ? 'all' : ''}">${body}</div>`;
 }
+/* ---------- assign tab: first-division games still waiting for a Forebet or SportsMole prediction ---------- */
+const FIRST = new Set(['eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1', 'usa.1', 'mex.1', 'bra.1']);
+let asg = null;
+async function loadAssign() {
+  const ds = [0, 1, 2].map(o => addDays(S.date, o)), days = [], items = [];
+  await Promise.all([...ds.map(async d => {
+    try { days.push({ date: d, cards: (await api('/api/day?date=' + d)).cards || [] }); } catch (e) { /* skipped */ }
+    try { items.push(...((await api('/api/candidates?date=' + d)).items || [])); } catch (e) { /* skipped */ }
+  }), (async () => { try { stat = await api('/api/status'); } catch (e) { /* the notes just say less */ } })()]);
+  asg = { days: days.sort((a, b) => a.date.localeCompare(b.date)), items };
+}
+function asgWhy(c, kinds) { // what the last Forebet read of this league said, for the tables this game is still missing
+  const l = (stat && stat.leagues || []).find(x => x.slug === c.league), out = [];
+  if (!l || !l.fb) return '';
+  for (const k of kinds) { const m = l.fb[k]; out.push(!m ? `${KN[k]} table not read yet` : m.ok ? `${KN[k]} table read ${ago(m.at)}, this game was not in it` : `${KN[k]} table blocked (${esc(errCode(m.msg))})`); }
+  return out.join(' · ');
+}
+function asgView() {
+  if (!asg) return `<div class="empty">Loading…</div>`;
+  const now = Date.now(), f = S.af || 'all', rows = [];
+  for (const d of asg.days) for (const c of d.cards) {
+    if (!FIRST.has(c.league) || c.final || new Date(c.kickoff).getTime() <= now) continue;
+    const have = { '1x2': !!(c.fb && c.fb.p), ou: !!(c.fb && c.fb.over != null), btts: !!(c.fb && c.fb.btts != null) }, miss = Object.keys(have).filter(k => !have[k]), smMiss = !c.sm;
+    if (!miss.length && !smMiss) continue;
+    rows.push({ d: d.date, c, have, miss, smMiss, cs: asg.items.filter(i => i.cardId === c.id && i.date === d.date) });
+  }
+  const shown = rows.filter(r => f === 'fb' ? r.miss.length : f === 'sm' ? r.smMiss : true);
+  const nF = rows.filter(r => r.miss.length).length, nS = rows.filter(r => r.smMiss).length;
+  const seg = `<div class="tseg"><button type="button" class="${f === 'all' ? 'on' : ''}" data-af="all">All<i>${rows.length}</i></button><button type="button" class="${f === 'fb' ? 'on' : ''}" data-af="fb">Forebet<i>${nF}</i></button><button type="button" class="${f === 'sm' ? 'on' : ''}" data-af="sm">SportsMole<i>${nS}</i></button></div>`;
+  const head = `<div class="small" style="margin:8px 4px 0">First-division games that have not started and are still missing a Forebet or SportsMole prediction, for the next 3 days. Games where the Hub found a possible match are first: check the teams, then tap Use.</div>`;
+  if (!shown.length) return head + seg + `<div class="empty">Nothing waiting. Every first-division game in the next 3 days has its ${f === 'fb' ? 'Forebet' : f === 'sm' ? 'SportsMole' : 'Forebet and SportsMole'} prediction.</div>`;
+  shown.sort((a, b) => (b.cs.length ? 1 : 0) - (a.cs.length ? 1 : 0) || new Date(a.c.kickoff) - new Date(b.c.kickoff));
+  const cbox = (r, list) => list.length ? `<div class="box cand">${list.map(i => `<div class="cr"><span>${i.src === 'fb' ? esc(KN[i.kind] || '') + ': ' : ''}${esc(i.title)}</span><button type="button" data-assign="${esc(i.key)}" data-card="${esc(r.c.id)}" data-date="${r.d}" data-lg="${esc(r.c.league)}">Use</button><button type="button" class="no" data-assign="${esc(i.key)}" data-card="${esc(r.c.id)}" data-date="${r.d}" data-lg="${esc(r.c.league)}" data-dismiss="1" aria-label="Not this game">✕</button></div>`).join('')}</div>` : '';
+  const dayName = d => d === cfg.today ? 'Today' : d === addDays(cfg.today, 1) ? 'Tomorrow' : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  let html = '', last = '';
+  for (const r of shown) {
+    const c = r.c, fbs = r.cs.filter(i => i.src === 'fb'), sms = r.cs.filter(i => i.src === 'sm');
+    if (r.d !== last && !shown.some(x => x.cs.length)) { html += `<div class="asgd">${esc(dayName(r.d))}</div>`; last = r.d; }
+    const fbLine = r.miss.length ? `<div class="src2"><div class="sl"><b>Forebet</b>${[['1x2', '1X2'], ['ou', 'O/U'], ['btts', 'Both']].map(([k, n]) => `<span class="pl ${r.have[k] ? 'y' : 'w'}">${n} ${r.have[k] ? '✓' : 'waiting'}</span>`).join('')}</div>${cbox(r, fbs)}${fbs.length ? '' : `<span class="why">${asgWhy(c, r.miss) || 'No Forebet table for this league.'}</span>`}</div>` : '';
+    const smLine = r.smMiss ? `<div class="src2"><div class="sl"><b>SportsMole</b><span class="pl w">waiting</span></div>${cbox(r, sms)}${sms.length ? '' : `<span class="why">${stat && (stat.leagues.find(l => l.slug === c.league) || {}).sm && stat.leagues.find(l => l.slug === c.league).sm.tried ? `Last looked ${ago(stat.leagues.find(l => l.slug === c.league).sm.tried)}, no page found for this game yet.` : 'Not looked for yet.'}</span>`}</div>` : '';
+    html += `<div class="trw asg ${r.cs.length ? 'has' : ''}"><div class="ah"><b>${esc(strip(c.home))} vs ${esc(strip(c.away))}</b><small>${esc(LCODE[c.leagueKey] || '')} · ${shown.some(x => x.cs.length) ? esc(dayName(r.d)) + ', ' : ''}${esc(c.ko)}</small></div>${fbLine}${smLine}</div>`;
+  }
+  return head + seg + `<div class="tcols" style="display:block">${html}</div>`;
+}
+
 const nowCT = () => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date());
 
 /* ---------- one game ---------- */
@@ -920,13 +975,13 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status']].map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status'], ['assign', 'Assign']].map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function render() {
   keepFilter();
   renderHeader();
-  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : compare();
+  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : compare();
 }
 async function loadCounts() {
   const ds = [-2, -1, 0, 1, 2].map(o => addDays(S.date, o)).filter(d => counts[d] == null || d === S.date);
@@ -1012,10 +1067,12 @@ document.addEventListener('click', async e => {
   }
   const as = e.target.closest('[data-assign]');
   if (as) {
-    const c = day.cards.find(x => x.id === as.dataset.card); if (!c) return;
+    const onAsg = S.tab === 'assign', dt = as.dataset.date || S.date, c = onAsg ? { id: as.dataset.card, league: as.dataset.lg } : day.cards.find(x => x.id === as.dataset.card); if (!c) return;
     as.disabled = true;
-    try { const r = await post('/api/assign', { date: S.date, league: c.league, id: c.id, key: as.dataset.assign, dismiss: !!as.dataset.dismiss }); if (r.error) throw new Error(r.error);
-      say(r.dismissed ? 'Suggestion removed.' : `Assigned: ${r.title}`, true); delete counts[S.date]; tally = null; await loadDay(); S.open = c.id; render(); }
+    try { const r = await post('/api/assign', { date: dt, league: c.league, id: c.id, key: as.dataset.assign, dismiss: !!as.dataset.dismiss }); if (r.error) throw new Error(r.error);
+      say(r.dismissed ? 'Suggestion removed.' : `Assigned: ${r.title}`, true); delete counts[dt]; tally = null;
+      if (onAsg) { await loadAssign(); return render(); }
+      await loadDay(); S.open = c.id; render(); }
     catch (er) { say(er.message); as.disabled = false; }
     return;
   }
@@ -1028,14 +1085,15 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-more],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],.hd'); if (!t) return;
+  if (t.dataset.af) { S.af = t.dataset.af; return render(); }
   if (t.dataset.tm) { S.tm = t.dataset.tm; keepFilter(); return render(); }
   if (t.dataset.more) { S.more[t.dataset.more] = !S.more[t.dataset.more]; return render(); }
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
-    if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
+    if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
   if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
   if (t.classList.contains('hd')) { S.open = S.open === t.dataset.id ? null : t.dataset.id; return render(); }
