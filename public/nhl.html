@@ -107,6 +107,13 @@ h4{margin:20px 18px 6px;font-size:14px}
 .xh .cfx.sp{background:rgba(255,230,0,.12);border-color:#ffe600;color:#ffe600;box-shadow:0 0 10px rgba(255,230,0,.5),inset 0 0 6px rgba(255,230,0,.18);text-shadow:0 0 6px rgba(255,230,0,.55)}
 .cr.win{box-shadow:0 0 0 2px var(--s),0 0 0 4px #38b6ff,0 0 14px rgba(56,182,255,.7)}
 .ag.gl{background:rgba(56,182,255,.14);color:#8fd4ff}
+.lnc{margin-left:8px;font-size:11px;font-weight:700;color:var(--blue)}.lnc.none{color:var(--faint);font-weight:600}
+.lnb{margin-left:8px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);background:none;color:var(--mut);font-size:11px;font-weight:650}
+.lnrow{display:flex;align-items:center;gap:8px;margin:8px 0 2px;flex-wrap:wrap}.lnrow label{font-size:12px;color:var(--mut)}
+.lnrow input{width:74px;padding:7px 8px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
+.lnrow .sm{padding:7px 13px;font-size:12.5px}.lnrow .ghost{background:none;border:1px solid var(--line);color:var(--mut)}
+.mt .o b{display:block}.mt .o .l2{display:block;font-size:12.5px;color:var(--ink);font-weight:650;margin-top:1px}.mt .o.hi .l2{color:#9ec1ff}
+.mt .o .l2 .sc3{display:block;margin:1px 0 0}
 .mt .o .sc3{color:var(--faint);font-size:11px;margin-left:3px}
 .sp+.ml{margin-top:11px}</style>
 </head>
@@ -115,7 +122,7 @@ h4{margin:20px 18px 6px;font-size:14px}
 <div class="wrap">
   <div class="top">
     <div class="title">NHL <span>Model</span></div>
-    <div class="sub">Winner and Over/Under 5.5 only. Overtime and shootout wins count. Times are Central.</div>
+    <div class="sub">Winner and Over/Under at the sportsbook line (5.5 when no line is known). Overtime and shootout wins count. Times are Central.</div>
     <div class="days" id="days"></div>
   </div>
   <div class="tabs" id="tabs"></div>
@@ -139,7 +146,7 @@ function pickOu(m) { const o = m.o >= 50; return { side: o ? 'Over' : 'Under', p
 function modelRow(label, m, c, g) {
   if (!m) return `<div class="g r"><div class="n">${label}</div><div class="p">No pick</div><div class="p">No pick</div></div>`;
   const w = pickWin(m, c), o = pickOu(m);
-  return `<div class="g r"><div class="n">${label}</div><div class="p${w.strong ? ' hi' : ''}"><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div><div class="p${o.strong ? ' hi' : ''}"><b>${o.side} ${o.p}%</b>${mark(g && g.ou)}</div></div>`;
+  return `<div class="g r"><div class="n">${label}</div><div class="p${w.strong ? ' hi' : ''}"><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div><div class="p${o.strong ? ' hi' : ''}"><b>${o.side} ${lineOf(c)} ${o.p}%</b>${mark(g && g.ou)}</div></div>`;
 }
 function fbRow(c, g) {
   const f = c.fb;
@@ -148,7 +155,7 @@ function fbRow(c, g) {
   const sc = f.score ? `<b>${esc(c.aAbbr)} ${f.score.a} – ${f.score.h} ${esc(c.hAbbr)}</b>` : 'No score';
   return `<div class="g r"><div class="n">Forebet</div><div class="p${f.pick ? ' hi' : ''}">${w}</div><div class="p">${sc}</div></div>`;
 }
-const LINE = 5.5;
+const LINE = 5.5, lineOf = c => c.ln ? c.ln.v : LINE;
 const TC={ANA:'#F47A38',BOS:'#FFB81C',BUF:'#3f7be0',CGY:'#D2001C',CAR:'#E0202e',CHI:'#E0283f',COL:'#9a3f66',CBJ:'#2f64b8',DAL:'#1c9a6a',DET:'#E0283f',EDM:'#FF6a1f',FLA:'#D8203e',LAK:'#8f979a',MIN:'#2f8a64',MTL:'#C0283a',NSH:'#FFB81C',NJD:'#E0283f',NYI:'#2f78c8',NYR:'#3469d8',OTT:'#D03045',PHI:'#F76a2b',PIT:'#E8AE1c',SJS:'#1a8f98',SEA:'#6fc3c9',STL:'#3a6bd0',TBL:'#3a6bc9',TOR:'#3a68c4',UTA:'#6CACE4',VAN:'#1c9a58',VGK:'#B4975A',WSH:'#D8203e',WPG:'#3f67aa'};
 const tcol = a => TC[a] || '#4c8dff';
 const crest = (a, win) => `<i class="cr${win ? ' win' : ''}" style="--tc:${tcol(a)}">${esc(a)}</i>`;
@@ -159,19 +166,19 @@ function tile(label, m, c, g, kind) {
     const side = m.pick, p = m.p && side ? (side === 'H' ? m.p[0] : m.p[1]) : null;
     return `<div class="mt${side ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${side ? esc(side === 'H' ? c.hAbbr : c.aAbbr) : '–'}${p ? ' ' + p + '%' : ''}</b>${mark(g && g.win)}</div>
       <div class="cf"><i style="width:${p ? Math.max(0, (p - 50) * 2) : 0}%"></i></div>
-      <div class="o">${m.score ? (() => { const tot = m.score.a + m.score.h, ov = tot > LINE; return `<b>${ov ? 'Over' : 'Under'}</b><span class="sc3">${m.score.a}–${m.score.h}</span>${mark(g && g.ou)}`; })() : 'No score'}</div></div>`;
+      <div class="o">${m.score ? (() => { const tot = m.score.a + m.score.h, ln = lineOf(c); return `<b>${tot === ln ? 'Push' : tot > ln ? 'Over' : 'Under'} ${ln}</b><span class="l2">${m.score.a}–${m.score.h}${mark(g && g.ou)}</span>`; })() : 'No score'}</div></div>`;
   }
   const w = pickWin(m, c), o = pickOu(m);
   return `<div class="mt${w.strong ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div>
     <div class="cf"><i style="width:${Math.max(0, (w.p - 50) * 2)}%"></i></div>
-    <div class="o${o.strong ? ' hi' : ''}"><b>${o.side} ${o.p}%</b>${mark(g && g.ou)}</div></div>`;
+    <div class="o${o.strong ? ' hi' : ''}"><b>${o.side} ${lineOf(c)}</b><span class="l2">${o.p}%${mark(g && g.ou)}${m.push ? `<span class="sc3">push ${m.push}%</span>` : ''}</span></div></div>`;
 }
 function sidesOf(c) { return [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), c.fb && c.fb.pick].filter(Boolean); }
 function consensus(c) { const p = sidesOf(c); return { n: p.length, same: p.length >= 3 && p.every(x => x === p[0]), side: p[0], split: p.length >= 2 && !p.every(x => x === p[0]) }; }
 function goalsPill(c) {
-  const vals = [c.v2 ? c.v2.o >= 50 : null, c.v4 ? c.v4.o >= 50 : null, c.fb && c.fb.score ? (c.fb.score.a + c.fb.score.h) > LINE : null].filter(x => x !== null);
-  if (vals.length < 3) return '';
-  return vals.every(Boolean) ? '<div class="ag gl">All say Over 5.5</div>' : vals.every(x => !x) ? '<div class="ag gl">All say Under 5.5</div>' : '';
+  const ln = lineOf(c), vals = [c.v2 ? c.v2.o >= 50 : null, c.v4 ? c.v4.o >= 50 : null, c.fb && c.fb.score ? (c.fb.score.a + c.fb.score.h) > ln : null].filter(x => x !== null);
+  if (vals.length < 3 || (c.fb && c.fb.score && c.fb.score.a + c.fb.score.h === ln)) return '';
+  return vals.every(Boolean) ? `<div class="ag gl">All say Over ${ln}</div>` : vals.every(x => !x) ? `<div class="ag gl">All say Under ${ln}</div>` : '';
 }
 function card(c) {
   const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
@@ -182,10 +189,13 @@ function card(c) {
     <div class="bar"><i class="${hf ? '' : 'fav'}" style="flex:${ap};--c:${tcol(c.aAbbr)}"></i><i class="${hf ? 'fav' : ''}" style="flex:${hp};--c:${tcol(c.hAbbr)}"></i></div></div>`;
   const all = c.v2 && c.v4 && c.fb, cs = consensus(c);
   const lab = cs.same ? '<span class="cfx s">Consensus</span>' : cs.split ? '<span class="cfx sp">Split</span>' : '';
-  return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL</span>${lab}</div><div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
+  const ln = lineOf(c), pre = !f && new Date(c.kickoff).getTime() > Date.now();
+  const lnc = `<span class="lnc${c.ln ? '' : ' none'}">O/U ${ln}${c.ln ? ' · ' + esc(c.ln.src || 'sportsbook') : ' · no line yet'}</span>`;
+  const lnrow = pre && S.ln === c.id ? `<div class="lnrow"><label>Total line</label><input type="number" inputmode="decimal" step="0.5" min="3.5" max="9.5" id="ln-${esc(c.id)}" value="${ln}"><button type="button" class="btn sm" data-saveln="${esc(c.id)}">Save</button>${c.ln && c.ln.how === 'manual' ? `<button type="button" class="btn sm ghost" data-clrln="${esc(c.id)}">Use ESPN</button>` : ''}<button type="button" class="btn sm ghost" data-setln="">Cancel</button></div>` : '';
+  return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
   ${split}${goalsPill(c)}
   <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>
-  <div class="note">${f ? `Total ${f.total} · graded at 5.5` : c.skipped ? esc(c.skipped) : 'Top row: winner pick. Bottom row: Over/Under 5.5 (Forebet: predicted score). Blue marks a confident pick.'}</div></div>`;
+  <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Top row: winner pick. Bottom row: Over/Under ${ln}${c.ln ? '' : ', the default until a line is known'} (Forebet: predicted score). Blue marks a confident pick.`}</div></div>`;
 }
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
@@ -219,13 +229,13 @@ function results() {
   const bb = B.brier.n ? (B.brier.v4 < B.brier.v2 ? [ '', ' class="best"', '' ] : B.brier.v2 < B.brier.v4 ? [' class="best"', '', ''] : ['', '', '']) : ['', '', ''];
   return `${seg}<table><tr><th></th><th>v2</th><th>v4 shadow</th><th>Forebet</th></tr>
   <tr><td>Winner</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.win[k], 'win', bw[i])).join('')}</tr>
-  <tr><td>Over/Under 5.5</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}</tr>
+  <tr><td>Over/Under at the line</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}</tr>
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
-  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Forebet's Over/Under is taken from its predicted score: a total of 6 or more counts as Over 5.5. Market odds are never used.</div>
+  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Over/Under is graded at each game's sportsbook line (5.5 for the ${tally.graded - (tally.lined || 0)} games saved before lines were kept; ${tally.lined || 0} graded at a real line so far). A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
-    const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${m.o >= 50 ? 'Over' : 'Under'}${mark(g && g.ou)}` : '–';
+    const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${m.o >= 50 ? 'Over' : 'Under'} ${r.ln ? r.ln.v : LINE}${mark(g && g.ou)}` : '–';
     const c = { h: r.hAbbr, a: r.aAbbr };
-    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.score ? r.fb.score.a + '–' + r.fb.score.h + ' ' + (r.fb.score.a + r.fb.score.h > 5.5 ? 'Over' : 'Under') + mark(gr.fb && gr.fb.ou) : '–'}` : '–';
+    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.score ? r.fb.score.a + '–' + r.fb.score.h + ' ' + (r.fb.score.a + r.fb.score.h === (r.ln ? r.ln.v : LINE) ? 'Push' : r.fb.score.a + r.fb.score.h > (r.ln ? r.ln.v : LINE) ? 'Over' : 'Under') + mark(gr.fb && gr.fb.ou) : '–'}` : '–';
     return `<div class="rg"><b>${esc(r.aAbbr)} @ ${esc(r.hAbbr)}</b><span>${f.a}–${f.h}${f.last !== 'REG' ? ' ' + f.last : ''}</span><span>${one(r.v2, gr.v2, c)}</span><span>${one(r.v4, gr.v4, c)}</span><span>${fb}</span></div>`;
   }).join('')}</div>`;
 }
@@ -237,7 +247,7 @@ function statusView() {
   <div class="kv"><span>Teams rated</span><span>${status.teams}</span></div>
   <div class="kv"><span>Forebet last read</span><span>${fb ? (fb.ok ? `${fb.rows} games, ${fb.saved} saved` : 'failed') : 'not yet'}</span></div>
   ${fb && fb.msg ? `<div class="note">${esc(fb.msg)}</div>` : ''}
-  <div class="note">Backtest on 2,428 games from 3 seasons: winner picks hit about 55% (v2) and 56% (v4) against 54% for always picking the home team. Over/Under 5.5 only beats the 55% Over rate when the model is confident. Goalie ratings did not help, so they are not used yet.</div></div></div>`;
+  <div class="note">Backtest on 2,428 games from 3 seasons: winner picks hit about 55% (v2) and 56% (v4) against 54% for always picking the home team. Over/Under at 5.5 only beat the 55% Over rate when the model was confident. Goalie ratings did not help, so they are not used yet.</div></div></div>`;
 }
 function renderDays() {
   const t = fmt(new Date()), list = [[addDays(t, -1), 'Yesterday'], [t, 'Today'], [addDays(t, 1), 'Tomorrow']];
@@ -251,7 +261,15 @@ async function load() {
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run'); if (!t) return;
+  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,[data-setln],[data-saveln],[data-clrln]'); if (!t) return;
+  if (t.dataset.setln !== undefined) { S.ln = t.dataset.setln || null; return render(); }
+  if (t.dataset.saveln || t.dataset.clrln) {
+    const id = t.dataset.saveln || t.dataset.clrln, v = t.dataset.clrln ? null : document.getElementById('ln-' + id).value;
+    t.disabled = true;
+    try { const r = await (await fetch('/api/nhl/line', { method: 'POST', body: JSON.stringify({ date: S.date, id, line: v }) })).json(); if (r.error) throw new Error(r.error); S.ln = null; $('#st').textContent = v == null ? 'Back to the ESPN line.' : 'Line saved: the Over/Under ratings now use ' + v + '.'; await load(); }
+    catch (er) { $('#st').textContent = er.message; t.disabled = false; }
+    return;
+  }
   if (t.dataset.d) { S.date = t.dataset.d; await load(); }
   else if (t.dataset.tab) { S.tab = t.dataset.tab; render(); }
   else if (t.dataset.sc) { S.scope = t.dataset.sc; render(); }

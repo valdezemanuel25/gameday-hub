@@ -9,7 +9,7 @@ import { forebetStep, forebetFetch, FB_PAGES, matchRows, is as isName } from './
 import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
-import { nhlStep, nhlTally, nhlStatus } from './nhl.js';
+import { nhlStep, nhlTally, nhlStatus, nhlSetLine } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
 const json = (data, status = 200) =>
@@ -565,6 +565,7 @@ const hub = {
     if (req.method === 'POST' && p === '/api/assign') { try { const b = await req.json(); const lg = leagueBySlug(String(b.league || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ ok: true, ...(await assignCandidate(String(b.date || ''), lg.slug, String(b.id || ''), String(b.key || ''), env, new Date(), { dismiss: !!b.dismiss })) }); } catch (e) { return json({ error: `Assign: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/day') { const date = q('date') || today(); return json((await env.HUB.get(`nhl:day:${date}`, 'json')) || { date, cards: [] }); }
     if (p === '/api/nhl/tally') return json(await nhlTally(env));
+    if (req.method === 'POST' && p === '/api/nhl/line') { try { const b = await req.json(); return json(await nhlSetLine(env, String(b.date || ''), String(b.id || ''), b.line, new Date())); } catch (e) { return json({ error: `Line: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/status') return json(await nhlStatus(env));
     if (req.method === 'POST' && p === '/api/nhl/run') { try { return json({ ok: true, ...(await nhlStep(env, new Date(), fetch, { force: true })) }); } catch (e) { return json({ error: `NHL: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/days') { // every saved day, for the Export button

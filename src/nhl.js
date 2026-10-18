@@ -1,6 +1,8 @@
 // NHL section: separate from soccer (own storage keys, own page, own model code).
 //   v2  = Poisson goals model (official).      v4 = shadow: Elo + xG-rate blend (tracked only).
-//   Forebet = recorded and graded only. Market odds are never read. Lines: Over/Under 5.5 only.
+//   Forebet = recorded and graded only. No model reads market odds. The one market number kept is the sportsbook's Over/Under
+//   total (ESPN's odds block, DraftKings): it is only the line that Over/Under is rated and graded against, and it never changes
+//   what the model expects. Until a line is known a game uses 5.5.
 // Storage: nhl:state (ratings, one write per batch of finished games), nhl:day:<date> (cards), nhl:fbmeta.
 import SEED from './nhlseed.js';
 import { fbHeaders, FB_HV } from './forebetpage.js';
@@ -21,23 +23,26 @@ const round = x => Math.round(x * 100);
 
 // ---- model -------------------------------------------------------------------------------------
 function pois(l, n = 16) { const p = [Math.exp(-l)]; for (let k = 1; k < n; k++) p.push(p[k - 1] * l / k); return p; }
-// P(home wins incl. overtime / shootout; a regulation tie is split 50/50) and P(total goals >= 6).
-export function probs(lh, la) {
-  const ph = pois(lh), pa = pois(la); let win = 0, tie = 0, over = 0;
+// P(home wins incl. overtime / shootout; a regulation tie is split 50/50), and for a total-goals line: P(over), P(exactly on the line)
+// (only a whole-number line can push) and P(under). At 5.5 over means 6 or more goals.
+export function probs(lh, la, line = LINE) {
+  const ph = pois(lh), pa = pois(la); let win = 0, tie = 0, over = 0, push = 0;
   for (let i = 0; i < ph.length; i++) for (let j = 0; j < pa.length; j++) {
     const x = ph[i] * pa[j];
     if (i > j) win += x; else if (i === j) tie += x;
-    if (i + j >= 6) over += x;
+    if (i + j > line) over += x; else if (i + j === line) push += x;
   }
-  return { home: win + tie * 0.5, over };
+  return { home: win + tie * 0.5, over, push, under: 1 - over - push };
 }
+// Over chance with a push taken out: the chance of Over among games that do not land exactly on the line.
+const ovr = pr => pr.over / Math.max(1e-9, pr.over + pr.under);
 export const freshState = () => JSON.parse(JSON.stringify({
   v: 1, through: SEED.through, ver: 0, applied: [],
   lg: { n: SEED.lg.n, g: SEED.lg.g, x: SEED.lg.x, nx: SEED.lg.n },
   plg: SEED.plg, plgx: SEED.plgx,
   teams: Object.fromEntries(Object.entries(SEED.teams).map(([t, s]) => [t, { ...s, nx: s.n }])),
 }));
-export function predict(S, hc, ac) {
+export function predict(S, hc, ac, line = LINE) {
   const H = S.teams[hc], A = S.teams[ac];
   if (!H || !A) return null;
   const L = S.lg.n > 20 ? S.lg.g / S.lg.n / 2 : S.plg;
@@ -46,15 +51,15 @@ export function predict(S, hc, ac) {
   const gAdj = t => GOALIE_W * (t.g || 0) * 29;
   const lh = Math.max(0.5, L * (rate(H, 'gf', 'pgf', L, H.n) / L) * (rate(A, 'ga', 'pga', L, A.n) / L) * HOME - gAdj(A));
   const la = Math.max(0.5, L * (rate(A, 'gf', 'pgf', L, A.n) / L) * (rate(H, 'ga', 'pga', L, H.n) / L) / HOME - gAdj(H));
-  const p2 = probs(lh, la);
+  const p2 = probs(lh, la, line);
   const sc = L / LX;
   const xlh = Math.max(0.5, LX * (rate(H, 'xf', 'pxf', LX, H.nx) / LX) * (rate(A, 'xa', 'pxa', LX, A.nx) / LX) * HOME * sc - gAdj(A));
   const xla = Math.max(0.5, LX * (rate(A, 'xf', 'pxf', LX, A.nx) / LX) * (rate(H, 'xa', 'pxa', LX, H.nx) / LX) / HOME * sc - gAdj(H));
-  const px = probs(xlh, xla);
+  const px = probs(xlh, xla, line);
   const pe = 1 / (1 + Math.pow(10, -(H.elo + 35 - A.elo) / 400));
   const w4 = 0.4 * pe + 0.3 * px.home + 0.3 * p2.home;
-  const o4 = probs(0.5 * lh + 0.5 * xlh, 0.5 * la + 0.5 * xla).over;
-  return { v2: { w: round(p2.home), o: round(p2.over) }, v4: { w: round(w4), o: round(o4) }, lam: [+lh.toFixed(2), +la.toFixed(2)] };
+  const p4 = probs(0.5 * lh + 0.5 * xlh, 0.5 * la + 0.5 * xla, line);
+  return { v2: { w: round(p2.home), o: round(ovr(p2)), ...(p2.push > 0.0005 ? { push: round(p2.push) } : {}) }, v4: { w: round(w4), o: round(ovr(p4)), ...(p4.push > 0.0005 ? { push: round(p4.push) } : {}) }, lam: [+lh.toFixed(2), +la.toFixed(2)] };
 }
 // A finished game moves the ratings (goals and Elo). xG is not in ESPN's feed, so xG rates stay as seeded.
 export function applyGame(S, hc, ac, h, a, last) {
@@ -120,7 +125,9 @@ async function scoreboard(date, fetchFn, debug) {
       if (!h || !a) continue;
       const t = comp.status?.type || {}, done = !!t.completed;
       const det = String(t.shortDetail || t.detail || ''), last = /SO/.test(det) ? 'SO' : /OT/.test(det) ? 'OT' : 'REG';
-      out.push({ id: String(ev.id), date: ev.date, done, last, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
+      // Only the Over/Under total is taken from the odds block (the sportsbook line); spreads and moneylines are ignored.
+      const od = (comp.odds || []).find(o => Number.isFinite(Number(o.overUnder)) && Number(o.overUnder) >= 3.5 && Number(o.overUnder) <= 9.5), line = od ? Number(od.overUnder) : null;
+      out.push({ id: String(ev.id), date: ev.date, done, last, line, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
     }
     return out;
   } catch (e) { debug.push(`scoreboard ${date}: ${e.message}`); return null; }
@@ -128,16 +135,18 @@ async function scoreboard(date, fetchFn, debug) {
 
 // ---- grading -----------------------------------------------------------------------------------
 // Forebet's Over/Under 5.5 is read from its predicted score: a predicted total above the line is Over.
-export function fbOu(fb, f) {
+export function fbOu(fb, f, line = LINE) {
   if (!fb || !fb.score || !f || f.total == null) return null;
-  return ((fb.score.a + fb.score.h) > LINE) === (f.total > LINE) ? 1 : 0;
+  const pt = fb.score.a + fb.score.h;
+  if (pt === line || f.total === line) return null; // a push (or no call at a whole-number line) is not graded
+  return (pt > line) === (f.total > line) ? 1 : 0;
 }
 export function gradeCard(c) {
   const f = c.final; if (!f) return;
-  const win = f.h > f.a ? 'H' : 'A', over = f.total > LINE;
-  const g = {};
-  for (const k of ['v2', 'v4']) if (c[k]) g[k] = { win: (c[k].w >= 50 ? 'H' : 'A') === win ? 1 : 0, ou: (c[k].o >= 50) === over ? 1 : 0, brier: +((c[k].w / 100 - (win === 'H' ? 1 : 0)) ** 2).toFixed(4) };
-  if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null, ou: fbOu(c.fb, f) };
+  const line = c.ln ? c.ln.v : LINE, win = f.h > f.a ? 'H' : 'A', over = f.total > line, push = f.total === line;
+  const g = { line };
+  for (const k of ['v2', 'v4']) if (c[k]) g[k] = { win: (c[k].w >= 50 ? 'H' : 'A') === win ? 1 : 0, ou: push ? null : (c[k].o >= 50) === over ? 1 : 0, brier: +((c[k].w / 100 - (win === 'H' ? 1 : 0)) ** 2).toFixed(4) };
+  if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null, ou: fbOu(c.fb, f, line) };
   c.grade = g;
 }
 
@@ -169,13 +178,19 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         }
         continue;
       }
-      const pr = predict(S, e.hc, e.ac);
+      const manual = c && c.ln && c.ln.how === 'manual', lineNow = manual ? c.ln.v : e.line ?? (c && c.ln ? c.ln.v : null);
+      const pr = predict(S, e.hc, e.ac, lineNow ?? LINE);
       if (!c) {
         c = { id: e.id, kickoff: e.date, ko: localTime(e.date), home: e.hName, away: e.aName, hAbbr: e.hc, aAbbr: e.ac, final: null, ver: S.ver };
+        if (e.line) c.ln = { v: e.line, src: e.lineSrc };
         if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; } else c.skipped = 'Team not in the NHL ratings yet';
         day.cards.push(c); dirty = true; out.created++;
-      } else if (!c.final && c.ver !== S.ver && new Date(c.kickoff).getTime() > now.getTime() && pr) { // ratings moved since this card was made
-        c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; dirty = true; out.refreshed++;
+      } else if (!c.final && new Date(c.kickoff).getTime() > now.getTime() && pr) {
+        const moved = !manual && e.line && (!c.ln || c.ln.v !== e.line); // the sportsbook moved the total
+        if (moved) c.ln = { v: e.line, src: e.lineSrc };
+        if (c.ver !== S.ver || moved) { // ratings moved since this card was made, or the line did
+          c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; dirty = true; out.refreshed++;
+        }
       }
     }
     if (dirty) await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day));
@@ -221,6 +236,20 @@ async function forebetRead(env, work, now, fetchFn) {
   return { rows: rows.length, saved, ...(m.msg ? { note: m.msg } : {}) };
 }
 
+// Type the line yourself (when ESPN has none, or to match a book you use). Games that have not started only. line = null hands it back to ESPN.
+export async function nhlSetLine(env, date, id, line, now = new Date()) {
+  const day = await env.HUB.get(`nhl:day:${date}`, 'json'), c = day?.cards?.find(x => x.id === id);
+  if (!c) return { error: 'Game not found on that day' };
+  if (c.final || new Date(c.kickoff).getTime() <= now.getTime()) return { error: 'That game has already started, so its line is locked.' };
+  const v = line == null || line === '' ? null : Number(line);
+  if (v != null && !(Number.isFinite(v) && v >= 3.5 && v <= 9.5 && Math.round(v * 2) === v * 2)) return { error: 'Enter a line between 3.5 and 9.5 in half-goal steps, for example 6.5.' };
+  const S = (await env.HUB.get('nhl:state', 'json')) || freshState(), pr = predict(S, c.hAbbr, c.aAbbr, v ?? LINE);
+  if (v == null) delete c.ln; else c.ln = { v, src: 'entered by you', how: 'manual' };
+  if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; }
+  await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day));
+  return { saved: true, ln: c.ln || null, v2: c.v2, v4: c.v4 };
+}
+
 // ---- results board -----------------------------------------------------------------------------
 const mk = () => ({ n: 0, hit: 0 });
 export async function nhlTally(env) {
@@ -228,12 +257,12 @@ export async function nhlTally(env) {
   const days = await Promise.all(list.keys.map(k => env.HUB.get(k.name, 'json')));
   const M = ['v2', 'v4', 'fb'], mkB = () => ({ win: Object.fromEntries(M.map(m => [m, mk()])), ou: Object.fromEntries(M.map(m => [m, mk()])), brier: { n: 0, v2: 0, v4: 0 } });
   const all = mkB(), same = mkB(), recent = [];
-  let graded = 0;
+  let graded = 0, lined = 0;
   for (const d of days.filter(Boolean).sort((a, b) => b.date.localeCompare(a.date))) {
     for (const c of d.cards.filter(x => x.final && x.grade).sort((a, b) => b.kickoff.localeCompare(a.kickoff))) {
-      graded++;
+      graded++; if (c.ln) lined++;
       let g = c.grade;
-      if (g.fb && g.fb.ou == null) { const o = fbOu(c.fb, c.final); if (o != null) g = { ...g, fb: { ...g.fb, ou: o } }; } // games graded before Forebet O/U existed
+      if (g.fb && g.fb.ou == null) { const o = fbOu(c.fb, c.final, c.ln ? c.ln.v : LINE); if (o != null) g = { ...g, fb: { ...g.fb, ou: o } }; } // games graded before Forebet O/U existed
       for (const m of M) {
         if (g[m]?.win != null) { all.win[m].n++; all.win[m].hit += g[m].win; }
         if (g[m]?.ou != null) { all.ou[m].n++; all.ou[m].hit += g[m].ou; }
@@ -243,11 +272,11 @@ export async function nhlTally(env) {
         same.brier.n++; same.brier.v2 += g.v2.brier; same.brier.v4 += g.v4.brier;
         for (const m of M) { same.win[m].n++; same.win[m].hit += g[m].win; if (m !== 'fb' || g.fb.ou != null) { same.ou[m].n++; same.ou[m].hit += g[m].ou; } }
       }
-      if (recent.length < 60) recent.push({ date: d.date, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, v2: c.v2, v4: c.v4, fb: c.fb || null, grade: g });
+      if (recent.length < 60) recent.push({ date: d.date, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, ln: c.ln || null, v2: c.v2, v4: c.v4, fb: c.fb || null, grade: g });
     }
   }
   const fix = b => ({ ...b, brier: { n: b.brier.n, v2: b.brier.n ? +(b.brier.v2 / b.brier.n).toFixed(3) : null, v4: b.brier.n ? +(b.brier.v4 / b.brier.n).toFixed(3) : null } });
-  return { graded, all: fix(all), same: fix(same), recent };
+  return { graded, lined, all: fix(all), same: fix(same), recent };
 }
 export async function nhlStatus(env) {
   const [S, fb] = await Promise.all([env.HUB.get('nhl:state', 'json'), env.HUB.get('nhl:fbmeta', 'json')]);

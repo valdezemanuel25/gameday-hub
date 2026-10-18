@@ -98,5 +98,51 @@ ok('results board counts Forebet Over/Under', t.all.ou.fb.n === 1 && t.same.ou.f
   const t2 = await nhlTally(env);
   ok('older graded games are counted for Forebet Over/Under too', t2.all.ou.fb.n === 1 && t2.recent[0].grade.fb.ou != null, JSON.stringify(t2.all.ou.fb));
 }
+
+// ---- sportsbook Over/Under line: the total is only the line Over/Under is rated and graded against ----
+import { nhlSetLine, gradeCard } from '../src/nhl.js';
+{
+  const hi = probs(3.4, 3.2, 6.5), lo = probs(3.4, 3.2, 5.5), w = probs(3.4, 3.2, 6);
+  ok('a higher line lowers the Over chance', hi.over < lo.over && Math.abs(lo.over - probs(3.4, 3.2).over) < 1e-12, `${hi.over} ${lo.over}`);
+  ok('a half-goal line cannot push, a whole-goal line can', hi.push === 0 && w.push > 0.1 && Math.abs(w.over + w.push + w.under - 1) < 1e-9);
+  ok('the line never changes the winner chance or the goals the model expects', probs(3.4, 3.2, 6.5).home === probs(3.4, 3.2, 5.5).home);
+  const S2 = freshState(), a = predict(S2, 'EDM', 'UTA'), b = predict(S2, 'EDM', 'UTA', 6.5);
+  ok('v2 and v4 rate Over lower at 6.5 than at 5.5, expected goals and winner unchanged', b.v2.o < a.v2.o && b.v4.o < a.v4.o && b.v2.w === a.v2.w && b.v4.w === a.v4.w && b.lam.join() === a.lam.join(), JSON.stringify([a, b]));
+  const c = { final: { h: 4, a: 2, total: 6, last: 'REG' }, v2: { w: 60, o: 60 }, v4: { w: 55, o: 40 }, fb: { pick: 'H', score: { h: 4, a: 3 } }, ln: { v: 6.5 } };
+  gradeCard(c);
+  ok('a total of 6 is Under at 6.5: Over picks miss, Under picks hit', c.grade.v2.ou === 0 && c.grade.v4.ou === 1 && c.grade.fb.ou === 0 && c.grade.line === 6.5, JSON.stringify(c.grade));
+  const d = { final: { h: 4, a: 2, total: 6, last: 'REG' }, v2: { w: 60, o: 60 }, v4: { w: 55, o: 40 }, ln: { v: 6 } };
+  gradeCard(d);
+  ok('a total exactly on a whole-number line is a push and is not graded', d.grade.v2.ou === null && d.grade.v4.ou === null && d.grade.v2.win === 1);
+  const e = { final: { h: 4, a: 2, total: 6, last: 'REG' }, v2: { w: 60, o: 60 } };
+  gradeCard(e);
+  ok('a game with no line is still graded at 5.5', e.grade.line === 5.5 && e.grade.v2.ou === 1);
+}
+{ // ESPN odds block: only the total is read; a line move refreshes the card; a typed line wins
+  const odds = (ou, name = 'DraftKings') => [{ provider: { name }, details: 'EDM -150', overUnder: ou, spread: -1.5 }];
+  const day2 = dayStr(24), key = day2.replace(/-/g, '');
+  const e1 = ev('9100', 28, 'Edmonton Oilers', 'EDM', 'Utah Mammoth', 'UTA', false); e1.competitions[0].odds = odds(6.5);
+  feed[key] = [e1];
+  const fetchOdds = async (url, o) => url.includes('forebet') ? { ok: false, status: 403, text: async () => '' } : fetchFn(url, o);
+  await nhlStep(env, new Date(), fetchOdds);
+  let dd = JSON.parse(kv.get(`nhl:day:${day2}`)), c = dd.cards.find(x => x.id === '9100');
+  ok('the card keeps the sportsbook total and its source', c && c.ln && c.ln.v === 6.5 && c.ln.src === 'DraftKings', JSON.stringify(c && c.ln));
+  ok('the Over chance is rated at that line', c.v2.o < predict(freshState(), 'EDM', 'UTA').v2.o && !JSON.stringify(c).includes('-150') && !JSON.stringify(c).includes('spread'));
+  e1.competitions[0].odds = odds(6);
+  await nhlStep(env, new Date(), fetchOdds);
+  dd = JSON.parse(kv.get(`nhl:day:${day2}`)); c = dd.cards.find(x => x.id === '9100');
+  ok('when the book moves the total the card is re-rated', c.ln.v === 6 && c.v2.push > 0, JSON.stringify([c.ln, c.v2]));
+  const r = await nhlSetLine(env, day2, '9100', 7);
+  ok('a typed line is saved and re-rates the card', r.saved && r.ln.v === 7 && r.ln.how === 'manual' && r.v2.o < c.v2.o, JSON.stringify(r));
+  e1.competitions[0].odds = odds(6.5);
+  await nhlStep(env, new Date(), fetchOdds);
+  dd = JSON.parse(kv.get(`nhl:day:${day2}`)); c = dd.cards.find(x => x.id === '9100');
+  ok('a typed line is not overwritten by ESPN', c.ln.v === 7 && c.ln.how === 'manual');
+  ok('a bad line is refused', (await nhlSetLine(env, day2, '9100', 6.3)).error && (await nhlSetLine(env, day2, '9100', 12)).error);
+  const back = await nhlSetLine(env, day2, '9100', null);
+  ok('clearing a typed line hands it back', back.saved && back.ln === null);
+  const t3 = await nhlTally(env);
+  ok('the board counts how many graded games had a real line', typeof t3.lined === 'number');
+}
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);
