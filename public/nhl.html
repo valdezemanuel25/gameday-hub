@@ -112,7 +112,7 @@ h4{margin:20px 18px 6px;font-size:14px}
 .lnrow{display:flex;align-items:center;gap:8px;margin:8px 0 2px;flex-wrap:wrap}.lnrow label{font-size:12px;color:var(--mut)}
 .lnrow input{width:74px;padding:7px 8px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
 .lnrow .sm{padding:7px 13px;font-size:12.5px}.lnrow .ghost{background:none;border:1px solid var(--line);color:var(--mut)}
-.mt .o b{display:block}.mt .o .l2{display:block;font-size:12.5px;color:var(--ink);font-weight:650;margin-top:1px}.mt .o.hi .l2{color:#9ec1ff}
+.mt .sr{margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}.mt .sr b{font-size:15px;color:var(--ink);font-weight:750;letter-spacing:-.01em}.mt .sr span{font-size:10.5px;color:var(--faint)}.mt .o b{display:block}.mt .o .l2{display:block;font-size:12.5px;color:var(--ink);font-weight:650;margin-top:1px}.mt .o.hi .l2{color:#9ec1ff}
 .mt .o .l2 .sc3{display:block;margin:1px 0 0}
 .mt .o .sc3{color:var(--faint);font-size:11px;margin-left:3px}
 .sp+.ml{margin-top:11px}</style>
@@ -166,12 +166,14 @@ function tile(label, m, c, g, kind) {
     const side = m.pick, p = m.p && side ? (side === 'H' ? m.p[0] : m.p[1]) : null;
     return `<div class="mt${side ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${side ? esc(side === 'H' ? c.hAbbr : c.aAbbr) : '–'}${p ? ' ' + p + '%' : ''}</b>${mark(g && g.win)}</div>
       <div class="cf"><i style="width:${p ? Math.max(0, (p - 50) * 2) : 0}%"></i></div>
-      <div class="o">${m.score ? (() => { const tot = m.score.a + m.score.h, ln = lineOf(c); return `<b>${tot === ln ? 'Push' : tot > ln ? 'Over' : 'Under'} ${ln}</b><span class="l2">${m.score.a}–${m.score.h}${mark(g && g.ou)}</span>`; })() : 'No score'}</div></div>`;
+      <div class="o">${m.score ? (() => { const tot = m.score.a + m.score.h, ln = lineOf(c); return `<b>${tot === ln ? 'Push' : tot > ln ? 'Over' : 'Under'} ${ln}</b><span class="l2">${mark(g && g.ou) || ' '}</span>`; })() : 'No score'}</div>
+      ${m.score ? `<div class="sr"><b>${m.score.a}–${m.score.h}</b><span>predicted</span></div>` : ''}</div>`;
   }
   const w = pickWin(m, c), o = pickOu(m);
   return `<div class="mt${w.strong ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div>
     <div class="cf"><i style="width:${Math.max(0, (w.p - 50) * 2)}%"></i></div>
-    <div class="o${o.strong ? ' hi' : ''}"><b>${o.side} ${lineOf(c)}</b><span class="l2">${o.p}%${mark(g && g.ou)}${m.push ? `<span class="sc3">push ${m.push}%</span>` : ''}</span></div></div>`;
+    <div class="o${o.strong ? ' hi' : ''}"><b>${o.side} ${lineOf(c)}</b><span class="l2">${o.p}%${mark(g && g.ou)}${m.push ? `<span class="sc3">push ${m.push}%</span>` : ''}</span></div>
+    ${m.sc ? `<div class="sr"><b>${m.sc.a}–${m.sc.h}</b><span>likeliest ${m.sc.p}%</span>${mark(g && g.sc)}</div>` : ''}</div>`;
 }
 function sidesOf(c) { return [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), c.fb && c.fb.pick].filter(Boolean); }
 function consensus(c) { const p = sidesOf(c); return { n: p.length, same: p.length >= 3 && p.every(x => x === p[0]), side: p[0], split: p.length >= 2 && !p.every(x => x === p[0]) }; }
@@ -195,7 +197,7 @@ function card(c) {
   return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
   ${split}${goalsPill(c)}
   <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>
-  <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Top row: winner pick. Bottom row: Over/Under ${ln}${c.ln ? '' : ', the default until a line is known'} (Forebet: predicted score). Blue marks a confident pick.`}</div></div>`;
+  <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Winner pick, Over/Under ${ln}${c.ln ? '' : ' (the default until a line is known)'}, then the single likeliest final score (score shown away–home; Forebet: its predicted score). Blue marks a confident pick.`}</div></div>`;
 }
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));

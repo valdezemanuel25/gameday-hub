@@ -34,6 +34,14 @@ export function probs(lh, la, line = LINE) {
   }
   return { home: win + tie * 0.5, over, push, under: 1 - over - push };
 }
+// The single likeliest final score. A hockey game cannot end level, so a tied regulation score goes to overtime or a shootout and its
+// chance is split 50/50 between the one-goal wins (the same 50/50 the winner chance uses). Returns { h, a, p } with p in percent.
+export function topScore(lh, la, n = 16) {
+  const ph = pois(lh, n), pa = pois(la, n), m = {}, add = (i, j, x) => { const k = i + ',' + j; m[k] = (m[k] || 0) + x; };
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const x = ph[i] * pa[j]; if (i === j) { add(i + 1, j, x / 2); add(i, j + 1, x / 2); } else add(i, j, x); }
+  let best = null; for (const [k, x] of Object.entries(m)) if (!best || x > best.x) best = { k, x };
+  const [h, a] = best.k.split(',').map(Number); return { h, a, p: round(best.x) };
+}
 // Over chance with a push taken out: the chance of Over among games that do not land exactly on the line.
 const ovr = pr => pr.over / Math.max(1e-9, pr.over + pr.under);
 export const freshState = () => JSON.parse(JSON.stringify({
@@ -59,7 +67,7 @@ export function predict(S, hc, ac, line = LINE) {
   const pe = 1 / (1 + Math.pow(10, -(H.elo + 35 - A.elo) / 400));
   const w4 = 0.4 * pe + 0.3 * px.home + 0.3 * p2.home;
   const p4 = probs(0.5 * lh + 0.5 * xlh, 0.5 * la + 0.5 * xla, line);
-  return { v2: { w: round(p2.home), o: round(ovr(p2)), ...(p2.push > 0.0005 ? { push: round(p2.push) } : {}) }, v4: { w: round(w4), o: round(ovr(p4)), ...(p4.push > 0.0005 ? { push: round(p4.push) } : {}) }, lam: [+lh.toFixed(2), +la.toFixed(2)] };
+  return { v2: { w: round(p2.home), o: round(ovr(p2)), sc: topScore(lh, la), ...(p2.push > 0.0005 ? { push: round(p2.push) } : {}) }, v4: { w: round(w4), o: round(ovr(p4)), sc: topScore(0.5 * lh + 0.5 * xlh, 0.5 * la + 0.5 * xla), ...(p4.push > 0.0005 ? { push: round(p4.push) } : {}) }, lam: [+lh.toFixed(2), +la.toFixed(2)] };
 }
 // A finished game moves the ratings (goals and Elo). xG is not in ESPN's feed, so xG rates stay as seeded.
 export function applyGame(S, hc, ac, h, a, last) {
@@ -146,6 +154,7 @@ export function gradeCard(c) {
   const line = c.ln ? c.ln.v : LINE, win = f.h > f.a ? 'H' : 'A', over = f.total > line, push = f.total === line;
   const g = { line };
   for (const k of ['v2', 'v4']) if (c[k]) g[k] = { win: (c[k].w >= 50 ? 'H' : 'A') === win ? 1 : 0, ou: push ? null : (c[k].o >= 50) === over ? 1 : 0, brier: +((c[k].w / 100 - (win === 'H' ? 1 : 0)) ** 2).toFixed(4) };
+  for (const k of ['v2', 'v4']) if (g[k] && c[k].sc) g[k].sc = c[k].sc.h === f.h && c[k].sc.a === f.a ? 1 : 0;
   if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null, ou: fbOu(c.fb, f, line) };
   c.grade = g;
 }

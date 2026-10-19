@@ -144,5 +144,18 @@ import { nhlSetLine, gradeCard } from '../src/nhl.js';
   const t3 = await nhlTally(env);
   ok('the board counts how many graded games had a real line', typeof t3.lined === 'number');
 }
+
+// ---- likeliest final score per model ----
+import { topScore } from '../src/nhl.js';
+{
+  const e = topScore(3, 3), f = topScore(3.8, 2.3);
+  ok('the likeliest score is never a tie (overtime decides it)', e.h !== e.a && f.h !== f.a, JSON.stringify([e, f]));
+  ok('a strong favourite gets a winning score', f.h > f.a && f.p > 4 && f.p < 25, JSON.stringify(f));
+  const S3 = freshState(), q = predict(S3, 'EDM', 'UTA');
+  ok('v2 and v4 each carry a likeliest score', q.v2.sc && q.v4.sc && Number.isInteger(q.v2.sc.h) && q.v4.sc.p > 0, JSON.stringify(q));
+  const c = { final: { h: 4, a: 3, total: 7, last: 'OT' }, v2: { w: 60, o: 60, sc: { h: 4, a: 3, p: 8 } }, v4: { w: 55, o: 55, sc: { h: 3, a: 2, p: 9 } } };
+  gradeCard(c);
+  ok('exact score is graded per model', c.grade.v2.sc === 1 && c.grade.v4.sc === 0);
+}
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);
