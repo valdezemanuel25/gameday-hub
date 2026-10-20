@@ -126,6 +126,16 @@ h4{margin:20px 18px 6px;font-size:14px}
 .tpc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.tpc div{background:var(--chip);border-radius:9px;padding:6px 8px;min-width:0}.tpc small{display:block;font-size:10.5px;color:var(--faint);font-weight:650}.tpc b{font-size:14.5px;font-weight:750;white-space:nowrap}
 .tpb{margin-top:8px;height:4px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}.tpb i{display:block;height:100%;background:var(--blue)}
 .tps{margin-top:9px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--faint)}.tps b{font-size:15px;font-weight:750;color:var(--ink);letter-spacing:-.01em}.tps em{font-style:normal;color:var(--mut)}
+.bgrid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,auto);grid-auto-columns:calc(50% - 5px);gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;padding:14px 18px 6px;scroll-padding-left:18px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.bgrid::-webkit-scrollbar{display:none}
+.bt{scroll-snap-align:start;text-align:left;display:block;width:100%;min-width:0;background:var(--s);border:1px solid var(--line);border-radius:12px;padding:8px 10px 8px}
+.bt.on{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue),0 0 14px rgba(76,141,255,.3)}
+.bt .m{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11px;color:var(--faint);font-weight:600;margin-bottom:5px;white-space:nowrap}
+.bt .m i{font-style:normal;font-size:10px;font-weight:750;padding:1px 7px;border-radius:99px;background:rgba(76,141,255,.18);color:#9ec1ff}.bt .m i.sp{background:rgba(240,195,90,.14);color:var(--amber)}.bt .m i.fin{background:none;color:var(--mut);padding:0}
+.bt .r{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}.bt .r .cr{width:26px;height:26px;font-size:8.5px}
+.bt .r b{font-size:15px;font-weight:750;letter-spacing:-.01em;flex:1;min-width:0}.bt .r span{font-size:15px;font-weight:700;color:var(--mut);font-variant-numeric:tabular-nums}.bt .r.fv b,.bt .r.fv span{color:var(--ink)}.bt .r.fv span{color:var(--blue)}
+.bt .ou{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--faint);display:flex;justify-content:space-between;gap:6px;white-space:nowrap}.bt .ou b{color:var(--mut);font-weight:650}
+.bdots{display:flex;justify-content:center;gap:6px;margin:2px 0 4px}.bdots i{width:6px;height:6px;border-radius:50%;background:var(--line)}.bdots i.on{background:var(--blue)}
+.dt{margin:10px 18px 0}.dt .card{padding:12px 11px 10px;margin-bottom:10px;position:relative;overflow:hidden;background:linear-gradient(180deg,#172033 0%,#131a27 100%)}
 .tpn{margin:4px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.5}
 .tpe{margin:6px 18px 0;padding:18px 14px;border:1px dashed var(--line);border-radius:14px;text-align:center;color:var(--mut);font-size:13px;line-height:1.5}</style>
 </head>
@@ -256,20 +266,21 @@ function topView() {
   return seg + (showW ? wh + (wrows || none('No game today or tomorrow has all three models on the same team.')) : '') + (showO ? oh + (orows || none('No game has all three on the same side of its line.')) : '') +
     `<div class="tpn">Only games that have not started. A game appears on both lists when the models agree on both. The score is v2's single likeliest final score; it is a guide, not a pick.</div>`;
 }
+function tileOf(c, on) {
+  const f = c.final, g = c.grade || {}, m0 = c.v2 || c.v4, hp = m0 ? m0.w : null, hf = hp != null && hp >= 50, cs = consensus(c);
+  const tag = f ? `<i class="fin">${f.last !== 'REG' ? esc(f.last) : 'Final'}</i>` : cs.same ? '<i>All agree</i>' : cs.split ? '<i class="sp">Split</i>' : '';
+  const row = (ab, side) => { const fav = !f && hp != null && (side === 'h') === hf; const v = f ? (side === 'h' ? f.h : f.a) : hp == null ? '–' : (side === 'h' ? hp : 100 - hp) + '%';
+    return `<div class="r${fav ? ' fv' : ''}">${crest(ab)}<b>${esc(ab)}</b><span>${v}</span></div>`; };
+  const ln = lineOf(c), ou = c.v2 ? pickOu(c.v2) : null;
+  const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}</span>${ou ? `<span><b>${ou.side}</b> ${ou.p}%</span>` : ''}`;
+  return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}<div class="ou">${foot}</div></button>`;
+}
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
-  const slots = new Map();
-  for (const c of list) { if (!slots.has(c.kickoff)) slots.set(c.kickoff, []); slots.get(c.kickoff).push(c); }
-  const isToday = S.date === fmt(new Date()), now = Date.now(), ct = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date());
-  let nowDone = !isToday, html = '';
-  for (const [iso, cs] of slots) {
-    const t = new Date(iso).getTime(), done = cs.every(c => c.final);
-    if (!nowDone && t > now) { nowDone = true; if (html) html += `<div class="now">Now, ${esc(ct)}</div>`; }
-    const [hm, ap] = String(cs[0].ko).split(' ');
-    html += `<div class="slot${done ? ' done' : ''}"><div class="t">${esc(hm)}<small>${esc(ap || '')}</small></div>${cs.map(card).join('')}</div>`;
-  }
-  return `<div class="rail">${html}</div>`;
+  if (!list.find(c => c.id === S.sel)) { const nxt = list.find(c => !c.final && new Date(c.kickoff).getTime() > Date.now()) || list[0]; S.sel = nxt.id; }
+  const cols = Math.ceil(list.length / 4);
+  return `<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}<div class="dt">${card(list.find(c => c.id === S.sel))}</div>`;
 }
 function cell(m, key, other) {
   const v = pct(m.hit, m.n);
@@ -313,7 +324,10 @@ function renderDays() {
   $('#days').innerHTML = list.map(([d, l]) => `<button type="button" class="day${d === S.date ? ' on' : ''}" data-d="${d}">${l}<b>${+d.slice(8)}</b></button>`).join('');
   $('#tabs').innerHTML = [['board', 'Board'], ['top', 'Top'], ['results', 'Results'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
 }
-function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : statusView(); }
+function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
+  document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
+document.addEventListener('scroll', e => { if (e.target && e.target.id === 'bgrid') updDots(); }, true);
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : statusView(); updDots(); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
   render();
@@ -321,7 +335,8 @@ async function load() {
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,[data-setln],[data-saveln],[data-clrln],[data-tf]'); if (!t) return;
+  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel]'); if (!t) return;
+  if (t.dataset.sel) { const sc = document.getElementById('bgrid'), x = sc ? sc.scrollLeft : 0; S.sel = t.dataset.sel; S.ln = null; render(); const n = document.getElementById('bgrid'); if (n) n.scrollLeft = x; return; }
   if (t.dataset.tf) { S.tf = t.dataset.tf; return render(); }
   if (t.dataset.setln !== undefined) { S.ln = t.dataset.setln || null; return render(); }
   if (t.dataset.saveln || t.dataset.clrln) {
