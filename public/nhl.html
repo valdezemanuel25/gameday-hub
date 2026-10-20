@@ -115,7 +115,18 @@ h4{margin:20px 18px 6px;font-size:14px}
 .mt .sr{margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}.mt .sr b{font-size:15px;color:var(--ink);font-weight:750;letter-spacing:-.01em}.mt .sr span{font-size:10.5px;color:var(--faint)}.mt .o b{display:block}.mt .o .l2{display:block;font-size:12.5px;color:var(--ink);font-weight:650;margin-top:1px}.mt .o.hi .l2{color:#9ec1ff}
 .mt .o .l2 .sc3{display:block;margin:1px 0 0}
 .mt .o .sc3{color:var(--faint);font-size:11px;margin-left:3px}
-.sp+.ml{margin-top:11px}</style>
+.sp+.ml{margin-top:11px}
+.tpf{display:flex;gap:6px;padding:12px 18px 0;flex-wrap:wrap}.tpf button{font-size:12.5px;padding:7px 12px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}.tpf button.on{background:var(--blue);border-color:var(--blue);color:#fff}.tpf button b{font-weight:700;margin-left:4px}
+.tph{margin:18px 18px 8px;font-size:14px;font-weight:700}.tph small{display:block;font-size:11.5px;color:var(--faint);font-weight:500;margin-top:2px;line-height:1.4}
+.tpr{margin:0 18px 10px;background:linear-gradient(180deg,#172033 0%,#131a27 100%);border:1px solid rgba(76,141,255,.45);border-radius:14px;padding:12px 12px 11px;box-shadow:0 0 14px rgba(76,141,255,.14)}
+.tpr .top1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tpm{display:flex;align-items:center;gap:8px;min-width:0}.tpm .cr{width:30px;height:30px;font-size:9.5px}.tpm b{font-size:15px;font-weight:700;white-space:nowrap}.tpm span{font-size:12px;color:var(--faint)}
+.tpw{font-size:11.5px;color:var(--mut);white-space:nowrap}
+.tpp{margin:10px 0 9px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}.tpp b{font-size:21px;font-weight:750;letter-spacing:-.02em}.tpp b i{font-style:normal;color:var(--blue)}.tpp span{font-size:12px;color:var(--mut)}
+.tpc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.tpc div{background:var(--chip);border-radius:9px;padding:6px 8px;min-width:0}.tpc small{display:block;font-size:10.5px;color:var(--faint);font-weight:650}.tpc b{font-size:14.5px;font-weight:750;white-space:nowrap}
+.tpb{margin-top:8px;height:4px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}.tpb i{display:block;height:100%;background:var(--blue)}
+.tpn{margin:4px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.5}
+.tpe{margin:6px 18px 0;padding:18px 14px;border:1px dashed var(--line);border-radius:14px;text-align:center;color:var(--mut);font-size:13px;line-height:1.5}</style>
 </head>
 <body>
 <div id="hub-bar"><div class="sw"><a href="/">⚽ Soccer</a><a href="/nhl" class="on">🏒 NHL</a></div></div>
@@ -135,8 +146,8 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 const TZ = 'America/Chicago';
 const fmt = d => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(d);
 const addDays = (d, n) => new Date(new Date(d + 'T12:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);
-const S = { date: fmt(new Date()), tab: 'board', scope: 'same' };
-let day = { cards: [] }, tally = null, status = null;
+const S = { date: fmt(new Date()), tab: 'board', scope: 'same', tf: 'all' };
+let day = { cards: [] }, tally = null, status = null, topCards = null;
 const api = async p => { const r = await fetch(p); const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error('Server replied ' + r.status); } };
 const pct = (h, n) => n ? Math.round(100 * h / n) : null;
 const mark = v => v == null ? '' : v ? ' <span class="y">✓</span>' : ' <span class="x">✗</span>';
@@ -199,6 +210,50 @@ function card(c) {
   <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>
   <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Winner pick, Over/Under ${ln}${c.ln ? '' : ' (the default until a line is known)'}, then the single likeliest final score (score shown away–home; Forebet: its predicted score). Blue marks a confident pick.`}</div></div>`;
 }
+// Top: only games where every model agrees. Winner: v2, v4 and Forebet all take the same side. Over/Under: v2, v4 and
+// Forebet's predicted score all land on the same side of that game's line. Ranked by how sure the models are, on average.
+async function loadTop() {
+  const t = fmt(new Date()), out = [];
+  await Promise.all([t, addDays(t, 1)].map(async d => { try { for (const c of (await api('/api/nhl/day?date=' + d)).cards || []) out.push({ ...c, _d: d }); } catch (e) { /* skipped */ } }));
+  topCards = out;
+}
+function topPicks() {
+  const win = [], ou = [], now = Date.now();
+  for (const c of topCards || []) {
+    if (c.final || c.skipped || new Date(c.kickoff).getTime() <= now) continue;
+    const cs = consensus(c);
+    if (cs.same) {
+      const H = cs.side === 'H', pv = [c.v2.w, c.v4.w, c.fb.p ? (H ? c.fb.p[0] : c.fb.p[1]) : null].map((x, i) => x == null ? null : (i < 2 ? (H ? x : 100 - x) : x));
+      const known = pv.filter(x => x != null);
+      win.push({ c, side: cs.side, team: H ? c.hAbbr : c.aAbbr, pv, avg: Math.round(known.reduce((a, b) => a + b, 0) / known.length) });
+    }
+    const ln = lineOf(c);
+    if (c.v2 && c.v4 && c.fb && c.fb.score && c.fb.score.a + c.fb.score.h !== ln) {
+      const vals = [c.v2.o >= 50, c.v4.o >= 50, c.fb.score.a + c.fb.score.h > ln];
+      if (vals.every(x => x === vals[0])) { const over = vals[0], pv = [over ? c.v2.o : 100 - c.v2.o, over ? c.v4.o : 100 - c.v4.o]; ou.push({ c, over, ln, pv, tot: c.fb.score.a + c.fb.score.h, avg: Math.round((pv[0] + pv[1]) / 2) }); }
+    }
+  }
+  const by = (a, b) => b.avg - a.avg || a.c.kickoff.localeCompare(b.c.kickoff);
+  return { win: win.sort(by), ou: ou.sort(by) };
+}
+function topRow(c, big, sub, chips, avg) {
+  const dn = c._d === fmt(new Date()) ? 'Today' : 'Tomorrow';
+  return `<div class="tpr"><div class="top1"><div class="tpm">${crest(c.aAbbr)}<b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b>${crest(c.hAbbr)}</div><span class="tpw">${dn}, ${esc(c.ko)}</span></div>
+    <div class="tpp"><b>${big}</b><span>${sub}</span></div>
+    <div class="tpc">${chips.map(([l, v]) => `<div><small>${l}</small><b>${v}</b></div>`).join('')}</div><div class="tpb"><i style="width:${Math.max(0, Math.min(100, (avg - 50) * 2))}%"></i></div></div>`;
+}
+function topView() {
+  if (!topCards) return `<div class="empty">Loading…</div>`;
+  const t = topPicks(), f = S.tf, showW = f === 'all' || f === 'win', showO = f === 'all' || f === 'ou';
+  const seg = `<div class="tpf">${[['all', 'All agree', t.win.length + t.ou.length], ['win', 'Winner', t.win.length], ['ou', 'Over/Under', t.ou.length]].map(([k, l, n]) => `<button type="button" data-tf="${k}" class="${f === k ? 'on' : ''}">${l}<b>${n}</b></button>`).join('')}</div>`;
+  const wh = `<div class="tph">Winner: v2, v4 and Forebet all pick the same team<small>Highest average chance first.</small></div>`;
+  const oh = `<div class="tph">Over/Under: all three land on the same side of the line<small>v2 and v4 chance, plus Forebet's predicted total. Highest first.</small></div>`;
+  const wrows = t.win.map(x => topRow(x.c, `${esc(x.team)} <i>to win</i>`, `avg ${x.avg}%`, [['v2', x.pv[0] + '%'], ['v4', x.pv[1] + '%'], ['Forebet', x.pv[2] == null ? 'pick' : x.pv[2] + '%']], x.avg)).join('');
+  const orows = t.ou.map(x => topRow(x.c, `${x.over ? 'Over' : 'Under'} ${x.ln}`, `${esc(x.c.ln ? 'DraftKings' : 'default line')} · avg ${x.avg}%`, [['v2', x.pv[0] + '%'], ['v4', x.pv[1] + '%'], ['Forebet', x.tot + ' goals']], x.avg)).join('');
+  const none = txt => `<div class="tpe">${txt}</div>`;
+  return seg + (showW ? wh + (wrows || none('No game today or tomorrow has all three models on the same team.')) : '') + (showO ? oh + (orows || none('No game has all three on the same side of its line.')) : '') +
+    `<div class="tpn">Only games that have not started. A game appears on both lists when the models agree on both.</div>`;
+}
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
@@ -254,16 +309,18 @@ function statusView() {
 function renderDays() {
   const t = fmt(new Date()), list = [[addDays(t, -1), 'Yesterday'], [t, 'Today'], [addDays(t, 1), 'Tomorrow']];
   $('#days').innerHTML = list.map(([d, l]) => `<button type="button" class="day${d === S.date ? ' on' : ''}" data-d="${d}">${l}<b>${+d.slice(8)}</b></button>`).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
+  $('#tabs').innerHTML = [['board', 'Board'], ['top', 'Top'], ['results', 'Results'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
 }
-function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : statusView(); }
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : statusView(); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
   render();
+  loadTop().then(() => { if (S.tab === 'top') render(); });
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,[data-setln],[data-saveln],[data-clrln]'); if (!t) return;
+  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,[data-setln],[data-saveln],[data-clrln],[data-tf]'); if (!t) return;
+  if (t.dataset.tf) { S.tf = t.dataset.tf; return render(); }
   if (t.dataset.setln !== undefined) { S.ln = t.dataset.setln || null; return render(); }
   if (t.dataset.saveln || t.dataset.clrln) {
     const id = t.dataset.saveln || t.dataset.clrln, v = t.dataset.clrln ? null : document.getElementById('ln-' + id).value;
