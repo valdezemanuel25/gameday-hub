@@ -111,8 +111,8 @@ export function analyze(cards, legs0) {
   const groups = new Map();
   for (const l of legs) { const k = gameKey(l); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(l); }
   for (const [k, g] of groups) {
-    const dup = new Set(g.map(l => l.market + (l.market === 'ou' && !isNhl(l) ? l.line : '')));
-    if (dup.size < g.length) return { error: 'Two picks on the same game use the same market. Remove one.' };
+    const dup = new Set(g.map(l => `${l.market}|${l.sel}|${l.market === 'ou' && !isNhl(l) ? l.line : ''}`));
+    if (dup.size < g.length) return { error: 'The same pick is on this bet twice. Remove one.' };
     const c = cards.get(k); if (!c) return { error: 'That game was not found. Reload and try again.' };
     if (!c.v2) return { error: `No prediction for ${c.home} vs ${c.away} yet.` };
     if (isNhl(g[0]) && c.skipped) return { error: `${c.home} vs ${c.away} has no prediction (${c.skipped}).` };
@@ -128,6 +128,7 @@ export function analyze(cards, legs0) {
   const sameGame = [...groups.values()].some(g => g.length > 1), notes = [];
   if ([...groups.values()].some(g => g.length > 1 && isNhl(g[0]))) notes.push('Hockey picks on the same game are worked out on v2\'s score grid only (v4 and Forebet show n/a), with overtime treated as an even split.');
   if (legs.some(l => isNhl(l) && l.market === 'ou' && Number.isInteger(l.line))) notes.push('On a whole-number line, a total exactly on the line is a push and refunds that pick. The Over chance shown leaves pushes out.');
+  if (sameGame && p.v2 === 0) notes.push('These picks on the same game cannot all happen at once, so the chance is 0%.');
   return { legs: out, p, games: groups.size, sameGame, parlay: legs.length > 1, notes };
 }
 

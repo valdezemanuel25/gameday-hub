@@ -32,7 +32,10 @@ ok('same-game legs are scored together, not multiplied', a.sameGame && Math.abs(
 ok('home win and Over 3.5 together are likelier than if they were independent (a big win means goals)', j > legProb(C1, L('1', 'win', 'H'), 'v2') * legProb(C1, L('1', 'ou', 'O', 3.5), 'v2'));
 ok('Forebet has no same-game number', a.p.fb === null);
 ok('the score grid adds to 1', Math.abs(scoreGrid(1.7, 1.1).reduce((s, c) => s + c[2], 0) - 1) < 1e-12);
-ok('same game, same market twice is refused', !!analyze(cards, [L('1', 'win', 'H'), L('1', 'win', 'A')]).error);
+ok('the identical pick twice is refused', !!analyze(cards, [L('1', 'win', 'H'), L('1', 'win', 'H')]).error);
+ok('several different picks on one game are allowed (winner, Over 2.5, both score)', (() => { const a = analyze(cards, [L('1', 'win', 'H'), { ...L('1', 'ou', 'O'), line: 2.5 }, L('1', 'btts', 'Y')]); return !a.error && a.sameGame && a.p.v2 > 0 && a.p.v2 < .7; })());
+ok('two Over/Under lines on one game are allowed', !analyze(cards, [{ ...L('1', 'ou', 'O'), line: 1.5 }, { ...L('1', 'ou', 'O'), line: 3.5 }]).error);
+ok('picks that cannot both happen give 0% with a note', (() => { const a = analyze(cards, [L('1', 'win', 'H'), L('1', 'win', 'A')]); return !a.error && a.p.v2 === 0 && a.notes.some(n => /cannot all happen/.test(n)); })());
 ok('bad picks are refused', !!analyze(cards, [{ ...L('1', 'ou', 'O', 3) }]).error && !!analyze(cards, [{ ...L('1', 'win', 'X') }]).error && !!analyze(cards, []).error && !!analyze(cards, [L('9', 'win', 'H')]).error);
 ok('a finished game cannot be analyzed', !!analyze(new Map([[`${D}|esp.1|1`, { ...C1, final: { h: 1, a: 0 } }]]), [L('1', 'win', 'H')]).error);
 

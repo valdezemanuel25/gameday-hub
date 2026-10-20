@@ -502,7 +502,7 @@ const BIN_O = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60
 const bpost = async (path, body) => { const r = await fetch(path, { method: 'POST', body: JSON.stringify(body) }); const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error('Server replied ' + r.status); } };
 const bpc = x => x == null ? '–' : Math.round(x * 100) + '%';
 async function loadBets() {
-  const ds = [0, 1, 2].map(o => addDays(cfg.today, o)), games = [];
+  const ds = [-1, 0, 1, 2, 3, 4, 5, 6, 7].map(o => addDays(cfg.today, o)), games = [];
   await Promise.all([...ds.map(async d => { try { for (const c of (await api('/api/day?date=' + d)).cards || []) if (c.v2 && !c.final) games.push({ date: d, c }); } catch (e) { /* skipped */ }
     try { for (const c of (await api('/api/nhl/day?date=' + d)).cards || []) if (c.v2 && !c.final && !c.skipped) games.push({ date: d, c: { ...c, league: 'nhl', leagueName: 'NHL', sport: 'nhl' } }); } catch (e) { /* skipped */ } }),
     (async () => { try { const r = await api('/api/bets'); BS.bets = r.items || []; BS.sum = r.summary || null; } catch (e) { BS.bets = BS.bets || []; } })(),
@@ -546,7 +546,7 @@ function selChips(g) {
   return ch('Y', 'Yes, both score') + ch('N', 'No');
 }
 function gameList() {
-  const q = BS.q.trim().toLowerCase(), list = (BS.games || []).filter(x => !q || `${x.c.home} ${x.c.away} ${x.c.leagueName}`.toLowerCase().includes(q)).slice(0, 8);
+  const q = BS.q.trim().toLowerCase(), list = (BS.games || []).filter(x => !q || `${x.c.home} ${x.c.away} ${x.c.leagueName}`.toLowerCase().includes(q)).slice(0, 80);
   const dn = d => d === cfg.today ? 'Today' : d === addDays(cfg.today, 1) ? 'Tomorrow' : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
   return list.length ? list.map(x => `<button type="button" class="zgm" data-bg="${esc(x.date + '|' + x.c.id)}"><b>${esc(x.c.home)} vs ${esc(x.c.away)}</b><small>${esc(x.c.leagueName)} · ${dn(x.date)}, ${esc(x.c.ko)}</small></button>`).join('') : `<div class="small" style="margin-top:8px">No upcoming games match. Only games with a prediction that have not finished are listed.</div>`;
 }
@@ -555,7 +555,7 @@ function betsView() {
   if (!BS.games) return `<div class="empty">Loading…</div>`;
   const g = BS.game, cur = BS.cur, slip = BS.an;
   const sel = g ? `<div class="zgm sel"><b>${esc(g.c.home)} vs ${esc(g.c.away)}</b><small>${esc(g.c.leagueName)} · ${esc(g.c.ko)}</small></div><div class="zrow"><button type="button" class="zch" data-bchg="1">Change game</button></div>`
-    : `<input type="text" id="bq" placeholder="Search a team or league" value="${esc(BS.q)}" autocomplete="off"><div id="bglist">${gameList()}</div>`;
+    : `<input type="text" id="bq" placeholder="Search a team or league" value="${esc(BS.q)}" autocomplete="off"><div id="bglist" style="max-height:340px;overflow-y:auto">${gameList()}</div>`;
   const hk = g && g.c.sport === 'nhl', hl = hk && g.c.ln && g.c.ln.v != null ? g.c.ln : null;
   const pick = g ? `<div class="zrow">${MK.filter(([k]) => !hk || k === 'win' || k === 'ou').map(([k, n]) => `<button type="button" class="zch ${BS.market === k ? 'on' : ''}" ${hk && k === 'ou' && !hl ? 'disabled' : ''} data-bm="${k}">${n}</button>`).join('')}</div>
     ${hk && !hl ? `<div class="zrc w">No Over/Under line for this game yet. Set it on the NHL page to bet the total.</div>` : ''}
@@ -1198,7 +1198,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.bm) { BS.market = t.dataset.bm; BS.sel = null; BS.cur = null; return render(); }
   if (t.dataset.bl) { BS.line = Number(t.dataset.bl); return bAnalyzeCur(); }
   if (t.dataset.bs) { BS.sel = t.dataset.bs; return bAnalyzeCur(); }
-  if (t.dataset.badd) { const l = curLeg(); if (!l) return; if (BS.slip.length >= 12) { BS.msg = 'A bet can have up to 12 picks.'; return render(); } BS.slip.push(l); BS.sel = null; BS.cur = null; BS.msg = ''; BS.game = null; return bAnalyzeSlip(); }
+  if (t.dataset.badd) { const l = curLeg(); if (!l) return; if (BS.slip.length >= 12) { BS.msg = 'A bet can have up to 12 picks.'; return render(); } BS.slip.push(l); BS.sel = null; BS.cur = null; BS.msg = 'Added. Pick another market on this game, or change game.'; return bAnalyzeSlip(); }
   if (t.dataset.brm) { BS.slip.splice(Number(t.dataset.brm), 1); return bAnalyzeSlip(); }
   if (t.dataset.bclear) { BS.slip = []; BS.an = null; BS.msg = ''; return render(); }
   if (t.dataset.btrack) {
