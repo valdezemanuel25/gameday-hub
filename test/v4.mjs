@@ -141,5 +141,22 @@ ok('a live game after the seed is added, a repeat of a seed game is not', merged
   ok('a cup refresh uses the stored cup results and saves rat:cup', r.league === 'cup' && r.games === live.length + 1 && saved.builtAt === Date.parse('2026-10-16T12:00:00Z'), JSON.stringify(r));
   ok('the saved cup ratings are what gets read next', (await getCupRatings(env, new Map())).builtAt === saved.builtAt);
 }
+
+// 9. newly promoted clubs: a club under MIN_GAMES is predicted from a starting prior and flagged; established pairs are not
+{
+  const G = gamesFor('eng.1', []), T = seed['eng.1'].teams, now = Date.parse('2026-10-14T12:00:00Z');
+  const club = 'Coventry City', games = G.filter(g => g.h !== club && g.a !== club).concat(G.filter(g => g.h === club || g.a === club).slice(-3));
+  const R = fit('eng.1', games, now);
+  const hasClub = Object.keys(R.t).find(x => x.startsWith('Coventry'));
+  ok('a club with 3 games is in the ratings and marked as starting-prior', !!hasClub && R.t[hasClub][2] === 3 && R.t[hasClub][3] === 1, JSON.stringify(R.t[hasClub]));
+  const est = Object.keys(R.t).filter(x => R.t[x][2] >= V4.MIN_GAMES);
+  const pp = predict(R, est[0], hasClub), pe = predict(R, est[0], est[1]);
+  ok('a game with that club gets a v4 prediction flagged promo', pp && pp.promo === true && Math.abs(pp.home + pp.draw + pp.away - 1) < 1e-9);
+  ok('a game between established clubs is not flagged', pe && pe.promo === false);
+  const q = R.t[hasClub];
+  ok('with 3 games the club sits between the weak prior and its own results (not an average club, not wild)', q[0] > .5 && q[0] < 1.3 && q[1] > .7 && q[1] < 1.5);
+  ok('no games at all in this league: still no prediction', predict(R, est[0], 'Never Played FC') === null);
+  const R2 = fit('eng.1', G, now); ok('with 8+ games the club leaves the prior (promo flag off)', Object.values(R2.t).every(v => v[2] < V4.MIN_GAMES ? v[3] === 1 : v[3] === 0));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll v4 checks passed');
 process.exit(fails ? 1 : 0);

@@ -23,6 +23,10 @@ export const V4 = {
   CAL_SLOPE: 0.55,     // how much of the model's own Over / BTTS signal is kept
   CAL_RECENT: 200,     // games used to find what the model says for an "average" game
   RATING_TTL_MS: 18 * 3600000,
+  // A club with fewer than MIN_GAMES games in its league (newly promoted, usually) is not left out: it starts from a
+  // somewhat weak prior (attack, defence; defence above 1 = leakier) that fades as its own games come in. Fitted on the
+  // 2025 promoted clubs of England, Spain and Germany and checked on this season (tools/backtest-promoted.mjs).
+  PROMO: { att: 0.866, def: 1.067, K: 16 },
 };
 
 // ---- club names: ESPN names -> the names used in the seed --------------------------------------
@@ -61,6 +65,10 @@ export function fit(slug, games, nowMs = Date.now(), warm = null) {
   gs.forEach((g, i) => { hi[i] = id(g.h); ai[i] = id(g.a); hg[i] = g.hg; ag[i] = g.ag; w[i] = Math.pow(0.5, (now - g.d) / H); W += w[i]; sh += w[i] * g.hg; sa += w[i] * g.ag; });
   const n = names.length, muH = sh / W, muA = sa / W;
   const A = new Float64Array(n).fill(1), D = new Float64Array(n).fill(1);
+  const cnt = new Int32Array(n); for (let i = 0; i < gs.length; i++) { cnt[hi[i]]++; cnt[ai[i]]++; }
+  // per-club prior target and shrink strength: everyone shrinks toward 1 with K; a club under MIN_GAMES toward PROMO with PROMO.K
+  const pA = new Float64Array(n).fill(1), pD = new Float64Array(n).fill(1), kk = new Float64Array(n).fill(K), promo = new Uint8Array(n);
+  for (let t = 0; t < n; t++) if (cnt[t] < V4.MIN_GAMES) { pA[t] = V4.PROMO.att; pD[t] = V4.PROMO.def; kk[t] = V4.PROMO.K; promo[t] = 1; }
   if (warm) names.forEach((nm, t) => { const w0 = warm[nm]; if (w0) { A[t] = w0[0]; D[t] = w0[1]; } });
   const passes = warm ? V4.WARM_ITER : V4.ITER;
   const sA = new Float64Array(n), eA = new Float64Array(n), sD = new Float64Array(n), eD = new Float64Array(n);
@@ -72,12 +80,11 @@ export function fit(slug, games, nowMs = Date.now(), warm = null) {
       sD[a] += wi * hg[i]; eD[a] += wi * muH * A[h]; sD[h] += wi * ag[i]; eD[h] += wi * muA * A[a];
     }
     let ma = 0, md = 0;
-    for (let t = 0; t < n; t++) { A[t] = (sA[t] + K) / (eA[t] + K); D[t] = (sD[t] + K) / (eD[t] + K); ma += A[t]; md += D[t]; }
+    for (let t = 0; t < n; t++) { A[t] = (sA[t] + kk[t] * pA[t]) / (eA[t] + kk[t]); D[t] = (sD[t] + kk[t] * pD[t]) / (eD[t] + kk[t]); ma += A[t]; md += D[t]; }
     ma /= n; md /= n; for (let t = 0; t < n; t++) { A[t] /= ma; D[t] /= md; }
   }
-  const cnt = new Int32Array(n); for (let i = 0; i < gs.length; i++) { cnt[hi[i]]++; cnt[ai[i]]++; }
   const R = { slug, fitDay: Math.floor(now), H, K, muH, muA, t: {} };
-  names.forEach((nm, t) => { R.t[nm] = [+A[t].toFixed(4), +D[t].toFixed(4), cnt[t]]; });
+  names.forEach((nm, t) => { R.t[nm] = [+A[t].toFixed(4), +D[t].toFixed(4), cnt[t], promo[t]]; });
 
   // League context for the Over / BTTS pull: what the league actually did in the last year, and what the
   // raw model says on average for the most recent games.
@@ -95,17 +102,18 @@ function lambdas(R, h, a) {
   return [R.muH * th[0] * ta[1], R.muA * ta[0] * th[1]];
 }
 
-// Prediction for one match. h / a are seed names (see resolve). Returns null if either club lacks enough games.
+// Prediction for one match. h / a are seed names (see resolve). Returns null if either club has no games at all in
+// this league's ratings. A club under MIN_GAMES is predicted from its starting prior and the result is flagged `promo`.
 export function predict(R, h, a) {
   const th = R?.t[h], ta = R?.t[a];
-  if (!th || !ta || th[2] < V4.MIN_GAMES || ta[2] < V4.MIN_GAMES) return null;
+  if (!th || !ta || th[2] < 1 || ta[2] < 1) return null;
   const [lh, la] = lambdas(R, h, a), p = grid(lh, la);
   const pull = (raw, base, mean) => sg(lg(base) + V4.CAL_SLOPE * (lg(raw) - lg(mean)));
   const over25 = pull(p.over25, R.base[0], R.mean[0]), bttsYes = pull(p.bttsYes, R.base[1], R.mean[1]);
   return {
     lambda: { home: lh, away: la }, home: p.home, draw: p.draw, away: p.away,
     over25, under25: 1 - over25, bttsYes, bttsNo: 1 - bttsYes,
-    topScores: p.top, drawRisk: false, model: 'v4',
+    topScores: p.top, drawRisk: false, model: 'v4', promo: !!(th[3] || ta[3]),
   };
 }
 

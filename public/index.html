@@ -592,12 +592,12 @@ function expanded(c) {
     : `<div class="src s0"><small>SportsMole</small>No prediction found yet</div>`;
   const v4 = c.v4, v3 = c.v3;
   const shadow = v4
-    ? `<div class="small"><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. It picks <b>${OUT[v4.pick]}</b>${v4.pick === v.pick ? ', same as v2' : `, <b>not</b> v2's pick (${OUT[v.pick]})`}. Over 2.5 ${v4.over}%, both score ${v4.btts}%.
+    ? `<div class="small"><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. It picks <b>${OUT[v4.pick]}</b>${v4.pick === v.pick ? ', same as v2' : `, <b>not</b> v2's pick (${OUT[v.pick]})`}. Over 2.5 ${v4.over}%, both score ${v4.btts}%.${v4.promo ? `<br>A club in this game is newly promoted, so v4 used a starting rating that fades as it plays. These games are tracked on their own line, not in v4's main record.` : ''}
       ${g && g.v4 ? `<br>v4 result: ${pill(g.v4.outcomeHit, 'Winner')} ${pill(g.v4.ouHit, 'O/U')} ${pill(g.v4.bttsHit, 'Both')}` : ''}</div>`
     : v3
       ? `<div class="small"><b>v3 (retired shadow test)</b>${v3.drawRisk ? ' (draw risk)' : ''}: ${esc(c.home)} ${v3.p[0]}%, draw ${v3.p[1]}%, ${esc(c.away)} ${v3.p[2]}%. It picks <b>${OUT[v3.pick]}</b>. Over 2.5 ${v3.over}%, both score ${v3.btts}%.
       ${g && g.v3 ? `<br>v3 result: ${pill(g.v3.outcomeHit, 'Winner')} ${pill(g.v3.ouHit, 'O/U')} ${pill(g.v3.bttsHit, 'Both')}` : ''}</div>`
-      : c.v4 === null && !c.final ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game (a club with too little history).</div>` : '';
+      : c.v4 === null && !c.final ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game (a club with no games in this league yet).</div>` : '';
   return `<div class="ex"><div class="in"><div class="in">
     <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
     <div class="two">${mdl}${sm}</div>
@@ -943,6 +943,8 @@ function results() {
     <div class="b"><span>Winner <b class="${r.outcomeHit ? 'ok' : 'no'}">${r.outcomeHit ? '✓' : '✗'}</b></span><span>O/U <b class="${r.ouHit ? 'ok' : 'no'}">${r.ouHit ? '✓' : '✗'}</b></span><span>Both <b class="${r.bttsHit ? 'ok' : 'no'}">${r.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
     boardBlock(t) + leagueScorecards(t) + calibrationView(t) + goalsCalibration(t) +
+    (t.promo && t.promo.v4 && t.promo.v4.n ? `<details class="old"><summary>v4 on newly promoted clubs (${t.promo.v4.n} games, own line)</summary><div class="small" style="margin:6px 4px">v4 starts these clubs from a weaker-than-average rating that fades as they play. These games are kept out of every v4 total above.</div>` +
+      resultsBlock('v2, same games', t.promo.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v4, starting rating', t.promo.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` : '') +
     `<details class="old"><summary>Retired v3 shadow test (${t.h2hOld.v3.n} games)</summary>` +
     resultsBlock('v2', t.h2hOld.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (retired)', t.h2hOld.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` +
     `<div class="sec" style="padding-top:20px">Recent games<small>Each model's pick and whether it hit.</small></div><div class="lst">${rows || '<div class="small">Nothing new graded yet. Results fill in automatically a few hours after each league finishes.</div>'}</div>` +

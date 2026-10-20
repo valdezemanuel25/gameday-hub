@@ -70,6 +70,7 @@ const slim = p => ({
   lam: [+p.lambda.home.toFixed(2), +p.lambda.away.toFixed(2)],
   best: (b => ({ pick: b.pick, p: round(b.p) }))(bestBet(p)),
   drawRisk: !!p.drawRisk,
+  ...(p.promo ? { promo: true } : {}), // v4 used a starting rating for a newly promoted club: tracked on its own line
 });
 const toPred = s => ({ home: s.p[0] / 100, draw: s.p[1] / 100, away: s.p[2] / 100, over25: s.over / 100, bttsYes: s.btts / 100 });
 
@@ -276,7 +277,7 @@ function fin(t) { return { ...t, brier: t.n ? +(t.brier / t.n).toFixed(3) : null
 
 async function tally(env) {
   const list = await env.HUB.list({ prefix: 'day:' });
-  const v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
+  const promoV2 = blank(), promoV4 = blank(), v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [], mineT = { n: 0, mine: 0, model: 0 };
   // Per-league scorecard and goals-market calibration (v2 / v4 / Forebet), built from every graded game.
   const perLg = new Map(), GB = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60 to 69%', 60, 70], ['70% and up', 70, 101]];
@@ -304,36 +305,39 @@ async function tally(env) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
       if (!c.grade || day.date <= LEGACY_THROUGH || UNTRACKED.has(c.league)) continue;
+      // v4 on a newly promoted club (starting rating) is its own line: it stays out of every v4 total below.
+      const promo = !!(c.v4 && c.v4.promo), g4 = promo ? null : c.grade.v4;
+      if (promo && c.grade.v4 && c.grade.v2) { add(promoV2, c.grade.v2); add(promoV4, c.grade.v4); }
       if (c.fb && c.final) { // Forebet (entered by hand) on the same games, next to v2 and v4
         const f = fbGrade(c.fb, c.final);
         if (f.outcomeHit != null) { fbT.n++; fbT.outcome += f.outcomeHit; fbT.score += f.scoreHit; fbT.brier += f.brier; }
         if (f.ouHit != null) { fbT.nOu++; fbT.ou += f.ouHit; }
         if (f.bttsHit != null) { fbT.nBtts++; fbT.btts += f.bttsHit; }
-        if (c.grade.v2 && c.grade.v4) {
-          const g2 = c.grade.v2, g4 = c.grade.v4;
+        if (c.grade.v2 && g4) {
+          const g2 = c.grade.v2;
           if (f.outcomeHit != null) { const o = SB.outcome, b = SB.brier; o.n++; o.v2 += g2.outcomeHit; o.v4 += g4.outcomeHit; o.fb += f.outcomeHit; b.n++; b.v2 += g2.brier; b.v4 += g4.brier; b.fb += f.brier; }
           if (f.ouHit != null) { const o = SB.ou; o.n++; o.v2 += g2.ouHit; o.v4 += g4.ouHit; o.fb += f.ouHit; }
           if (f.bttsHit != null) { const o = SB.btts; o.n++; o.v2 += g2.bttsHit; o.v4 += g4.bttsHit; o.fb += f.bttsHit; }
         }
-        for (const [k, g] of [['v2', c.grade.v2], ['v4', c.grade.v4]]) if (g) {
+        for (const [k, g] of [['v2', c.grade.v2], ['v4', g4]]) if (g) {
           const x = fbVs[k];
           if (f.outcomeHit != null) { x.n++; x.fbOutcome += f.outcomeHit; x.fbBrier += f.brier; x.outcome += g.outcomeHit; x.brier += g.brier; }
           if (f.ouHit != null) { x.nOu++; x.fbOu += f.ouHit; x.ou += g.ouHit; }
           if (f.bttsHit != null) { x.nBtts++; x.fbBtts += f.bttsHit; x.btts += g.bttsHit; }
         }
       }
-      if (c.grade.v4) add(v4All, c.grade.v4); // every game v4 predicted, including cup games v2 cannot cover
+      if (g4) add(v4All, g4); // every game v4 predicted, including cup games v2 cannot cover
       if (!c.grade.v2) continue;
       add(v2All, c.grade.v2);
-      if (c.grade.v4) { add(h2hV2, c.grade.v2); add(h2hV4, c.grade.v4); }
+      if (g4) { add(h2hV2, c.grade.v2); add(h2hV4, g4); }
       if (c.grade.v3) { add(oldV2, c.grade.v2); add(oldV3, c.grade.v3); }
       cal(c.v2.p, c.grade.v2.outcomeHit);
       if (c.final) {
         const gs = c.final.h + c.final.a, bs = c.final.h > 0 && c.final.a > 0, r = lgRow(c);
-        r.n++; add(r.v2, c.grade.v2); if (c.grade.v4) add(r.v4, c.grade.v4);
+        r.n++; add(r.v2, c.grade.v2); if (g4) add(r.v4, g4);
         if (c.fb) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { r.fb.n++; r.fb.outcome += f.outcomeHit; r.fb.brier += f.brier; } if (f.ouHit != null) r.fb.ou += f.ouHit; if (f.bttsHit != null) r.fb.btts += f.bttsHit; }
         calAdd('over', 'v2', c.v2.over, gs >= 3); calAdd('btts', 'v2', c.v2.btts, bs);
-        if (c.v4) { calAdd('over', 'v4', c.v4.over, gs >= 3); calAdd('btts', 'v4', c.v4.btts, bs); }
+        if (c.v4 && !promo) { calAdd('over', 'v4', c.v4.over, gs >= 3); calAdd('btts', 'v4', c.v4.btts, bs); }
         if (c.fb) { calAdd('over', 'fb', c.fb.over, gs >= 3); calAdd('btts', 'fb', c.fb.btts, bs); }
       }
       if (c.mine && c.final) { mineT.n++; mineT.model += c.grade.v2.outcomeHit ? 1 : 0; mineT.mine += c.mine === (c.final.h > c.final.a ? 'H' : c.final.h === c.final.a ? 'D' : 'A') ? 1 : 0; }
@@ -346,7 +350,7 @@ async function tally(env) {
     last30.n++;
     const hit = (x, o) => { x.n++; x.w += o.outcomeHit ? 1 : 0; x.ou += o.ouHit ? 1 : 0; x.bt += o.bttsHit ? 1 : 0; };
     if (c.grade.v2) hit(last30.v2, c.grade.v2);
-    if (c.grade.v4) hit(last30.v4, c.grade.v4);
+    if (c.grade.v4 && !(c.v4 && c.v4.promo)) hit(last30.v4, c.grade.v4);
     if (c.fb && c.final) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { last30.fb.n++; last30.fb.w += f.outcomeHit ? 1 : 0; last30.fb.ou += f.ouHit ? 1 : 0; last30.fb.bt += f.bttsHit ? 1 : 0; } }
     if (!c.final || !c.v2 || !c.v2.p) continue;
     const t = topT[Math.max(...c.v2.p) >= 55 ? 'win' : 'rest']; t.n++; t.hits += c.grade.v2.outcomeHit ? 1 : 0;
@@ -389,6 +393,7 @@ async function tally(env) {
     mine: mineT,
     h2h: { v2: fin(h2hV2), v4: fin(h2hV4) },
     v4: fin(v4All),
+    promo: { v2: fin(promoV2), v4: fin(promoV4) }, // v4 starting-rating games (newly promoted clubs), with v2 on the same games
     h2hOld: { v2: fin(oldV2), v3: fin(oldV3) },
     importedMatches: legacy.v2Rows.length,
     newlyGraded: live.length,
