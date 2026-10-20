@@ -344,7 +344,7 @@ body{padding-top:56px}
 .sgt .r2 b{font-size:14.5px;font-weight:750;letter-spacing:-.01em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sgt .r2 span{font-size:15px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums}.sgt .r2.fv span{color:var(--grass)}
 .sgt .f2{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--faint);display:flex;justify-content:space-between;gap:6px;white-space:nowrap}.sgt .f2 b{color:var(--dim);font-weight:650}
 .sdots{display:flex;justify-content:center;gap:6px;margin:2px 0 4px}.sdots i{width:6px;height:6px;border-radius:50%;background:var(--line)}.sdots i.on{background:var(--grass)}
-.sdt{margin:10px 18px 0}
+.sdt{margin:10px 18px 0;scroll-margin-top:68px}
 .zgm{display:block;width:100%;text-align:left;padding:9px 10px;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:none;color:inherit;font:inherit;cursor:pointer}
 .zgm b{display:block;font-size:13.5px;color:var(--ink)}.zgm small{color:var(--faint);font-size:11.5px}
 .zgm.sel{border-color:rgba(88,178,122,.5);background:rgba(88,178,122,.08)}
@@ -818,9 +818,9 @@ function board() {
   const doneCs = !S.top && cs.some(c => !ended(c)) ? cs.filter(ended) : [];
   if (doneCs.length) cs = cs.filter(c => !ended(c));
   // tiles: four games per column, swipe sideways; the selected game's full card sits underneath
-  if (!cs.find(c => c.id === S.sel)) { const nxt = cs.find(c => !c.final && new Date(c.kickoff).getTime() > Date.now()) || cs[0]; S.sel = nxt ? nxt.id : null; }
+  if (S.sel && !cs.find(c => c.id === S.sel)) S.sel = null;
   const cols = Math.ceil(cs.length / 4), sc = cs.find(c => c.id === S.sel);
-  const html = cs.length ? `<div class="sgrid" id="sgrid">${cs.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="sdots">${Array.from({ length: cols - 1 }, (_, i) => `<i></i>`).join('')}</div>` : ''}<div class="sdt">${sc ? game(sc) : ''}</div>` : '';
+  const html = cs.length ? `<div class="sgrid" id="sgrid">${cs.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="sdots">${Array.from({ length: cols - 1 }, (_, i) => `<i></i>`).join('')}</div>` : ''}${sc ? `<div class="sdt" id="sdt">${game(sc)}</div>` : ''}` : '';
   const fin = doneCs.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${S.fin}">Finished <b>${doneCs.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? doneCs.map(game).join('') : doneCs.map(c => `<div class="fr"><span class="lg">${esc(LCODE[c.leagueKey] || '')}</span><b>${esc(strip(c.home))} ${c.final ? `${c.final.h}–${c.final.a}` : 'vs'} ${esc(strip(c.away))}</b>${!c.final ? '<i class="pend">result pending</i>' : c.grade && c.grade.v2 ? `<i class="${c.grade.v2.outcomeHit ? 'ok' : 'no'}">${c.grade.v2.outcomeHit ? '✓' : '✗'}</i>` : ''}</div>`).join('')}</div>` : '';
   return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + html + fin + uncovered(uncShown) + `</div></div>`;
 }
@@ -1237,7 +1237,12 @@ document.addEventListener('click', async e => {
   if (t.dataset.af) { S.af = t.dataset.af; return render(); }
   if (t.dataset.tm) { S.tm = t.dataset.tm; keepFilter(); return render(); }
   if (t.dataset.more) { S.more[t.dataset.more] = !S.more[t.dataset.more]; return render(); }
-  if (t.dataset.ssel) { const g = document.getElementById('sgrid'), x = g ? g.scrollLeft : 0; S.sel = t.dataset.ssel; S.open = null; render(); const n = document.getElementById('sgrid'); if (n) n.scrollLeft = x; return; }
+  if (t.dataset.ssel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
+    const g = document.getElementById('sgrid'), x = g ? g.scrollLeft : 0, closing = S.sel === t.dataset.ssel;
+    if (closing) S.sel = null; else { if (!S.sel) S.back = window.scrollY; S.sel = t.dataset.ssel; }
+    S.open = closing ? null : S.sel; render(); const n = document.getElementById('sgrid'); if (n) n.scrollLeft = x;
+    requestAnimationFrame(() => { if (closing) { window.scrollTo({ top: S.back || 0, behavior: 'smooth' }); S.back = null; } else { const d = document.getElementById('sdt'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
+    return; }
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
@@ -1245,6 +1250,11 @@ document.addEventListener('click', async e => {
     if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
   if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
+  if (t.classList.contains('hd') && t.closest('#sdt')) { // tapping the opened game's header closes it and returns to the grid
+    const g = document.getElementById('sgrid'), x = g ? g.scrollLeft : 0; S.sel = null; S.open = null; render();
+    const n = document.getElementById('sgrid'); if (n) n.scrollLeft = x;
+    requestAnimationFrame(() => { window.scrollTo({ top: S.back || 0, behavior: 'smooth' }); S.back = null; });
+    return; }
   if (t.classList.contains('hd')) { S.open = S.open === t.dataset.id ? null : t.dataset.id; return render(); }
 });
 $('#btn-analyze').onclick = () => {

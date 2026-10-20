@@ -135,7 +135,7 @@ h4{margin:20px 18px 6px;font-size:14px}
 .bt .r b{font-size:15px;font-weight:750;letter-spacing:-.01em;flex:1;min-width:0}.bt .r span{font-size:15px;font-weight:700;color:var(--mut);font-variant-numeric:tabular-nums}.bt .r.fv b,.bt .r.fv span{color:var(--ink)}.bt .r.fv span{color:var(--blue)}
 .bt .ou{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--faint);display:flex;justify-content:space-between;gap:6px;white-space:nowrap}.bt .ou b{color:var(--mut);font-weight:650}
 .bdots{display:flex;justify-content:center;gap:6px;margin:2px 0 4px}.bdots i{width:6px;height:6px;border-radius:50%;background:var(--line)}.bdots i.on{background:var(--blue)}
-.dt{margin:10px 18px 0}.dt .card{padding:12px 11px 10px;margin-bottom:10px;position:relative;overflow:hidden;background:linear-gradient(180deg,#172033 0%,#131a27 100%)}
+.dt{margin:10px 18px 0;scroll-margin-top:68px}.dt .card{padding:12px 11px 10px;margin-bottom:10px;position:relative;overflow:hidden;background:linear-gradient(180deg,#172033 0%,#131a27 100%)}
 .cr{position:relative}.cr img{position:absolute;left:3px;top:3px;width:calc(100% - 6px);height:calc(100% - 6px);object-fit:contain}.cr.lg{background:#e9eef7;color:transparent;text-shadow:none}
 .gd{color:var(--gold)!important}.mt .w b.gd,.mt .o b.gd,.mt .o.hi b.gd{text-shadow:0 0 10px rgba(246,198,74,.45)}
 .tpp b.gd,.tpp b i{color:var(--gold)}
@@ -288,9 +288,9 @@ function tileOf(c, on) {
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
-  if (!list.find(c => c.id === S.sel)) { const nxt = list.find(c => !c.final && new Date(c.kickoff).getTime() > Date.now()) || list[0]; S.sel = nxt.id; }
+  if (S.sel && !list.find(c => c.id === S.sel)) S.sel = null;
   const cols = Math.ceil(list.length / 4);
-  return `<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}<div class="dt">${card(list.find(c => c.id === S.sel))}</div>`;
+  return `<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}`;
 }
 function cell(m, key, other) {
   const v = pct(m.hit, m.n);
@@ -346,7 +346,12 @@ async function load() {
 }
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel]'); if (!t) return;
-  if (t.dataset.sel) { const sc = document.getElementById('bgrid'), x = sc ? sc.scrollLeft : 0; S.sel = t.dataset.sel; S.ln = null; render(); const n = document.getElementById('bgrid'); if (n) n.scrollLeft = x; return; }
+  if (t.dataset.sel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
+    const sc = document.getElementById('bgrid'), x = sc ? sc.scrollLeft : 0, closing = S.sel === t.dataset.sel;
+    if (closing) { S.sel = null; S.ln = null; } else { if (!S.sel) S.back = window.scrollY; S.sel = t.dataset.sel; S.ln = null; }
+    render(); const n = document.getElementById('bgrid'); if (n) n.scrollLeft = x;
+    requestAnimationFrame(() => { if (closing) { window.scrollTo({ top: S.back || 0, behavior: 'smooth' }); S.back = null; } else { const d = document.getElementById('dt'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
+    return; }
   if (t.dataset.tf) { S.tf = t.dataset.tf; return render(); }
   if (t.dataset.setln !== undefined) { S.ln = t.dataset.setln || null; return render(); }
   if (t.dataset.saveln || t.dataset.clrln) {
