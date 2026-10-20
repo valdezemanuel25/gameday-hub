@@ -328,6 +328,30 @@ body{padding-top:56px}
 .asg.has{border-color:#5b4a22}
 .asgd{margin:14px 0 6px 4px;font-size:12px;font-weight:700;color:var(--grass)}
 
+.zbox{margin:12px 0 0 4px;padding:12px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+.zbox h3{margin:0 0 8px;font-size:12px;font-weight:700;color:var(--grass)}
+.zbox .zrow{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.zbox .zch{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:none;color:var(--dim);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.zbox .zch.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.zbox input[type=text]{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
+.zgm{display:block;width:100%;text-align:left;padding:9px 10px;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:none;color:inherit;font:inherit;cursor:pointer}
+.zgm b{display:block;font-size:13.5px;color:var(--ink)}.zgm small{color:var(--faint);font-size:11.5px}
+.zgm.sel{border-color:rgba(88,178,122,.5);background:rgba(88,178,122,.08)}
+.zpr{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 2px;font-size:12px;color:var(--faint)}.zpr b{display:block;font-size:20px;color:var(--ink);font-weight:800;line-height:1.1}.zpr .zna b{color:var(--faint);font-weight:600;font-size:16px}
+.zpr span.zk{display:block;font-size:10.5px;font-weight:700}
+.zrc{display:block;font-size:11.5px;color:var(--faint);margin-top:3px}.zrc.w{color:var(--amber)}
+.zgo{margin-top:8px;padding:10px 16px;border-radius:11px;border:0;background:var(--grass);color:#06130b;font:inherit;font-size:14px;font-weight:750;cursor:pointer}.zgo.alt{background:none;border:1px solid var(--line);color:var(--dim);font-weight:650;margin-left:6px}
+.zgo:disabled{opacity:.5}
+.zsl{padding:9px 0;border-top:1px solid var(--line)}.zsl:first-of-type{border-top:0}
+.zsl .zt{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.zsl .zt b{color:var(--ink);font-size:14px}.zsl .zt button{background:none;border:0;color:var(--faint);font-size:12px;cursor:pointer}
+.zsl small{color:var(--faint);font-size:11.5px}
+.zbet{margin:10px 0 0 4px;padding:11px 12px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+.zbet .zt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.zbet .zt b{font-size:13px;color:var(--ink)}
+.zst{padding:2px 9px;border-radius:99px;font-size:11px;font-weight:750;border:1px solid var(--line);color:var(--faint)}.zst.hit{color:var(--grass);border-color:rgba(88,178,122,.5);background:rgba(88,178,122,.1)}.zst.miss{color:#e0786f;border-color:rgba(224,122,111,.5);background:rgba(224,122,111,.08)}
+.zbl{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--dim);padding:4px 0}.zbl i{font-style:normal;font-weight:800}.zbl i.hit{color:var(--grass)}.zbl i.miss{color:#e0786f}.zbl small{display:block;color:var(--faint);font-size:11px}
+.zbet .zft{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11.5px;color:var(--faint)}.zbet .zft button{background:none;border:0;color:var(--faint);font-size:11.5px;cursor:pointer;padding:0 0 0 10px}
+.zsum{margin:12px 0 0 4px;font-size:12.5px;color:var(--dim);line-height:1.55}.zsum b{color:var(--ink)}
+
 .xhl{display:flex;align-items:baseline;gap:7px;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid var(--line);font-size:13px;flex-wrap:wrap}
 .xhl .k{font-size:10.5px;font-weight:700;color:var(--faint)}.xhl b{color:var(--ink);font-weight:700}.xhl .p{margin-left:auto;font-weight:750;color:var(--grass)}
 .xhl .ag{font-size:11px;color:var(--dim);flex-basis:100%}.xhl .ag.all{color:var(--grass)}
@@ -470,6 +494,82 @@ function asgView() {
     html += `<div class="trw asg ${r.cs.length ? 'has' : ''}"><div class="ah"><b>${esc(strip(c.home))} vs ${esc(strip(c.away))}</b><small>${esc(LCODE[c.leagueKey] || '')} · ${shown.some(x => x.cs.length) ? esc(dayName(r.d)) + ', ' : ''}${esc(c.ko)}</small></div>${fbLine}${smLine}</div>`;
   }
   return head + seg + `<div class="tcols" style="display:block">${html}</div>`;
+}
+
+/* ---------- bets tab: analyze a straight or parlay, track it, and let the finished games grade it ---------- */
+const BS = { games: null, q: '', game: null, market: 'win', sel: null, line: 2.5, slip: [], an: null, cur: null, bets: null, sum: null, msg: '', busy: false, del: null };
+const BIN_O = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60 to 69%', 60, 70], ['70% and up', 70, 101]];
+const bpost = async (path, body) => { const r = await fetch(path, { method: 'POST', body: JSON.stringify(body) }); const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error('Server replied ' + r.status); } };
+const bpc = x => x == null ? '–' : Math.round(x * 100) + '%';
+async function loadBets() {
+  const ds = [0, 1, 2].map(o => addDays(cfg.today, o)), games = [];
+  await Promise.all([...ds.map(async d => { try { for (const c of (await api('/api/day?date=' + d)).cards || []) if (c.v2 && !c.final) games.push({ date: d, c }); } catch (e) { /* skipped */ } }),
+    (async () => { try { const r = await api('/api/bets'); BS.bets = r.items || []; BS.sum = r.summary || null; } catch (e) { BS.bets = BS.bets || []; } })(),
+    (async () => { try { await ensureTally(); } catch (e) { /* the record notes are just left out */ } })()]);
+  BS.games = games.sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
+}
+const curLeg = () => { const g = BS.game; if (!g || !BS.sel) return null; return { date: g.date, league: g.c.league, id: g.c.id, market: BS.market, sel: BS.sel, ...(BS.market === 'ou' ? { line: BS.line } : {}) }; };
+async function bAnalyzeCur() {
+  const l = curLeg(); BS.cur = null; if (!l) return render();
+  const mine = l; BS.curKey = JSON.stringify(l); render();
+  try { const r = await bpost('/api/bets/analyze', { legs: [l] }); if (BS.curKey === JSON.stringify(mine)) BS.cur = r; } catch (e) { BS.cur = { error: e.message }; }
+  render();
+}
+async function bAnalyzeSlip() { BS.an = null; if (!BS.slip.length) return render(); try { BS.an = await bpost('/api/bets/analyze', { legs: BS.slip }); } catch (e) { BS.an = { error: e.message }; } render(); }
+// What a model's record says about a number like this one, from the Hub's finished games.
+function trackRec(l, m, p) {
+  if (!tally || p == null) return null;
+  const pc = p * 100;
+  if ((l.market === 'ou' && Number(l.line) === 2.5) || l.market === 'btts') {
+    const pos = l.market === 'ou' ? l.sel === 'O' : l.sel === 'Y', rows = tally.calGoals && tally.calGoals[l.market === 'ou' ? 'over' : 'btts'] && tally.calGoals[l.market === 'ou' ? 'over' : 'btts'][m];
+    if (!rows) return null;
+    const overP = pos ? pc : 100 - pc, bin = BIN_O.find(([, lo, hi]) => overP >= lo && overP < hi), r = bin && rows.find(x => x.label === bin[0]);
+    if (!r || !r.n) return null;
+    return { rate: Math.round(100 * (pos ? r.hits / r.n : 1 - r.hits / r.n)), n: r.n };
+  }
+  if (l.market === 'win' && m === 'v2' && pc >= 50) { const r = (tally.calibration || []).find(x => pc >= x.lo && pc < x.hi) || (tally.calibration || []).find(x => x.label === '60% and up' && pc >= 60); return r && r.n ? { rate: Math.round(100 * r.hits / r.n), n: r.n } : null; }
+  return null;
+}
+function probRow(l) {
+  const cell = (k, name) => `<span class="${l.p[k] == null ? 'zna' : ''}"><span class="zk">${name}</span><b>${l.p[k] == null ? 'n/a' : bpc(l.p[k])}</b></span>`;
+  const recs = ['v2', 'v4'].map(m => { const r = trackRec(l, m, l.p[m]); return r ? `<span class="zrc ${r.n < 25 ? 'w' : ''}">${m} so far: picks like this landed ${r.rate}% (${r.n} finished games${r.n < 25 ? ', still a small sample' : ''})</span>` : ''; }).join('');
+  return `<div class="zpr">${cell('v2', 'v2')}${cell('v4', 'v4 shadow')}${cell('fb', 'Forebet')}</div>${recs}${l.grid ? `<span class="zrc">At this line the number comes from each model's score grid, which tends to overstate goals markets. There is no track record for it yet.</span>` : ''}`;
+}
+const MK = [['win', 'Winner'], ['dc', 'Double chance'], ['ou', 'Over/Under'], ['btts', 'Both score']];
+function selChips(g) {
+  const c = g.c, ch = (v, t) => `<button type="button" class="zch ${BS.sel === v ? 'on' : ''}" data-bs="${v}">${esc(t)}</button>`;
+  if (BS.market === 'win') return ch('H', strip(c.home)) + ch('D', 'Draw') + ch('A', strip(c.away));
+  if (BS.market === 'dc') return ch('1X', `${strip(c.home)} or draw`) + ch('X2', `${strip(c.away)} or draw`) + ch('12', 'No draw');
+  if (BS.market === 'ou') return ch('O', 'Over') + ch('U', 'Under');
+  return ch('Y', 'Yes, both score') + ch('N', 'No');
+}
+function gameList() {
+  const q = BS.q.trim().toLowerCase(), list = (BS.games || []).filter(x => !q || `${x.c.home} ${x.c.away} ${x.c.leagueName}`.toLowerCase().includes(q)).slice(0, 8);
+  const dn = d => d === cfg.today ? 'Today' : d === addDays(cfg.today, 1) ? 'Tomorrow' : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+  return list.length ? list.map(x => `<button type="button" class="zgm" data-bg="${esc(x.date + '|' + x.c.id)}"><b>${esc(x.c.home)} vs ${esc(x.c.away)}</b><small>${esc(x.c.leagueName)} · ${dn(x.date)}, ${esc(x.c.ko)}</small></button>`).join('') : `<div class="small" style="margin-top:8px">No upcoming games match. Only games with a prediction that have not finished are listed.</div>`;
+}
+function statusChip(s) { return `<span class="zst ${s}">${s === 'pending' ? 'Pending' : s === 'hit' ? 'Hit' : s === 'miss' ? 'Missed' : 'Void'}</span>`; }
+function betsView() {
+  if (!BS.games) return `<div class="empty">Loading…</div>`;
+  const g = BS.game, cur = BS.cur, slip = BS.an;
+  const sel = g ? `<div class="zgm sel"><b>${esc(g.c.home)} vs ${esc(g.c.away)}</b><small>${esc(g.c.leagueName)} · ${esc(g.c.ko)}</small></div><div class="zrow"><button type="button" class="zch" data-bchg="1">Change game</button></div>`
+    : `<input type="text" id="bq" placeholder="Search a team or league" value="${esc(BS.q)}" autocomplete="off"><div id="bglist">${gameList()}</div>`;
+  const pick = g ? `<div class="zrow">${MK.map(([k, n]) => `<button type="button" class="zch ${BS.market === k ? 'on' : ''}" data-bm="${k}">${n}</button>`).join('')}</div>
+    ${BS.market === 'ou' ? `<div class="zrow">${[0.5, 1.5, 2.5, 3.5, 4.5, 5.5].map(v => `<button type="button" class="zch ${BS.line === v ? 'on' : ''}" data-bl="${v}">${v}</button>`).join('')}</div>` : ''}
+    <div class="zrow">${selChips(g)}</div>
+    ${cur && cur.error ? `<div class="zrc w">${esc(cur.error)}</div>` : cur && cur.legs ? `${probRow(cur.legs[0])}<button type="button" class="zgo" data-badd="1">${BS.slip.length ? 'Add to this parlay' : 'Add to bet'}</button>` : BS.sel ? `<div class="zrc">Working it out…</div>` : ''}` : '';
+  const builder = `<div class="zbox"><h3>1. Pick a game</h3>${sel}${g ? `<h3 style="margin-top:12px">2. What are you betting on?</h3>${pick}` : ''}</div>`;
+  const slipBox = BS.slip.length ? `<div class="zbox"><h3>Your bet: ${BS.slip.length === 1 ? 'single' : BS.slip.length + '-leg parlay'}</h3>
+    ${slip && slip.error ? `<div class="zrc w">${esc(slip.error)}</div>` : ''}
+    ${(slip && slip.legs ? slip.legs : BS.slip.map(l => ({ ...l, label: '…', p: {} }))).map((l, i) => `<div class="zsl"><div class="zt"><b>${esc(l.label)}</b><button type="button" data-brm="${i}">Remove</button></div><small>${esc(l.home || '')} vs ${esc(l.away || '')}${l.ko ? ' · ' + esc(l.ko) : ''}</small>${slip && slip.legs && BS.slip.length === 1 ? '' : ''}</div>`).join('')}
+    ${slip && slip.p ? `<div style="margin-top:8px;font-size:11.5px;font-weight:700;color:var(--grass)">${BS.slip.length > 1 ? 'All picks hit' : 'Chance it hits'}</div>${probRow({ p: slip.p, market: BS.slip.length === 1 ? BS.slip[0].market : 'parlay', sel: BS.slip[0].sel, line: BS.slip[0].line, grid: false })}${slip.sameGame ? `<span class="zrc">Picks on the same game are worked out together on each model's score grid, so they are not just multiplied. Forebet has no number for those.</span>` : ''}${slip.parlay && !slip.sameGame ? `<span class="zrc">Different games, so each model's chances are multiplied. A model shows n/a if it has no number for one of the games.</span>` : ''}` : ''}
+    <div><button type="button" class="zgo" data-btrack="1" ${BS.busy || !(slip && slip.p) ? 'disabled' : ''}>${BS.busy ? 'Saving…' : 'Track this bet'}</button><button type="button" class="zgo alt" data-bclear="1">Clear</button></div></div>` : '';
+  const sm = BS.sum, mdl = sm && sm.legs.n ? ['v2', 'v4', 'fb'].filter(k => sm.models[k].n).map(k => `${k === 'fb' ? 'Forebet' : k}: said <b>${sm.models[k].said}%</b>, landed <b>${sm.models[k].hit}%</b> (${sm.models[k].n})`).join(' · ') : '';
+  const head = sm && sm.bets.n ? `<div class="zsum"><b>${sm.bets.n}</b> tracked ${sm.bets.n === 1 ? 'bet' : 'bets'}: <b>${sm.bets.hit}</b> hit, <b>${sm.bets.miss}</b> missed, ${sm.bets.pending} pending${sm.bets.void ? `, ${sm.bets.void} void` : ''}.${mdl ? `<br>Settled picks, what each model said on average against how often they landed: ${mdl}.` : ''}</div>` : '';
+  const list = (BS.bets || []).map(b => `<div class="zbet"><div class="zt"><b>${b.legs.length === 1 ? 'Single' : b.legs.length + '-leg parlay'}</b>${statusChip(b.status)}</div>
+    ${b.legs.map(l => `<div class="zbl"><span>${esc(l.label)}<small>${esc(l.home)} vs ${esc(l.away)} · ${esc(l.leagueName || '')}</small></span><i class="${l.res || ''}">${l.res === 'hit' ? '✓' : l.res === 'miss' ? '✗' : l.res === 'void' ? 'void' : '…'}</i></div>`).join('')}
+    <div class="zft"><span>Models said at the time: ${['v2', 'v4', 'fb'].filter(k => b.p && b.p[k] != null).map(k => (k === 'fb' ? 'Forebet' : k) + ' ' + bpc(b.p[k])).join(' · ') || 'no numbers'}</span><span>${b.status === 'pending' ? `<button type="button" data-bvoid="${esc(b.id)}">Void</button>` : ''}<button type="button" data-bdel="${esc(b.id)}">${BS.del === b.id ? 'Tap again to remove' : 'Remove'}</button></span></div></div>`).join('');
+  return `<div class="small" style="margin:8px 4px 0">Build a single bet or a parlay, see what v2, v4 and Forebet give it, then track it. When the games finish and the Hub grades them, each pick is marked hit or missed. Odds are not used or stored.</div>${BS.msg ? `<div class="alert" style="margin:10px 4px 0">${esc(BS.msg)}</div>` : ''}${builder}${slipBox}${head}${list || `<div class="empty">No tracked bets yet.</div>`}`;
 }
 
 const nowCT = () => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date());
@@ -975,13 +1075,13 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status'], ['assign', 'Assign']].map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets']].map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function render() {
   keepFilter();
   renderHeader();
-  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : compare();
+  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : compare();
 }
 async function loadCounts() {
   const ds = [-2, -1, 0, 1, 2].map(o => addDays(S.date, o)).filter(d => counts[d] == null || d === S.date);
@@ -999,6 +1099,7 @@ async function loadDay(date) {
 }
 let tallyTry = false;
 async function warmTally() { if (tally || tallyTry) return; tallyTry = true; try { tally = await api('/api/tally'); if (S.tab === 'board') render(); } catch (e) {} }
+document.addEventListener('input', e => { if (e.target && e.target.id === 'bq') { BS.q = e.target.value; const el = document.getElementById('bglist'); if (el) el.innerHTML = gameList(); } });
 async function ensureTally() { if (!tally) { tally = await api('/api/tally'); } }
 
 /* ---------- Analyze / Update: one league at a time ---------- */
@@ -1085,7 +1186,29 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],.hd'); if (!t) return;
+  if (t.dataset.bg !== undefined) { const [d, id] = t.dataset.bg.split('|'); BS.game = BS.games.find(x => x.date === d && x.c.id === id) || null; BS.sel = null; BS.cur = null; BS.msg = ''; return render(); }
+  if (t.dataset.bchg) { BS.game = null; BS.sel = null; BS.cur = null; return render(); }
+  if (t.dataset.bm) { BS.market = t.dataset.bm; BS.sel = null; BS.cur = null; return render(); }
+  if (t.dataset.bl) { BS.line = Number(t.dataset.bl); return bAnalyzeCur(); }
+  if (t.dataset.bs) { BS.sel = t.dataset.bs; return bAnalyzeCur(); }
+  if (t.dataset.badd) { const l = curLeg(); if (!l) return; if (BS.slip.length >= 12) { BS.msg = 'A bet can have up to 12 picks.'; return render(); } BS.slip.push(l); BS.sel = null; BS.cur = null; BS.msg = ''; BS.game = null; return bAnalyzeSlip(); }
+  if (t.dataset.brm) { BS.slip.splice(Number(t.dataset.brm), 1); return bAnalyzeSlip(); }
+  if (t.dataset.bclear) { BS.slip = []; BS.an = null; BS.msg = ''; return render(); }
+  if (t.dataset.btrack) {
+    BS.busy = true; render();
+    try { const r = await bpost('/api/bets', { legs: BS.slip }); if (r.error) throw new Error(r.error); BS.slip = []; BS.an = null; BS.msg = 'Tracked. It will be marked hit or missed after the games finish and are graded.'; const l = await api('/api/bets'); BS.bets = l.items || []; BS.sum = l.summary || null; }
+    catch (er) { BS.msg = er.message; }
+    BS.busy = false; return render();
+  }
+  if (t.dataset.bvoid || t.dataset.bdel) {
+    const id = t.dataset.bvoid || t.dataset.bdel, del = !!t.dataset.bdel;
+    if (del && BS.del !== id) { BS.del = id; return render(); }
+    BS.del = null;
+    try { const r = await bpost(del ? '/api/bets/delete' : '/api/bets/void', { id }); if (r.error) throw new Error(r.error); const l = await api('/api/bets'); BS.bets = l.items || []; BS.sum = l.summary || null; BS.msg = del ? 'Removed.' : 'Marked void.'; }
+    catch (er) { BS.msg = er.message; }
+    return render();
+  }
   if (t.dataset.af) { S.af = t.dataset.af; return render(); }
   if (t.dataset.tm) { S.tm = t.dataset.tm; keepFilter(); return render(); }
   if (t.dataset.more) { S.more[t.dataset.more] = !S.more[t.dataset.more]; return render(); }
@@ -1093,7 +1216,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
-    if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
+    if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
   if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
   if (t.classList.contains('hd')) { S.open = S.open === t.dataset.id ? null : t.dataset.id; return render(); }
