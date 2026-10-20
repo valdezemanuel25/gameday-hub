@@ -132,7 +132,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
       id: f.id, kickoff: f.date, ko: localTime(f.date),
       league: slug, leagueKey: league.key, leagueName: league.name,
       home: f.home.name, away: f.away.name, final: null,
-      hAbbr: f.home.abbr || null, aAbbr: f.away.abbr || null, hRank: h?.team.rank ?? null, aRank: a?.team.rank ?? null,
+      hAbbr: f.home.abbr || null, aAbbr: f.away.abbr || null, hId: f.home.id || null, aId: f.away.id || null, hRank: h?.team.rank ?? null, aRank: a?.team.rank ?? null,
     };
     // v4 cup shadow (Champions League / Europa League): works from the cup model's own ratings, so it can
     // still predict a game v2 cannot (a club from a league the Hub does not keep).
