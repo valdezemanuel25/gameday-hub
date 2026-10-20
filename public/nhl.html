@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0b0f17">
 <title>Game Day Hub · NHL</title>
 <style>
-:root{--bg:#0b0f17;--bar:#0f141c;--s:#141b27;--s2:#1b2433;--ink:#eef2f8;--mut:#9aa6b8;--faint:#6c7a90;--line:#2a3546;--blue:#4c8dff;--chip:#1f2a3b;--good:#5ee08f;--bad:#ff7b6b;--amber:#f0c35a}
+:root{--bg:#0b0f17;--bar:#0f141c;--s:#141b27;--s2:#1b2433;--ink:#eef2f8;--mut:#9aa6b8;--faint:#6c7a90;--line:#2a3546;--blue:#4c8dff;--chip:#1f2a3b;--good:#5ee08f;--bad:#ff7b6b;--amber:#f0c35a;--gold:#f6c64a}
 *{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--bg)}
 body{background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;padding-top:56px;padding-bottom:100px}
@@ -122,7 +122,7 @@ h4{margin:20px 18px 6px;font-size:14px}
 .tpr .top1{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .tpm{display:flex;align-items:center;gap:8px;min-width:0}.tpm .cr{width:30px;height:30px;font-size:9.5px}.tpm b{font-size:15px;font-weight:700;white-space:nowrap}.tpm span{font-size:12px;color:var(--faint)}
 .tpw{font-size:11.5px;color:var(--mut);white-space:nowrap}
-.tpp{margin:10px 0 9px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}.tpp b{font-size:21px;font-weight:750;letter-spacing:-.02em}.tpp b i{font-style:normal;color:var(--blue)}.tpp span{font-size:12px;color:var(--mut)}
+.tpp{margin:10px 0 9px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}.tpp b{font-size:21px;font-weight:750;letter-spacing:-.02em}.tpp b i{font-style:normal}.tpp span{font-size:12px;color:var(--mut)}
 .tpc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.tpc div{background:var(--chip);border-radius:9px;padding:6px 8px;min-width:0}.tpc small{display:block;font-size:10.5px;color:var(--faint);font-weight:650}.tpc b{font-size:14.5px;font-weight:750;white-space:nowrap}
 .tpb{margin-top:8px;height:4px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}.tpb i{display:block;height:100%;background:var(--blue)}
 .tps{margin-top:9px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--faint)}.tps b{font-size:15px;font-weight:750;color:var(--ink);letter-spacing:-.01em}.tps em{font-style:normal;color:var(--mut)}
@@ -137,6 +137,8 @@ h4{margin:20px 18px 6px;font-size:14px}
 .bdots{display:flex;justify-content:center;gap:6px;margin:2px 0 4px}.bdots i{width:6px;height:6px;border-radius:50%;background:var(--line)}.bdots i.on{background:var(--blue)}
 .dt{margin:10px 18px 0}.dt .card{padding:12px 11px 10px;margin-bottom:10px;position:relative;overflow:hidden;background:linear-gradient(180deg,#172033 0%,#131a27 100%)}
 .cr{position:relative}.cr img{position:absolute;left:3px;top:3px;width:calc(100% - 6px);height:calc(100% - 6px);object-fit:contain}.cr.lg{background:#e9eef7;color:transparent;text-shadow:none}
+.gd{color:var(--gold)!important}.mt .w b.gd,.mt .o b.gd,.mt .o.hi b.gd{text-shadow:0 0 10px rgba(246,198,74,.45)}
+.tpp b.gd,.tpp b i{color:var(--gold)}
 .tpn{margin:4px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.5}
 .tpe{margin:6px 18px 0;padding:18px 14px;border:1px dashed var(--line);border-radius:14px;text-align:center;color:var(--mut);font-size:13px;line-height:1.5}</style>
 </head>
@@ -187,27 +189,30 @@ const logo = a => `https://a.espncdn.com/i/teamlogos/nhl/500/${LGO[a] || String(
 const crest = (a, win) => `<i class="cr${win ? ' win' : ''}" style="--tc:${tcol(a)}">${esc(a)}<img src="${logo(a)}" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('lg')" onerror="this.remove()"></i>`;
 function sideOf(m, c, kind) { return kind === 'fb' ? m.pick : (m.w >= 50 ? 'H' : 'A'); }
 function tile(label, m, c, g, kind) {
+  const gw = !c.final && consensus(c).same ? ' gd' : '', go = !c.final && goalsSide(c) ? ' gd' : '';
   if (!m) return `<div class="mt none"><div class="lb">${label}</div><div class="w">${kind === 'fb' ? 'Not read yet' : 'No pick'}</div></div>`;
   if (kind === 'fb') {
     const side = m.pick, p = m.p && side ? (side === 'H' ? m.p[0] : m.p[1]) : null;
-    return `<div class="mt${side ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${side ? esc(side === 'H' ? c.hAbbr : c.aAbbr) : '–'}${p ? ' ' + p + '%' : ''}</b>${mark(g && g.win)}</div>
+    return `<div class="mt${side ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b class="${gw.trim()}">${side ? esc(side === 'H' ? c.hAbbr : c.aAbbr) : '–'}${p ? ' ' + p + '%' : ''}</b>${mark(g && g.win)}</div>
       <div class="cf"><i style="width:${p ? Math.max(0, (p - 50) * 2) : 0}%"></i></div>
-      <div class="o">${m.score ? (() => { const tot = m.score.a + m.score.h, ln = lineOf(c); return `<b>${tot === ln ? 'Push' : tot > ln ? 'Over' : 'Under'} ${ln}</b><span class="l2">${mark(g && g.ou) || ' '}</span>`; })() : 'No score'}</div>
+      <div class="o">${m.score ? (() => { const tot = m.score.a + m.score.h, ln = lineOf(c); return `<b class="${go.trim()}">${tot === ln ? 'Push' : tot > ln ? 'Over' : 'Under'} ${ln}</b><span class="l2">${mark(g && g.ou) || ' '}</span>`; })() : 'No score'}</div>
       ${m.score ? `<div class="sr"><b>${m.score.a}–${m.score.h}</b><span>predicted</span></div>` : ''}</div>`;
   }
   const w = pickWin(m, c), o = pickOu(m);
-  return `<div class="mt${w.strong ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div>
+  return `<div class="mt${w.strong ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b class="${gw.trim()}">${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div>
     <div class="cf"><i style="width:${Math.max(0, (w.p - 50) * 2)}%"></i></div>
-    <div class="o${o.strong ? ' hi' : ''}"><b>${o.side} ${lineOf(c)}</b><span class="l2">${o.p}%${mark(g && g.ou)}${m.push ? `<span class="sc3">push ${m.push}%</span>` : ''}</span></div>
+    <div class="o${o.strong ? ' hi' : ''}"><b class="${go.trim()}">${o.side} ${lineOf(c)}</b><span class="l2">${o.p}%${mark(g && g.ou)}${m.push ? `<span class="sc3">push ${m.push}%</span>` : ''}</span></div>
     ${m.sc ? `<div class="sr"><b>${m.sc.a}–${m.sc.h}</b><span>likeliest ${m.sc.p}%</span>${mark(g && g.sc)}</div>` : ''}</div>`;
 }
 function sidesOf(c) { return [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), c.fb && c.fb.pick].filter(Boolean); }
 function consensus(c) { const p = sidesOf(c); return { n: p.length, same: p.length >= 3 && p.every(x => x === p[0]), side: p[0], split: p.length >= 2 && !p.every(x => x === p[0]) }; }
-function goalsPill(c) {
+// 'Over' / 'Under' when v2, v4 and Forebet's predicted total all fall on the same side of this game's line, else null.
+function goalsSide(c) {
   const ln = lineOf(c), vals = [c.v2 ? c.v2.o >= 50 : null, c.v4 ? c.v4.o >= 50 : null, c.fb && c.fb.score ? (c.fb.score.a + c.fb.score.h) > ln : null].filter(x => x !== null);
-  if (vals.length < 3 || (c.fb && c.fb.score && c.fb.score.a + c.fb.score.h === ln)) return '';
-  return vals.every(Boolean) ? `<div class="ag gl">All say Over ${ln}</div>` : vals.every(x => !x) ? `<div class="ag gl">All say Under ${ln}</div>` : '';
+  if (vals.length < 3 || (c.fb && c.fb.score && c.fb.score.a + c.fb.score.h === ln)) return null;
+  return vals.every(Boolean) ? 'Over' : vals.every(x => !x) ? 'Under' : null;
 }
+function goalsPill(c) { const g = goalsSide(c); return g ? `<div class="ag gl">All say ${g} ${lineOf(c)}</div>` : ''; }
 function card(c) {
   const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
   const hp = m0 ? m0.w : null, ap = hp == null ? null : 100 - hp;
@@ -254,7 +259,7 @@ function topPicks() {
 function topRow(c, big, sub, chips, avg) {
   const dn = c._d === fmt(new Date()) ? 'Today' : 'Tomorrow';
   return `<div class="tpr"><div class="top1"><div class="tpm">${crest(c.aAbbr)}<b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b>${crest(c.hAbbr)}</div><span class="tpw">${dn}, ${esc(c.ko)}</span></div>
-    <div class="tpp"><b>${big}</b><span>${sub}</span></div>
+    <div class="tpp"><b class="gd">${big}</b><span>${sub}</span></div>
     <div class="tpc">${chips.map(([l, v]) => `<div><small>${l}</small><b>${v}</b></div>`).join('')}</div><div class="tpb"><i style="width:${Math.max(0, Math.min(100, (avg - 50) * 2))}%"></i></div>
     ${c.v2 && c.v2.sc ? `<div class="tps"><span>v2 likeliest score</span><span><b>${esc(c.aAbbr)} ${c.v2.sc.a} – ${c.v2.sc.h} ${esc(c.hAbbr)}</b> <em>${c.v2.sc.p}%</em></span></div>` : ''}</div>`;
 }
@@ -273,10 +278,11 @@ function topView() {
 function tileOf(c, on) {
   const f = c.final, g = c.grade || {}, m0 = c.v2 || c.v4, hp = m0 ? m0.w : null, hf = hp != null && hp >= 50, cs = consensus(c);
   const tag = f ? `<i class="fin">${f.last !== 'REG' ? esc(f.last) : 'Final'}</i>` : cs.same ? '<i>All agree</i>' : cs.split ? '<i class="sp">Split</i>' : '';
+  const gs = f ? null : goalsSide(c), gw = !f && cs.same;
   const row = (ab, side) => { const fav = !f && hp != null && (side === 'h') === hf; const v = f ? (side === 'h' ? f.h : f.a) : hp == null ? '–' : (side === 'h' ? hp : 100 - hp) + '%';
-    return `<div class="r${fav ? ' fv' : ''}">${crest(ab)}<b>${esc(ab)}</b><span>${v}</span></div>`; };
+    return `<div class="r${fav ? ' fv' : ''}">${crest(ab)}<b>${esc(ab)}</b><span${fav && gw ? ' class="gd"' : ''}>${v}</span></div>`; };
   const ln = lineOf(c), ou = c.v2 ? pickOu(c.v2) : null;
-  const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}</span>${ou ? `<span><b>${ou.side}</b> ${ou.p}%</span>` : ''}`;
+  const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}</span>${ou ? `<span${gs ? ' class="gd"' : ''}><b${gs ? ' class="gd"' : ''}>${ou.side}</b> ${ou.p}%</span>` : ''}`;
   return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}<div class="ou">${foot}</div></button>`;
 }
 function board() {
