@@ -4,6 +4,8 @@
 //     market 'ou'   sel O | U, line 0.5 .. 5.5   market 'btts' sel Y | N
 //   Probabilities come from the cards' own v2 and v4 numbers (and Forebet where it publishes the same market). Odds are never used.
 //   Legs on different games multiply; legs on the same game are scored together on that model's score grid.
+//   Hockey (sport 'nhl', league 'nhl'): markets are the winner (overtime and shootout count, so no draw) and Over/Under at that card's
+//   DraftKings line. The line is taken from the card when the bet is placed and kept on the bet, so a later line move changes nothing.
 //   Settlement reads the finished score the Hub already grades from: a bet is stored once and settles by itself.
 
 const MAXG = 11;
@@ -18,16 +20,18 @@ export function scoreGrid(lh, la) {
   return cells.map(([x, y, p]) => [x, y, p / tot]);
 }
 
+const isNhl = l => l && l.sport === 'nhl';
 export function validLeg(l) {
   if (!l || !l.date || !l.league || !l.id) return 'Pick a game first.';
-  const ok = { win: ['H', 'D', 'A'], dc: ['1X', 'X2', '12'], ou: ['O', 'U'], btts: ['Y', 'N'] }[l.market];
+  const ok = (isNhl(l) ? { win: ['H', 'A'], ou: ['O', 'U'] } : { win: ['H', 'D', 'A'], dc: ['1X', 'X2', '12'], ou: ['O', 'U'], btts: ['Y', 'N'] })[l.market];
   if (!ok || !ok.includes(l.sel)) return 'Pick what you are betting on.';
-  if (l.market === 'ou' && !LINES.includes(Number(l.line))) return 'Choose a goals line between 0.5 and 5.5.';
+  if (l.market === 'ou' && !isNhl(l) && !LINES.includes(Number(l.line))) return 'Choose a goals line between 0.5 and 5.5.';
   return null;
 }
 // The rule a final score has to meet for this leg to win.
 export function test(l) {
   const line = Number(l.line);
+  if (isNhl(l)) return l.market === 'win' ? (h, a) => (l.sel === 'H' ? h > a : a > h) : (h, a, total) => (l.sel === 'O' ? total > line : total < line);
   switch (l.market) {
     case 'win': return (h, a) => (l.sel === 'H' ? h > a : l.sel === 'D' ? h === a : h < a);
     case 'dc': return (h, a) => (l.sel === '1X' ? h >= a : l.sel === 'X2' ? h <= a : h !== a);
@@ -37,6 +41,7 @@ export function test(l) {
 }
 export function label(l, c) {
   const home = c ? c.home : 'Home', away = c ? c.away : 'Away';
+  if (isNhl(l)) return l.market === 'win' ? `${l.sel === 'H' ? home : away} to win` : `${l.sel === 'O' ? 'Over' : 'Under'} ${Number(l.line)} goals`;
   if (l.market === 'win') return l.sel === 'H' ? `${home} to win` : l.sel === 'A' ? `${away} to win` : 'Draw';
   if (l.market === 'dc') return l.sel === '1X' ? `${home} or draw` : l.sel === 'X2' ? `${away} or draw` : `${home} or ${away} (no draw)`;
   if (l.market === 'ou') return `${l.sel === 'O' ? 'Over' : 'Under'} ${Number(l.line)} goals`;
@@ -44,12 +49,22 @@ export function label(l, c) {
 }
 
 // What a model says about a game, in one shape. Forebet only has 1X2, Over/Under 2.5 and Both teams to score.
-const srcOf = (c, m) => { const x = c && (m === 'fb' ? c.fb : c[m]); return x ? { p: x.p || null, over: x.over ?? null, btts: x.btts ?? null, lam: m === 'fb' ? null : x.lam || null } : null; };
+const srcOf = (c, m, l) => {
+  const x = c && (m === 'fb' ? c.fb : c[m]);
+  if (x && isNhl(l)) { // hockey cards: w = home win % (overtime counts), o = Over % at the card's line, p = Forebet [home, away]; only v2 has a score grid
+    return m === 'fb' ? { w: x.p ? x.p[0] : null, o: null, lam: null } : { w: x.w, o: x.o, lam: m === 'v2' && c.lam ? c.lam : null };
+  }
+  return x ? { p: x.p || null, over: x.over ?? null, btts: x.btts ?? null, lam: m === 'fb' ? null : x.lam || null } : null;
+};
 
 // One leg on one model. Uses the model's own published number where the card has it (winner, Over/Under 2.5, Both score);
 // any other goals line comes from that model's score grid.
 export function legProb(c, l, m) {
-  const s = srcOf(c, m); if (!s) return null;
+  const s = srcOf(c, m, l); if (!s) return null;
+  if (isNhl(l)) {
+    if (l.market === 'win') return s.w == null ? null : l.sel === 'H' ? s.w / 100 : 1 - s.w / 100;
+    return s.o == null || !(c.ln && c.ln.v === Number(l.line)) ? null : l.sel === 'O' ? s.o / 100 : 1 - s.o / 100;
+  }
   if (l.market === 'win' || l.market === 'dc') {
     if (!s.p) return null; const [h, d, a] = s.p.map(x => x / 100);
     return l.market === 'win' ? (l.sel === 'H' ? h : l.sel === 'D' ? d : a) : (l.sel === '1X' ? h + d : l.sel === 'X2' ? d + a : h + a);
@@ -58,10 +73,23 @@ export function legProb(c, l, m) {
   if (l.market === 'btts' && s.btts != null) return l.sel === 'Y' ? s.btts / 100 : 1 - s.btts / 100;
   return s.lam ? jointProb(c, [l], m, true) : null;
 }
+// Hockey: a level regulation score goes to overtime or a shootout, so each tied cell is split evenly between the two winners, and the
+// total is one higher when overtime (not a shootout) decides it: also an even split. v2 only; the other models have no score grid.
+function hockeyJoint(lam, legs) {
+  const N = 16, pois = l => { const p = [Math.exp(-l)]; for (let k = 1; k < N; k++) p.push(p[k - 1] * l / k); return p; }, ph = pois(lam[0]), pa = pois(lam[1]), tests = legs.map(test);
+  let sum = 0, tot = 0;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const x = ph[i] * pa[j]; tot += x;
+    const outs = i === j ? [[i + 1, i, 2 * i + 1, .25], [i + 1, i, 2 * i, .25], [i, i + 1, 2 * i + 1, .25], [i, i + 1, 2 * i, .25]] : [[i, j, i + j, 1]];
+    for (const [h, a, t, w] of outs) if (tests.every(f => f(h, a, t))) sum += x * w;
+  }
+  return sum / tot;
+}
 // Several legs on the same game, together: the chance that one final score satisfies all of them.
 export function jointProb(c, legs, m, force = false) {
   if (!force && legs.length === 1) return legProb(c, legs[0], m);
-  const s = srcOf(c, m); if (!s || !s.lam) return null;
+  const s = srcOf(c, m, legs[0]); if (!s || !s.lam) return null;
+  if (isNhl(legs[0])) return hockeyJoint(s.lam, legs);
   const tests = legs.map(test); let sum = 0;
   for (const [x, y, p] of scoreGrid(s.lam[0], s.lam[1])) if (tests.every(f => f(x, y))) sum += p;
   return sum;
@@ -69,28 +97,38 @@ export function jointProb(c, legs, m, force = false) {
 export const gameKey = l => `${l.date}|${l.league}|${l.id}`;
 
 // cards: Map of gameKey -> card. Returns each leg with its label and probability per model, and the whole bet's chance.
-export function analyze(cards, legs) {
-  if (!Array.isArray(legs) || !legs.length) return { error: 'Add at least one pick.' };
-  if (legs.length > 12) return { error: 'A bet can have up to 12 picks.' };
-  for (const l of legs) { const e = validLeg(l); if (e) return { error: e }; }
+export function analyze(cards, legs0) {
+  if (!Array.isArray(legs0) || !legs0.length) return { error: 'Add at least one pick.' };
+  if (legs0.length > 12) return { error: 'A bet can have up to 12 picks.' };
+  for (const l of legs0) { const e = validLeg(l); if (e) return { error: e }; }
+  // A hockey Over/Under is always at that card's own line.
+  const legs = [];
+  for (const l0 of legs0) {
+    const l = { ...l0 };
+    if (isNhl(l) && l.market === 'ou') { const c = cards.get(gameKey(l)); if (c) { if (!c.ln) return { error: `No Over/Under line for ${c.home} vs ${c.away} yet. Set it on the NHL page first.` }; l.line = c.ln.v; l.src = c.ln.src || 'sportsbook'; } }
+    legs.push(l);
+  }
   const groups = new Map();
   for (const l of legs) { const k = gameKey(l); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(l); }
   for (const [k, g] of groups) {
-    const dup = new Set(g.map(l => l.market + (l.market === 'ou' ? l.line : '')));
+    const dup = new Set(g.map(l => l.market + (l.market === 'ou' && !isNhl(l) ? l.line : '')));
     if (dup.size < g.length) return { error: 'Two picks on the same game use the same market. Remove one.' };
     const c = cards.get(k); if (!c) return { error: 'That game was not found. Reload and try again.' };
     if (!c.v2) return { error: `No prediction for ${c.home} vs ${c.away} yet.` };
+    if (isNhl(g[0]) && c.skipped) return { error: `${c.home} vs ${c.away} has no prediction (${c.skipped}).` };
     if (c.final) return { error: `${c.home} vs ${c.away} has finished, so it can't be analyzed.` };
   }
-  const out = legs.map(l => { const c = cards.get(gameKey(l)); return { ...l, line: l.market === 'ou' ? Number(l.line) : undefined, label: label(l, c), home: c.home, away: c.away, leagueName: c.leagueName, kickoff: c.kickoff, ko: c.ko, p: Object.fromEntries(MODELS.map(m => [m, legProb(c, l, m)])), grid: l.market === 'ou' && Number(l.line) !== 2.5 }; });
+  const out = legs.map(l => { const c = cards.get(gameKey(l)); return { ...l, line: l.market === 'ou' ? Number(l.line) : undefined, label: label(l, c), home: c.home, away: c.away, leagueName: isNhl(l) ? 'NHL' : c.leagueName, kickoff: c.kickoff, ko: c.ko, p: Object.fromEntries(MODELS.map(m => [m, legProb(c, l, m)])), grid: !isNhl(l) && l.market === 'ou' && Number(l.line) !== 2.5 }; });
   const p = {};
   for (const m of MODELS) {
     let acc = 1;
     for (const [k, g] of groups) { const v = jointProb(cards.get(k), g, m); if (v == null) { acc = null; break; } acc *= v; }
     p[m] = acc;
   }
-  const sameGame = [...groups.values()].some(g => g.length > 1);
-  return { legs: out, p, games: groups.size, sameGame, parlay: legs.length > 1 };
+  const sameGame = [...groups.values()].some(g => g.length > 1), notes = [];
+  if ([...groups.values()].some(g => g.length > 1 && isNhl(g[0]))) notes.push('Hockey picks on the same game are worked out on v2\'s score grid only (v4 and Forebet show n/a), with overtime treated as an even split.');
+  if (legs.some(l => isNhl(l) && l.market === 'ou' && Number.isInteger(l.line))) notes.push('On a whole-number line, a total exactly on the line is a push and refunds that pick. The Over chance shown leaves pushes out.');
+  return { legs: out, p, games: groups.size, sameGame, parlay: legs.length > 1, notes };
 }
 
 // ---- settling and summary ----
@@ -99,7 +137,10 @@ export function settle(bet, cards) {
   for (const l of bet.legs) {
     if (l.res) continue;
     const c = cards.get(gameKey(l));
-    if (c && c.final) { l.res = test(l)(c.final.h, c.final.a) ? 'hit' : 'miss'; changed = true; }
+    if (c && c.final) {
+      const total = c.final.total ?? c.final.h + c.final.a; // hockey totals leave out the shootout goal
+      l.res = isNhl(l) && l.market === 'ou' && total === Number(l.line) ? 'void' : test(l)(c.final.h, c.final.a, total) ? 'hit' : 'miss'; changed = true;
+    }
   }
   const was = bet.status;
   bet.status = bet.legs.some(l => l.res === 'miss') ? 'miss' : bet.legs.every(l => l.res) ? (bet.legs.every(l => l.res === 'void') ? 'void' : 'hit') : 'pending';
@@ -125,15 +166,15 @@ export async function getBets(env) { return (await env.HUB.get('bets', 'json')) 
 export const saveBets = (env, doc) => env.HUB.put('bets', JSON.stringify(doc));
 // The cards a set of legs refers to, one read per day.
 export async function loadCards(env, legs) {
-  const dates = [...new Set(legs.map(l => l.date))], days = await Promise.all(dates.map(d => env.HUB.get(`day:${d}`, 'json'))), m = new Map();
-  dates.forEach((d, i) => { for (const c of days[i]?.cards || []) m.set(`${d}|${c.league}|${c.id}`, c); });
+  const keys = [...new Set(legs.map(l => `${isNhl(l) ? 'nhl:' : ''}${l.date}`))], days = await Promise.all(keys.map(k => env.HUB.get(k.startsWith('nhl:') ? `nhl:day:${k.slice(4)}` : `day:${k}`, 'json'))), m = new Map();
+  keys.forEach((k, i) => { const nhl = k.startsWith('nhl:'), d = nhl ? k.slice(4) : k; for (const c of days[i]?.cards || []) m.set(`${d}|${nhl ? 'nhl' : c.league}|${c.id}`, c); });
   return m;
 }
 export async function addBet(env, legs, now = new Date()) {
   const cards = await loadCards(env, legs || []), a = analyze(cards, legs);
   if (a.error) return a;
   const bet = { id: now.getTime().toString(36) + Math.random().toString(36).slice(2, 6), at: now.toISOString(), status: 'pending', p: a.p, parlay: a.parlay, sameGame: a.sameGame,
-    legs: a.legs.map(l => ({ date: l.date, league: l.league, id: l.id, market: l.market, sel: l.sel, ...(l.market === 'ou' ? { line: l.line } : {}), label: l.label, home: l.home, away: l.away, leagueName: l.leagueName, ko: l.ko, kickoff: l.kickoff, p: l.p, res: null })) };
+    legs: a.legs.map(l => ({ date: l.date, league: l.league, id: l.id, ...(l.sport ? { sport: l.sport } : {}), market: l.market, sel: l.sel, ...(l.market === 'ou' ? { line: l.line, ...(l.src ? { src: l.src } : {}) } : {}), label: l.label, home: l.home, away: l.away, leagueName: l.leagueName, ko: l.ko, kickoff: l.kickoff, p: l.p, res: null })) };
   const doc = await getBets(env); doc.items.unshift(bet); doc.items = doc.items.slice(0, 300);
   await saveBets(env, doc);
   return { saved: true, bet };

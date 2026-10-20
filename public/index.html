@@ -503,12 +503,13 @@ const bpost = async (path, body) => { const r = await fetch(path, { method: 'POS
 const bpc = x => x == null ? '–' : Math.round(x * 100) + '%';
 async function loadBets() {
   const ds = [0, 1, 2].map(o => addDays(cfg.today, o)), games = [];
-  await Promise.all([...ds.map(async d => { try { for (const c of (await api('/api/day?date=' + d)).cards || []) if (c.v2 && !c.final) games.push({ date: d, c }); } catch (e) { /* skipped */ } }),
+  await Promise.all([...ds.map(async d => { try { for (const c of (await api('/api/day?date=' + d)).cards || []) if (c.v2 && !c.final) games.push({ date: d, c }); } catch (e) { /* skipped */ }
+    try { for (const c of (await api('/api/nhl/day?date=' + d)).cards || []) if (c.v2 && !c.final && !c.skipped) games.push({ date: d, c: { ...c, league: 'nhl', leagueName: 'NHL', sport: 'nhl' } }); } catch (e) { /* skipped */ } }),
     (async () => { try { const r = await api('/api/bets'); BS.bets = r.items || []; BS.sum = r.summary || null; } catch (e) { BS.bets = BS.bets || []; } })(),
     (async () => { try { await ensureTally(); } catch (e) { /* the record notes are just left out */ } })()]);
   BS.games = games.sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
 }
-const curLeg = () => { const g = BS.game; if (!g || !BS.sel) return null; return { date: g.date, league: g.c.league, id: g.c.id, market: BS.market, sel: BS.sel, ...(BS.market === 'ou' ? { line: BS.line } : {}) }; };
+const curLeg = () => { const g = BS.game; if (!g || !BS.sel) return null; const nhl = g.c.sport === 'nhl'; return { date: g.date, league: g.c.league, id: g.c.id, ...(nhl ? { sport: 'nhl' } : {}), market: BS.market, sel: BS.sel, ...(BS.market === 'ou' && !nhl ? { line: BS.line } : {}) }; };
 async function bAnalyzeCur() {
   const l = curLeg(); BS.cur = null; if (!l) return render();
   const mine = l; BS.curKey = JSON.stringify(l); render();
@@ -518,7 +519,7 @@ async function bAnalyzeCur() {
 async function bAnalyzeSlip() { BS.an = null; if (!BS.slip.length) return render(); try { BS.an = await bpost('/api/bets/analyze', { legs: BS.slip }); } catch (e) { BS.an = { error: e.message }; } render(); }
 // What a model's record says about a number like this one, from the Hub's finished games.
 function trackRec(l, m, p) {
-  if (!tally || p == null) return null;
+  if (!tally || p == null || l.sport === 'nhl' || l.league === 'nhl') return null;
   const pc = p * 100;
   if ((l.market === 'ou' && Number(l.line) === 2.5) || l.market === 'btts') {
     const pos = l.market === 'ou' ? l.sel === 'O' : l.sel === 'Y', rows = tally.calGoals && tally.calGoals[l.market === 'ou' ? 'over' : 'btts'] && tally.calGoals[l.market === 'ou' ? 'over' : 'btts'][m];
@@ -538,6 +539,7 @@ function probRow(l) {
 const MK = [['win', 'Winner'], ['dc', 'Double chance'], ['ou', 'Over/Under'], ['btts', 'Both score']];
 function selChips(g) {
   const c = g.c, ch = (v, t) => `<button type="button" class="zch ${BS.sel === v ? 'on' : ''}" data-bs="${v}">${esc(t)}</button>`;
+  if (c.sport === 'nhl') return BS.market === 'win' ? ch('H', strip(c.home)) + ch('A', strip(c.away)) : ch('O', 'Over') + ch('U', 'Under');
   if (BS.market === 'win') return ch('H', strip(c.home)) + ch('D', 'Draw') + ch('A', strip(c.away));
   if (BS.market === 'dc') return ch('1X', `${strip(c.home)} or draw`) + ch('X2', `${strip(c.away)} or draw`) + ch('12', 'No draw');
   if (BS.market === 'ou') return ch('O', 'Over') + ch('U', 'Under');
@@ -554,14 +556,18 @@ function betsView() {
   const g = BS.game, cur = BS.cur, slip = BS.an;
   const sel = g ? `<div class="zgm sel"><b>${esc(g.c.home)} vs ${esc(g.c.away)}</b><small>${esc(g.c.leagueName)} · ${esc(g.c.ko)}</small></div><div class="zrow"><button type="button" class="zch" data-bchg="1">Change game</button></div>`
     : `<input type="text" id="bq" placeholder="Search a team or league" value="${esc(BS.q)}" autocomplete="off"><div id="bglist">${gameList()}</div>`;
-  const pick = g ? `<div class="zrow">${MK.map(([k, n]) => `<button type="button" class="zch ${BS.market === k ? 'on' : ''}" data-bm="${k}">${n}</button>`).join('')}</div>
-    ${BS.market === 'ou' ? `<div class="zrow">${[0.5, 1.5, 2.5, 3.5, 4.5, 5.5].map(v => `<button type="button" class="zch ${BS.line === v ? 'on' : ''}" data-bl="${v}">${v}</button>`).join('')}</div>` : ''}
-    <div class="zrow">${selChips(g)}</div>
+  const hk = g && g.c.sport === 'nhl', hl = hk && g.c.ln && g.c.ln.v != null ? g.c.ln : null;
+  const pick = g ? `<div class="zrow">${MK.filter(([k]) => !hk || k === 'win' || k === 'ou').map(([k, n]) => `<button type="button" class="zch ${BS.market === k ? 'on' : ''}" ${hk && k === 'ou' && !hl ? 'disabled' : ''} data-bm="${k}">${n}</button>`).join('')}</div>
+    ${hk && !hl ? `<div class="zrc w">No Over/Under line for this game yet. Set it on the NHL page to bet the total.</div>` : ''}
+    ${hk && hl && BS.market === 'ou' ? `<div class="zrc">Over/Under ${hl.v} goals · ${esc(hl.src || 'line')}. Hockey totals use this game's own line.</div>` : ''}
+    ${BS.market === 'ou' && !hk ? `<div class="zrow">${[0.5, 1.5, 2.5, 3.5, 4.5, 5.5].map(v => `<button type="button" class="zch ${BS.line === v ? 'on' : ''}" data-bl="${v}">${v}</button>`).join('')}</div>` : ''}
+    ${hk && BS.market === 'ou' && !hl ? '' : `<div class="zrow">${selChips(g)}</div>`}
     ${cur && cur.error ? `<div class="zrc w">${esc(cur.error)}</div>` : cur && cur.legs ? `${probRow(cur.legs[0])}<button type="button" class="zgo" data-badd="1">${BS.slip.length ? 'Add to this parlay' : 'Add to bet'}</button>` : BS.sel ? `<div class="zrc">Working it out…</div>` : ''}` : '';
   const builder = `<div class="zbox"><h3>1. Pick a game</h3>${sel}${g ? `<h3 style="margin-top:12px">2. What are you betting on?</h3>${pick}` : ''}</div>`;
   const slipBox = BS.slip.length ? `<div class="zbox"><h3>Your bet: ${BS.slip.length === 1 ? 'single' : BS.slip.length + '-leg parlay'}</h3>
     ${slip && slip.error ? `<div class="zrc w">${esc(slip.error)}</div>` : ''}
-    ${(slip && slip.legs ? slip.legs : BS.slip.map(l => ({ ...l, label: '…', p: {} }))).map((l, i) => `<div class="zsl"><div class="zt"><b>${esc(l.label)}</b><button type="button" data-brm="${i}">Remove</button></div><small>${esc(l.home || '')} vs ${esc(l.away || '')}${l.ko ? ' · ' + esc(l.ko) : ''}</small>${slip && slip.legs && BS.slip.length === 1 ? '' : ''}</div>`).join('')}
+    ${(slip && slip.legs ? slip.legs : BS.slip.map(l => ({ ...l, label: '…', p: {} }))).map((l, i) => `<div class="zsl"><div class="zt"><b>${esc(l.label)}</b><button type="button" data-brm="${i}">Remove</button></div><small>${esc(l.home || '')} vs ${esc(l.away || '')}${l.ko ? ' · ' + esc(l.ko) : ''}</small></div>`).join('')}
+    ${slip && slip.notes ? slip.notes.map(n => `<span class="zrc">${esc(n)}</span>`).join('') : ''}
     ${slip && slip.p ? `<div style="margin-top:8px;font-size:11.5px;font-weight:700;color:var(--grass)">${BS.slip.length > 1 ? 'All picks hit' : 'Chance it hits'}</div>${probRow({ p: slip.p, market: BS.slip.length === 1 ? BS.slip[0].market : 'parlay', sel: BS.slip[0].sel, line: BS.slip[0].line, grid: false })}${slip.sameGame ? `<span class="zrc">Picks on the same game are worked out together on each model's score grid, so they are not just multiplied. Forebet has no number for those.</span>` : ''}${slip.parlay && !slip.sameGame ? `<span class="zrc">Different games, so each model's chances are multiplied. A model shows n/a if it has no number for one of the games.</span>` : ''}` : ''}
     <div><button type="button" class="zgo" data-btrack="1" ${BS.busy || !(slip && slip.p) ? 'disabled' : ''}>${BS.busy ? 'Saving…' : 'Track this bet'}</button><button type="button" class="zgo alt" data-bclear="1">Clear</button></div></div>` : '';
   const sm = BS.sum, mdl = sm && sm.legs.n ? ['v2', 'v4', 'fb'].filter(k => sm.models[k].n).map(k => `${k === 'fb' ? 'Forebet' : k}: said <b>${sm.models[k].said}%</b>, landed <b>${sm.models[k].hit}%</b> (${sm.models[k].n})`).join(' · ') : '';
@@ -1187,7 +1193,7 @@ document.addEventListener('click', async e => {
     return;
   }
   const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],.hd'); if (!t) return;
-  if (t.dataset.bg !== undefined) { const [d, id] = t.dataset.bg.split('|'); BS.game = BS.games.find(x => x.date === d && x.c.id === id) || null; BS.sel = null; BS.cur = null; BS.msg = ''; return render(); }
+  if (t.dataset.bg !== undefined) { const [d, id] = t.dataset.bg.split('|'); BS.game = BS.games.find(x => x.date === d && x.c.id === id) || null; if (BS.game && BS.game.c.sport === 'nhl' && !['win','ou'].includes(BS.market)) BS.market = 'win'; BS.sel = null; BS.cur = null; BS.msg = ''; return render(); }
   if (t.dataset.bchg) { BS.game = null; BS.sel = null; BS.cur = null; return render(); }
   if (t.dataset.bm) { BS.market = t.dataset.bm; BS.sel = null; BS.cur = null; return render(); }
   if (t.dataset.bl) { BS.line = Number(t.dataset.bl); return bAnalyzeCur(); }
