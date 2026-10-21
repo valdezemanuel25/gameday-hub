@@ -264,22 +264,23 @@ const mk = () => ({ n: 0, hit: 0 });
 export async function nhlTally(env) {
   const list = await env.HUB.list({ prefix: 'nhl:day:' });
   const days = await Promise.all(list.keys.map(k => env.HUB.get(k.name, 'json')));
-  const M = ['v2', 'v4', 'fb'], mkB = () => ({ win: Object.fromEntries(M.map(m => [m, mk()])), ou: Object.fromEntries(M.map(m => [m, mk()])), brier: { n: 0, v2: 0, v4: 0 } });
+  const M = ['v2', 'v4', 'fb'], mkB = () => ({ win: Object.fromEntries(M.map(m => [m, mk()])), ou: Object.fromEntries(M.map(m => [m, mk()])), brier: { n: 0, v2: 0, v4: 0 }, home: mk() });
   const all = mkB(), same = mkB(), recent = [];
   let graded = 0, lined = 0;
   for (const d of days.filter(Boolean).sort((a, b) => b.date.localeCompare(a.date))) {
     for (const c of d.cards.filter(x => x.final && x.grade).sort((a, b) => b.kickoff.localeCompare(a.kickoff))) {
-      graded++; if (c.ln) lined++;
+      graded++; const real = !!(c.ln && c.grade.line === c.ln.v); if (real) lined++; // Over/Under only counts at a real sportsbook line
       let g = c.grade;
       if (g.fb && g.fb.ou == null) { const o = fbOu(c.fb, c.final, c.ln ? c.ln.v : LINE); if (o != null) g = { ...g, fb: { ...g.fb, ou: o } }; } // games graded before Forebet O/U existed
       for (const m of M) {
         if (g[m]?.win != null) { all.win[m].n++; all.win[m].hit += g[m].win; }
-        if (g[m]?.ou != null) { all.ou[m].n++; all.ou[m].hit += g[m].ou; }
+        if (real && g[m]?.ou != null) { all.ou[m].n++; all.ou[m].hit += g[m].ou; }
       }
+      all.home.n++; all.home.hit += c.final.h > c.final.a ? 1 : 0;
       for (const m of ['v2', 'v4']) if (g[m]) { all.brier.n += m === 'v2' ? 1 : 0; all.brier[m] += g[m].brier; }
       if (g.v2 && g.v4 && g.fb && g.fb.win != null) {
-        same.brier.n++; same.brier.v2 += g.v2.brier; same.brier.v4 += g.v4.brier;
-        for (const m of M) { same.win[m].n++; same.win[m].hit += g[m].win; if (m !== 'fb' || g.fb.ou != null) { same.ou[m].n++; same.ou[m].hit += g[m].ou; } }
+        same.brier.n++; same.brier.v2 += g.v2.brier; same.brier.v4 += g.v4.brier; same.home.n++; same.home.hit += c.final.h > c.final.a ? 1 : 0;
+        for (const m of M) { same.win[m].n++; same.win[m].hit += g[m].win; if (real && (m !== 'fb' || g.fb.ou != null)) { same.ou[m].n++; same.ou[m].hit += g[m].ou; } }
       }
       if (recent.length < 60) recent.push({ date: d.date, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, ln: c.ln || null, v2: c.v2, v4: c.v4, fb: c.fb || null, grade: g });
     }

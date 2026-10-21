@@ -90,10 +90,11 @@ ok('Forebet O/U: predicted 4-3 (7) vs final 5-4 is a hit', fbOu({ score: { a: 3,
 ok('Forebet O/U: predicted 3-2 (5) vs final 2-1 is a hit (both Under)', fbOu({ score: { a: 2, h: 3 } }, { total: 3 }) === 1);
 ok('Forebet O/U: predicted 3-3 (6) is Over', fbOu({ score: { a: 3, h: 3 } }, { total: 7 }) === 1);
 ok('Forebet O/U: no predicted score means no grade', fbOu({ pick: 'H' }, { total: 7 }) === null);
-ok('results board counts Forebet Over/Under', t.all.ou.fb.n === 1 && t.same.ou.fb.n === 1, JSON.stringify(t.all.ou.fb));
+ok('a game with no sportsbook line is left out of every Over/Under count', t.all.ou.fb.n === 0 && t.all.ou.v2.n === 0 && t.same.ou.v4.n === 0 && t.lined === 0, JSON.stringify(t.all.ou));
+ok('the always-pick-home baseline counts every graded game', t.all.home.n === 1 && t.same.home.n === 1 && (t.all.home.hit === 0 || t.all.home.hit === 1));
 { // a game graded before Forebet O/U existed is filled in when the board is built, with nothing rewritten
   const k = [...kv.keys()].find(x => x.startsWith('nhl:day:')), d = JSON.parse(kv.get(k));
-  for (const c of d.cards) if (c.grade && c.grade.fb) delete c.grade.fb.ou;
+  for (const c of d.cards) if (c.grade && c.grade.fb) { delete c.grade.fb.ou; c.ln = { v: 5.5, src: 'DraftKings' }; c.grade.line = 5.5; } // now a game with a real line
   kv.set(k, JSON.stringify(d));
   const t2 = await nhlTally(env);
   ok('older graded games are counted for Forebet Over/Under too', t2.all.ou.fb.n === 1 && t2.recent[0].grade.fb.ou != null, JSON.stringify(t2.all.ou.fb));

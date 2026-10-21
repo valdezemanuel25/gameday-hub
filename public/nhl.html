@@ -208,6 +208,7 @@ function sidesOf(c) { return [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), 
 function consensus(c) { const p = sidesOf(c); return { n: p.length, same: p.length >= 3 && p.every(x => x === p[0]), side: p[0], split: p.length >= 2 && !p.every(x => x === p[0]) }; }
 // 'Over' / 'Under' when v2, v4 and Forebet's predicted total all fall on the same side of this game's line, else null.
 function goalsSide(c) {
+  if (!c.ln) return null; // no sportsbook line yet, so no Over/Under pick to grade
   const ln = lineOf(c), vals = [c.v2 ? c.v2.o >= 50 : null, c.v4 ? c.v4.o >= 50 : null, c.fb && c.fb.score ? (c.fb.score.a + c.fb.score.h) > ln : null].filter(x => x !== null);
   if (vals.length < 3 || (c.fb && c.fb.score && c.fb.score.a + c.fb.score.h === ln)) return null;
   return vals.every(Boolean) ? 'Over' : vals.every(x => !x) ? 'Under' : null;
@@ -248,7 +249,7 @@ function topPicks() {
       win.push({ c, side: cs.side, team: H ? c.hAbbr : c.aAbbr, pv, avg: Math.round(known.reduce((a, b) => a + b, 0) / known.length) });
     }
     const ln = lineOf(c);
-    if (c.v2 && c.v4 && c.fb && c.fb.score && c.fb.score.a + c.fb.score.h !== ln) {
+    if (c.ln && c.v2 && c.v4 && c.fb && c.fb.score && c.fb.score.a + c.fb.score.h !== ln) {
       const vals = [c.v2.o >= 50, c.v4.o >= 50, c.fb.score.a + c.fb.score.h > ln];
       if (vals.every(x => x === vals[0])) { const over = vals[0], pv = [over ? c.v2.o : 100 - c.v2.o, over ? c.v4.o : 100 - c.v4.o]; ou.push({ c, over, ln, pv, tot: c.fb.score.a + c.fb.score.h, avg: Math.round((pv[0] + pv[1]) / 2) }); }
     }
@@ -310,12 +311,13 @@ function results() {
   return `${seg}<table><tr><th></th><th>v2</th><th>v4 shadow</th><th>Forebet</th></tr>
   <tr><td>Winner</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.win[k], 'win', bw[i])).join('')}</tr>
   <tr><td>Over/Under at the line</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}</tr>
+  <tr><td>Always pick home</td><td colspan="3" class="hm">${B.home && B.home.n ? `${Math.round(B.home.hit / B.home.n * 100)}% <small>${B.home.hit}/${B.home.n}</small>` : '–'}</td></tr>
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
-  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Over/Under is graded at each game's sportsbook line (5.5 for the ${tally.graded - (tally.lined || 0)} games saved before lines were kept; ${tally.lined || 0} graded at a real line so far). A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
+  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Over/Under is graded only at the game's DraftKings line: ${tally.lined || 0} of ${tally.graded} graded games had one, and the ${tally.graded - (tally.lined || 0)} without a line are left out of the Over/Under row. \"Always pick home\" is the baseline a winner pick has to beat. A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
-    const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${m.o >= 50 ? 'Over' : 'Under'} ${r.ln ? r.ln.v : LINE}${mark(g && g.ou)}` : '–';
+    const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${r.ln ? `${m.o >= 50 ? 'Over' : 'Under'} ${r.ln.v}${mark(g && g.ou)}` : '<small>no line</small>'}` : '–';
     const c = { h: r.hAbbr, a: r.aAbbr };
-    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.score ? r.fb.score.a + '–' + r.fb.score.h + ' ' + (r.fb.score.a + r.fb.score.h === (r.ln ? r.ln.v : LINE) ? 'Push' : r.fb.score.a + r.fb.score.h > (r.ln ? r.ln.v : LINE) ? 'Over' : 'Under') + mark(gr.fb && gr.fb.ou) : '–'}` : '–';
+    const fb = r.fb ? `${r.fb.pick ? esc(r.fb.pick === 'H' ? r.hAbbr : r.aAbbr) + mark(gr.fb && gr.fb.win) : '–'}<br>${r.fb.score && !r.ln ? '<small>no line</small>' : r.fb.score ? r.fb.score.a + '–' + r.fb.score.h + ' ' + (r.fb.score.a + r.fb.score.h === (r.ln ? r.ln.v : LINE) ? 'Push' : r.fb.score.a + r.fb.score.h > (r.ln ? r.ln.v : LINE) ? 'Over' : 'Under') + mark(gr.fb && gr.fb.ou) : '–'}` : '–';
     return `<div class="rg"><b>${esc(r.aAbbr)} @ ${esc(r.hAbbr)}</b><span>${f.a}–${f.h}${f.last !== 'REG' ? ' ' + f.last : ''}</span><span>${one(r.v2, gr.v2, c)}</span><span>${one(r.v4, gr.v4, c)}</span><span>${fb}</span></div>`;
   }).join('')}</div>`;
 }
