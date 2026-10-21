@@ -220,7 +220,7 @@ body{padding-top:56px}
 .xq{background:#17241f;border-radius:10px;padding:6px 7px 7px;min-width:0}
 .xq .l{font-size:10px;color:var(--faint);font-weight:650;margin-bottom:3px}
 .xq b{display:block;font-size:13.5px;font-weight:750;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.xq small{display:block;font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap}.xq small.sc{color:var(--faint);font-size:10.5px}.xq small.sc.dim{opacity:.75}
+.xq small{display:block;font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap}.xq small.sc{color:var(--faint);font-size:10.5px}.xq small.sc.xg{color:var(--dim)}
 .xq .g{margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--faint);line-height:1.55}.xq .g span{display:flex;justify-content:space-between;gap:2px;white-space:nowrap}.xq .g b{display:inline;font-size:11.5px;font-weight:650;color:var(--dim)}.xq .g b.hi{color:var(--grass)}
 .xags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}.xags .xag{margin:0}
 .xag.s{background:var(--grass);color:#07150d;font-weight:750}.xag.s:before{content:"✓";width:auto;height:auto;background:none;font-weight:800}
@@ -614,7 +614,7 @@ function expanded(c) {
       : c.v4 === null ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game${c.v4why ? ': ' + esc(c.v4why) : ''}.</div>` : '';
   return `<div class="ex"><div class="in"><div class="in">
     ${done ? `<div class="two">${mdl}${sm}</div>` : c.sm ? '' : `<div class="two">${sm}</div>`}
-    <div class="two"><div class="box">Most likely exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b><small style="display:block;margin-top:4px;font-size:11px;color:var(--faint)">The score on the card is the best one that fits the pick, Over/Under and both-score lean.</small></div>${done || !c.fb ? fbBox(c) : ''}</div>
+    <div class="two"><div class="box" style="${done || !c.fb ? '' : 'grid-column:1/-1'}">Most likely exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b><small style="display:block;margin-top:4px;font-size:11px;color:var(--faint)">The score on the card is the best one that fits the pick, Over/Under and both-score lean.</small></div>${done || !c.fb ? fbBox(c) : ''}</div>
     ${candBox(c)}
     <div class="box f note">Your note<textarea id="note-${esc(c.id)}" maxlength="500" placeholder="Injuries, rotation, anything the model can't see">${esc(c.note || '')}</textarea>
       <div class="rw"><select id="mine-${esc(c.id)}" aria-label="Your pick">${[['', 'No pick of my own'], ['H', c.home + ' win'], ['D', 'Draw'], ['A', c.away + ' win']].map(([v, l]) => `<option value="${v}" ${(c.mine || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><button type="button" class="sv" data-save="${esc(c.id)}">Save</button></div></div>
@@ -710,7 +710,8 @@ function agreeScore(m) {
 function scoreHtml(m) { // one short line on the card; the exact top three are in the opened details
   if (!m || !m.scores || !m.scores[0]) return '';
   const a = agreeScore(m), top = m.scores[0];
-  return `<small class="sc">Score ${esc(a ? a.s : top[0])} · ${a ? a.p : top[1]}%</small>`;
+  const xg = m.lam ? `<small class="sc xg">Expected goals ${(+m.lam[0]).toFixed(1)}–${(+m.lam[1]).toFixed(1)}</small>` : '';
+  return xg + `<small class="sc">Score ${esc(a ? a.s : top[0])} · ${a ? a.p : top[1]}%</small>`;
 }
 function chips(c) {
   const v = c.v2, g = c.grade || {}, out = [], picks = [];
