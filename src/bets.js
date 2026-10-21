@@ -134,10 +134,10 @@ export function analyze(cards, legs0) {
 
 // ---- suggested parlays ----
 // Two picks from two different games whose combined chance is above MIN_PARLAY. Every model's own numbers are multiplied, never odds.
-// A pick is only a candidate when most of the models that have a number for it give it better than a 50% chance, and a pair is only
+// Winner, Over/Under 2.5 and Both teams to score only (no double chance). A pick is only a candidate when most of the models that have a number for it give it better than a 50% chance, and a pair is only
 // shown when most of the models that can price the pair put it above the line (the same majority rule as the card headline).
 export const MIN_PARLAY = 0.45;
-const CAND = [['win', 'H'], ['win', 'A'], ['dc', '1X'], ['dc', 'X2'], ['ou', 'O'], ['ou', 'U'], ['btts', 'Y'], ['btts', 'N']];
+const CAND = [['win', 'H'], ['win', 'A'], ['ou', 'O'], ['ou', 'U'], ['btts', 'Y'], ['btts', 'N']];
 const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
 export function suggest(cards, now = Date.now(), limit = 8) {
   const games = [];

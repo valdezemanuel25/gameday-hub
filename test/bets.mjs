@@ -113,14 +113,14 @@ ok('a bet can be removed', (await changeBet(e2, v.bet.id, 'delete')).ok && !(awa
 // suggested parlays: two picks, different games, above 45% together for most models, each pick backed by most models
 {
   const A = card('11', 'Alpha', 'Beta', mdl([70, 18, 12], 66, 50, [2.2, 0.8]), mdl([66, 20, 14], 62, 48, [2.0, 0.8]), { p: [68, 20, 12], over: 60, btts: 44 });
-  const B = card('12', 'Gamma', 'Delta', mdl([64, 20, 16], 40, 40, [1.6, 0.8]), mdl([62, 22, 16], 42, 41, [1.5, 0.8]), { p: [60, 22, 18], over: 41, btts: 40 });
+  const B = card('12', 'Gamma', 'Delta', mdl([72, 18, 10], 40, 40, [1.9, 0.7]), mdl([70, 20, 10], 42, 41, [1.8, 0.7]), { p: [69, 20, 11], over: 41, btts: 40 });
   const Z = card('13', 'Even', 'Steven', mdl([34, 30, 36], 50, 50, [1.2, 1.2]), mdl([35, 30, 35], 50, 50, [1.2, 1.2]), { p: [35, 30, 35], over: 50, btts: 50 });
   const F = card('14', 'Done', 'Gone', mdl([80, 10, 10], 60, 50, [2.5, .6]), mdl([80, 10, 10], 60, 50, [2.5, .6]), null, { final: { h: 1, a: 0 } });
   const cs = new Map([[`${D}|esp.1|11`, A], [`${D}|esp.1|12`, B], [`${D}|esp.1|13`, Z], [`${D}|esp.1|14`, F]]);
   const s = suggest(cs);
   ok('suggestions pair picks from different games only', s.length > 0 && s.every(x => x.legs[0].id !== x.legs[1].id));
   ok('every suggestion is above 45% for most models', s.every(x => ['v2', 'v4', 'fb'].filter(m => x.p[m] != null && x.p[m] > 0.45).length >= 2));
-  ok('finished games are left out, and a coin-flip game only gets picks that clear 50% (double chance, not a winner)', s.every(x => x.legs.every(l => l.id !== '14' && (l.id !== '13' || l.market === 'dc'))));
+  ok('finished and coin-flip games are left out, and double chance is never suggested', s.every(x => x.legs.every(l => l.id !== '14' && l.id !== '13' && l.market !== 'dc')));
   ok('a pair is the product of each model\'s two leg numbers', s.every(x => Math.abs(x.p.v2 - x.legs[0].p.v2 * x.legs[1].p.v2) < 1e-9));
   ok('a pick most models put under 50% is never suggested (Over on Gamma-Delta)', s.every(x => !x.legs.some(l => l.id === '12' && l.market === 'ou' && l.sel === 'O')));
   ok('best pair first', s.every((x, i) => i === 0 || (x.p.v2 + x.p.v4 + x.p.fb) <= (s[i - 1].p.v2 + s[i - 1].p.v4 + s[i - 1].p.fb) + 1e-9));
