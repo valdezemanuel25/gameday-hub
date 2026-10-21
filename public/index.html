@@ -664,7 +664,7 @@ function goalsCons(c) {
   const sm = c.sm ? { over: c.sm.h + c.sm.a >= 3 ? 100 : 0, btts: c.sm.h > 0 && c.sm.a > 0 ? 100 : 0 } : null; // SportsMole votes through its score
   const mkc = (k, yes, no) => {
     const col = [c.v2[k], c.v4 && c.v4[k], c.fb && c.fb[k], sm && sm[k]].filter(x => x != null), n = col.length;
-    const y = col.filter(x => x >= 55).length, o = col.filter(x => x <= 45).length;
+    const y = col.filter(x => x > 50).length, o = col.filter(x => x < 50).length; // same rule as the headline: above 50% is a yes, below 50% a no, exactly 50% no vote
     if (n >= 3 && y === n) out.push(`All say ${yes}`); else if (n >= 3 && o === n) out.push(`All say ${no}`);
     else if (n === 2 && y === 2) out.push(`Both say ${yes}`); else if (n === 2 && o === 2) out.push(`Both say ${no}`);
     else if (n >= 3 && y * 2 > n) out.push(`<span class="pt">${y} of ${n} say ${yes}</span>`); else if (n >= 3 && o * 2 > n) out.push(`<span class="pt">${o} of ${n} say ${no}</span>`);

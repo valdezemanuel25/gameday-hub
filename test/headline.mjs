@@ -17,4 +17,8 @@ const mk = o => ({ home: 'Lille', away: 'Galatasaray', v2: { pick: 'H', p: [52, 
 { const c = mk({ v2: { pick: 'H', p: [40, 30, 30], over: 50, btts: 50 }, v4: { pick: 'A', p: [30, 30, 40], over: 50, btts: 50 }, fb: null, sm: null });
   const h = api.headline(c); ok('a 1-1 split has no majority: Split', /Split/.test(h) && /no majority/.test(h), h); }
 { const c = mk({ v4: null, fb: null, sm: null }); const h = api.headline(c); ok('v2 alone keeps its own strongest pick', /xhl/.test(h) && !/Split|models agree/.test(h), h); }
+{ const c = mk({ v2: { pick: 'A', p: [20, 17, 63], over: 82, btts: 75 }, v4: { pick: 'H', p: [65, 17, 19], over: 81, btts: 73 }, fb: { p: [58, 20, 22], over: 75, btts: 54, score: { h: 2, a: 1 } }, sm: { h: 2, a: 1, text: 'x' } });
+  const g = api.goalsCons(c).join(' | '); ok('Betis game: Forebet at 54% both-score still counts, so all four say both score', /All say both score/.test(g) && /All say Over 2\.5/.test(g), g); }
+{ const c = mk({ v2: { pick: 'H', p: [50, 25, 25], over: 50, btts: 50 }, v4: { pick: 'H', p: [50, 25, 25], over: 52, btts: 48 }, fb: null, sm: null });
+  const g = api.goalsCons(c).join(' | '); ok('exactly 50% is no vote', !/All say|Both say/.test(g), g); }
 console.log(fails ? `\n${fails} FAILED` : '\nAll headline checks passed'); process.exit(fails ? 1 : 0);
