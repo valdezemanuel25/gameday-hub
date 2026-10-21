@@ -87,6 +87,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 details.how{margin-top:10px;font-size:12px;color:var(--dim)}
 details.how summary{cursor:pointer;color:var(--dim);padding:4px 0}
 details.how p{margin-top:6px;line-height:1.5}
+details.how h5.hw{margin:14px 0 2px;font-size:12px;font-weight:650;color:var(--dim)}
 .empty{margin:22px 18px;padding:22px;border:1px dashed var(--line);border-radius:14px;color:var(--dim);font-size:14px;line-height:1.6;text-align:center}
 .st{font-size:11.5px;color:var(--faint);text-align:center;padding:4px 16px 0;min-height:18px}
 .st.ready{color:var(--grass)}
@@ -602,6 +603,7 @@ function expanded(c) {
   const sm = c.sm
     ? `<div class="src s1"><small>SportsMole said</small><b>${esc(c.sm.text.replace(/^.*?(\d+–\d+).*$/, '$1'))}</b><small>${esc(c.sm.text)}</small>${c.smGrade ? `<div class="hits">${pill(c.smGrade.outcomeHit, 'Winner')}${pill(c.smGrade.scoreHit, 'Score')}${pill(c.smGrade.ouHit, 'O/U')}${pill(c.smGrade.bttsHit, 'Both')}</div>` : ''}</div>`
     : `<div class="src s0"><small>SportsMole</small>No prediction found yet</div>`;
+  const done = !!c.final; // before the game the top cards already say all of this; the boxes come back with the result marks
   const v4 = c.v4, v3 = c.v3;
   const shadow = v4
     ? `<div class="small"><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. It picks <b>${OUT[v4.pick]}</b>${v4.pick === v.pick ? ', same as v2' : `, <b>not</b> v2's pick (${OUT[v.pick]})`}. Over 2.5 ${v4.over}%, both score ${v4.btts}%.${v4.promo ? `<br>A club in this game is newly promoted, so v4 used a starting rating that fades as it plays. These games are tracked on their own line, not in v4's main record.` : ''}
@@ -611,16 +613,17 @@ function expanded(c) {
       ${g && g.v3 ? `<br>v3 result: ${pill(g.v3.outcomeHit, 'Winner')} ${pill(g.v3.ouHit, 'O/U')} ${pill(g.v3.bttsHit, 'Both')}` : ''}</div>`
       : c.v4 === null ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game${c.v4why ? ': ' + esc(c.v4why) : ''}.</div>` : '';
   return `<div class="ex"><div class="in"><div class="in">
-    <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
-    <div class="two">${mdl}${sm}</div>
-    <div class="two"><div class="box">Most common exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b></div>${fbBox(c)}</div>
+    ${done ? `<div class="two">${mdl}${sm}</div>` : c.sm ? '' : `<div class="two">${sm}</div>`}
+    <div class="two"><div class="box">Most likely exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b><small style="display:block;margin-top:4px;font-size:11px;color:var(--faint)">The score on the card is the best one that fits the pick, Over/Under and both-score lean.</small></div>${done || !c.fb ? fbBox(c) : ''}</div>
     ${candBox(c)}
-    <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
-    ${shadow}
-    ${fbLine(c)}
     <div class="box f note">Your note<textarea id="note-${esc(c.id)}" maxlength="500" placeholder="Injuries, rotation, anything the model can't see">${esc(c.note || '')}</textarea>
       <div class="rw"><select id="mine-${esc(c.id)}" aria-label="Your pick">${[['', 'No pick of my own'], ['H', c.home + ' win'], ['D', 'Draw'], ['A', c.away + ' win']].map(([v, l]) => `<option value="${v}" ${(c.mine || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><button type="button" class="sv" data-save="${esc(c.id)}">Save</button></div></div>
-    <details class="how"><summary>How the model got here</summary>
+    <details class="how"><summary>More details</summary>
+      <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
+      <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
+      ${shadow}
+      ${fbLine(c)}
+      <h5 class="hw">How the model got here</h5>
       <p>Last 5 domestic league games per club (before kickoff). Expected goals: ${esc(c.home)} ${v.lam[0]}, ${esc(c.away)} ${v.lam[1]}. Official model v2: league-average prior 1.56, home 1.17×, away 0.83×, form weight 0.6.</p>
       ${c.crossLeague ? `<p>${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment; the v4 cup model does.</p>` : ''}
       ${c.v4 && (c.leagueKey === 'ucl' || c.leagueKey === 'uel') ? `<p>v4 cup shadow model: each club's rating from its own league, a strength factor for each league, and a small correction from its Champions League and Europa League games of the last three seasons. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Tracked next to v2; it never changes v2's picks.</p>` : c.v4 ? `<p>v4 shadow model: attack and defence ratings for every club from about 2.5 years of league games, with recent games counting more and each result judged against the opposition faced. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Over 2.5 and both-score are pulled toward the league's recent scoring rate. It is tracked next to v2 and never changes v2's picks.</p>` : ''}
@@ -704,11 +707,10 @@ function agreeScore(m) {
   return null;
 }
 // Two small lines: the score that agrees with the card (with its own chance), and the raw most common score when it differs.
-function scoreHtml(m, pre = 'likeliest') {
+function scoreHtml(m) { // one short line on the card; the exact top three are in the opened details
   if (!m || !m.scores || !m.scores[0]) return '';
   const a = agreeScore(m), top = m.scores[0];
-  if (!a) return `<small class="sc">${pre} ${esc(top[0])} (${top[1]}%)</small>`;
-  return `<small class="sc">${pre} ${esc(a.s)} (${a.p}%)</small>` + (a.s !== top[0] ? `<small class="sc dim">most common ${esc(top[0])} (${top[1]}%)</small>` : '');
+  return `<small class="sc">Score ${esc(a ? a.s : top[0])} · ${a ? a.p : top[1]}%</small>`;
 }
 function chips(c) {
   const v = c.v2, g = c.grade || {}, out = [], picks = [];
@@ -802,7 +804,7 @@ function fbLine(c) {
 function v4Only(c) {
   const v4 = c.v4; if (!v4) return '';
   const g = c.grade && c.grade.v4;
-  return `<small><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. Picks <b>${OUT[v4.pick]}</b>. Over 2.5 ${v4.over}%, both score ${v4.btts}%. Likeliest score that agrees: ${esc((agreeScore(v4) || { s: v4.scores[0][0] }).s)}; most common ${esc(v4.scores[0][0])}.` +
+  return `<small><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. Picks <b>${OUT[v4.pick]}</b>. Over 2.5 ${v4.over}%, both score ${v4.btts}%. Score that fits its picks: ${esc((agreeScore(v4) || { s: v4.scores[0][0] }).s)}; single most likely score ${esc(v4.scores[0][0])}.` +
     (c.final ? ` Final ${c.final.h}–${c.final.a}${g ? ` ${pill(g.outcomeHit, 'Winner')} ${pill(g.ouHit, 'O/U')} ${pill(g.bttsHit, 'Both')}` : ''}` : '') + `</small>`;
 }
 function uncovered(list) {
