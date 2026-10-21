@@ -266,6 +266,8 @@ export async function nhlTally(env) {
   const days = await Promise.all(list.keys.map(k => env.HUB.get(k.name, 'json')));
   const M = ['v2', 'v4', 'fb'], mkB = () => ({ win: Object.fromEntries(M.map(m => [m, mk()])), ou: Object.fromEntries(M.map(m => [m, mk()])), brier: { n: 0, v2: 0, v4: 0 }, home: mk() });
   const all = mkB(), same = mkB(), recent = [];
+  // Calibration: winner picks grouped by how sure the model was, against how often they won.
+  const BANDS = [['50 to 54%', 50, 55], ['55 to 59%', 55, 60], ['60 to 64%', 60, 65], ['65% and up', 65, 101]], cal = { v2: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })), v4: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })) };
   let graded = 0, lined = 0;
   for (const d of days.filter(Boolean).sort((a, b) => b.date.localeCompare(a.date))) {
     for (const c of d.cards.filter(x => x.final && x.grade).sort((a, b) => b.kickoff.localeCompare(a.kickoff))) {
@@ -277,6 +279,7 @@ export async function nhlTally(env) {
         if (real && g[m]?.ou != null) { all.ou[m].n++; all.ou[m].hit += g[m].ou; }
       }
       all.home.n++; all.home.hit += c.final.h > c.final.a ? 1 : 0;
+      for (const m of ['v2', 'v4']) if (g[m] && c[m] && g[m].win != null) { const t = Math.max(c[m].w, 100 - c[m].w), b = cal[m].find(x => t >= x.lo && t < x.hi); if (b) { b.n++; b.hits += g[m].win; b.sum += t; } }
       for (const m of ['v2', 'v4']) if (g[m]) { all.brier.n += m === 'v2' ? 1 : 0; all.brier[m] += g[m].brier; }
       if (g.v2 && g.v4 && g.fb && g.fb.win != null) {
         same.brier.n++; same.brier.v2 += g.v2.brier; same.brier.v4 += g.v4.brier; same.home.n++; same.home.hit += c.final.h > c.final.a ? 1 : 0;
@@ -286,7 +289,8 @@ export async function nhlTally(env) {
     }
   }
   const fix = b => ({ ...b, brier: { n: b.brier.n, v2: b.brier.n ? +(b.brier.v2 / b.brier.n).toFixed(3) : null, v4: b.brier.n ? +(b.brier.v4 / b.brier.n).toFixed(3) : null } });
-  return { graded, lined, all: fix(all), same: fix(same), recent };
+  const calOut = Object.fromEntries(Object.entries(cal).map(([m, bs]) => [m, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]));
+  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent };
 }
 export async function nhlStatus(env) {
   const [S, fb] = await Promise.all([env.HUB.get('nhl:state', 'json'), env.HUB.get('nhl:fbmeta', 'json')]);

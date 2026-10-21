@@ -6,6 +6,16 @@ import { CUP, compIndex, fitCup, predictCup, resolveClub } from './v4cup.js';
 export { V4, norm, fit, predict, grid, CUP, compIndex, fitCup, predictCup, resolveClub };
 
 const DAY = 86400000;
+// The side of Over 2.5 a league's bundled history lands on most often (null if there is no history for it). A do-nothing baseline.
+const usual = new Map();
+export function usualOverSide(slug) {
+  if (usual.has(slug)) return usual.get(slug);
+  let n = 0, o = 0;
+  if (seed[slug]) for (const g of seed[slug].g) { n++; if (g[3] + g[4] >= 3) o++; }
+  else if (slug === 'uefa.champions' || slug === 'uefa.europa') { const c = slug === 'uefa.champions' ? 0 : 1; for (const g of cupSeed.g) if (g[1] === c) { n++; if (g[4] + g[5] >= 3) o++; } }
+  const side = n >= 100 ? (o * 2 >= n ? 'over' : 'under') : null;
+  usual.set(slug, side); return side;
+}
 export const supports = slug => !!(V4.PARAMS[slug] && seed[slug]);
 
 const lookups = new Map();

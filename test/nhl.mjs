@@ -90,6 +90,7 @@ ok('Forebet O/U: predicted 4-3 (7) vs final 5-4 is a hit', fbOu({ score: { a: 3,
 ok('Forebet O/U: predicted 3-2 (5) vs final 2-1 is a hit (both Under)', fbOu({ score: { a: 2, h: 3 } }, { total: 3 }) === 1);
 ok('Forebet O/U: predicted 3-3 (6) is Over', fbOu({ score: { a: 3, h: 3 } }, { total: 7 }) === 1);
 ok('Forebet O/U: no predicted score means no grade', fbOu({ pick: 'H' }, { total: 7 }) === null);
+ok('calibration bands count each graded winner pick once per model', t.cal && t.cal.v2.reduce((x, b) => x + b.n, 0) === 1 && t.cal.v4.reduce((x, b) => x + b.n, 0) === 1 && t.cal.v2.every(b => b.n === 0 || typeof b.avg === 'number'), JSON.stringify(t.cal && t.cal.v2));
 ok('a game with no sportsbook line is left out of every Over/Under count', t.all.ou.fb.n === 0 && t.all.ou.v2.n === 0 && t.same.ou.v4.n === 0 && t.lined === 0, JSON.stringify(t.all.ou));
 ok('the always-pick-home baseline counts every graded game', t.all.home.n === 1 && t.same.home.n === 1 && (t.all.home.hit === 0 || t.all.home.hit === 1));
 { // a game graded before Forebet O/U existed is filled in when the board is built, with nothing rewritten

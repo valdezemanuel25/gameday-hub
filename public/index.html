@@ -916,11 +916,12 @@ function calibrationView(t) {
   const mine = t.mine && t.mine.n ? `<div class="small" style="margin-top:10px">Your own picks on ${t.mine.n} games: you got ${t.mine.mine}, the model got ${t.mine.model}.</div>` : '';
   return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>Winner picks grouped by how sure the model was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}${mine}</div>`;
 }
+const moe = (h, n) => (n >= 5 ? Math.round(196 * Math.sqrt((h / n) * (1 - h / n) / n)) : null); // 95% margin on a hit rate, in points
 const RB = { same: 'Same games', all: 'All games each model has' };
 function boardBlock(t) {
   const bd = t.board; if (!bd) return '';
   const view = S.rb === 'all' ? 'all' : 'same', M = bd[view].models;
-  const cell = (m, k, best) => { const [h, n] = M[m][k]; return n ? `<div class="c ${best ? 'best' : ''}"><div class="p">${Math.round(100 * h / n)}%</div><div class="f">${h} of ${n}</div><div class="tr"><i style="width:${Math.round(100 * h / n)}%"></i></div></div>` : `<div class="c"><div class="p">–</div><div class="f">no games yet</div></div>`; };
+  const cell = (m, k, best) => { const [h, n] = M[m][k]; return n ? `<div class="c ${best ? 'best' : ''}"><div class="p">${Math.round(100 * h / n)}%</div><div class="f">${h} of ${n}${moe(h, n) != null ? ` · ±${moe(h, n)}` : ''}</div><div class="tr"><i style="width:${Math.round(100 * h / n)}%"></i></div></div>` : `<div class="c"><div class="p">–</div><div class="f">no games yet</div></div>`; };
   const row = (k, name, sub) => {
     const pcts = ['v2', 'v4', 'fb'].map(m => { const [h, n] = M[m][k]; return n ? h / n : null; }), top = Math.max(...pcts.filter(x => x != null)), many = pcts.filter(x => x != null).length > 1;
     return `<div class="r"><div class="lab">${name}<small>${sub}</small></div>${['v2', 'v4', 'fb'].map((m, i) => cell(m, k, many && pcts[i] === top)).join('')}</div>`;
@@ -931,10 +932,10 @@ function boardBlock(t) {
     <div class="seg">${['same', 'all'].map(v => `<button type="button" data-rb="${v}" class="${v === view ? 'on' : ''}">${RB[v]}${v === 'same' && view === 'same' ? ` (${n})` : ''}</button>`).join('')}</div>
     <div class="bd"><div class="r h"><div></div><div><b>v2</b>official</div><div><b>v4</b>shadow</div><div class="fb"><b>Forebet</b>tracked only</div></div>
       ${row('outcome', 'Winner', 'home, draw, away')}${row('ou', 'Over/under', '2.5 goals')}${row('btts', 'Both score', 'both teams')}
-      ${(() => { const B = bd[view].base; if (!B) return ''; const bc = ([h, n]) => n ? `<div class="c"><div class="p">${Math.round(100 * h / n)}%</div><div class="f">${h} of ${n}</div></div>` : `<div class="c"><div class="p">–</div></div>`;
-        return `<div class="r bs"><div class="lab">Always home<small>no model, just pick the home team</small></div>${bc(B.home)}<div class="bsn">beat this to add anything</div></div><div class="r bs"><div class="lab">Always Over<small>no model, just pick Over 2.5</small></div>${bc(B.over)}<div class="bsn">beat this to add anything</div></div>`; })()}
+      ${(() => { const B = bd[view].base; if (!B) return ''; const bc = ([h, n]) => n ? `<div class="c"><div class="p">${Math.round(100 * h / n)}%</div><div class="f">${h} of ${n}${moe(h, n) != null ? ` · ±${moe(h, n)}` : ''}</div></div>` : `<div class="c"><div class="p">–</div></div>`;
+        return `<div class="r bs"><div class="lab">Always home<small>no model, just pick the home team</small></div>${bc(B.home)}<div class="bsn">beat this to add anything</div></div><div class="r bs"><div class="lab">Always Over<small>no model, just pick Over 2.5</small></div>${bc(B.over)}<div class="bsn">beat this to add anything</div></div>${B.usual && B.usual[1] ? `<div class="r bs"><div class="lab">League's usual side<small>Over or Under 2.5, whichever that league lands on more</small></div>${bc(B.usual)}<div class="bsn">history of that league, no model</div></div>` : ''}`; })()}
       <div class="r br"><div>Brier score<br><span class="fnt">lower is better</span></div>${br.map(x => `<div>${x == null ? '–' : `<b class="${x === bl && br.filter(y => y != null).length > 1 ? 'best' : ''}">${x}</b>`}</div>`).join('')}</div></div>
-    <div class="bdn">Small samples swing a lot. The two baseline rows are the do-nothing picks each model has to beat${view === 'all' ? ' (counted on the games v2 was graded on)' : ''}. Forebet is recorded and graded only; no model uses it. A random guess scores 0.667 on Brier.${view === 'same' && !n ? ' No game has all three models graded yet.' : ''}</div>`;
+    <div class="bdn">Small samples swing a lot. The baseline rows are the do-nothing picks each model has to beat. ± is the 95% margin: the true rate probably sits within that many points of the percentage shown, and it shrinks as games pile up${view === 'all' ? ' (counted on the games v2 was graded on)' : ''}. Forebet is recorded and graded only; no model uses it. A random guess scores 0.667 on Brier.${view === 'same' && !n ? ' No game has all three models graded yet.' : ''}</div>`;
 }
 // What each model picked for one graded game, and whether it hit.
 function fbPicks(c) {

@@ -62,6 +62,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 table{width:calc(100% - 36px);margin:12px 18px 0;border-collapse:collapse;background:var(--s);border:1px solid var(--line);border-radius:14px;overflow:hidden;font-variant-numeric:tabular-nums}
 th,td{padding:11px 10px;text-align:left;border-bottom:1px solid var(--line);font-size:14px}
 tr:last-child td{border-bottom:0}
+table.cal{margin-top:6px}table.cal td.off{color:#e0a040}table.cal td small{display:block;color:var(--faint);font-size:11px}
 th{font-size:11px;color:var(--mut);font-weight:600}
 td small{display:block;color:var(--faint);font-size:11px;margin-top:1px}
 td.best{color:var(--blue);font-weight:700}
@@ -295,11 +296,20 @@ function board() {
 }
 function cell(m, key, other) {
   const v = pct(m.hit, m.n);
-  return v == null ? '<td>–</td>' : `<td${other}>${v}%<small>${m.hit}/${m.n}</small></td>`;
+  const mg = m.n >= 5 ? Math.round(196 * Math.sqrt((m.hit / m.n) * (1 - m.hit / m.n) / m.n)) : null;
+  return v == null ? '<td>–</td>' : `<td${other}>${v}%<small>${m.hit}/${m.n}${mg != null ? ' · ±' + mg : ''}</small></td>`;
 }
 function bestOf(models, key) {
   const v = ['v2', 'v4', 'fb'].map(k => { const m = models[k]; return m.n ? m.hit / m.n : -1; }), mx = Math.max(...v);
   return v.map(x => x === mx && mx >= 0 && v.filter(y => y === mx).length < v.filter(y => y >= 0).length ? ' class="best"' : '');
+}
+function nbAge() { try { const t = localStorage.getItem('hubBackupNhl'); return t ? Math.floor((Date.now() - new Date(t).getTime()) / 86400000) : null; } catch (e) { return null; } }
+function nbLine() { const b = nbAge(); return b == null ? 'No hockey export made from this device yet.' : b === 0 ? 'Last hockey export from this device: today.' : `Last hockey export from this device: ${b} day${b === 1 ? '' : 's'} ago.`; }
+function calView() {
+  const C = tally.cal; if (!C) return '';
+  const row = (m, name) => C[m].filter(b => b.n).map(b => `<tr><td>${name} sure ${esc(b.label)}</td><td>${b.avg}%<small>said</small></td><td${Math.abs(100 * b.hits / b.n - b.avg) > 15 ? ' class="off"' : ''}>${Math.round(100 * b.hits / b.n)}%<small>${b.hits}/${b.n} won</small></td></tr>`).join('');
+  const rows = row('v2', 'v2') + row('v4', 'v4');
+  return rows ? `<h4>Are the percentages honest?</h4><table class="cal"><tr><th></th><th>It said</th><th>It won</th></tr>${rows}</table><div class="nt">Winner picks grouped by how sure the model was. When "said" and "won" are far apart the percentage is not telling you much yet. Small groups swing a lot.</div>` : '';
 }
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;
@@ -308,12 +318,14 @@ function results() {
   if (!tally.graded) return seg + `<div class="empty">No graded NHL games yet. Results appear here once finished games are graded.</div>`;
   const bw = bestOf(B.win, 'win'), bo = bestOf(B.ou, 'ou');
   const bb = B.brier.n ? (B.brier.v4 < B.brier.v2 ? [ '', ' class="best"', '' ] : B.brier.v2 < B.brier.v4 ? [' class="best"', '', ''] : ['', '', '']) : ['', '', ''];
-  return `${seg}<table><tr><th></th><th>v2</th><th>v4 shadow</th><th>Forebet</th></tr>
+  const b = nbAge(), nag = b != null && b >= 14 ? `<div class="nt" style="color:#e0a040"><b>Last hockey export was ${b} days ago.</b> Export it on the Status tab.</div>` : '';
+  return `${seg}${nag}<table><tr><th></th><th>v2</th><th>v4 shadow</th><th>Forebet</th></tr>
   <tr><td>Winner</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.win[k], 'win', bw[i])).join('')}</tr>
   <tr><td>Over/Under at the line</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}</tr>
-  <tr><td>Always pick home</td><td colspan="3" class="hm">${B.home && B.home.n ? `${Math.round(B.home.hit / B.home.n * 100)}% <small>${B.home.hit}/${B.home.n}</small>` : '–'}</td></tr>
+  <tr><td>Always pick home</td><td colspan="3" class="hm">${B.home && B.home.n ? `${Math.round(B.home.hit / B.home.n * 100)}% <small>${B.home.hit}/${B.home.n} · ±${Math.round(196 * Math.sqrt((B.home.hit / B.home.n) * (1 - B.home.hit / B.home.n) / B.home.n))}</small>` : '–'}</td></tr>
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
-  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. Over/Under is graded only at the game's DraftKings line: ${tally.lined || 0} of ${tally.graded} graded games had one, and the ${tally.graded - (tally.lined || 0)} without a line are left out of the Over/Under row. \"Always pick home\" is the baseline a winner pick has to beat. A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
+  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. ± is the 95% margin: the true rate probably sits within that many points, and it shrinks as games pile up. Over/Under is graded only at the game's DraftKings line: ${tally.lined || 0} of ${tally.graded} graded games had one, and the ${tally.graded - (tally.lined || 0)} without a line are left out of the Over/Under row. \"Always pick home\" is the baseline a winner pick has to beat. A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
+  ${calView()}
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
     const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${r.ln ? `${m.o >= 50 ? 'Over' : 'Under'} ${r.ln.v}${mark(g && g.ou)}` : '<small>no line</small>'}` : '–';
     const c = { h: r.hAbbr, a: r.aAbbr };
@@ -330,6 +342,7 @@ function statusView() {
   <div class="kv"><span>Forebet last read</span><span>${fb ? (fb.ok ? `${fb.rows} games, ${fb.saved} saved` : 'failed') : 'not yet'}</span></div>
   ${fb && fb.msg ? `<div class="note">${esc(fb.msg)}</div>` : ''}
   <div class="note">Backtest on 2,428 games from 3 seasons: winner picks hit about 55% (v2) and 56% (v4) against 54% for always picking the home team. Over/Under at 5.5 only beat the 55% Over rate when the model was confident. Goalie ratings did not help, so they are not used yet.</div>
+  <div class="note" style="${nbAge() == null || nbAge() >= 7 ? 'color:#e0a040' : ''}">${nbLine()}</div>
   <button type="button" class="btn" id="xp" style="margin-top:12px">Export hockey data</button><div class="note">Downloads every saved hockey day (cards with v2, v4 and Forebet picks and results) plus the totals, as one file.</div></div></div>`;
 }
 function renderDays() {
@@ -369,6 +382,8 @@ document.addEventListener('click', async e => {
   else if (t.dataset.sc) { S.scope = t.dataset.sc; render(); }
   else if (t.id === 'xp') { // the server sends the file itself, which also works on phones that block script downloads
     $('#st').textContent = 'Preparing the hockey export… the file should download in a moment.';
+    try { localStorage.setItem('hubBackupNhl', new Date().toISOString()); } catch (e) { /* ignore */ }
+    if (S.tab === 'status') render();
     window.location.href = '/api/nhl/export';
   }
   else if (t.id === 'run') {

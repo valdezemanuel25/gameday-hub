@@ -158,5 +158,11 @@ ok('a live game after the seed is added, a repeat of a seed game is not', merged
   ok('no games at all in this league: still no prediction', predict(R, est[0], 'Never Played FC') === null);
   const R2 = fit('eng.1', G, now); ok('with 8+ games the club leaves the prior (promo flag off)', Object.values(R2.t).every(v => v[2] < V4.MIN_GAMES ? v[3] === 1 : v[3] === 0));
 }
+{ // a league's usual Over 2.5 side comes from its bundled history
+  const { usualOverSide } = await import('../src/v4.js');
+  const sides = ['eng.1', 'ger.1', 'usa.1', 'uefa.champions'].map(usualOverSide);
+  ok('league usual side is over/under for leagues with history ' + JSON.stringify(sides), sides.every(x => x === 'over' || x === 'under'));
+  ok('no history means no baseline', usualOverSide('por.1') === null);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll v4 checks passed');
 process.exit(fails ? 1 : 0);
