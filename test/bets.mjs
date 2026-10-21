@@ -124,6 +124,9 @@ ok('a bet can be removed', (await changeBet(e2, v.bet.id, 'delete')).ok && !(awa
   ok('a pair is the product of each model\'s two leg numbers', s.every(x => Math.abs(x.p.v2 - x.legs[0].p.v2 * x.legs[1].p.v2) < 1e-9));
   ok('a pick most models put under 50% is never suggested (Over on Gamma-Delta)', s.every(x => !x.legs.some(l => l.id === '12' && l.market === 'ou' && l.sel === 'O')));
   ok('best pair first', s.every((x, i) => i === 0 || (x.p.v2 + x.p.v4 + x.p.fb) <= (s[i - 1].p.v2 + s[i - 1].p.v4 + s[i - 1].p.fb) + 1e-9));
+  const P = { ...A, id: '15', kickoff: new Date(Date.now() - 3600000).toISOString() };
+  const sp = suggest(new Map([[`${D}|esp.1|15`, P], [`${D}|esp.1|12`, B]]));
+  ok('a game already in play is still suggested and marked in play', sp.length > 0 && sp.some(x => x.legs.some(l => l.id === '15' && l.live)) && sp.every(x => x.legs.every(l => l.id !== '12' || !l.live)));
   ok('nothing when no two games qualify', suggest(new Map([[`${D}|esp.1|13`, Z]])).length === 0);
 }
 

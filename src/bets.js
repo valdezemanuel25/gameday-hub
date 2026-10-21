@@ -142,7 +142,7 @@ const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
 export function suggest(cards, now = Date.now(), limit = 8) {
   const games = [];
   for (const [k, c] of cards) {
-    if (!c || !c.v2 || c.final || c.skipped || c.sport === 'nhl' || (c.kickoff && new Date(c.kickoff).getTime() <= now)) continue;
+    if (!c || !c.v2 || c.final || c.skipped || c.sport === 'nhl') continue; // games in play stay in until they are graded as finished
     const [date, league, id] = k.split('|'), opts = [];
     for (const [market, sel] of CAND) {
       const l = { date, league, id, market, sel, ...(market === 'ou' ? { line: 2.5 } : {}) }, p = {};
@@ -161,7 +161,7 @@ export function suggest(cards, now = Date.now(), limit = 8) {
     const have = MODELS.filter(m => p[m] != null);
     if (have.length < 2 || have.filter(m => p[m] > MIN_PARLAY).length * 2 <= have.length) continue;
     const row = x => ({ date: x.date, league: x.league, id: x.id, market: x.market, sel: x.sel, ...(x.line ? { line: x.line } : {}) });
-    out.push({ mean: avg(have.map(m => p[m])), p, legs: [a, b].map((x, n) => ({ ...row(x), label: x.label, home: (n ? games[j] : games[i]).c.home, away: (n ? games[j] : games[i]).c.away, ko: (n ? games[j] : games[i]).c.ko, leagueName: (n ? games[j] : games[i]).c.leagueName, p: x.p })) });
+    out.push({ mean: avg(have.map(m => p[m])), p, legs: [a, b].map((x, n) => ({ ...row(x), label: x.label, home: (n ? games[j] : games[i]).c.home, away: (n ? games[j] : games[i]).c.away, ko: (n ? games[j] : games[i]).c.ko, live: !!((n ? games[j] : games[i]).c.kickoff && new Date((n ? games[j] : games[i]).c.kickoff).getTime() <= now), leagueName: (n ? games[j] : games[i]).c.leagueName, p: x.p })) });
   }
   out.sort((a, b) => b.mean - a.mean);
   return out.slice(0, limit).map(({ mean, ...r }) => r);

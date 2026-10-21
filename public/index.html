@@ -525,17 +525,17 @@ async function loadBets() {
 }
 // Two-pick parlays from different games that the models put above 45% together (soccer, next two days).
 async function loadSuggest() {
-  const lim = addDays(cfg.today, 1), gs = (BS.games || []).filter(x => x.c.sport !== 'nhl' && x.date <= lim && new Date(x.c.kickoff) > Date.now()).map(x => ({ date: x.date, league: x.c.league, id: x.c.id }));
+  const lim = addDays(cfg.today, 1), gs = (BS.games || []).filter(x => x.c.sport !== 'nhl' && x.date <= lim).map(x => ({ date: x.date, league: x.c.league, id: x.c.id }));
   try { BS.sug = gs.length > 1 ? (await bpost('/api/bets/suggest', { games: gs })).items || [] : []; } catch (e) { BS.sug = []; }
   if (S.tab === 'bets') render();
 }
 function sugBox() {
   if (BS.sug == null) return '';
   const body = BS.sug.length ? BS.sug.map((x, i) => `<div class="zsl"><div class="zt"><b>2-leg parlay</b><span><button type="button" data-bsug="${i}">Add to bet</button> <button type="button" data-bsugt="${i}" ${BS.busy ? 'disabled' : ''}>Track as model parlay</button></span></div>
-    ${x.legs.map(l => `<div class="zbl"><span>${esc(l.label)}<small>${esc(l.home)} vs ${esc(l.away)} · ${esc(l.ko || '')}</small></span></div>`).join('')}
+    ${x.legs.map(l => `<div class="zbl"><span>${esc(l.label)}<small>${esc(l.home)} vs ${esc(l.away)} · ${esc(l.ko || '')}${l.live ? ' · in play' : ''}</small></span></div>`).join('')}
     <div class="zpr"><span><span class="zk">v2</span><b>${bpc(x.p.v2)}</b></span><span><span class="zk">v4 shadow</span><b>${bpc(x.p.v4)}</b></span><span><span class="zk">Forebet</span><b>${bpc(x.p.fb)}</b></span></div></div>`).join('')
     : `<div class="zrc">No two-pick parlay clears 45% right now.</div>`;
-  return `<div class="zbox"><h3>Suggested parlays</h3><div class="zrc">Two picks from different games, today and tomorrow. Each pick is one most models give better than 50%, and the pair has to be above 45% together for most models. These multiply each model's own numbers, which run high when a model is overconfident, so treat them as a shortlist.</div>${body}</div>`;
+  return `<div class="zbox"><h3>Suggested parlays</h3><div class="zrc">Two picks from different games, today and tomorrow. A game stays in until it is finished and graded; one already in play still shows its pre-game numbers. Each pick is one most models give better than 50%, and the pair has to be above 45% together for most models. These multiply each model's own numbers, which run high when a model is overconfident, so treat them as a shortlist.</div>${body}</div>`;
 }
 const curLeg = () => { const g = BS.game; if (!g || !BS.sel) return null; const nhl = g.c.sport === 'nhl'; return { date: g.date, league: g.c.league, id: g.c.id, ...(nhl ? { sport: 'nhl' } : {}), market: BS.market, sel: BS.sel, ...(BS.market === 'ou' && !nhl ? { line: BS.line } : {}) }; };
 async function bAnalyzeCur() {
