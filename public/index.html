@@ -710,7 +710,7 @@ function agreeScore(m) {
 function scoreHtml(m) { // one short line on the card; the exact top three are in the opened details
   if (!m || !m.scores || !m.scores[0]) return '';
   const a = agreeScore(m), top = m.scores[0];
-  const xg = m.lam ? `<small class="sc xg">Expected goals ${(+m.lam[0]).toFixed(1)}–${(+m.lam[1]).toFixed(1)}</small>` : '';
+  const xg = m.lam ? `<small class="sc xg">xG ${(+m.lam[0]).toFixed(1)} - ${(+m.lam[1]).toFixed(1)}</small>` : '';
   return xg + `<small class="sc">Score ${esc(a ? a.s : top[0])} · ${a ? a.p : top[1]}%</small>`;
 }
 function chips(c) {
