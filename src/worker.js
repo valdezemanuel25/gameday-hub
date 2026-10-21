@@ -586,6 +586,13 @@ const hub = {
       do { const r = await env.HUB.list({ prefix: 'nhl:day:', cursor }); out.push(...r.keys.map(k => k.name.slice(8))); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
       return json({ days: out.sort() });
     }
+    if (p === '/api/nhl/export') { // one request returns the whole hockey backup as a file download
+      const names = []; let cursor;
+      do { const r = await env.HUB.list({ prefix: 'nhl:day:', cursor }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
+      names.sort(); const days = await Promise.all(names.map(n => env.HUB.get(n, 'json')));
+      const data = { exportedAt: new Date().toISOString(), note: 'Game Day Hub hockey backup. days = every saved NHL day (cards with model picks and results); totals = hockey results summary.', days: days.filter(Boolean), totals: await nhlTally(env) };
+      return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'content-disposition': `attachment; filename="gameday-hub-hockey-${new Date().toISOString().slice(0, 10)}.json"`, 'cache-control': 'no-store' } });
+    }
     if (p === '/api/nhl/tally') return json(await nhlTally(env));
     if (req.method === 'POST' && p === '/api/nhl/line') { try { const b = await req.json(); return json(await nhlSetLine(env, String(b.date || ''), String(b.id || ''), b.line, new Date())); } catch (e) { return json({ error: `Line: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/status') return json(await nhlStatus(env));

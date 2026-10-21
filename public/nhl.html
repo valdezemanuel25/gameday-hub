@@ -365,17 +365,9 @@ document.addEventListener('click', async e => {
   if (t.dataset.d) { S.date = t.dataset.d; await load(); }
   else if (t.dataset.tab) { S.tab = t.dataset.tab; render(); }
   else if (t.dataset.sc) { S.scope = t.dataset.sc; render(); }
-  else if (t.id === 'xp') {
-    t.disabled = true;
-    try {
-      const list = (await api('/api/nhl/days')).days, days = [];
-      for (let i = 0; i < list.length; i++) { $('#st').textContent = `Exporting day ${i + 1} of ${list.length}…`; days.push(await api('/api/nhl/day?date=' + list[i])); }
-      const data = { exportedAt: new Date().toISOString(), note: 'Game Day Hub hockey backup. days = every saved NHL day (cards with model picks and results); totals = hockey results summary.', days, totals: await api('/api/nhl/tally') };
-      const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' })), a = document.createElement('a');
-      a.href = url; a.download = `gameday-hub-hockey-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
-      $('#st').textContent = `Hockey export downloaded: ${days.length} day${days.length === 1 ? '' : 's'}.`;
-    } catch (err) { $('#st').textContent = err.message; }
-    t.disabled = false;
+  else if (t.id === 'xp') { // the server sends the file itself, which also works on phones that block script downloads
+    $('#st').textContent = 'Preparing the hockey export… the file should download in a moment.';
+    window.location.href = '/api/nhl/export';
   }
   else if (t.id === 'run') {
     t.disabled = true; $('#st').textContent = 'Updating…';
