@@ -346,7 +346,7 @@ async function load() {
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel]'); if (!t) return;
+  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,#xp,[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel]'); if (!t) return;
   if (t.dataset.sel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
     const sc = document.getElementById('bgrid'), x = sc ? sc.scrollLeft : 0, closing = S.sel === t.dataset.sel;
     if (closing) { S.sel = null; S.ln = null; } else { if (!S.sel) S.back = window.scrollY; S.sel = t.dataset.sel; S.ln = null; }
