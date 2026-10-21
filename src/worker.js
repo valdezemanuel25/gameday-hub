@@ -9,7 +9,7 @@ import { forebetStep, forebetFetch, FB_PAGES, matchRows, is as isName } from './
 import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
-import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
+import { analyze as analyzeBet, suggest as suggestBets, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -589,6 +589,7 @@ const hub = {
         if (req.method !== 'POST') return json({ error: 'Not found' }, 404);
         const b = await req.json();
         if (p === '/api/bets/analyze') return json(analyzeBet(await betCards(env, Array.isArray(b.legs) ? b.legs : []), b.legs));
+        if (p === '/api/bets/suggest') { const g = (Array.isArray(b.games) ? b.games : []).slice(0, 60).map(x => ({ date: String(x.date || ''), league: String(x.league || ''), id: String(x.id || '') })); return json({ items: suggestBets(await betCards(env, g)) }); }
         if (p === '/api/bets') return json(await addBet(env, b.legs));
         if (p === '/api/bets/delete' || p === '/api/bets/void') return json(await changeBet(env, String(b.id || ''), p.endsWith('delete') ? 'delete' : 'void'));
       } catch (e) { return json({ error: `Bets: ${e && e.message ? e.message : e}` }, 500); }

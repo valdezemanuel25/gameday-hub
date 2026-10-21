@@ -132,6 +132,41 @@ export function analyze(cards, legs0) {
   return { legs: out, p, games: groups.size, sameGame, parlay: legs.length > 1, notes };
 }
 
+// ---- suggested parlays ----
+// Two picks from two different games whose combined chance is above MIN_PARLAY. Every model's own numbers are multiplied, never odds.
+// A pick is only a candidate when most of the models that have a number for it give it better than a 50% chance, and a pair is only
+// shown when most of the models that can price the pair put it above the line (the same majority rule as the card headline).
+export const MIN_PARLAY = 0.45;
+const CAND = [['win', 'H'], ['win', 'A'], ['dc', '1X'], ['dc', 'X2'], ['ou', 'O'], ['ou', 'U'], ['btts', 'Y'], ['btts', 'N']];
+const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+export function suggest(cards, now = Date.now(), limit = 8) {
+  const games = [];
+  for (const [k, c] of cards) {
+    if (!c || !c.v2 || c.final || c.skipped || c.sport === 'nhl' || (c.kickoff && new Date(c.kickoff).getTime() <= now)) continue;
+    const [date, league, id] = k.split('|'), opts = [];
+    for (const [market, sel] of CAND) {
+      const l = { date, league, id, market, sel, ...(market === 'ou' ? { line: 2.5 } : {}) }, p = {};
+      for (const m of MODELS) p[m] = legProb(c, l, m);
+      const have = MODELS.filter(m => p[m] != null);
+      if (have.length < 2 || have.filter(m => p[m] > .5).length * 2 <= have.length) continue;
+      opts.push({ ...l, label: label(l, c), p, mean: avg(have.map(m => p[m])) });
+    }
+    // keep each game's two strongest picks so a pair is not always the same safe market
+    opts.sort((a, b) => b.mean - a.mean);
+    if (opts.length) games.push({ c, opts: opts.slice(0, 2) });
+  }
+  const out = [];
+  for (let i = 0; i < games.length; i++) for (let j = i + 1; j < games.length; j++) for (const a of games[i].opts) for (const b of games[j].opts) {
+    const p = {}; for (const m of MODELS) p[m] = a.p[m] != null && b.p[m] != null ? a.p[m] * b.p[m] : null;
+    const have = MODELS.filter(m => p[m] != null);
+    if (have.length < 2 || have.filter(m => p[m] > MIN_PARLAY).length * 2 <= have.length) continue;
+    const row = x => ({ date: x.date, league: x.league, id: x.id, market: x.market, sel: x.sel, ...(x.line ? { line: x.line } : {}) });
+    out.push({ mean: avg(have.map(m => p[m])), p, legs: [a, b].map((x, n) => ({ ...row(x), label: x.label, home: (n ? games[j] : games[i]).c.home, away: (n ? games[j] : games[i]).c.away, ko: (n ? games[j] : games[i]).c.ko, leagueName: (n ? games[j] : games[i]).c.leagueName, p: x.p })) });
+  }
+  out.sort((a, b) => b.mean - a.mean);
+  return out.slice(0, limit).map(({ mean, ...r }) => r);
+}
+
 // ---- settling and summary ----
 export function settle(bet, cards) {
   let changed = false;
