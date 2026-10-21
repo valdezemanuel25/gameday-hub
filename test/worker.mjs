@@ -30,7 +30,7 @@ const entry = (id, name, gp, gf, ga) => ({
   stats: [{ name: 'gamesPlayed', value: gp }, { name: 'pointsFor', value: gf }, { name: 'pointsAgainst', value: ga }],
 });
 
-let fixtureDone = false, elDone = false;
+let fixtureDone = false, elDone = false, fx2Done = false;
 const history = [];
 // Arsenal (359) last 5: 2-1, 0-3, 2-0, 2-1, 1-0 (7 scored, 5 conceded). Brighton (331): 7 scored, 4 conceded.
 [[2, 1], [0, 3], [2, 0], [2, 1], [1, 0]].forEach(([f, a], i) =>
@@ -53,7 +53,7 @@ globalThis.fetch = async url => {
     return send({ children: [{ standings: { entries } }] });
   }
   if (u.includes('/eng.1/scoreboard')) {
-    return send({ events: [...history, ev('fx1', FX1_KO, [359, 'Arsenal'], [331, 'Brighton'], 2, 1, fixtureDone), ev('fx2', '2026-10-15T19:00:00Z', [359, 'Arsenal'], [331, 'Brighton'], 0, 0, false)] });
+    return send({ events: [...history, ev('fx1', FX1_KO, [359, 'Arsenal'], [331, 'Brighton'], 2, 1, fixtureDone), ev('fx2', '2026-10-15T19:00:00Z', [359, 'Arsenal'], [331, 'Brighton'], 0, 0, fx2Done)] });
   }
   if (u.includes('/uefa.champions/scoreboard')) {
     return send({ events: [
@@ -157,6 +157,22 @@ ok('retired v3 test keeps the 58 imported shadow matches', t.h2hOld.v2.n === 58 
   await call('/api/analyze?league=eng.1&date=2026-10-15&leftover=1', 'POST', 'secret');
   const kept = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
   ok('leftover: a card that already has a v4 key is left exactly as it was', JSON.stringify(kept.v2) === JSON.stringify(v2x) && kept.v4 === null);
+  kv.delete(key);
+}
+
+// ---- a v4 made before kickoff survives re-analysis after the game finished (but before it is graded) ----
+{
+  const key = 'day:2026-10-15', v4x = { p: [50, 25, 25], pick: 'H', over: 50, btts: 50, scores: [['1–0', 10]], lam: [1.4, 1] };
+  const v2x = { p: [41, 29, 30], pick: 'H', over: 50, btts: 50, scores: [['1–1', 10]], lam: [1, 1], best: { pick: 'x', p: 50 } };
+  const card = { id: 'fx2', league: 'eng.1', home: 'Arsenal', away: 'Brighton', v2: v2x, v4: v4x, final: null, kickoff: '2026-10-15T19:00:00Z' };
+  kv.set(key, JSON.stringify({ date: '2026-10-15', analyzed: {}, cards: [card] }));
+  await call('/api/analyze?league=eng.1&date=2026-10-15', 'POST', 'secret'); // the clock is past that kickoff
+  const k = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
+  ok('re-analysis after kickoff keeps the v4 made before it', JSON.stringify(k.v4) === JSON.stringify(v4x) && !k.v4why, JSON.stringify(k.v4));
+  kv.set(key, JSON.stringify({ date: '2026-10-15', analyzed: {}, cards: [{ ...card, v4: undefined }] }));
+  fx2Done = true; await call('/api/analyze?league=eng.1&date=2026-10-15', 'POST', 'secret'); fx2Done = false;
+  const n = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
+  ok('a game first seen after kickoff has no v4 and says why', n.v4 === null && /already played|not recognized|no games/.test(n.v4why || ''), JSON.stringify([n.v4, n.v4why]));
   kv.delete(key);
 }
 

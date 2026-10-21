@@ -92,8 +92,10 @@ export async function cupForecast(league, f, h0, a0, env, memo, debug) {
   const an = resolveClub(f.away.name, a0 && { slug: a0.league.slug, name: a0.team.name });
   if (!hn) debug?.push(`v4 cup: unknown club "${f.home.name}"`);
   if (!an) debug?.push(`v4 cup: unknown club "${f.away.name}"`);
-  if (!hn || !an) return null;
-  return predictCup(await getCupRatings(env, memo), ci, hn, an);
+  if (!hn || !an) { memo?.set('v4why:' + f.id, `club not recognized: ${!hn ? f.home.name : f.away.name}`); return null; }
+  const r = predictCup(await getCupRatings(env, memo), ci, hn, an);
+  if (!r) memo?.set('v4why:' + f.id, 'the cup model has too few games for one of the clubs');
+  return r;
 }
 
 async function refreshCup(env, now) {

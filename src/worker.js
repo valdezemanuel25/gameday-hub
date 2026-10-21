@@ -152,14 +152,23 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     card.v2 = slim(r2);
     // v4 shadow: only for league games that haven't been played yet, and only when both clubs have enough history.
     // (null = v4 has nothing to say: cup game, club not found, or too little history.)
-    let r4 = null;
-    if (!f.done && !league.cup && v4Supports(slug) && h.league.slug === slug && a.league.slug === slug) {
+    let r4 = null, why = null; // why = the plain-words reason a game has no v4 (shown on the card)
+    if (league.cup && !league.cupModel) why = null;
+    else if (f.done) why = 'the game was already played when the Hub first saw it';
+    else if (league.cupModel) why = memo.get('v4why:' + f.id) || null;
+    else if (!v4Supports(slug)) why = 'v4 is not built for this league';
+    else if (h.league.slug !== slug || a.league.slug !== slug) why = "a club is not in this league's history";
+    else {
       const R = await getRatings(league, env, memo);
       const hn = v4Resolve(slug, f.home.name) || v4Resolve(slug, h.team.name), an = v4Resolve(slug, f.away.name) || v4Resolve(slug, a.team.name);
-      r4 = hn && an ? v4Predict(R, hn, an) : null;
+      if (!hn || !an) why = `club not recognized: ${!hn ? f.home.name : f.away.name}`;
+      else { r4 = v4Predict(R, hn, an); if (!r4) why = 'one club has no games on record'; }
     }
     if (league.cupModel) r4 = r4cup;
     card.v4 = r4 ? slim(r4) : null;
+    // Once the game has kicked off the v4 made before it stands: a later re-analysis must not wipe it.
+    if (old?.v4 && new Date(f.date).getTime() <= now.getTime()) { card.v4 = old.v4; why = null; if (old.v4why) delete card.v4why; }
+    if (!card.v4 && why) card.v4why = why;
     if (old?.sm) card.sm = old.sm;
     if (old?.note) card.note = old.note;
     if (old?.mine) card.mine = old.mine;

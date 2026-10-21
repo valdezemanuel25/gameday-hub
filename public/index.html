@@ -609,7 +609,7 @@ function expanded(c) {
     : v3
       ? `<div class="small"><b>v3 (retired shadow test)</b>${v3.drawRisk ? ' (draw risk)' : ''}: ${esc(c.home)} ${v3.p[0]}%, draw ${v3.p[1]}%, ${esc(c.away)} ${v3.p[2]}%. It picks <b>${OUT[v3.pick]}</b>. Over 2.5 ${v3.over}%, both score ${v3.btts}%.
       ${g && g.v3 ? `<br>v3 result: ${pill(g.v3.outcomeHit, 'Winner')} ${pill(g.v3.ouHit, 'O/U')} ${pill(g.v3.bttsHit, 'Both')}` : ''}</div>`
-      : c.v4 === null && !c.final ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game (a club with no games in this league yet).</div>` : '';
+      : c.v4 === null ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game${c.v4why ? ': ' + esc(c.v4why) : ''}.</div>` : '';
   return `<div class="ex"><div class="in"><div class="in">
     <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
     <div class="two">${mdl}${sm}</div>
