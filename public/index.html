@@ -349,6 +349,7 @@ body{padding-top:56px}
 .sdt{margin:10px 18px 0;scroll-margin-top:68px}
 .zgm{display:block;width:100%;text-align:left;padding:9px 10px;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:none;color:inherit;font:inherit;cursor:pointer}
 .zgm b{display:block;font-size:13.5px;color:var(--ink)}.zgm small{color:var(--faint);font-size:11.5px}
+.zpvs{margin-top:6px}.zpv{display:flex;gap:10px;align-items:baseline;margin-top:4px;font-size:12px;color:var(--ink)}.zpv .zk{flex:0 0 66px;color:var(--faint);font-size:11px}.zpv small{color:var(--dim);font-size:11.5px}
 .zgm.sel{border-color:rgba(88,178,122,.5);background:rgba(88,178,122,.08)}
 .zpr{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 2px;font-size:12px;color:var(--faint)}.zpr b{display:block;font-size:20px;color:var(--ink);font-weight:800;line-height:1.1}.zpr .zna b{color:var(--faint);font-weight:600;font-size:16px}
 .zpr span.zk{display:block;font-size:10.5px;font-weight:700}
@@ -510,7 +511,7 @@ function asgView() {
 }
 
 /* ---------- bets tab: analyze a straight or parlay, track it, and let the finished games grade it ---------- */
-const BS = { sug: null, games: null, q: '', game: null, market: 'win', sel: null, line: 2.5, slip: [], an: null, cur: null, bets: null, sum: null, msg: '', busy: false, del: null };
+const BS = { sport: null, lg: null, sug: null, games: null, q: '', game: null, market: 'win', sel: null, line: 2.5, slip: [], an: null, cur: null, bets: null, sum: null, msg: '', busy: false, del: null };
 const BIN_O = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60 to 69%', 60, 70], ['70% and up', 70, 101]];
 const bpost = async (path, body) => { const r = await fetch(path, { method: 'POST', body: JSON.stringify(body) }); const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error('Server replied ' + r.status); } };
 const bpc = x => x == null ? '–' : Math.round(x * 100) + '%';
@@ -573,17 +574,43 @@ function selChips(g) {
   if (BS.market === 'ou') return ch('O', 'Over') + ch('U', 'Under');
   return ch('Y', 'Yes, both score') + ch('N', 'No');
 }
-function gameList() {
-  const q = BS.q.trim().toLowerCase(), list = (BS.games || []).filter(x => !q || `${x.c.home} ${x.c.away} ${x.c.leagueName}`.toLowerCase().includes(q)).slice(0, 80);
-  const dn = d => d === cfg.today ? 'Today' : d === addDays(cfg.today, 1) ? 'Tomorrow' : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
-  return list.length ? list.map(x => `<button type="button" class="zgm" data-bg="${esc(x.date + '|' + x.c.id)}"><b>${esc(x.c.home)} vs ${esc(x.c.away)}</b><small>${esc(x.c.leagueName)} · ${dn(x.date)}, ${esc(x.c.ko)}</small></button>`).join('') : `<div class="small" style="margin-top:8px">No upcoming games match. Only games with a prediction that have not finished are listed.</div>`;
+const dayName = d => d === cfg.today ? 'Today' : d === addDays(cfg.today, 1) ? 'Tomorrow' : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+const gameBtn = (x, withLeague) => `<button type="button" class="zgm" data-bg="${esc(x.date + '|' + x.c.id)}"><b>${esc(x.c.home)} vs ${esc(x.c.away)}</b><small>${withLeague ? esc(x.c.leagueName) + ' · ' : ''}${dayName(x.date)}, ${esc(x.c.ko)}</small></button>`;
+// Sport, then league, then game. Typing in the search box shows matching games instead.
+function gameArea() {
+  const all = BS.games || [], q = BS.q.trim().toLowerCase();
+  if (q) {
+    const hit = all.filter(x => `${x.c.home} ${x.c.away} ${x.c.leagueName}`.toLowerCase().includes(q));
+    return hit.length ? hit.slice(0, 8).map(x => gameBtn(x, true)).join('') + (hit.length > 8 ? `<div class="small" style="margin-top:8px">${hit.length - 8} more. Keep typing to narrow it down.</div>` : '') : `<div class="small" style="margin-top:8px">No upcoming games match.</div>`;
+  }
+  const back = (to, t) => `<div class="zrow"><button type="button" class="zch" data-bback="${to}">‹ ${esc(t)}</button></div>`;
+  const nhl = all.filter(x => x.c.sport === 'nhl'), soc = all.filter(x => x.c.sport !== 'nhl');
+  if (!all.length) return `<div class="small" style="margin-top:8px">No upcoming games with a prediction yet. Analyze a day first.</div>`;
+  if (!BS.sport) return `<div class="small" style="margin-top:8px">Which sport?</div><div class="zrow">${[['soccer', '⚽ Soccer', soc.length], ['nhl', '🏒 Hockey', nhl.length]].map(([k, n, c]) => `<button type="button" class="zch" ${c ? '' : 'disabled'} data-bsp="${k}">${n} · ${c}</button>`).join('')}</div>`;
+  if (BS.sport === 'soccer' && !BS.lg) {
+    const lgs = new Map(); for (const x of soc) { const o = lgs.get(x.c.league) || { name: x.c.leagueName, n: 0 }; o.n++; lgs.set(x.c.league, o); }
+    return back('sport', 'Soccer') + `<div class="small">Which league?</div><div class="zrow">${[...lgs].sort((a, b) => b[1].n - a[1].n).map(([k, o]) => `<button type="button" class="zch" data-blg="${esc(k)}">${esc(o.name)} · ${o.n}</button>`).join('')}</div>`;
+  }
+  const list = BS.sport === 'nhl' ? nhl : soc.filter(x => x.c.league === BS.lg), title = BS.sport === 'nhl' ? 'Hockey' : (list[0] ? list[0].c.leagueName : 'League');
+  return back(BS.sport === 'nhl' ? 'sport' : 'lg', title) + (list.length ? list.map(x => gameBtn(x, false)).join('') : `<div class="small" style="margin-top:8px">No upcoming games here.</div>`);
+}
+// What the models say about a game, shown before choosing a bet.
+function gamePreview(c) {
+  const row = (name, t) => `<div class="zpv"><span class="zk">${name}</span><span>${t}</span></div>`;
+  if (c.sport === 'nhl') {
+    const h = x => x == null ? null : Math.round(x), fb = c.fb && c.fb.p ? h(c.fb.p[0]) : null;
+    const line = (m, w, o) => w == null ? '' : `${esc(strip(c.home))} ${h(w)}% · ${esc(strip(c.away))} ${100 - h(w)}%${o != null && c.ln ? ` · Over ${c.ln.v} ${h(o)}%` : ''}`;
+    return row('v2', line('v2', c.v2 && c.v2.w, c.v2 && c.v2.o)) + (c.v4 ? row('v4 shadow', line('v4', c.v4.w, c.v4.o)) : '') + (fb != null ? row('Forebet', `${esc(strip(c.home))} ${fb}% · ${esc(strip(c.away))} ${100 - fb}%`) : '') + (c.ln ? '' : `<div class="zrc">No Over/Under line for this game yet.</div>`);
+  }
+  const one = (m, x) => !x ? '' : (x.p ? `${esc(strip(c.home))} ${x.p[0]}% · Draw ${x.p[1]}% · ${esc(strip(c.away))} ${x.p[2]}%` : '') + (x.over != null ? `<br><small>Over 2.5 ${x.over}%${x.btts != null ? ` · Both score ${x.btts}%` : ''}</small>` : '');
+  return row('v2', one('v2', c.v2)) + (c.v4 ? row('v4 shadow', one('v4', c.v4)) : '') + (c.fb && c.fb.p ? row('Forebet', one('fb', c.fb)) : '');
 }
 function statusChip(s) { return `<span class="zst ${s}">${s === 'pending' ? 'Pending' : s === 'hit' ? 'Hit' : s === 'miss' ? 'Missed' : 'Void'}</span>`; }
 function betsView() {
   if (!BS.games) return `<div class="empty">Loading…</div>`;
   const g = BS.game, cur = BS.cur, slip = BS.an;
-  const sel = g ? `<div class="zgm sel"><b>${esc(g.c.home)} vs ${esc(g.c.away)}</b><small>${esc(g.c.leagueName)} · ${esc(g.c.ko)}</small></div><div class="zrow"><button type="button" class="zch" data-bchg="1">Change game</button></div>`
-    : `<input type="text" id="bq" placeholder="Search a team or league" value="${esc(BS.q)}" autocomplete="off"><div id="bglist" style="max-height:340px;overflow-y:auto">${gameList()}</div>`;
+  const sel = g ? `<div class="zgm sel"><b>${esc(g.c.home)} vs ${esc(g.c.away)}</b><small>${esc(g.c.leagueName)} · ${dayName(g.date)}, ${esc(g.c.ko)}</small><div class="zpvs">${gamePreview(g.c)}</div></div><div class="zrow"><button type="button" class="zch" data-bchg="1">Change game</button></div>`
+    : `<input type="text" id="bq" placeholder="Search a team or league" value="${esc(BS.q)}" autocomplete="off"><div id="bglist">${gameArea()}</div>`;
   const hk = g && g.c.sport === 'nhl', hl = hk && g.c.ln && g.c.ln.v != null ? g.c.ln : null;
   const pick = g ? `<div class="zrow">${MK.filter(([k]) => !hk || k === 'win' || k === 'ou').map(([k, n]) => `<button type="button" class="zch ${BS.market === k ? 'on' : ''}" ${hk && k === 'ou' && !hl ? 'disabled' : ''} data-bm="${k}">${n}</button>`).join('')}</div>
     ${hk && !hl ? `<div class="zrc w">No Over/Under line for this game yet. Set it on the NHL page to bet the total.</div>` : ''}
@@ -1186,7 +1213,7 @@ async function loadDay(date) {
 }
 let tallyTry = false;
 async function warmTally() { if (tally || tallyTry) return; tallyTry = true; try { tally = await api('/api/tally'); if (S.tab === 'board') render(); } catch (e) {} }
-document.addEventListener('input', e => { if (e.target && e.target.id === 'bq') { BS.q = e.target.value; const el = document.getElementById('bglist'); if (el) el.innerHTML = gameList(); } });
+document.addEventListener('input', e => { if (e.target && e.target.id === 'bq') { BS.q = e.target.value; const el = document.getElementById('bglist'); if (el) el.innerHTML = gameArea(); } });
 async function ensureTally() { if (!tally) { tally = await api('/api/tally'); } }
 
 /* ---------- Analyze / Update: one league at a time ---------- */
@@ -1273,8 +1300,11 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-ssel],[data-bsug],[data-bsugt],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-bsug],[data-bsugt],.hd'); if (!t) return;
   if (t.dataset.bg !== undefined) { const [d, id] = t.dataset.bg.split('|'); BS.game = BS.games.find(x => x.date === d && x.c.id === id) || null; if (BS.game && BS.game.c.sport === 'nhl' && !['win','ou'].includes(BS.market)) BS.market = 'win'; BS.sel = null; BS.cur = null; BS.msg = ''; return render(); }
+  if (t.dataset.bsp) { BS.sport = t.dataset.bsp; BS.lg = BS.sport === 'nhl' ? 'nhl' : null; return render(); }
+  if (t.dataset.blg) { BS.lg = t.dataset.blg; return render(); }
+  if (t.dataset.bback) { if (t.dataset.bback === 'sport') { BS.sport = null; BS.lg = null; } else BS.lg = null; return render(); }
   if (t.dataset.bchg) { BS.game = null; BS.sel = null; BS.cur = null; return render(); }
   if (t.dataset.bm) { BS.market = t.dataset.bm; BS.sel = null; BS.cur = null; return render(); }
   if (t.dataset.bl) { BS.line = Number(t.dataset.bl); return bAnalyzeCur(); }
