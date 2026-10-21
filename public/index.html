@@ -531,7 +531,7 @@ async function loadSuggest() {
 }
 function sugBox() {
   if (BS.sug == null) return '';
-  const body = BS.sug.length ? BS.sug.map((x, i) => `<div class="zsl"><div class="zt"><b>2-leg parlay</b><button type="button" data-bsug="${i}">Add to bet</button></div>
+  const body = BS.sug.length ? BS.sug.map((x, i) => `<div class="zsl"><div class="zt"><b>2-leg parlay</b><span><button type="button" data-bsug="${i}">Add to bet</button> <button type="button" data-bsugt="${i}" ${BS.busy ? 'disabled' : ''}>Track as model parlay</button></span></div>
     ${x.legs.map(l => `<div class="zbl"><span>${esc(l.label)}<small>${esc(l.home)} vs ${esc(l.away)} · ${esc(l.ko || '')}</small></span></div>`).join('')}
     <div class="zpr"><span><span class="zk">v2</span><b>${bpc(x.p.v2)}</b></span><span><span class="zk">v4 shadow</span><b>${bpc(x.p.v4)}</b></span><span><span class="zk">Forebet</span><b>${bpc(x.p.fb)}</b></span></div></div>`).join('')
     : `<div class="zrc">No two-pick parlay clears 45% right now.</div>`;
@@ -599,8 +599,10 @@ function betsView() {
     ${slip && slip.p ? `<div style="margin-top:8px;font-size:11.5px;font-weight:700;color:var(--grass)">${BS.slip.length > 1 ? 'All picks hit' : 'Chance it hits'}</div>${probRow({ p: slip.p, market: BS.slip.length === 1 ? BS.slip[0].market : 'parlay', sel: BS.slip[0].sel, line: BS.slip[0].line, grid: false })}${slip.sameGame ? `<span class="zrc">Picks on the same game are worked out together on each model's score grid, so they are not just multiplied. Forebet has no number for those.</span>` : ''}${slip.parlay && !slip.sameGame ? `<span class="zrc">Different games, so each model's chances are multiplied. A model shows n/a if it has no number for one of the games.</span>` : ''}` : ''}
     <div><button type="button" class="zgo" data-btrack="1" ${BS.busy || !(slip && slip.p) ? 'disabled' : ''}>${BS.busy ? 'Saving…' : 'Track this bet'}</button><button type="button" class="zgo alt" data-bclear="1">Clear</button></div></div>` : '';
   const sm = BS.sum, mdl = sm && sm.legs.n ? ['v2', 'v4', 'fb'].filter(k => sm.models[k].n).map(k => `${k === 'fb' ? 'Forebet' : k}: said <b>${sm.models[k].said}%</b>, landed <b>${sm.models[k].hit}%</b> (${sm.models[k].n})`).join(' · ') : '';
-  const head = sm && sm.bets.n ? `<div class="zsum"><b>${sm.bets.n}</b> tracked ${sm.bets.n === 1 ? 'bet' : 'bets'}: <b>${sm.bets.hit}</b> hit, <b>${sm.bets.miss}</b> missed, ${sm.bets.pending} pending${sm.bets.void ? `, ${sm.bets.void} void` : ''}.${mdl ? `<br>Settled picks, what each model said on average against how often they landed: ${mdl}.` : ''}</div>` : '';
-  const list = (BS.bets || []).map(b => `<div class="zbet"><div class="zt"><b>${b.legs.length === 1 ? 'Single' : b.legs.length + '-leg parlay'}</b>${statusChip(b.status)}</div>
+  const mm = sm && sm.model, mmdl = mm && mm.legs.n ? ['v2', 'v4', 'fb'].filter(k => mm.models[k].n).map(k => `${k === 'fb' ? 'Forebet' : k}: said <b>${mm.models[k].said}%</b>, landed <b>${mm.models[k].hit}%</b> (${mm.models[k].n})`).join(' · ') : '';
+  const mhead = mm && mm.bets.n ? `<div class="zsum"><b>Model parlays</b>: <b>${mm.bets.n}</b> tracked, <b>${mm.bets.hit}</b> hit, <b>${mm.bets.miss}</b> missed, ${mm.bets.pending} pending${mm.bets.void ? `, ${mm.bets.void} void` : ''}.${mmdl ? `<br>Settled picks, said against landed: ${mmdl}.` : ''}</div>` : '';
+  const head = (sm && sm.bets.n ? `<div class="zsum"><b>Your bets</b>: <b>${sm.bets.n}</b> tracked ${sm.bets.n === 1 ? 'bet' : 'bets'}: <b>${sm.bets.hit}</b> hit, <b>${sm.bets.miss}</b> missed, ${sm.bets.pending} pending${sm.bets.void ? `, ${sm.bets.void} void` : ''}.${mdl ? `<br>Settled picks, what each model said on average against how often they landed: ${mdl}.` : ''}</div>` : '') + mhead;
+  const list = (BS.bets || []).map(b => `<div class="zbet"><div class="zt"><b>${b.src === 'model' ? 'Model parlay' : b.legs.length === 1 ? 'Single' : b.legs.length + '-leg parlay'}</b>${statusChip(b.status)}</div>
     ${b.legs.map(l => `<div class="zbl"><span>${esc(l.label)}<small>${esc(l.home)} vs ${esc(l.away)} · ${esc(l.leagueName || '')}</small></span><i class="${l.res || ''}">${l.res === 'hit' ? '✓' : l.res === 'miss' ? '✗' : l.res === 'void' ? 'void' : '…'}</i></div>`).join('')}
     <div class="zft"><span>Models said at the time: ${['v2', 'v4', 'fb'].filter(k => b.p && b.p[k] != null).map(k => (k === 'fb' ? 'Forebet' : k) + ' ' + bpc(b.p[k])).join(' · ') || 'no numbers'}</span><span>${b.status === 'pending' ? `<button type="button" data-bvoid="${esc(b.id)}">Void</button>` : ''}<button type="button" data-bdel="${esc(b.id)}">${BS.del === b.id ? 'Tap again to remove' : 'Remove'}</button></span></div></div>`).join('');
   return `<div class="small" style="margin:8px 4px 0">Build a single bet or a parlay, see what v2, v4 and Forebet give it, then track it. When the games finish and the Hub grades them, each pick is marked hit or missed. Odds are not used or stored.</div>${BS.msg ? `<div class="alert" style="margin:10px 4px 0">${esc(BS.msg)}</div>` : ''}${builder}${slipBox}${sugBox()}${head}${list || `<div class="empty">No tracked bets yet.</div>`}`;
@@ -1271,7 +1273,7 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-ssel],[data-bsug],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-ssel],[data-bsug],[data-bsugt],.hd'); if (!t) return;
   if (t.dataset.bg !== undefined) { const [d, id] = t.dataset.bg.split('|'); BS.game = BS.games.find(x => x.date === d && x.c.id === id) || null; if (BS.game && BS.game.c.sport === 'nhl' && !['win','ou'].includes(BS.market)) BS.market = 'win'; BS.sel = null; BS.cur = null; BS.msg = ''; return render(); }
   if (t.dataset.bchg) { BS.game = null; BS.sel = null; BS.cur = null; return render(); }
   if (t.dataset.bm) { BS.market = t.dataset.bm; BS.sel = null; BS.cur = null; return render(); }
@@ -1279,6 +1281,13 @@ document.addEventListener('click', async e => {
   if (t.dataset.bs) { BS.sel = t.dataset.bs; return bAnalyzeCur(); }
   if (t.dataset.badd) { const l = curLeg(); if (!l) return; if (BS.slip.length >= 12) { BS.msg = 'A bet can have up to 12 picks.'; return render(); } BS.slip.push(l); BS.sel = null; BS.cur = null; BS.msg = 'Added. Pick another market on this game, or change game.'; return bAnalyzeSlip(); }
   if (t.dataset.bsug !== undefined) { const x = (BS.sug || [])[Number(t.dataset.bsug)]; if (!x) return; BS.slip = x.legs.map(l => ({ date: l.date, league: l.league, id: l.id, market: l.market, sel: l.sel, ...(l.line ? { line: l.line } : {}) })); BS.game = null; BS.sel = null; BS.cur = null; BS.msg = 'Added both picks. Track it below if you want it graded.'; return bAnalyzeSlip(); }
+  if (t.dataset.bsugt !== undefined) {
+    const x = (BS.sug || [])[Number(t.dataset.bsugt)]; if (!x) return;
+    BS.busy = true; render();
+    try { const r = await bpost('/api/bets', { source: 'model', legs: x.legs.map(l => ({ date: l.date, league: l.league, id: l.id, market: l.market, sel: l.sel, ...(l.line ? { line: l.line } : {}) })) }); if (r.error) throw new Error(r.error); BS.msg = 'Tracked as a model parlay. It is kept apart from your own bets.'; const l = await api('/api/bets'); BS.bets = l.items || []; BS.sum = l.summary || null; }
+    catch (er) { BS.msg = er.message; }
+    BS.busy = false; return render();
+  }
   if (t.dataset.brm) { BS.slip.splice(Number(t.dataset.brm), 1); return bAnalyzeSlip(); }
   if (t.dataset.bclear) { BS.slip = []; BS.an = null; BS.msg = ''; return render(); }
   if (t.dataset.btrack) {

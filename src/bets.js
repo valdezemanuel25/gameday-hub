@@ -184,7 +184,11 @@ export function settle(bet, cards) {
   return changed || was !== bet.status;
 }
 // How the models did on the picks you tracked: what each said on average against how often those picks landed.
+// Your own bets and the Hub's suggested parlays you tracked are kept apart: the top-level numbers are your bets, `model` is the suggestions.
 export function summary(items) {
+  return { ...summarize(items.filter(b => b.src !== 'model')), model: summarize(items.filter(b => b.src === 'model')) };
+}
+function summarize(items) {
   const bets = { n: items.length, hit: 0, miss: 0, pending: 0, void: 0 }, legs = { n: 0, hit: 0 }, per = Object.fromEntries(MODELS.map(m => [m, { n: 0, sum: 0, hit: 0, brier: 0 }]));
   for (const b of items) {
     bets[b.status === 'pending' ? 'pending' : b.status]++;
@@ -206,10 +210,10 @@ export async function loadCards(env, legs) {
   keys.forEach((k, i) => { const nhl = k.startsWith('nhl:'), d = nhl ? k.slice(4) : k; for (const c of days[i]?.cards || []) m.set(`${d}|${nhl ? 'nhl' : c.league}|${c.id}`, c); });
   return m;
 }
-export async function addBet(env, legs, now = new Date()) {
+export async function addBet(env, legs, now = new Date(), source = null) {
   const cards = await loadCards(env, legs || []), a = analyze(cards, legs);
   if (a.error) return a;
-  const bet = { id: now.getTime().toString(36) + Math.random().toString(36).slice(2, 6), at: now.toISOString(), status: 'pending', p: a.p, parlay: a.parlay, sameGame: a.sameGame,
+  const bet = { id: now.getTime().toString(36) + Math.random().toString(36).slice(2, 6), at: now.toISOString(), status: 'pending', ...(source === 'model' ? { src: 'model' } : {}), p: a.p, parlay: a.parlay, sameGame: a.sameGame,
     legs: a.legs.map(l => ({ date: l.date, league: l.league, id: l.id, ...(l.sport ? { sport: l.sport } : {}), market: l.market, sel: l.sel, ...(l.market === 'ou' ? { line: l.line, ...(l.src ? { src: l.src } : {}) } : {}), label: l.label, home: l.home, away: l.away, leagueName: l.leagueName, ko: l.ko, kickoff: l.kickoff, p: l.p, res: null })) };
   const doc = await getBets(env); doc.items.unshift(bet); doc.items = doc.items.slice(0, 300);
   await saveBets(env, doc);

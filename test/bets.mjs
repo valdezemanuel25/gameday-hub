@@ -126,5 +126,15 @@ ok('a bet can be removed', (await changeBet(e2, v.bet.id, 'delete')).ok && !(awa
   ok('best pair first', s.every((x, i) => i === 0 || (x.p.v2 + x.p.v4 + x.p.fb) <= (s[i - 1].p.v2 + s[i - 1].p.v4 + s[i - 1].p.fb) + 1e-9));
   ok('nothing when no two games qualify', suggest(new Map([[`${D}|esp.1|13`, Z]])).length === 0);
 }
+
+// model parlays are tracked apart from your own bets
+{
+  const kv = new Map(), env = { HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => kv.set(k, v) } };
+  kv.set(`day:${D}`, JSON.stringify({ date: D, cards: [C1, C2] }));
+  const m = await addBet(env, [L('1', 'win', 'H'), L('2', 'btts', 'Y')], new Date(), 'model'), mine = await addBet(env, [L('1', 'win', 'H')]);
+  ok('a model parlay is stored with its source, your own bet is not', m.bet.src === 'model' && mine.bet.src === undefined);
+  const sm = summary((await listBets(env)).items);
+  ok('the summary keeps your bets and model parlays apart', sm.bets.n === 1 && sm.model.bets.n === 1 && sm.model.bets.pending === 1, JSON.stringify(sm.bets) + JSON.stringify(sm.model.bets));
+}
 console.log(fail ? `\n${fail} bet checks FAILED` : '\nAll bet checks passed');
 process.exit(fail ? 1 : 0);
