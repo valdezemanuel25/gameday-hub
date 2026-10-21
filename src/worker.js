@@ -292,7 +292,10 @@ async function tally(env) {
   const SB = { outcome: { n: 0, v2: 0, v4: 0, fb: 0 }, ou: { n: 0, v2: 0, v4: 0, fb: 0 }, btts: { n: 0, v2: 0, v4: 0, fb: 0 }, brier: { n: 0, v2: 0, v4: 0, fb: 0 } };
   const CAL = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60% and up', 60, 101]].map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 }));
   const cal = (p, hit) => { const t = Math.max(...p), b = CAL.find(x => t >= x.lo && t < x.hi); if (!b) return; b.n++; b.hits += hit ? 1 : 0; b.sum += t; };
+  // Do-nothing baselines: always pick the home team, always pick Over 2.5. 'all' covers the games v2 was graded on, 'same' the games all three models have.
+  const BASE = { all: { n: 0, home: 0, over: 0 }, same: { home: 0, over: 0 } };
   for (const r of legacy.v2Rows) {
+    { const m = /(\d+)\s*[–-]\s*(\d+)\s*$/.exec(r.actual || ''); if (m) { BASE.all.n++; BASE.all.home += +m[1] > +m[2] ? 1 : 0; BASE.all.over += +m[1] + +m[2] >= 3 ? 1 : 0; } }
     if (r.p) cal(r.p, r.outcomeHit);
     v2All.n++; v2All.outcome += r.outcomeHit; v2All.ou += r.ouHit; v2All.btts += r.bttsHit; v2All.brier += r.brier ?? 0;
   }
@@ -315,8 +318,8 @@ async function tally(env) {
         if (f.bttsHit != null) { fbT.nBtts++; fbT.btts += f.bttsHit; }
         if (c.grade.v2 && g4) {
           const g2 = c.grade.v2;
-          if (f.outcomeHit != null) { const o = SB.outcome, b = SB.brier; o.n++; o.v2 += g2.outcomeHit; o.v4 += g4.outcomeHit; o.fb += f.outcomeHit; b.n++; b.v2 += g2.brier; b.v4 += g4.brier; b.fb += f.brier; }
-          if (f.ouHit != null) { const o = SB.ou; o.n++; o.v2 += g2.ouHit; o.v4 += g4.ouHit; o.fb += f.ouHit; }
+          if (f.outcomeHit != null) { BASE.same.home += c.final.h > c.final.a ? 1 : 0; const o = SB.outcome, b = SB.brier; o.n++; o.v2 += g2.outcomeHit; o.v4 += g4.outcomeHit; o.fb += f.outcomeHit; b.n++; b.v2 += g2.brier; b.v4 += g4.brier; b.fb += f.brier; }
+          if (f.ouHit != null) { BASE.same.over += c.final.h + c.final.a >= 3 ? 1 : 0; const o = SB.ou; o.n++; o.v2 += g2.ouHit; o.v4 += g4.ouHit; o.fb += f.ouHit; }
           if (f.bttsHit != null) { const o = SB.btts; o.n++; o.v2 += g2.bttsHit; o.v4 += g4.bttsHit; o.fb += f.bttsHit; }
         }
         for (const [k, g] of [['v2', c.grade.v2], ['v4', g4]]) if (g) {
@@ -329,6 +332,7 @@ async function tally(env) {
       if (g4) add(v4All, g4); // every game v4 predicted, including cup games v2 cannot cover
       if (!c.grade.v2) continue;
       add(v2All, c.grade.v2);
+      if (c.final) { BASE.all.n++; BASE.all.home += c.final.h > c.final.a ? 1 : 0; BASE.all.over += c.final.h + c.final.a >= 3 ? 1 : 0; }
       if (g4) { add(h2hV2, c.grade.v2); add(h2hV4, g4); }
       if (c.grade.v3) { add(oldV2, c.grade.v2); add(oldV3, c.grade.v3); }
       cal(c.v2.p, c.grade.v2.outcomeHit);
@@ -373,9 +377,9 @@ async function tally(env) {
   const avg = (x, n) => (n ? +(x / n).toFixed(3) : null);
   const mAll = x => ({ outcome: [x.outcome, x.n], ou: [x.ou, x.n], btts: [x.btts, x.n], brier: x.brier });
   const board = {
-    same: { n: SB.outcome.n, models: Object.fromEntries(['v2', 'v4', 'fb'].map(m => [m, {
+    same: { n: SB.outcome.n, base: { home: [BASE.same.home, SB.outcome.n], over: [BASE.same.over, SB.ou.n] }, models: Object.fromEntries(['v2', 'v4', 'fb'].map(m => [m, {
       outcome: [SB.outcome[m], SB.outcome.n], ou: [SB.ou[m], SB.ou.n], btts: [SB.btts[m], SB.btts.n], brier: avg(SB.brier[m], SB.brier.n) }])) },
-    all: { models: { v2: mAll(fin(v2All)), v4: mAll(fin(v4All)), fb: { outcome: [fbT.outcome, fbT.n], ou: [fbT.ou, fbT.nOu], btts: [fbT.btts, fbT.nBtts], brier: avg(fbT.brier, fbT.n) } } },
+    all: { base: { home: [BASE.all.home, BASE.all.n], over: [BASE.all.over, BASE.all.n] }, models: { v2: mAll(fin(v2All)), v4: mAll(fin(v4All)), fb: { outcome: [fbT.outcome, fbT.n], ou: [fbT.ou, fbT.nOu], btts: [fbT.btts, fbT.nBtts], brier: avg(fbT.brier, fbT.n) } } },
   };
   const sc = x => ({ n: x.n, outcome: x.outcome, ou: x.ou, btts: x.btts, brier: x.n ? +(x.brier / x.n).toFixed(3) : null });
   const leagues = [...perLg.values()].sort((a, b) => b.n - a.n).map(r => ({ slug: r.slug, name: r.name, n: r.n, v2: sc(r.v2), v4: sc(r.v4), fb: sc(r.fb) }));

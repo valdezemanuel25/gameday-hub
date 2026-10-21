@@ -181,6 +181,7 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .bd .c .f{font-size:11.5px;color:var(--faint);margin-top:1px}
 .bd .c .tr{height:4px;border-radius:4px;background:#1c2b25;margin-top:6px;overflow:hidden}.bd .c .tr i{display:block;height:100%;background:#4a6157}
 .bd .c.best .p{color:var(--grass)}.bd .c.best .tr i{background:var(--grass)}
+.bd .r.bs{grid-template-columns:84px minmax(0,1fr) 2fr;background:rgba(255,255,255,.02)}.bd .r.bs .lab small{display:block;font-size:10.5px;color:var(--faint);margin-top:2px;line-height:1.3}.bd .r.bs .c .p{color:var(--dim);font-size:18px}.bd .r.bs .bsn{font-size:11px;color:var(--faint)}
 .bd .r.br{font-size:12px;color:var(--dim);padding:10px 12px}.bd .r.br b{color:var(--ink);font-weight:600}.bd .r.br b.best{color:var(--grass)}
 .bdn{margin:10px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.45}
 .tri{display:grid;grid-template-columns:84px repeat(3,minmax(0,1fr));gap:4px 6px;margin-top:7px;font-size:12px;color:var(--dim)}
@@ -930,8 +931,10 @@ function boardBlock(t) {
     <div class="seg">${['same', 'all'].map(v => `<button type="button" data-rb="${v}" class="${v === view ? 'on' : ''}">${RB[v]}${v === 'same' && view === 'same' ? ` (${n})` : ''}</button>`).join('')}</div>
     <div class="bd"><div class="r h"><div></div><div><b>v2</b>official</div><div><b>v4</b>shadow</div><div class="fb"><b>Forebet</b>tracked only</div></div>
       ${row('outcome', 'Winner', 'home, draw, away')}${row('ou', 'Over/under', '2.5 goals')}${row('btts', 'Both score', 'both teams')}
+      ${(() => { const B = bd[view].base; if (!B) return ''; const bc = ([h, n]) => n ? `<div class="c"><div class="p">${Math.round(100 * h / n)}%</div><div class="f">${h} of ${n}</div></div>` : `<div class="c"><div class="p">–</div></div>`;
+        return `<div class="r bs"><div class="lab">Always home<small>no model, just pick the home team</small></div>${bc(B.home)}<div class="bsn">beat this to add anything</div></div><div class="r bs"><div class="lab">Always Over<small>no model, just pick Over 2.5</small></div>${bc(B.over)}<div class="bsn">beat this to add anything</div></div>`; })()}
       <div class="r br"><div>Brier score<br><span class="fnt">lower is better</span></div>${br.map(x => `<div>${x == null ? '–' : `<b class="${x === bl && br.filter(y => y != null).length > 1 ? 'best' : ''}">${x}</b>`}</div>`).join('')}</div></div>
-    <div class="bdn">Small samples swing a lot. Forebet is recorded and graded only; no model uses it. A random guess scores 0.667 on Brier.${view === 'same' && !n ? ' No game has all three models graded yet.' : ''}</div>`;
+    <div class="bdn">Small samples swing a lot. The two baseline rows are the do-nothing picks each model has to beat${view === 'all' ? ' (counted on the games v2 was graded on)' : ''}. Forebet is recorded and graded only; no model uses it. A random guess scores 0.667 on Brier.${view === 'same' && !n ? ' No game has all three models graded yet.' : ''}</div>`;
 }
 // What each model picked for one graded game, and whether it hit.
 function fbPicks(c) {
