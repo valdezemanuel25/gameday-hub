@@ -219,7 +219,7 @@ body{padding-top:56px}
 .xq{background:#17241f;border-radius:10px;padding:6px 7px 7px;min-width:0}
 .xq .l{font-size:10px;color:var(--faint);font-weight:650;margin-bottom:3px}
 .xq b{display:block;font-size:13.5px;font-weight:750;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.xq small{display:block;font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap}.xq small.sc{color:var(--faint);font-size:10.5px}
+.xq small{display:block;font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap}.xq small.sc{color:var(--faint);font-size:10.5px}.xq small.sc.dim{opacity:.75}
 .xq .g{margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--faint);line-height:1.55}.xq .g span{display:flex;justify-content:space-between;gap:2px;white-space:nowrap}.xq .g b{display:inline;font-size:11.5px;font-weight:650;color:var(--dim)}.xq .g b.hi{color:var(--grass)}
 .xags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}.xags .xag{margin:0}
 .xag.s{background:var(--grass);color:#07150d;font-weight:750}.xag.s:before{content:"✓";width:auto;height:auto;background:none;font-weight:800}
@@ -598,7 +598,7 @@ function expanded(c) {
   const v = c.v2, g = c.grade;
   const ou = v.over >= 50 ? ['Over 2.5 goals', v.over, 'Under', 100 - v.over] : ['Under 2.5 goals', 100 - v.over, 'Over', v.over];
   const bt = v.btts >= 50 ? ['Both teams score: yes', v.btts, 'No', 100 - v.btts] : ['Both teams score: no', 100 - v.btts, 'Yes', v.btts];
-  const mdl = `<div class="src m1"><small>Model said</small><b>${esc(v.scores[0][0])}</b><small>${esc(pickText(c))} ${Math.max(...v.p)}%</small>${g ? `<div class="hits">${pill(g.v2.outcomeHit, 'Winner')}${pill(g.v2.ouHit, 'O/U')}${pill(g.v2.bttsHit, 'Both')}</div>` : ''}</div>`;
+  const mdl = `<div class="src m1"><small>Model said</small><b>${esc((agreeScore(v) || { s: v.scores[0][0] }).s)}</b><small>${esc(pickText(c))} ${Math.max(...v.p)}%</small>${g ? `<div class="hits">${pill(g.v2.outcomeHit, 'Winner')}${pill(g.v2.ouHit, 'O/U')}${pill(g.v2.bttsHit, 'Both')}</div>` : ''}</div>`;
   const sm = c.sm
     ? `<div class="src s1"><small>SportsMole said</small><b>${esc(c.sm.text.replace(/^.*?(\d+–\d+).*$/, '$1'))}</b><small>${esc(c.sm.text)}</small>${c.smGrade ? `<div class="hits">${pill(c.smGrade.outcomeHit, 'Winner')}${pill(c.smGrade.scoreHit, 'Score')}${pill(c.smGrade.ouHit, 'O/U')}${pill(c.smGrade.bttsHit, 'Both')}</div>` : ''}</div>`
     : `<div class="src s0"><small>SportsMole</small>No prediction found yet</div>`;
@@ -613,7 +613,7 @@ function expanded(c) {
   return `<div class="ex"><div class="in"><div class="in">
     <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
     <div class="two">${mdl}${sm}</div>
-    <div class="two"><div class="box">Most likely scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b></div>${fbBox(c)}</div>
+    <div class="two"><div class="box">Most common exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b></div>${fbBox(c)}</div>
     ${candBox(c)}
     <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
     ${shadow}
@@ -690,12 +690,32 @@ function headline(c) {
   const ag = b.m.length < 2 ? '' : !no.length ? `<span class="ag all">All ${b.m.length} models agree</span>` : `<span class="ag">${yes.join(', ')} back${yes.length === 1 ? 's' : ''} it${no.length ? ` · ${no.join(', ')} disagree${no.length === 1 ? 's' : ''}` : ''}</span>`;
   return `<div class="xhl"><span class="k">${b.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${b.label}</b><span class="p">${b.p}%</span>${ag}</div>`;
 }
+// The likeliest exact score that agrees with the model's own pick, its Over 2.5 side and its both-score side, worked out from the
+// same expected goals the model used. (The single most common score can clash with those, e.g. 2-0 beside both-score 53%.)
+function agreeScore(m) {
+  if (!m || !m.lam || !m.pick || m.over == null) return null;
+  const [lh, la] = m.lam, G = 9, ph = [Math.exp(-lh)], pa = [Math.exp(-la)];
+  for (let k = 1; k < G; k++) { ph[k] = ph[k - 1] * lh / k; pa[k] = pa[k - 1] * la / k; }
+  let tot = 0; const all = [];
+  for (let x = 0; x < G; x++) for (let y = 0; y < G; y++) { const p = ph[x] * pa[y]; tot += p; all.push([x, y, p]); }
+  const out = (x, y) => (x > y ? 'H' : x === y ? 'D' : 'A'), ov = m.over >= 50, bt = m.btts == null ? null : m.btts >= 50;
+  const tests = [(x, y) => out(x, y) === m.pick && (x + y >= 3) === ov && (bt == null || (x > 0 && y > 0) === bt), (x, y) => out(x, y) === m.pick && (x + y >= 3) === ov, (x, y) => out(x, y) === m.pick];
+  for (const t of tests) { const hit = all.filter(([x, y]) => t(x, y)).sort((a, b) => b[2] - a[2])[0]; if (hit) return { s: `${hit[0]}–${hit[1]}`, p: Math.round(100 * hit[2] / tot) }; }
+  return null;
+}
+// Two small lines: the score that agrees with the card (with its own chance), and the raw most common score when it differs.
+function scoreHtml(m, pre = 'likeliest') {
+  if (!m || !m.scores || !m.scores[0]) return '';
+  const a = agreeScore(m), top = m.scores[0];
+  if (!a) return `<small class="sc">${pre} ${esc(top[0])} (${top[1]}%)</small>`;
+  return `<small class="sc">${pre} ${esc(a.s)} (${a.p}%)</small>` + (a.s !== top[0] ? `<small class="sc dim">most common ${esc(top[0])} (${top[1]}%)</small>` : '');
+}
 function chips(c) {
   const v = c.v2, g = c.grade || {}, out = [], picks = [];
   const gl = (o, b) => `<div class="g"><span>O2.5 ${o == null ? '<b>–</b>' : `<b class="${o >= 55 ? 'hi' : ''}">${o}%</b>`}</span><span>BTTS ${b == null ? '<b>–</b>' : `<b class="${b >= 55 ? 'hi' : ''}">${b}%</b>`}</span></div>`;
-  const mk = (cls, label, side, pct, score, hit, goals, pre = 'likeliest') => { picks.push(side); return `<div class="xq ${cls}"><div class="l">${label}</div><b>${esc(sideName2(c, side))}${hit == null ? '' : ` <span class="ck ${hit ? 'ok' : 'no'}">${hit ? '✓' : '✗'}</span>`}</b>${pct != null ? `<small>${pct}% ${side === 'D' ? 'draw' : 'win'}</small>` : ''}${score ? `<small class="sc">${pre} ${score}</small>` : ''}${goals || ''}</div>`; };
-  out.push(mk('', 'v2', v.pick, Math.max(...v.p), esc(v.scores[0][0]), g.v2 ? g.v2.outcomeHit : null, gl(v.over, v.btts)));
-  out.push(c.v4 ? mk('', 'v4', c.v4.pick, Math.max(...c.v4.p), esc(c.v4.scores[0][0]), g.v4 ? g.v4.outcomeHit : null, gl(c.v4.over, c.v4.btts)) : `<div class="xq none"><div class="l">v4</div><b>No pick</b></div>`);
+  const mk = (cls, label, side, pct, score, hit, goals, pre = 'likeliest') => { picks.push(side); return `<div class="xq ${cls}"><div class="l">${label}</div><b>${esc(sideName2(c, side))}${hit == null ? '' : ` <span class="ck ${hit ? 'ok' : 'no'}">${hit ? '✓' : '✗'}</span>`}</b>${pct != null ? `<small>${pct}% ${side === 'D' ? 'draw' : 'win'}</small>` : ''}${score && score.html ? score.html : score ? `<small class="sc">${pre} ${score}</small>` : ''}${goals || ''}</div>`; };
+  out.push(mk('', 'v2', v.pick, Math.max(...v.p), { html: scoreHtml(v) }, g.v2 ? g.v2.outcomeHit : null, gl(v.over, v.btts)));
+  out.push(c.v4 ? mk('', 'v4', c.v4.pick, Math.max(...c.v4.p), { html: scoreHtml(c.v4) }, g.v4 ? g.v4.outcomeHit : null, gl(c.v4.over, c.v4.btts)) : `<div class="xq none"><div class="l">v4</div><b>No pick</b></div>`);
   const f = c.fb;
   if (f && (f.p || f.score)) { const side = f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a); out.push(mk('', 'Forebet', side, f.p ? Math.max(...f.p) : null, f.score ? f.score.h + '–' + f.score.a : '', null, gl(f.over, f.btts), 'predicts')); }
   else out.push(`<div class="xq none"><div class="l">Forebet</div><b>Not read yet</b></div>`);
@@ -782,7 +802,7 @@ function fbLine(c) {
 function v4Only(c) {
   const v4 = c.v4; if (!v4) return '';
   const g = c.grade && c.grade.v4;
-  return `<small><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. Picks <b>${OUT[v4.pick]}</b>. Over 2.5 ${v4.over}%, both score ${v4.btts}%. Most likely ${esc(v4.scores[0][0])}.` +
+  return `<small><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. Picks <b>${OUT[v4.pick]}</b>. Over 2.5 ${v4.over}%, both score ${v4.btts}%. Likeliest score that agrees: ${esc((agreeScore(v4) || { s: v4.scores[0][0] }).s)}; most common ${esc(v4.scores[0][0])}.` +
     (c.final ? ` Final ${c.final.h}–${c.final.a}${g ? ` ${pill(g.outcomeHit, 'Winner')} ${pill(g.ouHit, 'O/U')} ${pill(g.bttsHit, 'Both')}` : ''}` : '') + `</small>`;
 }
 function uncovered(list) {
