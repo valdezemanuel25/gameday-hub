@@ -581,6 +581,11 @@ const hub = {
       return json({ error: 'Not found' }, 404);
     }
     if (p === '/api/nhl/day') { const date = q('date') || today(); return json((await env.HUB.get(`nhl:day:${date}`, 'json')) || { date, cards: [] }); }
+    if (p === '/api/nhl/days') { // every saved hockey day, for the Export button
+      const out = []; let cursor;
+      do { const r = await env.HUB.list({ prefix: 'nhl:day:', cursor }); out.push(...r.keys.map(k => k.name.slice(8))); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
+      return json({ days: out.sort() });
+    }
     if (p === '/api/nhl/tally') return json(await nhlTally(env));
     if (req.method === 'POST' && p === '/api/nhl/line') { try { const b = await req.json(); return json(await nhlSetLine(env, String(b.date || ''), String(b.id || ''), b.line, new Date())); } catch (e) { return json({ error: `Line: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/status') return json(await nhlStatus(env));
