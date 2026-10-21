@@ -661,12 +661,13 @@ function consensus(c) {
 }
 function goalsCons(c) {
   const out = [];
-  const mkc = (k, yes, no, both) => {
-    const col = [c.v2[k], c.v4 && c.v4[k], c.fb && c.fb[k]].filter(x => x != null), n = col.length;
+  const sm = c.sm ? { over: c.sm.h + c.sm.a >= 3 ? 100 : 0, btts: c.sm.h > 0 && c.sm.a > 0 ? 100 : 0 } : null; // SportsMole votes through its score
+  const mkc = (k, yes, no) => {
+    const col = [c.v2[k], c.v4 && c.v4[k], c.fb && c.fb[k], sm && sm[k]].filter(x => x != null), n = col.length;
     const y = col.filter(x => x >= 55).length, o = col.filter(x => x <= 45).length;
     if (n >= 3 && y === n) out.push(`All say ${yes}`); else if (n >= 3 && o === n) out.push(`All say ${no}`);
     else if (n === 2 && y === 2) out.push(`Both say ${yes}`); else if (n === 2 && o === 2) out.push(`Both say ${no}`);
-    else if (n >= 3 && y === n - 1) out.push(`<span class="pt">${y} of ${n} say ${yes}</span>`); else if (n >= 3 && o === n - 1) out.push(`<span class="pt">${o} of ${n} say ${no}</span>`);
+    else if (n >= 3 && y * 2 > n) out.push(`<span class="pt">${y} of ${n} say ${yes}</span>`); else if (n >= 3 && o * 2 > n) out.push(`<span class="pt">${o} of ${n} say ${no}</span>`);
   };
   mkc('over', 'Over 2.5', 'Under 2.5'); mkc('btts', 'both score', 'not both');
   return out;
@@ -680,18 +681,35 @@ function splitText(c) {
   const nm = s => s === 'D' ? 'Draw' : esc(strip(s === 'H' ? c.home : c.away));
   return [...by.entries()].map(([side, ms]) => `${nm(side)} (${ms.join(', ')})`).join(' vs ');
 }
-// The one line a card leads with: the model's strongest pick across the result and the goals markets, and how many models back it.
+// The one line a card leads with: what most of the models back. Every model gets one vote on the result, Over/Under 2.5 and
+// both-score (SportsMole's vote comes from its score). A pick only leads when a majority backs it; with no majority the card says Split.
 function headline(c) {
-  const v = c.v2, v4 = c.v4 || {}, f = c.fb || {}, opts = [];
-  const mx = Math.max(...v.p), wi = v.p.indexOf(mx), ws = 'HDA'[wi];
-  const wm = []; wm.push(['v2', c.v2.pick]); if (c.v4) wm.push(['v4', c.v4.pick]); if (f.p || f.score) wm.push(['Forebet', f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a)]); if (c.sm) wm.push(['SportsMole', sideOfScore(c.sm.h, c.sm.a)]);
-  opts.push({ label: wi === 1 ? 'Draw' : `${esc(strip(wi === 0 ? c.home : c.away))} to win`, p: mx, m: wm.map(([n, x]) => [n, x === ws]) });
-  const mk = (label, p, key, flip) => { const m = [['v2', v[key]], ['v4', v4[key]], ['Forebet', f[key]]].filter(x => x[1] != null).map(([n, x]) => [n, flip ? x <= 50 : x >= 50]); opts.push({ label, p, m }); };
-  mk('Over 2.5 goals', v.over, 'over', false); mk('Under 2.5 goals', 100 - v.over, 'over', true);
-  mk('Both teams score', v.btts, 'btts', false); mk('Not both teams score', 100 - v.btts, 'btts', true);
-  const b = opts.sort((x, y) => y.p - x.p)[0], yes = b.m.filter(x => x[1]).map(x => x[0]), no = b.m.filter(x => !x[1]).map(x => x[0]);
-  const ag = b.m.length < 2 ? '' : !no.length ? `<span class="ag all">All ${b.m.length} models agree</span>` : `<span class="ag">${yes.join(', ')} back${yes.length === 1 ? 's' : ''} it${no.length ? ` · ${no.join(', ')} disagree${no.length === 1 ? 's' : ''}` : ''}</span>`;
-  return `<div class="xhl"><span class="k">${b.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${b.label}</b><span class="p">${b.p}%</span>${ag}</div>`;
+  const v = c.v2, v4 = c.v4 || {}, f = c.fb || {};
+  const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
+  const M = [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
+  if (c.v4) M.push({ n: 'v4', w: c.v4.pick, p: v4.p, over: v4.over, btts: v4.btts, po: v4.over, pb: v4.btts });
+  if (f.p || f.score) M.push({ n: 'Forebet', w: f.p ? hda(f.p) : sideOfScore(f.score.h, f.score.a), p: f.p || null, over: f.over != null ? f.over : f.score ? (f.score.h + f.score.a >= 3 ? 100 : 0) : null, btts: f.btts != null ? f.btts : f.score ? (f.score.h > 0 && f.score.a > 0 ? 100 : 0) : null, po: f.over != null ? f.over : null, pb: f.btts != null ? f.btts : null });
+  if (c.sm) M.push({ n: 'SportsMole', w: sideOfScore(c.sm.h, c.sm.a), p: null, over: c.sm.h + c.sm.a >= 3 ? 100 : 0, btts: c.sm.h > 0 && c.sm.a > 0 ? 100 : 0, po: null, pb: null });
+  const home = esc(strip(c.home)), away = esc(strip(c.away));
+  const O = [['H', `${home} to win`, m => m.w === 'H', m => m.p && m.p[0]], ['D', 'Draw', m => m.w === 'D', m => m.p && m.p[1]], ['A', `${away} to win`, m => m.w === 'A', m => m.p && m.p[2]],
+    ['O', 'Over 2.5 goals', m => m.over != null && m.over > 50, m => m.po], ['U', 'Under 2.5 goals', m => m.over != null && m.over < 50, m => m.po == null ? null : 100 - m.po],
+    ['B', 'Both teams score', m => m.btts != null && m.btts > 50, m => m.pb], ['N', 'Not both teams score', m => m.btts != null && m.btts < 50, m => m.pb == null ? null : 100 - m.pb]];
+  const asked = o => M.filter(m => (o === 'H' || o === 'D' || o === 'A') ? true : (o === 'O' || o === 'U') ? m.over != null : m.btts != null);
+  const rows = O.map(([key, label, back, pr]) => { const a = asked(key), yes = a.filter(back), ps = a.map(pr).filter(x => typeof x === 'number'); return { key, label, a, yes, no: a.filter(m => !back(m)), p: ps.length ? Math.round(ps.reduce((x, y) => x + y, 0) / ps.length) : null }; });
+  const score = r => [r.a.length ? r.yes.length / r.a.length : 0, r.yes.length, r.p == null ? 0 : r.p];
+  const best = rows.filter(r => r.a.length >= 2).sort((x, y) => { const a = score(x), b = score(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; })[0];
+  if (!best) { // only v2 to go on: its own strongest pick
+    const mx = Math.max(...v.p), wi = v.p.indexOf(mx), alts = [[mx, wi === 1 ? 'Draw' : `${wi === 0 ? home : away} to win`], [v.over, 'Over 2.5 goals'], [100 - v.over, 'Under 2.5 goals'], [v.btts, 'Both teams score'], [100 - v.btts, 'Not both teams score']].sort((x, y) => y[0] - x[0])[0];
+    return `<div class="xhl"><span class="k">${alts[0] >= 60 ? 'Best pick' : 'Lean'}</span><b>${alts[1]}</b><span class="p">${alts[0]}%</span></div>`;
+  }
+  const maj = best.yes.length * 2 > best.a.length, all = best.yes.length === best.a.length;
+  if (!maj) { // nobody has a majority on anything: show v2's strongest pick, flagged as a split
+    const mx = Math.max(...v.p), wi = v.p.indexOf(mx);
+    return `<div class="xhl"><span class="k">Split</span><b>${wi === 1 ? 'Draw' : `${wi === 0 ? home : away} to win`}</b><span class="p">${mx}%</span><span class="ag">v2's pick · no majority across the models</span></div>`;
+  }
+  const names = r => r.map(m => m.n).join(', ');
+  const ag = all ? `<span class="ag all">All ${best.a.length} models agree</span>` : `<span class="ag">${best.yes.length} of ${best.a.length} back it (${names(best.yes)}) · ${names(best.no)} disagree${best.no.length === 1 ? 's' : ''}</span>`;
+  return `<div class="xhl"><span class="k">${all && best.p != null && best.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${best.label}</b>${best.p != null ? `<span class="p">${best.p}%</span>` : ''}${ag}</div>`;
 }
 // The likeliest exact score that agrees with the model's own pick, its Over 2.5 side and its both-score side, worked out from the
 // same expected goals the model used. (The single most common score can clash with those, e.g. 2-0 beside both-score 53%.)
