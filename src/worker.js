@@ -11,6 +11,7 @@ import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, suggest as suggestBets, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { leanPick, leanHit } from './pick.js';
+import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -602,6 +603,18 @@ const hub = {
       return new Response('Sign in to open Game Day Hub.', { status: 401, headers: { 'cache-control': 'no-store' } });
     }
 
+    if (p.startsWith('/api/push/')) { // alerts to the installed app: which devices, and a test message
+      try {
+        if (req.method === 'GET' && p === '/api/push/key') return json({ key: (await getVapid(env, url.origin)).pub, devices: (await getPush(env)).subs.length });
+        if (req.method !== 'POST') return json({ error: 'Not found' }, 404);
+        const b = await req.json().catch(() => ({}));
+        if (p === '/api/push/subscribe') return json(await addSub(env, b.sub, b.label));
+        if (p === '/api/push/unsubscribe') return json(await removeSub(env, String(b.endpoint || '')));
+        if (p === '/api/push/test') return json({ ok: true, ...(await sendAll(env, { title: 'Game Day Hub', body: 'Notifications are on for this device.', tag: 'test', url: '/' })) });
+      } catch (e) { return json({ error: e && e.message ? e.message : String(e) }, 500); }
+      return json({ error: 'Not found' }, 404);
+    }
+
     if (p === '/api/config') {
       return json({
         today: today(), tomorrow: addDays(today(), 1), tz: TZ,
@@ -713,7 +726,14 @@ const hub = {
 
   async scheduled(event, env0, ctx) {
     const c = counted(env0);
-    ctx.waitUntil(runSlot(c.env).finally(() => c.flush()));
+    ctx.waitUntil((async () => {
+      try { await runSlot(c.env); }
+      finally {
+        // Alerts for games about to start. Never allowed to break the background job.
+        try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(c.env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
+        await c.flush();
+      }
+    })());
   },
 };
 export default hub;

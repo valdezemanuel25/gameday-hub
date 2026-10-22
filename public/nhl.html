@@ -337,6 +337,49 @@ function results() {
     return `<div class="rg"><b>${esc(r.aAbbr)} @ ${esc(r.hAbbr)}</b><span>${f.a}–${f.h}${f.last !== 'REG' ? ' ' + f.last : ''}</span><span>${one(r.v2, gr.v2, c)}</span><span>${one(r.v4, gr.v4, c)}</span><span>${fb}</span></div>`;
   }).join('')}</div>`;
 }
+// ---------- notifications on this device ----------
+const PUSH_OK = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const PUSH_B64 = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); s += '='.repeat((4 - (s.length % 4)) % 4); return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+let pushSt = { s: 'checking', msg: '' };
+async function pushCheck() {
+  try {
+    if (!PUSH_OK()) pushSt.s = 'unsupported';
+    else if (Notification.permission === 'denied') pushSt.s = 'denied';
+    else { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); pushSt.s = sub ? 'on' : 'off'; }
+  } catch (e) { pushSt.s = 'unsupported'; }
+  render();
+}
+async function pushAct(what) {
+  const post = (u, b) => fetch(u, { method: 'POST', body: JSON.stringify(b) }).then(r => r.json());
+  pushSt.msg = ''; const was = pushSt.s; pushSt.s = 'busy'; render();
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (what === 'on') {
+      if ((await Notification.requestPermission()) !== 'granted') { pushSt.s = Notification.permission === 'denied' ? 'denied' : 'off'; return render(); }
+      const k = await (await fetch('/api/push/key')).json();
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: PUSH_B64(k.key) });
+      const r = await post('/api/push/subscribe', { sub: sub.toJSON(), label: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '' });
+      if (r.error) throw new Error(r.error);
+      pushSt.msg = 'Notifications are on for this device.';
+    } else if (what === 'off') {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { await post('/api/push/unsubscribe', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
+      pushSt.msg = 'Notifications are off for this device.';
+    } else { const r = await post('/api/push/test', {}); pushSt.msg = r.sent ? 'Test sent. It should arrive in a few seconds.' : 'No device received it. Turn notifications off and on again.'; }
+  } catch (e) { pushSt.msg = 'Could not do that: ' + e.message; }
+  await pushCheck();
+}
+function pushBox() {
+  const iosTab = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
+  const b = (k, t, cls) => `<button type="button" class="${cls || 'btn'}" data-push="${k}" style="margin-top:8px;margin-right:8px">${t}</button>`;
+  const body = pushSt.s === 'checking' ? '<div class="note">Checking…</div>'
+    : pushSt.s === 'unsupported' ? `<div class="note">${iosTab ? 'On iPhone, add the Hub to your Home Screen (Share, then Add to Home Screen) and open it from there. Notifications only work in the installed app.' : 'This browser cannot show notifications from the Hub.'}</div>`
+    : pushSt.s === 'denied' ? '<div class="note">Notifications are blocked for this app. Allow them in your device settings, then come back.</div>'
+    : pushSt.s === 'on' ? `<div class="note">On for this device.</div>${b('test', 'Send a test')}${b('off', 'Turn off')}`
+    : pushSt.s === 'busy' ? '<div class="note">Working…</div>' : `${b('on', 'Turn on notifications')}`;
+  return `<div class="note" style="margin-top:14px"><b>Notifications</b><br>A heads-up about 45 minutes before a game where every model agrees on its best pick: soccer Best picks (all models agree at 60% or more) and hockey games where v2, v4 and Forebet agree.</div>
+    <div>${body}${pushSt.msg ? `<div class="note" style="margin-top:6px">${esc(pushSt.msg)}</div>` : ''}</div>`;
+}
 function statusView() {
   if (!status) return `<div class="empty">Loading…</div>`;
   const fb = status.forebet;
@@ -347,6 +390,7 @@ function statusView() {
   ${fb && fb.msg ? `<div class="note">${esc(fb.msg)}</div>` : ''}
   <div class="note">Backtest on 2,428 games from 3 seasons: winner picks hit about 55% (v2) and 56% (v4) against 54% for always picking the home team. Over/Under at 5.5 only beat the 55% Over rate when the model was confident. Goalie ratings did not help, so they are not used yet.</div>
   <div class="note" style="${nbAge() == null || nbAge() >= 7 ? 'color:#e0a040' : ''}">${nbLine()}</div>
+  ${pushBox()}
   <button type="button" class="btn" id="xp" style="margin-top:12px">Export hockey data</button><div class="note">Downloads every saved hockey day (cards with v2, v4 and Forebet picks and results) plus the totals, as one file.</div></div></div>`;
 }
 function renderDays() {
@@ -365,7 +409,8 @@ async function load() {
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,#xp,[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel]'); if (!t) return;
+  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel]'); if (!t) return;
+  if (t.dataset.push) return pushAct(t.dataset.push);
   if (t.dataset.sel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
     const sc = document.getElementById('bgrid'), x = sc ? sc.scrollLeft : 0, closing = S.sel === t.dataset.sel;
     if (closing) { S.sel = null; S.ln = null; } else { if (!S.sel) S.back = window.scrollY; S.sel = t.dataset.sel; S.ln = null; }
@@ -382,7 +427,7 @@ document.addEventListener('click', async e => {
     return;
   }
   if (t.dataset.d) { S.date = t.dataset.d; await load(); }
-  else if (t.dataset.tab) { S.tab = t.dataset.tab; render(); }
+  else if (t.dataset.tab) { S.tab = t.dataset.tab; if (S.tab === 'status') pushCheck(); render(); }
   else if (t.dataset.sc) { S.scope = t.dataset.sc; render(); }
   else if (t.id === 'xp') { // the server sends the file itself, which also works on phones that block script downloads
     $('#st').textContent = 'Preparing the hockey export… the file should download in a moment.';

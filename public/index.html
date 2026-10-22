@@ -1199,6 +1199,49 @@ async function fbRun(slug) {
   try { stat = await api('/api/status'); if (S.tab === 'status') render(); if (saved) { delete counts[S.date]; tally = null; await loadDay(); } } catch (er) { /* the grid refreshes on the next visit */ }
 }
 
+// ---------- notifications on this device ----------
+const PUSH_OK = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const PUSH_B64 = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); s += '='.repeat((4 - (s.length % 4)) % 4); return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+let pushSt = { s: 'checking', msg: '' };
+async function pushCheck() {
+  try {
+    if (!PUSH_OK()) pushSt.s = 'unsupported';
+    else if (Notification.permission === 'denied') pushSt.s = 'denied';
+    else { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); pushSt.s = sub ? 'on' : 'off'; }
+  } catch (e) { pushSt.s = 'unsupported'; }
+  render();
+}
+async function pushAct(what) {
+  const post = (u, b) => fetch(u, { method: 'POST', body: JSON.stringify(b) }).then(r => r.json());
+  pushSt.msg = ''; const was = pushSt.s; pushSt.s = 'busy'; render();
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (what === 'on') {
+      if ((await Notification.requestPermission()) !== 'granted') { pushSt.s = Notification.permission === 'denied' ? 'denied' : 'off'; return render(); }
+      const k = await (await fetch('/api/push/key')).json();
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: PUSH_B64(k.key) });
+      const r = await post('/api/push/subscribe', { sub: sub.toJSON(), label: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '' });
+      if (r.error) throw new Error(r.error);
+      pushSt.msg = 'Notifications are on for this device.';
+    } else if (what === 'off') {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { await post('/api/push/unsubscribe', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
+      pushSt.msg = 'Notifications are off for this device.';
+    } else { const r = await post('/api/push/test', {}); pushSt.msg = r.sent ? 'Test sent. It should arrive in a few seconds.' : 'No device received it. Turn notifications off and on again.'; }
+  } catch (e) { pushSt.msg = 'Could not do that: ' + e.message; }
+  await pushCheck();
+}
+function pushBox() {
+  const iosTab = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
+  const b = (k, t, cls) => `<button type="button" class="${cls || 'btn'}" data-push="${k}" style="margin-top:8px;margin-right:8px">${t}</button>`;
+  const body = pushSt.s === 'checking' ? '<div class="small">Checking…</div>'
+    : pushSt.s === 'unsupported' ? `<div class="small">${iosTab ? 'On iPhone, add the Hub to your Home Screen (Share, then Add to Home Screen) and open it from there. Notifications only work in the installed app.' : 'This browser cannot show notifications from the Hub.'}</div>`
+    : pushSt.s === 'denied' ? '<div class="small">Notifications are blocked for this app. Allow them in your device settings, then come back.</div>'
+    : pushSt.s === 'on' ? `<div class="small">On for this device.</div>${b('test', 'Send a test')}${b('off', 'Turn off')}`
+    : pushSt.s === 'busy' ? '<div class="small">Working…</div>' : `${b('on', 'Turn on notifications')}`;
+  return `<div class="sec" style="padding-top:16px">Notifications<small>A heads-up about 45 minutes before a game where every model agrees on its best pick: soccer Best picks (all models agree at 60% or more) and hockey games where v2, v4 and Forebet agree.</small></div>
+    <div class="pair" style="padding-top:0">${body}${pushSt.msg ? `<div class="small" style="margin-top:6px">${esc(pushSt.msg)}</div>` : ''}</div>`;
+}
 function statusView() {
   if (!stat) return `<div class="empty">Loading…</div>`;
   const w = stat.writes, pct = Math.min(100, Math.round(100 * w.used / w.limit)), cls = pct >= 90 ? 'x' : pct >= 70 ? 'w' : '';
@@ -1207,6 +1250,7 @@ function statusView() {
   return `<div class="sec">Saves used today<small>${w.used} of ${w.limit}. The free plan stops saving at the limit and resets at 7:00 PM Central. This is a close estimate.</small></div>
     <div class="pair" style="padding-top:0"><div class="meter ${cls}"><i style="width:${pct}%"></i></div>${pct >= 90 ? '<div class="small" style="color:var(--miss)">Almost out. Avoid Analyze this day until the reset.</div>' : pct >= 70 ? '<div class="small" style="color:var(--amber)">Getting high. Use Analyze leftover games instead of a full run.</div>' : ''}</div>
     ${bad.length ? `<div class="sec" style="padding-top:16px">Needs attention<small>${bad.length} league${bad.length === 1 ? '' : 's'} with a problem the last time they ran.</small></div><div class="pair" style="padding-top:0">${bad.map(row).join('')}</div>` : `<div class="banner" style="margin-top:14px">No league problems on record.</div>`}
+    ${pushBox()}
     ${sourceBoard()}
     ${shotsBlock()}
     ${forebetBox()}
@@ -1375,8 +1419,9 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-bsug],[data-bsugt],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-bsug],[data-bsugt],[data-push],.hd'); if (!t) return;
   if (t.dataset.bg !== undefined) { const [d, id] = t.dataset.bg.split('|'); BS.game = BS.games.find(x => x.date === d && x.c.id === id) || null; if (BS.game && BS.game.c.sport === 'nhl' && !['win','ou'].includes(BS.market)) BS.market = 'win'; BS.sel = null; BS.cur = null; BS.msg = ''; return render(); }
+  if (t.dataset.push) return pushAct(t.dataset.push);
   if (t.dataset.bsp) { BS.sport = t.dataset.bsp; BS.lg = BS.sport === 'nhl' ? 'nhl' : null; return render(); }
   if (t.dataset.blg) { BS.lg = t.dataset.blg; return render(); }
   if (t.dataset.bback) { if (t.dataset.bback === 'sport') { BS.sport = null; BS.lg = null; } else BS.lg = null; return render(); }
@@ -1422,7 +1467,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
-    if (S.tab === 'status') { stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
+    if (S.tab === 'status') { pushCheck(); stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
   if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
   if (t.classList.contains('hd') && t.closest('#sdt')) { // tapping the opened game's header closes it and returns to the grid
