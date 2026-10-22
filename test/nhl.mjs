@@ -159,5 +159,17 @@ import { topScore } from '../src/nhl.js';
   gradeCard(c);
   ok('exact score is graded per model', c.grade.v2.sc === 1 && c.grade.v4.sc === 0);
 }
+// ---- Model bets: the locked headline pick of each graded card is counted ----
+{
+  const dk = 'nhl:day:2026-10-30';
+  kv.set(dk, JSON.stringify({ date: '2026-10-30', cards: [
+    { id: 'm1', kickoff: '2026-10-30T23:00:00Z', home: 'A', away: 'B', hAbbr: 'AAA', aAbbr: 'BBB', ln: { v: 5.5 }, v2: { w: 40, o: 40 }, v4: { w: 42, o: 44 }, fb: { pick: 'A', p: [43, 57], score: { h: 2, a: 3 } }, final: { h: 2, a: 4, last: 'REG', total: 6 } },
+    { id: 'm2', kickoff: '2026-10-30T22:00:00Z', home: 'C', away: 'D', hAbbr: 'CCC', aAbbr: 'DDD', v2: { w: 60, o: 50 }, v4: { w: 58, o: 50 }, fb: { pick: 'H', p: [57, 43] }, final: { h: 1, a: 2, last: 'REG', total: 3 } }] }));
+  const day = JSON.parse(kv.get(dk)); for (const c of day.cards) gradeCard(c); kv.set(dk, JSON.stringify(day));
+  const tl = (await nhlTally(env)).leans;
+  const mine = tl.recent.filter(r => r.date === '2026-10-30');
+  ok('hockey Model bets: each graded card is counted once with its locked pick (one hit, one missed)', mine.length === 2 && mine.find(r => r.home === 'A').hit === true && mine.find(r => r.home === 'C').hit === false && tl.n === tl.recent.length && tl.hits === tl.recent.filter(r => r.hit).length, JSON.stringify(tl));
+  ok('hockey Model bets: base rates come from the same games', tl.base.home <= tl.n && tl.base.overN <= tl.n && tl.base.over <= tl.base.overN, JSON.stringify(tl.base));
+}
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);

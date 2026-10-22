@@ -1,5 +1,5 @@
 // Bet analyzer and tracker: probabilities, parlays, same-game legs, settling and summary.
-import { suggest, analyze, jointProb, legProb, scoreGrid, settle, summary, addBet, listBets, changeBet, test } from '../src/bets.js';
+import { analyze, jointProb, legProb, scoreGrid, settle, summary, addBet, listBets, changeBet, test } from '../src/bets.js';
 let fail = 0;
 const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) fail++; };
 const card = (id, home, away, v2, v4, fb, extra = {}) => ({ id, league: 'esp.1', leagueName: 'La Liga', home, away, kickoff: new Date(Date.now() + 86400000).toISOString(), ko: '3:00 PM', v2, v4, fb, final: null, ...extra });
@@ -108,26 +108,6 @@ ok('a bet can be removed', (await changeBet(e2, v.bet.id, 'delete')).ok && !(awa
   const moved = JSON.parse(kv2.get(`nhl:day:${D}`)); moved.cards[0].ln = { v: 5.5, src: 'DraftKings' }; moved.cards[0].final = { h: 4, a: 3, last: 'OT', total: 7 }; kv2.set(`nhl:day:${D}`, JSON.stringify(moved));
   const lb = (await listBets(env2)).items[0];
   ok('the bet settles from the finished hockey game at the line it was placed on', lb.status === 'hit' && lb.legs.every(x => x.res === 'hit'), JSON.stringify(lb.legs.map(x => x.res)));
-}
-
-// suggested parlays: two picks, different games, above 45% together for most models, each pick backed by most models
-{
-  const A = card('11', 'Alpha', 'Beta', mdl([70, 18, 12], 66, 50, [2.2, 0.8]), mdl([66, 20, 14], 62, 48, [2.0, 0.8]), { p: [68, 20, 12], over: 60, btts: 44 });
-  const B = card('12', 'Gamma', 'Delta', mdl([72, 18, 10], 40, 40, [1.9, 0.7]), mdl([70, 20, 10], 42, 41, [1.8, 0.7]), { p: [69, 20, 11], over: 41, btts: 40 });
-  const Z = card('13', 'Even', 'Steven', mdl([34, 30, 36], 50, 50, [1.2, 1.2]), mdl([35, 30, 35], 50, 50, [1.2, 1.2]), { p: [35, 30, 35], over: 50, btts: 50 });
-  const F = card('14', 'Done', 'Gone', mdl([80, 10, 10], 60, 50, [2.5, .6]), mdl([80, 10, 10], 60, 50, [2.5, .6]), null, { final: { h: 1, a: 0 } });
-  const cs = new Map([[`${D}|esp.1|11`, A], [`${D}|esp.1|12`, B], [`${D}|esp.1|13`, Z], [`${D}|esp.1|14`, F]]);
-  const s = suggest(cs);
-  ok('suggestions pair picks from different games only', s.length > 0 && s.every(x => x.legs[0].id !== x.legs[1].id));
-  ok('every suggestion is above 45% for most models', s.every(x => ['v2', 'v4', 'fb'].filter(m => x.p[m] != null && x.p[m] > 0.45).length >= 2));
-  ok('finished and coin-flip games are left out, and double chance is never suggested', s.every(x => x.legs.every(l => l.id !== '14' && l.id !== '13' && l.market !== 'dc')));
-  ok('a pair is the product of each model\'s two leg numbers', s.every(x => Math.abs(x.p.v2 - x.legs[0].p.v2 * x.legs[1].p.v2) < 1e-9));
-  ok('a pick most models put under 50% is never suggested (Over on Gamma-Delta)', s.every(x => !x.legs.some(l => l.id === '12' && l.market === 'ou' && l.sel === 'O')));
-  ok('best pair first', s.every((x, i) => i === 0 || (x.p.v2 + x.p.v4 + x.p.fb) <= (s[i - 1].p.v2 + s[i - 1].p.v4 + s[i - 1].p.fb) + 1e-9));
-  const P = { ...A, id: '15', kickoff: new Date(Date.now() - 3600000).toISOString() };
-  const sp = suggest(new Map([[`${D}|esp.1|15`, P], [`${D}|esp.1|12`, B]]));
-  ok('a game already in play is still suggested and marked in play', sp.length > 0 && sp.some(x => x.legs.some(l => l.id === '15' && l.live)) && sp.every(x => x.legs.every(l => l.id !== '12' || !l.live)));
-  ok('nothing when no two games qualify', suggest(new Map([[`${D}|esp.1|13`, Z]])).length === 0);
 }
 
 // model parlays are tracked apart from your own bets

@@ -32,6 +32,11 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .tab{padding:9px 6px;font-size:13.5px;color:var(--mut);margin-right:10px;border-bottom:2px solid transparent}
 .tab.on{color:var(--ink);border-bottom-color:var(--blue);font-weight:600}
 .pad{padding:14px 18px 0}
+.mbx{margin-top:4px}.mbr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.mbr:first-child{border-top:0}
+.mbl small,.mbv small{display:block;color:var(--faint);font-size:11.5px}.mbv{text-align:right}.mbv b{font-size:16px}
+.mbh{background:var(--s);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px}.mbsec{margin-top:18px;font-size:14px;font-weight:650}.mbsec small{display:block;font-weight:400;font-size:11.5px;color:var(--faint);margin-top:2px}
+.mbg{padding:10px 0;border-top:1px solid var(--line)}.mbg:first-child{border-top:0}.mbt{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+.mbs{font-size:11.5px;font-weight:700;color:var(--mut)}.mbs.hit{color:#5ee08a}.mbs.miss{color:#e07a6a}.mbk{font-weight:700;color:var(--mut)}.mbk.best{color:#d9b85c}.mbk.lean{color:#5ee08a}
 .card{background:var(--s);border:1px solid var(--line);border-radius:14px;padding:13px 13px 11px;margin-bottom:10px}
 .hd{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .hd h3{font-size:18px;font-weight:700;letter-spacing:-.01em}
@@ -380,6 +385,68 @@ function pushBox() {
   return `<div class="note" style="margin-top:14px"><b>Notifications</b><br>A heads-up about 45 minutes before a game where every model agrees on its best pick: soccer Best picks (all models agree at 60% or more) and hockey games where v2, v4 and Forebet agree.</div>
     <div>${body}${pushSt.msg ? `<div class="note" style="margin-top:6px">${esc(pushSt.msg)}</div>` : ''}</div>`;
 }
+// ---------- Model bets: each card's headline pick, tracked as one fixed bet ----------
+// (hockeyPick and hockeyHit are the same code the server uses to lock and score the pick; test/pick.mjs keeps the two copies identical.)
+function hockeyPick(c) {
+  if (!c || !c.v2 || c.skipped || c.v2.w == null) return null;
+  const f = c.fb || {}, line = c.ln ? c.ln.v : null, tot = f.score ? f.score.h + f.score.a : null;
+  const M = [{ n: 'v2', w: c.v2.w >= 50 ? 'H' : 'A', ph: c.v2.w, o: line != null ? c.v2.o : null }];
+  if (c.v4 && c.v4.w != null) M.push({ n: 'v4', w: c.v4.w >= 50 ? 'H' : 'A', ph: c.v4.w, o: line != null ? c.v4.o : null });
+  if (f.pick) M.push({ n: 'Forebet', w: f.pick, ph: f.p ? f.p[0] : null, o: line != null && tot != null && tot !== line ? (tot > line ? 100 : 0) : null, fbo: true });
+  const O = [['H', m => m.w === 'H', m => m.ph], ['A', m => m.w === 'A', m => (m.ph == null ? null : 100 - m.ph)],
+    ['O', m => m.o != null && m.o > 50, m => (m.fbo ? null : m.o)], ['U', m => m.o != null && m.o < 50, m => (m.fbo || m.o == null ? null : 100 - m.o)]];
+  const asked = k => M.filter(m => (k === 'H' || k === 'A') ? true : m.o != null);
+  const rows = O.map(([key, back, pr]) => { const a = asked(key), yes = a.filter(back), ps = a.map(pr).filter(x => typeof x === 'number'); return { key, a, yes, no: a.filter(m => !back(m)), p: ps.length ? Math.round(ps.reduce((x, y) => x + y, 0) / ps.length) : null }; });
+  const score = r => [r.a.length ? r.yes.length / r.a.length : 0, r.yes.length, r.p == null ? 0 : r.p];
+  const best = rows.filter(r => r.a.length >= 2).sort((x, y) => { const a = score(x), b = score(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; })[0];
+  const ln = key => (key === 'O' || key === 'U' ? { line } : {});
+  const own = c.v2.w >= 50 ? ['H', c.v2.w] : ['A', 100 - c.v2.w];
+  if (!best) return { k: 'solo', key: own[0], p: Math.round(own[1]), y: 1, a: 1, by: ['v2'], no: [] };
+  const maj = best.yes.length * 2 > best.a.length, all = best.yes.length === best.a.length;
+  if (!maj) return { k: 'split', key: own[0], p: Math.round(own[1]), y: best.yes.length, a: best.a.length, by: ['v2'], no: [] };
+  return { k: all && best.a.length >= 3 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n), ...ln(best.key) };
+}
+// true / false, or null when an Over/Under pick lands exactly on a whole-number line (a push: no result).
+function hockeyHit(key, f, line) {
+  const t = f.total != null ? f.total : f.h + f.a;
+  return key === 'H' ? f.h > f.a : key === 'A' ? f.h < f.a : t === line ? null : key === 'O' ? t > line : t < line;
+}
+
+const LEAN_KIND = { best: 'Best pick', lean: 'Lean', split: 'Split', solo: 'v2 alone' };
+const leanName = (c, L) => ({ H: `${c.home} to win`, A: `${c.away} to win`, O: `Over ${L.line} goals`, U: `Under ${L.line} goals` })[L.key];
+const MB_PLAIN = { H: 'Home win', A: 'Away win', O: 'Over', U: 'Under' };
+const moe = (h, n) => (n >= 5 ? Math.round(196 * Math.sqrt((h / n) * (1 - h / n) / n)) : null);
+function mbRow(label, sub, x, base) {
+  const n = x ? x.n : 0, h = x ? x.hits : 0, m = n ? moe(h, n) : null;
+  return `<div class="mbr"><div class="mbl">${label}${sub ? `<small>${sub}</small>` : ''}</div><div class="mbv">${n ? `<b>${Math.round(100 * h / n)}%</b><small>${h} of ${n}${m != null ? ` · ±${m}` : ''}${base != null ? ` · happens ${base}% overall` : ''}</small>` : '<small>none yet</small>'}</div></div>`;
+}
+function agreeText(L) { return L.k === 'split' ? 'no majority, v2\'s own pick' : L.k === 'solo' ? 'only v2 had numbers' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`; }
+function mbetsToday() {
+  const rows = (day.cards || []).filter(c => c.v2 && !c.skipped).map(c => ({ c, L: c.lean || (c.final ? null : hockeyPick(c)) })).filter(x => x.L || x.c.final).sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
+  if (!rows.length) return `<div class="note">No picks for this day yet.</div>`;
+  return rows.map(({ c, L }) => {
+    if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><div class="note">This game was already over when the Hub first saw it.</div></div>`;
+    const st = c.lean ? (L.hit == null ? '<span class="mbs">Push</span>' : L.hit ? '<span class="mbs hit">Hit ✓</span>' : '<span class="mbs miss">Missed ✗</span>') : `<span class="mbs">${c.kickoff && new Date(c.kickoff) <= Date.now() ? 'In play' : 'Pending'}</span>`;
+    return `<div class="mbg"><div class="mbt"><b>${esc(leanName(c, L))}</b>${st}</div><div class="note">${esc(c.away)} at ${esc(c.home)} · ${esc(c.ko || '')}${c.final ? ' · ' + c.final.a + '–' + c.final.h : ''}</div>
+      <div class="note"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${agreeText(L)}</div></div>`;
+  }).join('');
+}
+function mbetsView() {
+  if (!tally) return `<div class="empty">Loading…</div>`;
+  const T = tally.leans || { n: 0, hits: 0, push: 0, byKind: {}, byKey: {}, byBack: {}, base: {}, recent: [] }, pct = (h, n) => n ? Math.round(100 * h / n) : null;
+  const kinds = ['best', 'lean', 'split', 'solo'].filter(k => T.byKind[k]), keys = ['H', 'A', 'O', 'U'].filter(k => T.byKey[k]), B = T.base || {};
+  const overP = B.overN ? pct(B.over, B.overN) : null;
+  const backs = Object.keys(T.byBack).sort((a, b) => { const [ay, aa] = a.split(' of ').map(Number), [by, ba] = b.split(' of ').map(Number); return (ay === aa ? 0 : 1) - (by === ba ? 0 : 1) || ba - aa || by - ay; });
+  const head = T.n ? `<div class="mbh"><b>${T.hits}</b> of <b>${T.n}</b> model bets hit (<b>${pct(T.hits, T.n)}%</b>${moe(T.hits, T.n) != null ? ` ± ${moe(T.hits, T.n)}` : ''}). One pick per game, graded when it ends${T.push ? `; ${T.push} push${T.push === 1 ? '' : 'es'} not counted` : ''}.</div>` : `<div class="mbh">No model bets are graded yet. Each game's headline pick is recorded when the game is graded, so the record starts with the next games that finish.</div>`;
+  const recent = (T.recent || []).slice(0, 15).map(r => `<div class="mbg"><div class="mbt"><b>${esc(r.key === 'H' ? r.home + ' to win' : r.key === 'A' ? r.away + ' to win' : (r.key === 'O' ? 'Over ' : 'Under ') + r.line)}</b><span class="mbs ${r.hit ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : 'Missed ✗'}</span></div><div class="note">${esc(r.away)} at ${esc(r.home)} · ${r.final.a}–${r.final.h}${r.final.last && r.final.last !== 'REG' ? ' ' + esc(r.final.last) : ''}</div><div class="note"><span class="mbk ${r.k}">${LEAN_KIND[r.k]}</span>${r.p != null ? ` ${r.p}%` : ''}${r.k === 'best' || r.k === 'lean' ? ` · ${r.y === r.a ? 'all ' + r.a + ' agree' : r.y + ' of ' + r.a + ' back it'}` : ''}</div></div>`).join('');
+  return `<div class="pad"><div class="note" style="margin:0 0 10px">Every game's headline pick (the side most of v2, v4 and Forebet back: the winner, or Over/Under at that game's DraftKings line) is one fixed bet. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. No odds are used. Over/Under needs a real line; a total exactly on the line is a push.</div>${head}
+    <div class="mbsec">Today's model bets<small>${esc(S.date)}. Picks still update until the game starts.</small></div><div class="mbx">${mbetsToday()}</div>
+    ${T.n ? `<div class="mbsec">By strength<small>Best pick: all three models agree. Lean: two of three. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k])).join('')}</div>
+    <div class="mbsec">By kind of pick<small>Compare each to how often it happens in all these games.</small></div><div class="mbx">${keys.map(k => mbRow(MB_PLAIN[k], '', T.byKey[k], k === 'H' ? pct(B.home || 0, T.n) : k === 'A' ? 100 - pct(B.home || 0, T.n) : k === 'O' ? overP : overP == null ? null : 100 - overP)).join('')}</div>
+    ${backs.length ? `<div class="mbsec">By how many models agree</div><div class="mbx">${backs.map(k => mbRow(k, 'models back it', T.byBack[k])).join('')}</div>` : ''}
+    <div class="mbsec">Recent model bets</div><div class="mbx">${recent}</div>
+    <div class="note" style="margin-top:10px">Small samples swing a lot, and ± is the 95% margin. A row only means something if it beats how often that outcome happens anyway.</div>` : ''}</div>`;
+}
 function statusView() {
   if (!status) return `<div class="empty">Loading…</div>`;
   const fb = status.forebet;
@@ -396,12 +463,12 @@ function statusView() {
 function renderDays() {
   const t = fmt(new Date()), list = [[addDays(t, -1), 'Yesterday'], [t, 'Today'], [addDays(t, 1), 'Tomorrow']];
   $('#days').innerHTML = list.map(([d, l]) => `<button type="button" class="day${d === S.date ? ' on' : ''}" data-d="${d}">${l}<b>${+d.slice(8)}</b></button>`).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['top', 'Top'], ['results', 'Results'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
+  $('#tabs').innerHTML = [['board', 'Board'], ['top', 'Top'], ['results', 'Results'], ['mbets', 'Model bets'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
 }
 function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
   document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'bgrid') updDots(); }, true);
-function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : statusView(); updDots(); }
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : statusView(); updDots(); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
   render();

@@ -36,3 +36,33 @@ export function leanHit(key, f) {
   const t = f.h + f.a;
   return key === 'H' ? f.h > f.a : key === 'D' ? f.h === f.a : key === 'A' ? f.h < f.a : key === 'O' ? t >= 3 : key === 'U' ? t < 3 : key === 'B' ? f.h > 0 && f.a > 0 : !(f.h > 0 && f.a > 0);
 }
+
+// ---- hockey ----
+// The same idea for a hockey card: each model gives one vote on the winner (overtime counts, so no draw) and, when the game has a
+// sportsbook total, on Over or Under at THAT line. v2 and v4 vote Over when their Over chance is above 50% (Under when below);
+// Forebet votes from its predicted total. A total exactly on the line is no vote. No odds are used beyond which number "Over" means.
+//   'best' = all three models agree (the Top tab's "All agree"), 'lean' = a majority, 'split' = no majority (v2's own winner), 'solo' = only v2.
+export function hockeyPick(c) {
+  if (!c || !c.v2 || c.skipped || c.v2.w == null) return null;
+  const f = c.fb || {}, line = c.ln ? c.ln.v : null, tot = f.score ? f.score.h + f.score.a : null;
+  const M = [{ n: 'v2', w: c.v2.w >= 50 ? 'H' : 'A', ph: c.v2.w, o: line != null ? c.v2.o : null }];
+  if (c.v4 && c.v4.w != null) M.push({ n: 'v4', w: c.v4.w >= 50 ? 'H' : 'A', ph: c.v4.w, o: line != null ? c.v4.o : null });
+  if (f.pick) M.push({ n: 'Forebet', w: f.pick, ph: f.p ? f.p[0] : null, o: line != null && tot != null && tot !== line ? (tot > line ? 100 : 0) : null, fbo: true });
+  const O = [['H', m => m.w === 'H', m => m.ph], ['A', m => m.w === 'A', m => (m.ph == null ? null : 100 - m.ph)],
+    ['O', m => m.o != null && m.o > 50, m => (m.fbo ? null : m.o)], ['U', m => m.o != null && m.o < 50, m => (m.fbo || m.o == null ? null : 100 - m.o)]];
+  const asked = k => M.filter(m => (k === 'H' || k === 'A') ? true : m.o != null);
+  const rows = O.map(([key, back, pr]) => { const a = asked(key), yes = a.filter(back), ps = a.map(pr).filter(x => typeof x === 'number'); return { key, a, yes, no: a.filter(m => !back(m)), p: ps.length ? Math.round(ps.reduce((x, y) => x + y, 0) / ps.length) : null }; });
+  const score = r => [r.a.length ? r.yes.length / r.a.length : 0, r.yes.length, r.p == null ? 0 : r.p];
+  const best = rows.filter(r => r.a.length >= 2).sort((x, y) => { const a = score(x), b = score(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; })[0];
+  const ln = key => (key === 'O' || key === 'U' ? { line } : {});
+  const own = c.v2.w >= 50 ? ['H', c.v2.w] : ['A', 100 - c.v2.w];
+  if (!best) return { k: 'solo', key: own[0], p: Math.round(own[1]), y: 1, a: 1, by: ['v2'], no: [] };
+  const maj = best.yes.length * 2 > best.a.length, all = best.yes.length === best.a.length;
+  if (!maj) return { k: 'split', key: own[0], p: Math.round(own[1]), y: best.yes.length, a: best.a.length, by: ['v2'], no: [] };
+  return { k: all && best.a.length >= 3 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n), ...ln(best.key) };
+}
+// true / false, or null when an Over/Under pick lands exactly on a whole-number line (a push: no result).
+export function hockeyHit(key, f, line) {
+  const t = f.total != null ? f.total : f.h + f.a;
+  return key === 'H' ? f.h > f.a : key === 'A' ? f.h < f.a : t === line ? null : key === 'O' ? t > line : t < line;
+}

@@ -5,6 +5,7 @@
 //   what the model expects. Until a line is known a game uses 5.5.
 // Storage: nhl:state (ratings, one write per batch of finished games), nhl:day:<date> (cards), nhl:fbmeta.
 import SEED from './nhlseed.js';
+import { hockeyPick, hockeyHit } from './pick.js';
 import { fbHeaders, FB_HV } from './forebetpage.js';
 
 const TZ = 'America/Chicago';
@@ -157,6 +158,8 @@ export function gradeCard(c) {
   for (const k of ['v2', 'v4']) if (g[k] && c[k].sc) g[k].sc = c[k].sc.h === f.h && c[k].sc.a === f.a ? 1 : 0;
   if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null, ou: fbOu(c.fb, f, line) };
   c.grade = g;
+  // The card's headline pick is locked here (from what the card held when it finished) and scored on the final. Model bets reads it.
+  if (!c.lean) { const l = hockeyPick(c); if (l) { const h = hockeyHit(l.key, f, l.line); l.hit = h; c.lean = l; } }
 }
 
 // ---- cron / on-demand step ---------------------------------------------------------------------
@@ -269,6 +272,8 @@ export async function nhlTally(env) {
   // Calibration: winner picks grouped by how sure the model was, against how often they won.
   const BANDS = [['50 to 54%', 50, 55], ['55 to 59%', 55, 60], ['60 to 64%', 60, 65], ['65% and up', 65, 101]], cal = { v2: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })), v4: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })) };
   let graded = 0, lined = 0;
+  // Model bets: every card's headline pick, locked when the game was graded. A total exactly on the line is a push (no result).
+  const LB = { n: 0, hits: 0, push: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, over: 0, overN: 0 }, recent: [] }, lbAdd = (o, k, hit) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; };
   for (const d of days.filter(Boolean).sort((a, b) => b.date.localeCompare(a.date))) {
     for (const c of d.cards.filter(x => x.final && x.grade).sort((a, b) => b.kickoff.localeCompare(a.kickoff))) {
       graded++; const real = !!(c.ln && c.grade.line === c.ln.v); if (real) lined++; // Over/Under only counts at a real sportsbook line
@@ -279,6 +284,17 @@ export async function nhlTally(env) {
         if (real && g[m]?.ou != null) { all.ou[m].n++; all.ou[m].hit += g[m].ou; }
       }
       all.home.n++; all.home.hit += c.final.h > c.final.a ? 1 : 0;
+      if (c.lean) {
+        const L = c.lean;
+        if (L.hit == null) LB.push++;
+        else {
+          LB.n++; LB.hits += L.hit ? 1 : 0; lbAdd(LB.byKind, L.k, L.hit); lbAdd(LB.byKey, L.key, L.hit);
+          if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.y} of ${L.a}`, L.hit);
+          LB.base.home += c.final.h > c.final.a ? 1 : 0;
+          if (c.ln && c.final.total !== c.ln.v) { LB.base.overN++; LB.base.over += c.final.total > c.ln.v ? 1 : 0; }
+          if (LB.recent.length < 40) LB.recent.push({ date: d.date, kickoff: c.kickoff, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, k: L.k, key: L.key, line: L.line ?? null, p: L.p, y: L.y, a: L.a, hit: !!L.hit });
+        }
+      }
       for (const m of ['v2', 'v4']) if (g[m] && c[m] && g[m].win != null) { const t = Math.max(c[m].w, 100 - c[m].w), b = cal[m].find(x => t >= x.lo && t < x.hi); if (b) { b.n++; b.hits += g[m].win; b.sum += t; } }
       for (const m of ['v2', 'v4']) if (g[m]) { all.brier.n += m === 'v2' ? 1 : 0; all.brier[m] += g[m].brier; }
       if (g.v2 && g.v4 && g.fb && g.fb.win != null) {
@@ -290,7 +306,7 @@ export async function nhlTally(env) {
   }
   const fix = b => ({ ...b, brier: { n: b.brier.n, v2: b.brier.n ? +(b.brier.v2 / b.brier.n).toFixed(3) : null, v4: b.brier.n ? +(b.brier.v4 / b.brier.n).toFixed(3) : null } });
   const calOut = Object.fromEntries(Object.entries(cal).map(([m, bs]) => [m, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]));
-  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent };
+  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent, leans: LB };
 }
 export async function nhlStatus(env) {
   const [S, fb] = await Promise.all([env.HUB.get('nhl:state', 'json'), env.HUB.get('nhl:fbmeta', 'json')]);
