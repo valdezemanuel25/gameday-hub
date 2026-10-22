@@ -136,6 +136,7 @@ ok('cron analyze slot: one league per run', anJob.job === 'analyze', JSON.string
 
 // ---- totals include the imported history ----
 const t = await call('/api/tally');
+ok('Model bets: the graded card carries a locked headline pick and the tally counts it', t.leans && t.leans.n === 1 && typeof t.leans.hits === 'number' && t.leans.recent.length === 1 && t.leans.byKind[t.leans.recent[0].k].n === 1, JSON.stringify(t.leans));
 ok('v2 total = 280 imported + 1 new', t.v2.n === 281, `n=${t.v2.n}`);
 ok('imported outcome hits 139 (+1 new) = 140', t.v2.outcome === 140, `got ${t.v2.outcome}`);
 ok('imported O/U hits 154 (+0 new)', t.v2.ou === 154, `got ${t.v2.ou}`);

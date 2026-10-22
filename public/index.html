@@ -98,6 +98,10 @@ details.how h5.hw{margin:14px 0 2px;font-size:12px;font-weight:650;color:var(--d
 .btn.g{background:transparent;color:var(--ink);border:1px solid #35514a}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .sec{padding:16px 18px 2px;font-size:14px;font-weight:650}
+.mbx,.mbl2{margin:6px 18px 0}.mbr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.mbr:first-child{border-top:0}
+.mbl small,.mbv small{display:block;color:var(--faint);font-size:11.5px}.mbv{text-align:right}.mbv b{font-size:16px}
+.mbg{padding:10px 0;border-top:1px solid var(--line)}.mbg:first-child{border-top:0}.mbt{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}.mbg small{display:block;color:var(--faint);font-size:11.5px;margin-top:2px}
+.mbs{font-size:11.5px;font-weight:700;color:var(--dim)}.mbs.hit{color:var(--grass)}.mbs.miss{color:#e07a6a}.mbk{font-weight:700;color:var(--dim)}.mbk.best{color:#d9b85c}.mbk.lean{color:var(--grass)}
 .sec small{display:block;font-weight:400;color:var(--dim);font-size:12.5px;margin-top:2px}
 .pair{padding:12px 18px 2px}
 .pair .lab{display:flex;justify-content:space-between;font-size:13px;margin-bottom:7px}
@@ -1037,6 +1041,74 @@ function triRows(c) {
   const line = (label, key) => `<span>${label}</span>${cols.map(x => `<span>${cl(x && x[key])}</span>`).join('')}`;
   return `<div class="tri"><span></span><span class="hh">v2</span><span class="hh">v4</span><span class="hh">Forebet</span>${line('Winner', 'w')}${line('Over/under', 'ou')}${line('Both score', 'bt')}</div>`;
 }
+// ---------- Model bets: each card's headline pick, tracked as one fixed bet ----------
+// (leanPick and leanHit are the same code the server uses to lock and score the pick; test/pick.mjs keeps the two copies identical.)
+const hdaOf = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
+const LEAN_KEYS = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score', N: 'Not both score' };
+
+function leanPick(c) {
+  const v = c && c.v2; if (!v || !v.p) return null;
+  const f = c.fb || {};
+  const M = [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
+  if (c.v4) M.push({ n: 'v4', w: c.v4.pick, p: c.v4.p, over: c.v4.over, btts: c.v4.btts, po: c.v4.over, pb: c.v4.btts });
+  if (f.p || f.score) M.push({ n: 'Forebet', w: f.p ? hdaOf(f.p) : sideOfScore(f.score.h, f.score.a), p: f.p || null, over: f.over != null ? f.over : f.score ? (f.score.h + f.score.a >= 3 ? 100 : 0) : null, btts: f.btts != null ? f.btts : f.score ? (f.score.h > 0 && f.score.a > 0 ? 100 : 0) : null, po: f.over != null ? f.over : null, pb: f.btts != null ? f.btts : null });
+  if (c.sm) M.push({ n: 'SportsMole', w: sideOfScore(c.sm.h, c.sm.a), p: null, over: c.sm.h + c.sm.a >= 3 ? 100 : 0, btts: c.sm.h > 0 && c.sm.a > 0 ? 100 : 0, po: null, pb: null });
+  const O = [['H', m => m.w === 'H', m => m.p && m.p[0]], ['D', m => m.w === 'D', m => m.p && m.p[1]], ['A', m => m.w === 'A', m => m.p && m.p[2]],
+    ['O', m => m.over != null && m.over > 50, m => m.po], ['U', m => m.over != null && m.over < 50, m => (m.po == null ? null : 100 - m.po)],
+    ['B', m => m.btts != null && m.btts > 50, m => m.pb], ['N', m => m.btts != null && m.btts < 50, m => (m.pb == null ? null : 100 - m.pb)]];
+  const asked = o => M.filter(m => (o === 'H' || o === 'D' || o === 'A') ? true : (o === 'O' || o === 'U') ? m.over != null : m.btts != null);
+  const rows = O.map(([key, back, pr]) => { const a = asked(key), yes = a.filter(back), ps = a.map(pr).filter(x => typeof x === 'number'); return { key, a, yes, no: a.filter(m => !back(m)), p: ps.length ? Math.round(ps.reduce((x, y) => x + y, 0) / ps.length) : null }; });
+  const score = r => [r.a.length ? r.yes.length / r.a.length : 0, r.yes.length, r.p == null ? 0 : r.p];
+  const best = rows.filter(r => r.a.length >= 2).sort((x, y) => { const a = score(x), b = score(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; })[0];
+  if (!best) {
+    const mx = Math.max(...v.p), wi = v.p.indexOf(mx);
+    const alts = [[mx, 'HDA'[wi]], [v.over, 'O'], [100 - v.over, 'U'], [v.btts, 'B'], [100 - v.btts, 'N']].filter(x => typeof x[0] === 'number').sort((x, y) => y[0] - x[0])[0];
+    return { k: 'solo', key: alts[1], p: alts[0], y: 1, a: 1, by: ['v2'], no: [] };
+  }
+  const maj = best.yes.length * 2 > best.a.length, all = best.yes.length === best.a.length;
+  if (!maj) { const mx = Math.max(...v.p), wi = v.p.indexOf(mx); return { k: 'split', key: 'HDA'[wi], p: mx, y: best.yes.length, a: best.a.length, by: ['v2'], no: [] }; }
+  return { k: all && best.p != null && best.p >= 60 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n) };
+}
+// Did the pick land on this final score? Over/Under use 2.5 goals.
+function leanHit(key, f) {
+  const t = f.h + f.a;
+  return key === 'H' ? f.h > f.a : key === 'D' ? f.h === f.a : key === 'A' ? f.h < f.a : key === 'O' ? t >= 3 : key === 'U' ? t < 3 : key === 'B' ? f.h > 0 && f.a > 0 : !(f.h > 0 && f.a > 0);
+}
+
+const LEAN_KIND = { best: 'Best pick', lean: 'Lean', split: 'Split', solo: 'v2 alone' };
+const leanName = (c, key) => ({ H: `${strip(c.home)} to win`, D: 'Draw', A: `${strip(c.away)} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' })[key];
+const MB_PLAIN = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score', N: 'Not both score' };
+function mbRow(label, sub, x, base) {
+  const n = x ? x.n : 0, h = x ? x.hits : 0, m = n ? moe(h, n) : null;
+  return `<div class="mbr"><div class="mbl">${label}${sub ? `<small>${sub}</small>` : ''}</div><div class="mbv">${n ? `<b>${Math.round(100 * h / n)}%</b><small>${h} of ${n}${m != null ? ` · ±${m}` : ''}${base != null ? ` · happens ${base}% overall` : ''}</small>` : '<small>none yet</small>'}</div></div>`;
+}
+function mbetsToday() {
+  const rows = (day.cards || []).filter(c => c.v2 && !SECOND_DIV.includes(c.leagueKey)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
+    .sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
+  if (!rows.length) return `<div class="small" style="margin:8px 4px 0">No picks for this day yet. Analyze the day on the Board first.</div>`;
+  return rows.map(({ c, L }) => {
+    if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><small>This game was already over when the Hub first saw it.</small></div>`;
+    const st = c.lean ? (L.hit ? '<span class="mbs hit">Hit ✓</span>' : '<span class="mbs miss">Missed ✗</span>') : `<span class="mbs">${c.kickoff && new Date(c.kickoff) <= Date.now() ? 'In play' : 'Pending'}</span>`;
+    return `<div class="mbg"><div class="mbt"><b>${esc(leanName(c, L.key))}</b>${st}</div><small>${esc(c.home)} vs ${esc(c.away)} · ${esc(c.ko || '')}${c.final ? ' · ' + c.final.h + '–' + c.final.a : ''}</small>
+      <small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.k === 'split' ? 'no majority, v2\'s own pick' : L.k === 'solo' ? 'only v2 had numbers' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
+  }).join('');
+}
+function mbetsView() {
+  if (!tally) return `<div class="empty">Loading…</div>`;
+  const T = tally.leans || { n: 0, hits: 0, byKind: {}, byKey: {}, byBack: {}, base: {}, recent: [] }, pct = (h, n) => n ? Math.round(100 * h / n) : null;
+  const bp = k => T.n ? pct(T.base[k] || 0, T.n) : null;
+  const kinds = ['best', 'lean', 'split', 'solo'].filter(k => T.byKind[k]), keys = ['H', 'D', 'A', 'O', 'U', 'B', 'N'].filter(k => T.byKey[k]);
+  const backs = Object.keys(T.byBack).sort((a, b) => { const [ay, aa] = a.split(' of ').map(Number), [by, ba] = b.split(' of ').map(Number); return (ay === aa ? 0 : 1) - (by === ba ? 0 : 1) || ba - aa || by - ay; });
+  const head = T.n ? `<div class="zsum"><b>${T.hits}</b> of <b>${T.n}</b> model bets hit (<b>${pct(T.hits, T.n)}%</b>${moe(T.hits, T.n) != null ? ` ± ${moe(T.hits, T.n)}` : ''}). One pick per card, graded when the game ends.</div>` : `<div class="zsum">No model bets are graded yet. Each card's headline pick is recorded when its game is graded, so the record starts with the next games that finish.</div>`;
+  const recent = (T.recent || []).slice(0, 15).map(r => `<div class="mbg"><div class="mbt"><b>${esc(MB_PLAIN[r.key])}</b><span class="mbs ${r.hit ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : 'Missed ✗'}</span></div><small>${esc(r.home)} vs ${esc(r.away)} · ${r.final.h}–${r.final.a}</small><small><span class="mbk ${r.k}">${LEAN_KIND[r.k]}</span>${r.p != null ? ` ${r.p}%` : ''}${r.k === 'best' || r.k === 'lean' ? ` · ${r.y === r.a ? 'all ' + r.a + ' agree' : r.y + ' of ' + r.a + ' back it'}` : ''}</small></div>`).join('');
+  return `<div class="small" style="margin:8px 4px 0">Every card's headline pick (Best pick or Lean, the line the card leads with) is one fixed bet. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. No odds are used.</div>${head}
+    <div class="sec">Today's model bets<small>${esc(S.date === cfg.today ? 'Today' : S.date)}. Picks still update until the game starts.</small></div><div class="mbl2">${mbetsToday()}</div>
+    ${T.n ? `<div class="sec">By strength<small>Best pick: all models agree and average 60% or more. Lean: most agree. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k])).join('')}</div>
+    <div class="sec">By kind of pick<small>Compare each to how often it happens in all these games.</small></div><div class="mbx">${keys.map(k => mbRow(MB_PLAIN[k], '', T.byKey[k], k === 'H' ? bp('home') : k === 'O' ? bp('over') : k === 'U' ? 100 - bp('over') : k === 'B' ? bp('btts') : k === 'N' ? 100 - bp('btts') : null)).join('')}</div>
+    ${backs.length ? `<div class="sec">By how many models agree</div><div class="mbx">${backs.map(k => mbRow(k.replace(' of ', ' of '), 'models back it', T.byBack[k])).join('')}</div>` : ''}
+    <div class="sec">Recent model bets</div><div class="mbl2">${recent}</div>
+    <div class="bdn">Small samples swing a lot, and ± is the 95% margin. A row only means something if it beats how often that outcome happens anyway.</div>` : ''}`;
+}
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;
   const t = tally;
@@ -1185,7 +1257,7 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets']].map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets']].map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function updSDots() { const g = document.getElementById('sgrid'), ds = document.querySelectorAll('.sdots i'); if (!g || !ds.length) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2);
@@ -1194,7 +1266,7 @@ document.addEventListener('scroll', e => { if (e.target && e.target.id === 'sgri
 function render() {
   keepFilter();
   renderHeader();
-  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : compare();
+  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : compare();
   updSDots();
 }
 async function loadCounts() {
@@ -1366,7 +1438,7 @@ $('#btn-grade').onclick = () => runAll('grade');
 
 (async () => {
   cfg = await api('/api/config'); S.date = cfg.today; await loadDay();
-  if (S.tab === 'results' || S.tab === 'compare') { await ensureTally(); render(); }
+  if (S.tab === 'results' || S.tab === 'compare' || S.tab === 'mbets') { await ensureTally(); render(); }
   try { stat = await api('/api/status'); if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') render(); } catch (e) { /* alerts are optional */ }
 })();
 </script>
