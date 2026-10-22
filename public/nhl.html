@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Game Day">
 <title>Game Day Hub · NHL</title>
 <style>
 :root{--bg:#0b0f17;--bar:#0f141c;--s:#141b27;--s2:#1b2433;--ink:#eef2f8;--mut:#9aa6b8;--faint:#6c7a90;--line:#2a3546;--blue:#4c8dff;--chip:#1f2a3b;--good:#5ee08f;--bad:#ff7b6b;--amber:#f0c35a;--gold:#f6c64a}
@@ -395,6 +399,7 @@ document.addEventListener('click', async e => {
   }
 });
 load();
+try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js'); } catch (e) { /* installing is optional */ }
 </script>
 </body>
 </html>

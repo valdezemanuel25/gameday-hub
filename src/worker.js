@@ -75,17 +75,29 @@ const slim = p => ({
 });
 const toPred = s => ({ home: s.p[0] / 100, draw: s.p[1] / 100, away: s.p[2] / 100, over25: s.over / 100, bttsYes: s.btts / 100 });
 
-// The password is ADMIN_TOKEN. It is accepted from the browser's login box (HTTP Basic, any username)
-// or from the x-admin-token header. With no ADMIN_TOKEN set, nothing is let in.
-function authed(req, env) {
+// The password is ADMIN_TOKEN. It is accepted from the sign-in page (which sets a one-year cookie), from the x-admin-token header,
+// and from HTTP Basic (any username) so scripts keep working. With no ADMIN_TOKEN set, nothing is let in.
+// The cookie is an HMAC of a fixed phrase under the password, so nothing is stored; changing the password signs every device out.
+const COOKIE = 'hub_s';
+async function sessionValue(env) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.ADMIN_TOKEN), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode('game-day-hub session v1'));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const same = (a, b) => { if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; };
+async function authed(req, env) {
   if (!env.ADMIN_TOKEN) return false;
-  if ((req.headers.get('x-admin-token') || '') === env.ADMIN_TOKEN) return true;
+  if (same(req.headers.get('x-admin-token') || '', env.ADMIN_TOKEN)) return true;
   const h = req.headers.get('authorization') || '';
   if (h.startsWith('Basic ')) {
-    try { const d = atob(h.slice(6)); return d.slice(d.indexOf(':') + 1) === env.ADMIN_TOKEN; } catch (e) { return false; }
+    try { const d = atob(h.slice(6)); if (same(d.slice(d.indexOf(':') + 1), env.ADMIN_TOKEN)) return true; } catch (e) { /* fall through to the cookie */ }
   }
-  return false;
+  const m = /(?:^|;\s*)hub_s=([0-9a-f]+)/.exec(req.headers.get('cookie') || '');
+  return !!m && same(m[1], await sessionValue(env));
 }
+// What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
+const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
+const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/');
 
 // ---------------------------------------------------------------------------------------------
 // Analyze ONE league for ONE date: fixtures -> v2 (official) + v4 (shadow) cards.
@@ -573,10 +585,21 @@ const hub = {
     const p = url.pathname;
     const q = k => url.searchParams.get(k);
 
+    // Sign in once: a correct password sets a cookie that lasts a year, so the installed app and the browser open straight in.
+    if (p === '/login' && req.method === 'POST') {
+      let f; try { f = await req.formData(); } catch (e) { f = null; }
+      const pw = f ? String(f.get('password') || '') : '', next = safeNext(f && String(f.get('next') || ''));
+      if (!env.ADMIN_TOKEN || !same(pw, env.ADMIN_TOKEN)) return new Response(null, { status: 303, headers: { location: '/login?e=1' + (next !== '/' ? '&next=' + encodeURIComponent(next) : ''), 'cache-control': 'no-store' } });
+      return new Response(null, { status: 303, headers: { location: next, 'set-cookie': `${COOKIE}=${await sessionValue(env)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
+    }
+    if (p === '/logout') return new Response(null, { status: 303, headers: { location: '/login', 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
+    if (req.method === 'GET' && (p === '/login' || PUBLIC_FILES.has(p))) return env.ASSETS.fetch(req); // /login is public/login.html (the assets handler serves it without the .html)
+
     // Whole site is private: page and data both need the password.
-    if (!authed(req, env)) {
+    if (!(await authed(req, env))) {
       if (p.startsWith('/api/')) return json({ error: 'Bad or missing admin token' }, 401);
-      return new Response('Sign in to open Game Day Hub.', { status: 401, headers: { 'www-authenticate': 'Basic realm="Game Day Hub", charset="UTF-8"', 'cache-control': 'no-store' } });
+      if (req.method === 'GET') return new Response(null, { status: 302, headers: { location: '/login' + (p !== '/' ? '?next=' + encodeURIComponent(p + url.search) : ''), 'cache-control': 'no-store' } });
+      return new Response('Sign in to open Game Day Hub.', { status: 401, headers: { 'cache-control': 'no-store' } });
     }
 
     if (p === '/api/config') {

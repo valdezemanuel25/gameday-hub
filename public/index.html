@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0B1210">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Game Day">
 <title>Game Day Hub</title>
 <style>
 :root{--bg:#0B1210;--panel:#121C18;--panel2:#17241F;--line:#22332C;--ink:#E8EEE4;--dim:#8FA399;--faint:#5F746B;--grass:#58B27A;--sm:#7FA6D9;--amber:#F0B54A;--miss:#E07A5F}
@@ -1441,6 +1444,7 @@ $('#btn-grade').onclick = () => runAll('grade');
   if (S.tab === 'results' || S.tab === 'compare' || S.tab === 'mbets') { await ensureTally(); render(); }
   try { stat = await api('/api/status'); if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') render(); } catch (e) { /* alerts are optional */ }
 })();
+try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js'); } catch (e) { /* installing is optional */ }
 </script>
 </body>
 </html>

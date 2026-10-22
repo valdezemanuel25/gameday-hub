@@ -1,0 +1,33 @@
+// Sign-in: a password sets a one-year cookie so the installed app and the browser stay signed in; the old header and Basic still work.
+import worker from '../src/worker.js';
+let fail = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) fail++; };
+const kv = new Map(), env = { ADMIN_TOKEN: 'secret', ASSETS: { fetch: r => new Response('asset:' + new URL(r.url).pathname) }, HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv.set(k, v); }, list: async () => ({ keys: [] }) } };
+const go = (path, init = {}) => worker.fetch(new Request('https://hub.test' + path, { redirect: 'manual', ...init }), env, { waitUntil() {} });
+const form = (o) => ({ method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(o).toString() });
+let r = await go('/');
+ok('signed out, the page goes to the sign-in page (no browser password box)', r.status === 302 && r.headers.get('location') === '/login' && !r.headers.get('www-authenticate'), r.status + ' ' + r.headers.get('location'));
+r = await go('/nhl');
+ok('the hockey page remembers where you were going', r.status === 302 && r.headers.get('location') === '/login?next=%2Fnhl', r.headers.get('location'));
+r = await go('/api/config');
+ok('signed out, the data still says 401 (json, not a redirect)', r.status === 401 && (await r.json()).error);
+r = await go('/login'); ok('the sign-in page loads without signing in', r.status === 200 && (await r.text()).includes('/login'));
+for (const f of ['/manifest.webmanifest', '/sw.js', '/icon-192.png', '/apple-touch-icon.png']) { r = await go(f); ok(`${f} loads without signing in (needed to install the app)`, r.status === 200); }
+r = await go('/login', form({ password: 'nope' }));
+ok('a wrong password sets no cookie and returns to sign-in with an error', r.status === 303 && !r.headers.get('set-cookie') && r.headers.get('location').startsWith('/login?e=1'), r.headers.get('location'));
+r = await go('/login', form({ password: 'secret', next: '/nhl' }));
+const sc = r.headers.get('set-cookie') || '';
+ok('the right password sets a one-year, HttpOnly, Secure cookie and goes to where you were headed', r.status === 303 && r.headers.get('location') === '/nhl' && /hub_s=[0-9a-f]{64}/.test(sc) && /Max-Age=31536000/.test(sc) && /HttpOnly/.test(sc) && /Secure/.test(sc), sc + ' ' + r.headers.get('location'));
+ok('the password itself is never in the cookie', !sc.includes('secret'));
+r = await go('/login', form({ password: 'secret', next: '//evil.example' }));
+ok('next can only be a path on this site', r.headers.get('location') === '/', r.headers.get('location'));
+const cookie = sc.split(';')[0];
+r = await go('/api/config', { headers: { cookie } }); ok('the cookie opens the data', r.status === 200);
+r = await go('/', { headers: { cookie } }); ok('the cookie opens the page', r.status === 200);
+r = await go('/api/config', { headers: { cookie: 'hub_s=' + '0'.repeat(64) } }); ok('a made-up cookie does not', r.status === 401);
+r = await go('/api/config', { headers: { 'x-admin-token': 'secret' } }); ok('the x-admin-token header still works', r.status === 200);
+r = await go('/api/config', { headers: { authorization: 'Basic ' + btoa('me:secret') } }); ok('Basic still works for scripts', r.status === 200);
+r = await go('/api/config', { headers: { authorization: 'Basic ' + btoa('me:wrong') } }); ok('a wrong Basic password does not', r.status === 401);
+r = await go('/logout'); ok('sign out clears the cookie', r.status === 303 && /Max-Age=0/.test(r.headers.get('set-cookie') || ''));
+const env2 = { ...env, ADMIN_TOKEN: 'changed' };
+r = await worker.fetch(new Request('https://hub.test/api/config', { headers: { cookie } }), env2, { waitUntil() {} }); ok('changing the password signs every device out', r.status === 401);
+console.log(fail ? `\n${fail} auth checks FAILED` : '\nAll auth checks passed'); process.exit(fail ? 1 : 0);
