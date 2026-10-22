@@ -16,7 +16,7 @@ html{background:var(--bg)}
 body{background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;padding-top:56px;padding-bottom:100px}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-#hub-bar{position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+#hub-bar{-webkit-transform:translateZ(0);transform:translateZ(0);position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:var(--bar);border-bottom:1px solid var(--line)}
 #hub-bar .sw{display:flex;gap:4px;background:var(--s2);border-radius:999px;padding:4px;width:100%;max-width:360px}
 #hub-bar a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px;color:var(--mut)}
 #hub-bar a.on{background:var(--blue);color:#fff}
@@ -81,7 +81,7 @@ h4{margin:20px 18px 6px;font-size:14px}
 .rg b{color:var(--ink);font-weight:600;font-size:12.5px}
 .rl{margin:0 18px;border:1px solid var(--line);border-radius:14px;background:var(--s);overflow:hidden}
 .rl .rg:first-child{border-top:0;color:var(--faint)}
-.dock{position:fixed;left:0;right:0;bottom:0;background:var(--bar);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+.dock{-webkit-transform:translateZ(0);transform:translateZ(0);position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--bar);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
 .dock .in{max-width:520px;margin:0 auto;display:flex;gap:10px;align-items:center}
 .btn{flex:none;padding:11px 16px;border-radius:12px;background:var(--blue);color:#fff;font-weight:650;font-size:14px}
 .btn[disabled]{opacity:.55}

@@ -94,7 +94,7 @@ details.how h5.hw{margin:14px 0 2px;font-size:12px;font-weight:650;color:var(--d
 .empty{margin:22px 18px;padding:22px;border:1px dashed var(--line);border-radius:14px;color:var(--dim);font-size:14px;line-height:1.6;text-align:center}
 .st{font-size:11.5px;color:var(--faint);text-align:center;padding:4px 16px 0;min-height:18px}
 .st.ready{color:var(--grass)}
-.dock{position:fixed;left:0;right:0;bottom:0;z-index:10;padding:10px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--bg) 72%,rgba(11,18,16,0))}
+.dock{-webkit-transform:translateZ(0);transform:translateZ(0);position:fixed;left:0;right:0;bottom:0;z-index:10;padding:10px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--bg) 72%,rgba(11,18,16,0))}
 .dock .in{max-width:520px;margin:0 auto}
 .dock .btns{display:flex;gap:10px;margin-top:6px}
 .btn{flex:1;text-align:center;padding:12px 4px;line-height:1.2;border-radius:12px;font-weight:650;font-size:14px;background:var(--ink);color:#0B1210}
@@ -197,7 +197,7 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .cand{border-color:#5b4a22}.cand small{display:block;color:var(--amber);font-size:11.5px;margin-bottom:2px}
 .cr{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-top:5px}.cr span{flex:1;min-width:0;overflow-wrap:anywhere}
 .cr button{flex:none;padding:5px 11px;border-radius:99px;border:1px solid #35514a;font-size:12px;font-weight:650}.cr button.no{padding:5px 8px;color:var(--dim)}
-#hub-bar{position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:#0f1612;border-bottom:1px solid var(--line)}
+#hub-bar{-webkit-transform:translateZ(0);transform:translateZ(0);position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:#0f1612;border-bottom:1px solid var(--line)}
 #hub-bar .sw{display:flex;gap:4px;background:var(--panel2);border-radius:999px;padding:4px;width:100%;max-width:360px}
 #hub-bar a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px;color:var(--dim)}
 #hub-bar a.on{background:var(--grass);color:#0B1210}
