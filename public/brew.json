@@ -125,63 +125,6 @@
           "t": "Lam Research -11.8%. Semis had their worst week since April 2025."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-10-22",
-      "title": "Very vulnerable",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "26,703",
-          "change": 1.05
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,757",
-          "change": 0.58
-        },
-        {
-          "label": "Dow",
-          "value": "52,856",
-          "change": 0.69
-        },
-        {
-          "label": "10-yr",
-          "value": "5.146%",
-          "change": 3,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$84,585",
-          "change": 2.23
-        },
-        {
-          "label": "Netflix",
-          "value": "$65.04",
-          "change": -5.31
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "SpaceX + Tesla",
-          "t": "Boards are exploring a merger worth about $3.5T. Kalshi: 84% before 2028."
-        },
-        {
-          "h": "Meta",
-          "t": "2-for-1 split with nonvoting shares, plus a $25B New Mexico privacy penalty."
-        },
-        {
-          "h": "PHP bug",
-          "t": "Patch released for a flaw putting about 70% of websites at risk."
-        },
-        {
-          "h": "Layoffs and bankruptcy",
-          "t": "eBay cutting ~1,000 jobs (9%). Getty Images filed Chapter 11."
-        }
-      ],
-      "note": "Market numbers are the Oct 21 close."
     }
   ]
 }
