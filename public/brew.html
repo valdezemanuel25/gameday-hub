@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14110c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Game Day">
+<title>Game Day Hub · Brew</title>
+<style>
+:root{--bg:#14110c;--bar:#1a160f;--s:#1f1a12;--s2:#2a2418;--ink:#f4efe6;--mut:#a89f8c;--faint:#7b7261;--line:#3a3222;--amber:#f0b54a;--good:#5ee08f;--bad:#ff7b6b}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;padding-top:56px;padding-bottom:40px}
+#hub-bar{-webkit-transform:translateZ(0);transform:translateZ(0);position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+#hub-bar .sw{display:flex;gap:4px;background:var(--s2);border-radius:999px;padding:4px;width:100%;max-width:360px}
+#hub-bar a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px;color:var(--mut)}
+#hub-bar a.on{background:var(--amber);color:#14110c}
+.wrap{max-width:560px;margin:0 auto;padding:0 18px}
+.title{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:18px}
+.sub{font-size:12.5px;color:var(--mut);margin:3px 0 14px;line-height:1.5}
+.empty{border:1px dashed var(--line);border-radius:14px;padding:18px 14px;text-align:center;color:var(--mut);font-size:13px}
+.card{background:var(--s);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+.src{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--amber);font-weight:650}
+.ttl{font-size:17px;font-weight:750;letter-spacing:-.01em;margin:3px 0 10px}
+.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+.chip{background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:7px 8px;display:flex;flex-direction:column;gap:1px}
+.chip small{font-size:11px;color:var(--mut)}.chip b{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}.chip span{font-size:12px;font-weight:650;font-variant-numeric:tabular-nums}
+.up{color:var(--good)}.dn{color:var(--bad)}.fl{color:var(--mut)}
+.list{display:flex;flex-direction:column;gap:9px}
+.bt{display:flex;flex-direction:column;gap:1px;padding-left:10px;border-left:2px solid var(--line)}
+.bt b{font-size:13.5px;font-weight:700}.bt span{font-size:13px;color:var(--mut);line-height:1.45}
+.note{font-size:12px;color:var(--faint);margin-top:8px}
+</style>
+</head>
+<body>
+<div id="hub-bar"><div class="sw"><a href="/">⚽ Soccer</a><a href="/nhl">🏒 NHL</a><a href="/brew" class="on">☕ Brew</a></div></div>
+<div class="wrap">
+  <div class="title">Brew</div>
+  <div class="sub" id="sub">Quick read of your Brew Markets and Morning Brew emails.</div>
+  <div id="view"><div class="empty">Loading…</div></div>
+</div>
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ago = iso => { if (!iso) return ''; const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+const chip = m => { const c = Number(m.change), flat = c === 0 || (Math.abs(c) < 0.05 && !m.unit); return `<div class="chip"><small>${esc(m.label)}</small><b>${esc(m.value)}</b><span class="${flat ? 'fl' : c > 0 ? 'up' : 'dn'}">${c > 0 ? '▲' : c < 0 ? '▼' : ''} ${Math.abs(c)}${m.unit ? ' ' + esc(m.unit) : '%'}</span></div>`; };
+const card = i => `<div class="card"><div class="src">${esc(i.source || '')} · ${esc(i.date || '')}</div><div class="ttl">${esc(i.title || '')}</div>
+  ${(i.markets || []).length ? `<div class="strip">${i.markets.map(chip).join('')}</div>` : ''}
+  <div class="list">${(i.takeaways || []).map(t => typeof t === 'string' ? `<div class="bt"><span>${esc(t)}</span></div>` : `<div class="bt"><b>${esc(t.h)}</b><span>${esc(t.t)}</span></div>`).join('')}</div>${i.note ? `<div class="note">${esc(i.note)}</div>` : ''}</div>`;
+(async () => {
+  try {
+    const r = await fetch('/api/brew'); if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    if (j.updated) document.getElementById('sub').textContent = `Quick read of your Brew Markets and Morning Brew emails. Updated ${ago(j.updated)}.`;
+    document.getElementById('view').innerHTML = (j.issues || []).length ? j.issues.map(card).join('') : '<div class="empty">No newsletter summaries yet.</div>';
+  } catch (e) { document.getElementById('view').innerHTML = '<div class="empty">Could not load the summaries. Pull to refresh.</div>'; }
+})();
+</script>
+</body>
+</html>
