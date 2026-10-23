@@ -1,6 +1,70 @@
 {
-  "updated": "2026-10-23T13:30:00Z",
+  "updated": "2026-10-23T20:35:25Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-10-23",
+      "title": "IPO? I think no",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,955",
+          "change": -0.21
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,624",
+          "change": -0.52
+        },
+        {
+          "label": "Dow",
+          "value": "52,215",
+          "change": -1.24
+        },
+        {
+          "label": "10-yr",
+          "value": "4.988%",
+          "change": 4,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$103.67",
+          "change": 4.22
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$81,185",
+          "change": 0.03
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Oil spikes",
+          "t": "US crude jumped 4.2% to $103.67 on Middle East fears; gold hit its lowest since July."
+        },
+        {
+          "h": "AmEx",
+          "t": "Record $20.1B revenue (+9%) and profit up 28% to $3.71B, but stock fell 3.7% on a slight miss and ~3,500 job cuts."
+        },
+        {
+          "h": "IPO chill",
+          "t": "SK Hynix shelved a Solidigm US listing, Firmus scrapped its IPO, and Oura delayed its own."
+        },
+        {
+          "h": "OpenAI",
+          "t": "Reportedly trimmed its funding target to $1.25T from $1.4T on softer demand."
+        },
+        {
+          "h": "Telecom hit",
+          "t": "AT&T fell 8% and T-Mobile 7.7% on reports SpaceX is seeking access to 80,000 cell towers."
+        },
+        {
+          "h": "Two-tier consumer",
+          "t": "US luxury spending fell 6% in September while high earners drove most Beige Book districts."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-10-23",
