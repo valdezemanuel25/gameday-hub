@@ -628,6 +628,9 @@ const hub = {
       return json((await env.HUB.get(`day:${date}`, 'json')) || { date, cards: [] });
     }
     if (p === '/api/tally') return json(await tally(env));
+    if (p === '/api/brew') { // newsletter summaries: public/brew.json is rewritten daily by a scheduled task
+      try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; return json({ updated: j && j.updated || null, issues: Array.isArray(j && j.issues) ? j.issues : [] }); } catch (e) { return json({ updated: null, issues: [] }); }
+    }
     if (p === '/api/candidates') return json(await candidates(q('date') || today(), env));
     if (req.method === 'POST' && p === '/api/assign') { try { const b = await req.json(); const lg = leagueBySlug(String(b.league || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ ok: true, ...(await assignCandidate(String(b.date || ''), lg.slug, String(b.id || ''), String(b.key || ''), env, new Date(), { dismiss: !!b.dismiss })) }); } catch (e) { return json({ error: `Assign: ${e && e.message ? e.message : e}` }, 500); } }
     if (p.startsWith('/api/bets')) { // bet analyzer and tracker

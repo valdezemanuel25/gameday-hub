@@ -1,0 +1,30 @@
+{
+  "updated": "2026-10-23T02:58:00Z",
+  "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-10-22",
+      "title": "Fare necessities",
+      "takeaways": [
+        "Tech-led selloff: Nasdaq -2.60% to 26,008.86 (worst day since June), S&P 500 -1.21% to 7,663.45, Dow flat at 52,867.98.",
+        "Bonds rallied and oil spiked: 10-year yield fell 19 bps to 4.953% (biggest drop in a year), crude +2.23% to $99.32 on Middle East tensions, Bitcoin -3.84% to about $81,366.",
+        "Meta fell about 7% on AI spending: roughly $65B quarterly revenue, $825B in future contracts, and a 2-for-1 nonvoting stock split in January that keeps Zuckerberg's voting control near 61%.",
+        "Airlines feel the fuel squeeze: American posted record revenue but still lost money as fuel costs rose 68%; premium-cabin revenue grew 22.9% at American and 17% at United. Southwest rose 5.36% despite cutting its profit forecast.",
+        "Defensives led: staples up about 5%, healthcare at a record high (+3.5%), P&G +5.58% (best day since March 2020), Lockheed +6.87% on a record $292B backlog, Spotify +11.22%.",
+        "Decliners: Lam Research -11.76% on supply-chain warnings, SpaceX -9.14%, Tesla -3.08%. Semiconductors lost 11.4% last week, their worst week since April 2025."
+      ]
+    },
+    {
+      "source": "Morning Brew",
+      "date": "2026-10-22",
+      "title": "Very vulnerable",
+      "takeaways": [
+        "Prior-day close (Oct 21): Nasdaq 26,702.86 (+1.05%), S&P 7,757.17 (+0.58%), Dow 52,856.09 (+0.69%), 10-year 5.146% (+3 bps), Bitcoin $84,585 (+2.23%). Netflix fell 5.31% to $65.04 after missing earnings.",
+        "Musk's SpaceX and Tesla boards formed committees to explore a merger. It would form a company worth about $3.5T. SpaceX rose nearly 8%, and Kalshi put 84% odds on a merger before 2028.",
+        "Meta's 2-for-1 split gives Class A holders a nonvoting Class C share. A New Mexico judge also ordered Meta to pay $25B over data-privacy violations.",
+        "Security: patches released for a PHP bug that threatens about 70% of websites, rated 9.2 of 10 in severity.",
+        "Also: eBay is cutting about 9% of staff (~1,000 jobs), and Getty Images filed for Chapter 11 with a plan to be taken private by Koch's investment firm."
+      ]
+    }
+  ]
+}
