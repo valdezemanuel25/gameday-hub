@@ -1,24 +1,129 @@
 {
-  "updated": "2026-10-23T03:02:00Z",
+  "updated": "2026-10-23T13:30:00Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-10-23",
+      "title": "Dynamic Duo",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "26,009",
+          "change": -2.6
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,663",
+          "change": -1.21
+        },
+        {
+          "label": "Dow",
+          "value": "52,868",
+          "change": 0.02
+        },
+        {
+          "label": "10-yr",
+          "value": "4.953%",
+          "change": -19,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$81,325",
+          "change": -3.89
+        },
+        {
+          "label": "Moderna",
+          "value": "$202.63",
+          "change": -17.57
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Tech selloff",
+          "t": "Renewed AI-overspending worries pushed the Nasdaq down 2.60% and the S&P 500 down 1.21%."
+        },
+        {
+          "h": "Moderna -17.6%",
+          "t": "Shares plunged after cancer-vaccine study results reportedly leaked on social media."
+        },
+        {
+          "h": "Skydance",
+          "t": "Musk reportedly put about $1B into Skydance, the Paramount and Warner Bros. Discovery combination."
+        },
+        {
+          "h": "Banks vs AI agents",
+          "t": "JPMorgan, Morgan Stanley and Bank of America are racing to restrict unvetted AI agents on customer accounts."
+        },
+        {
+          "h": "Data center boom",
+          "t": "PPG expects data center paint sales to triple this year; its quarterly sales grew 7% to $4.5B."
+        },
+        {
+          "h": "iPhone Duo",
+          "t": "Apple's $1,999 foldable got mixed reviews: strong battery and screen, but heavy, hot, with no Face ID."
+        }
+      ],
+      "note": "Market numbers are the Oct 22 close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-10-22",
       "title": "Fare necessities",
       "markets": [
-        { "label": "Nasdaq", "value": "26,009", "change": -2.60 },
-        { "label": "S&P 500", "value": "7,663", "change": -1.21 },
-        { "label": "Dow", "value": "52,868", "change": 0.02 },
-        { "label": "10-yr", "value": "4.953%", "change": -19, "unit": "bps" },
-        { "label": "Oil", "value": "$99.32", "change": 2.23 },
-        { "label": "Bitcoin", "value": "$81,366", "change": -3.84 }
+        {
+          "label": "Nasdaq",
+          "value": "26,009",
+          "change": -2.6
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,663",
+          "change": -1.21
+        },
+        {
+          "label": "Dow",
+          "value": "52,868",
+          "change": 0.02
+        },
+        {
+          "label": "10-yr",
+          "value": "4.953%",
+          "change": -19,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$99.32",
+          "change": 2.23
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$81,366",
+          "change": -3.84
+        }
       ],
       "takeaways": [
-        { "h": "Tech selloff", "t": "Nasdaq had its worst day since June." },
-        { "h": "Meta -7%", "t": "AI spending worries. Stock split in January keeps Zuckerberg's voting control." },
-        { "h": "Airlines", "t": "Fuel up 68% at American, but premium-cabin revenue is growing 17-23%." },
-        { "h": "Defensives won", "t": "Staples +5%, healthcare at a record, P&G +5.6%, Lockheed +6.9%." },
-        { "h": "Chips hurt", "t": "Lam Research -11.8%. Semis had their worst week since April 2025." }
+        {
+          "h": "Tech selloff",
+          "t": "Nasdaq had its worst day since June."
+        },
+        {
+          "h": "Meta -7%",
+          "t": "AI spending worries. Stock split in January keeps Zuckerberg's voting control."
+        },
+        {
+          "h": "Airlines",
+          "t": "Fuel up 68% at American, but premium-cabin revenue is growing 17-23%."
+        },
+        {
+          "h": "Defensives won",
+          "t": "Staples +5%, healthcare at a record, P&G +5.6%, Lockheed +6.9%."
+        },
+        {
+          "h": "Chips hurt",
+          "t": "Lam Research -11.8%. Semis had their worst week since April 2025."
+        }
       ]
     },
     {
@@ -26,18 +131,55 @@
       "date": "2026-10-22",
       "title": "Very vulnerable",
       "markets": [
-        { "label": "Nasdaq", "value": "26,703", "change": 1.05 },
-        { "label": "S&P 500", "value": "7,757", "change": 0.58 },
-        { "label": "Dow", "value": "52,856", "change": 0.69 },
-        { "label": "10-yr", "value": "5.146%", "change": 3, "unit": "bps" },
-        { "label": "Bitcoin", "value": "$84,585", "change": 2.23 },
-        { "label": "Netflix", "value": "$65.04", "change": -5.31 }
+        {
+          "label": "Nasdaq",
+          "value": "26,703",
+          "change": 1.05
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,757",
+          "change": 0.58
+        },
+        {
+          "label": "Dow",
+          "value": "52,856",
+          "change": 0.69
+        },
+        {
+          "label": "10-yr",
+          "value": "5.146%",
+          "change": 3,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$84,585",
+          "change": 2.23
+        },
+        {
+          "label": "Netflix",
+          "value": "$65.04",
+          "change": -5.31
+        }
       ],
       "takeaways": [
-        { "h": "SpaceX + Tesla", "t": "Boards are exploring a merger worth about $3.5T. Kalshi: 84% before 2028." },
-        { "h": "Meta", "t": "2-for-1 split with nonvoting shares, plus a $25B New Mexico privacy penalty." },
-        { "h": "PHP bug", "t": "Patch released for a flaw putting about 70% of websites at risk." },
-        { "h": "Layoffs and bankruptcy", "t": "eBay cutting ~1,000 jobs (9%). Getty Images filed Chapter 11." }
+        {
+          "h": "SpaceX + Tesla",
+          "t": "Boards are exploring a merger worth about $3.5T. Kalshi: 84% before 2028."
+        },
+        {
+          "h": "Meta",
+          "t": "2-for-1 split with nonvoting shares, plus a $25B New Mexico privacy penalty."
+        },
+        {
+          "h": "PHP bug",
+          "t": "Patch released for a flaw putting about 70% of websites at risk."
+        },
+        {
+          "h": "Layoffs and bankruptcy",
+          "t": "eBay cutting ~1,000 jobs (9%). Getty Images filed Chapter 11."
+        }
       ],
       "note": "Market numbers are the Oct 21 close."
     }
