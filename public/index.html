@@ -670,7 +670,7 @@ function expanded(c) {
     </details></div></div>`;
 }
 const GAME_MS = 2 * 3600000;
-const SECOND_DIV = ['laliga2', 'bundesliga2', 'championship']; // no SportsMole page expected
+const SECOND_DIV = ['laliga2', 'bundesliga2']; // no SportsMole page expected (SportsMole does cover the Championship)
 const UNCOUNTED = (c, date) => c.leagueKey === 'laliga2' || c.leagueKey === 'bundesliga2' || (c.leagueKey === 'championship' && date < '2026-10-24'); // Championship counts from 24 Oct 2026
 // Neon outline once every model for the game is in: v2, v4, Forebet, plus SportsMole (not needed in second divisions).
 const allIn = c => !!(c.v2 && c.v4 && c.fb && (SECOND_DIV.includes(c.leagueKey) || c.sm));
