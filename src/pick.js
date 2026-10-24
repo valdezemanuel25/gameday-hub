@@ -74,3 +74,6 @@ export const unitsWon = (m, hit) => hit ? (m > 0 ? m / 100 : 100 / -m) : -1;
 // Break-even win rate (%) for an American price, and the tag for a pick: model chance 5+ points above it is Value, 5+ below is Not worth it.
 export const needP = m => m < 0 ? -m / (-m + 100) * 100 : 100 / (m + 100) * 100;
 export const verdictOf = (p, m) => p == null || m == null ? null : p - needP(m) >= 5 ? 'val' : p - needP(m) <= -5 ? 'no' : 'fair';
+// Price bands for the profit breakdown (American odds).
+export const BANDS = [['b1', '-300 or shorter'], ['b2', '-299 to -150'], ['b3', '-149 to +149'], ['b4', '+150 or longer']];
+export const bandOf = m => m <= -300 ? 'b1' : m <= -150 ? 'b2' : m < 150 ? 'b3' : 'b4';

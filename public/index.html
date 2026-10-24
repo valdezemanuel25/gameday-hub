@@ -1133,12 +1133,14 @@ function profitView(T) {
   const u = x => (x >= 0 ? '+' : '') + x.toFixed(1) + 'u', roi = x => Math.round(100 * x.won / x.n);
   P.hits = P.hits != null ? P.hits : Object.values(P.byKind || {}).reduce((a, x) => a + x.hits, 0);
   const row = (label, sub, x) => `<div class="mbr"><div class="mbl">${label}<small>${sub}</small></div><div class="mbv"><b class="${x.won >= 0 ? 'up' : 'dn'}">${u(x.won)}</b><small>${roi(x)}% return · ${x.hits} of ${x.n} hit</small></div></div>`;
+  const BAND = [['b1', '-300 or shorter'], ['b2', '-299 to -150'], ['b3', '-149 to +149'], ['b4', '+150 or longer']], bands = BAND.filter(([k]) => (P.byBand || {})[k]);
   const VD = { val: 'Value', fair: 'Fair price', no: 'Not worth it' }, kinds = Object.keys(P.byKind || {}), vds = ['val', 'fair', 'no'].filter(k => (P.byVerdict || {})[k]);
   const combos = []; for (const k of ['best', 'lean']) for (const v of ['val', 'fair', 'no']) { const x = (P.byCombo || {})[k + '|' + v]; if (x) combos.push([`${LEAN_KIND[k]} · ${VD[v]}`, x]); }
   return `<div class="sec">Profit at saved prices<small>First divisions only. 1 unit on each pick at the price saved when the game was graded. This is the real test of whether a pick is worth taking.</small></div><div class="mbx">
     ${row('All priced picks', `${P.n} bets`, P)}
     ${kinds.map(k => row(LEAN_KIND[k] || k, `${P.byKind[k].n} bets`, P.byKind[k])).join('')}</div>
-    ${vds.length ? `<div class="sec">By price tag<small>Did "Value" picks really return more than "Not worth it" ones? If the tag works, Value should be clearly ahead. Under about 100 bets this is mostly luck.</small></div><div class="mbx">${vds.map(v => row(VD[v], `${P.byVerdict[v].n} bets`, P.byVerdict[v])).join('')}${combos.map(([l, x]) => row(l, `${x.n} bets`, x)).join('')}</div>` : ''}`;
+    ${vds.length ? `<div class="sec">By price tag<small>Did "Value" picks really return more than "Not worth it" ones? If the tag works, Value should be clearly ahead. Under about 100 bets this is mostly luck.</small></div><div class="mbx">${vds.map(v => row(VD[v], `${P.byVerdict[v].n} bets`, P.byVerdict[v])).join('')}${combos.map(([l, x]) => row(l, `${x.n} bets`, x)).join('')}</div>` : ''}
+    ${bands.length ? `<div class="sec">By price<small>Where the money is made or lost. A short price (-300 or shorter) pays little and needs a very high hit rate. Once a band is clearly negative over 100+ bets, it is a candidate for a cap.</small></div><div class="mbx">${bands.map(([k, l]) => row(l, `${P.byBand[k].n} bets · needs ${k === 'b1' ? '75%+' : k === 'b2' ? '60 to 75%' : k === 'b3' ? '40 to 60%' : 'under 40%'}`, P.byBand[k])).join('')}</div>` : ''}`;
 }
 function mbetsView() {
   if (!tally) return `<div class="empty">Loading…</div>`;
