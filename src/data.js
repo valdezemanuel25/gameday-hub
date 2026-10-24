@@ -85,12 +85,16 @@ export const FIRST_DIV = new Set(['eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', '
 // ESPN's odds block (DraftKings): American prices for home / draw / away and the Over/Under 2.5 line when it is offered. Anything missing is left out.
 const am = v => { if (v == null) return null; const t = String(v).trim().toUpperCase(); if (t === 'EVEN' || t === 'EV') return 100; const n = Number(t.replace('+', '')); return Number.isInteger(n) && Math.abs(n) >= 100 ? n : null; };
 export function parseOdds(list) {
-  const o = (list || []).find(x => x && (x.moneyline || x.homeTeamOdds || x.drawOdds || x.total)); if (!o) return null;
+  const o = (list || []).find(x => x && (x.moneyline || x.homeTeamOdds || x.drawOdds || x.total || x.overUnder != null)); if (!o) return null;
   const out = {}, ml = o.moneyline || {}, pick = (...xs) => { for (const x of xs) { const v = am(x); if (v != null) return v; } return null; };
   const h = pick(ml.home?.close?.odds, ml.home?.open?.odds, o.homeTeamOdds?.moneyLine), d = pick(ml.draw?.close?.odds, ml.draw?.open?.odds, o.drawOdds?.moneyLine), a = pick(ml.away?.close?.odds, ml.away?.open?.odds, o.awayTeamOdds?.moneyLine);
   if (h != null) out.h = h; if (d != null) out.d = d; if (a != null) out.a = a;
   const t = o.total || {}, line = Number(String(t.over?.close?.line ?? t.over?.open?.line ?? o.overUnder ?? '').replace(/[^0-9.]/g, ''));
-  if (line === 2.5) { const ov = pick(t.over?.close?.odds, t.over?.open?.odds), un = pick(t.under?.close?.odds, t.under?.open?.odds); if (ov != null) out.over = ov; if (un != null) out.under = un; }
+  if (line >= 0.5 && line <= 7.5) { // the book's one main total, whatever it is (2.5, 3.5, ...); the prices belong to that line
+    out.tl = line;
+    const ov = pick(t.over?.close?.odds, t.over?.open?.odds, o.overOdds), un = pick(t.under?.close?.odds, t.under?.open?.odds, o.underOdds);
+    if (ov != null) out.to = ov; if (un != null) out.tu = un;
+  }
   return Object.keys(out).length ? out : null;
 }
 function parseEvent(ev) {
@@ -272,4 +276,10 @@ export async function fixturesForLeague(league, date, debug) {
   // A Chicago calendar day spans UTC day D and D+1, so two single-day requests cover it.
   const evs = await scoreboard(league.slug, d, new Date(d.getTime() + DAY), debug);
   return evs.filter(e => localDate(e.date) === date).sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+// What ESPN sends for a game's odds, untouched, for the "check raw prices" button (shows whether props like Both score are in the feed at all).
+export async function rawOdds(slug, date) {
+  const j = await getJson(`${BASE}/${slug}/scoreboard?dates=${String(date).replace(/-/g, '')}&limit=300`, []);
+  return (j?.events || []).slice(0, 3).map(ev => ({ id: ev.id, name: ev.name, odds: ev.competitions?.[0]?.odds ?? null }));
 }

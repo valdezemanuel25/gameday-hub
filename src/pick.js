@@ -68,7 +68,8 @@ export function hockeyHit(key, f, line) {
 }
 
 // The saved price (American odds) for a pick's bet, or null when the book did not offer it.
-export function priceFor(odds, key) { const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.over, U: odds.under })[key]; return Number.isFinite(m) ? m : null; }
+// Over/Under prices count only when the book's own total is 2.5, because the tracked bet is Over/Under 2.5.
+export function priceFor(odds, key) { const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null })[key]; return Number.isFinite(m) ? m : null; }
 // Units won by 1 unit staked at a price: a hit pays the price, a miss loses the stake.
 export const unitsWon = (m, hit) => hit ? (m > 0 ? m / 100 : 100 / -m) : -1;
 // Break-even win rate (%) for an American price, and the tag for a pick: model chance 5+ points above it is Value, 5+ below is Not worth it.
