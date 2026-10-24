@@ -1141,8 +1141,13 @@ function oddsBar() {
 }
 function vdRank({ c, L }) {
   if (!L || !FIRST.has(c.league)) return 3;
-  const m = L.price != null ? L.price : priceFor(c, L.key); if (m == null || L.p == null) return 3;
-  const d = L.p - needP(m); return d >= 5 ? 0 : d <= -5 ? 2 : 1;
+  const m = L.price != null ? L.price : priceFor(c, L.key), o = c.odds;
+  let d = null;
+  if (m != null && L.p != null) d = L.p - needP(m);
+  else if ((L.key === 'O' || L.key === 'U') && o && o.tl != null && o.tl !== 2.5) { // the tag shown is for the book's own line, so sort by that
+    const ov = L.key === 'O', bp = ov ? o.to : o.tu, mp = pTotal(c, o.tl, ov); if (mp != null && bp != null) d = mp - needP(bp);
+  }
+  return d == null ? 3 : d >= 5 ? 0 : d <= -5 ? 2 : 1;
 }
 function mbetsToday() {
   const rows = (day.cards || []).filter(c => c.v2 && !UNCOUNTED(c, day.date)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
