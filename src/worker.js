@@ -228,6 +228,29 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
 }
 
 // ---------------------------------------------------------------------------------------------
+// Prices for games already analyzed: look at ONE first-division league per run (each at most every 6 hours, remembered in the free
+// edge cache so it costs no KV writes) and attach ESPN's current price to cards that have not started. Display only; no model reads it.
+export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
+  const t = localDate(now.toISOString());
+  for (const date of [t, addDays(t, 1)]) {
+    const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) continue;
+    for (const lg of LEAGUES.filter(l => FIRST_DIV.has(l.slug))) {
+      const open = (day.cards || []).filter(c => c.league === lg.slug && !c.final && new Date(c.kickoff).getTime() > now.getTime());
+      if (!open.length) continue;
+      const ck = new Request(`https://hub.local/odds/${date}/${lg.slug}`);
+      try { if (cache && await cache.match(ck)) continue; } catch (e) { /* no cache: just look */ }
+      try { if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': 'max-age=21600' } })); } catch (e) { /* ignore */ }
+      const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
+      let changed = 0;
+      for (const c of open) { const o = byId.get(c.id)?.odds; if (o && JSON.stringify(o) !== JSON.stringify(c.odds)) { c.odds = o; changed++; } }
+      if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+      return { job: 'odds', league: lg.slug, date, changed };
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Grade ONE league for ONE date. Waits until (last kickoff + game length + delay) unless forced.
 // ---------------------------------------------------------------------------------------------
 export async function gradeLeague(date, slug, env, { force = false } = {}, now = new Date()) {
@@ -748,6 +771,7 @@ const hub = {
     ctx.waitUntil((async () => {
       try { await runSlot(c.env); }
       finally {
+        try { await oddsStep(c.env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
         // Alerts for games about to start. Never allowed to break the background job.
         try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(c.env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
         await c.flush();
