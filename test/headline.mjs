@@ -2,8 +2,8 @@
 import fs from 'fs';
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
-const code = ['esc', 'strip', 'sideOfScore', 'goalsCons', 'headline'].map(grab).join('\n');
-const api = new Function(`${code}; return { headline, goalsCons };`)();
+const code = ['esc', 'strip', 'sideOfScore', 'goalsCons', 'headline', 'priceFor', 'pTotal', 'needP', 'fmtOdds', 'priceLine'].map(grab).join('\n');
+const api = new Function(`const FIRST = new Set(['eng.1']); ${code}; return { headline, goalsCons };`)();
 let fails = 0; const ok = (n, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${x}`); };
 const mk = o => ({ home: 'Lille', away: 'Galatasaray', v2: { pick: 'H', p: [52, 26, 21], over: 41, btts: 43 }, v4: { pick: 'H', p: [60, 20, 20], over: 65, btts: 61 }, fb: { p: [48, 26, 26], over: 64, btts: 63, score: { h: 3, a: 1 } }, sm: { h: 2, a: 1, text: 'x' }, ...o });
 { const c = mk({}); const h = api.headline(c), g = api.goalsCons(c).join(' | ');
@@ -21,4 +21,7 @@ const mk = o => ({ home: 'Lille', away: 'Galatasaray', v2: { pick: 'H', p: [52, 
   const g = api.goalsCons(c).join(' | '); ok('Betis game: Forebet at 54% both-score still counts, so all four say both score', /All say both score/.test(g) && /All say Over 2\.5/.test(g), g); }
 { const c = mk({ v2: { pick: 'H', p: [50, 25, 25], over: 50, btts: 50 }, v4: { pick: 'H', p: [50, 25, 25], over: 52, btts: 48 }, fb: null, sm: null });
   const g = api.goalsCons(c).join(' | '); ok('exactly 50% is no vote', !/All say|Both say/.test(g), g); }
+{ const c = mk({ league: 'eng.1', odds: { h: -150, d: 280, a: 380 } }), h = api.headline(c), n = api.headline(mk({ league: 'xxx.1', odds: { h: -150, d: 280, a: 380 } }));
+  ok('first-division card shows its price line with a tag', /needs \d+%/.test(h) && /(Value|Fair price|Not worth it)/.test(h), h);
+  ok('other leagues show no price line', !/needs \d+%|No price/.test(n), n); }
 console.log(fails ? `\n${fails} FAILED` : '\nAll headline checks passed'); process.exit(fails ? 1 : 0);

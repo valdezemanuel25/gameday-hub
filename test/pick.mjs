@@ -5,7 +5,7 @@ import { gradeCard } from '../src/nhl.js';
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
 const code = ['esc', 'strip', 'sideOfScore', 'hdaOf', 'leanPick', 'leanHit', 'headline'].map(grab).join('\n');
-const page = new Function(`${code}; return { leanPick, leanHit, headline };`)();
+const page = new Function(`const FIRST = new Set(), priceLine = () => ''; ${code}; return { leanPick, leanHit, headline };`)();
 let fails = 0; const ok = (n, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${x}`); };
 const mk = o => ({ home: 'Club Brugge', away: 'Lens', v2: { pick: 'H', p: [52, 26, 21], over: 66, btts: 58 }, v4: { pick: 'H', p: [60, 20, 20], over: 65, btts: 61 }, fb: { p: [48, 26, 26], over: 64, btts: 56 }, sm: { h: 2, a: 1, text: '2–1' }, ...o });
 // Brugge game: all four back Brugge, Over and both-score; the card leads with the most-backed, highest-average pick
