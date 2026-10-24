@@ -1,5 +1,5 @@
 import { parseOdds } from '../src/data.js';
-import { priceFor, unitsWon } from '../src/pick.js';
+import { priceFor, unitsWon, needP, verdictOf } from '../src/pick.js';
 let bad = 0; const ok = (n, c) => { console.log((c ? 'PASS  ' : 'FAIL  ') + n); if (!c) bad++; };
 const a = parseOdds([{ provider: { name: 'DraftKings' }, moneyline: { home: { close: { odds: '-150' } }, draw: { close: { odds: '+280' } }, away: { close: { odds: '+400' } } }, total: { over: { close: { line: 'o2.5', odds: '-120' } }, under: { close: { line: 'u2.5', odds: '+100' } } } }]);
 ok('moneyline and 2.5 total read from the new block', a && a.h === -150 && a.d === 280 && a.a === 400 && a.over === -120 && a.under === 100);
@@ -10,7 +10,8 @@ ok('no odds -> null', parseOdds([]) === null && parseOdds(undefined) === null &&
 ok('junk prices ignored', parseOdds([{ moneyline: { home: { close: { odds: 'abc' } } } }]) === null);
 ok('priceFor maps the pick key', priceFor(a, 'H') === -150 && priceFor(a, 'O') === -120 && priceFor(a, 'B') === null && priceFor(null, 'H') === null);
 ok('units: a -200 hit wins 0.5, a miss loses 1, a +150 hit wins 1.5', unitsWon(-200, true) === 0.5 && unitsWon(-200, false) === -1 && unitsWon(150, true) === 1.5);
-
+ok('break-even: -500 needs 83%, -110 needs 52%, +150 needs 40%', Math.round(needP(-500)) === 83 && Math.round(needP(-110)) === 52 && Math.round(needP(150)) === 40);
+ok('tags: 70% at -500 not worth it, 80% at -500 only fair, 60% at +100 value, 52% at -110 fair', verdictOf(70, -500) === 'no' && verdictOf(80, -500) === 'fair' && verdictOf(60, 100) === 'val' && verdictOf(52, -110) === 'fair' && verdictOf(null, -110) === null);
 { // prices are attached to cards already analyzed, only before kickoff, with no write when nothing changed
   const { oddsStep } = await import('../src/worker.js');
   const now = new Date('2026-10-24T15:00:00Z'), kv = new Map(), writes = [];

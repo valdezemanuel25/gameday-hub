@@ -71,3 +71,6 @@ export function hockeyHit(key, f, line) {
 export function priceFor(odds, key) { const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.over, U: odds.under })[key]; return Number.isFinite(m) ? m : null; }
 // Units won by 1 unit staked at a price: a hit pays the price, a miss loses the stake.
 export const unitsWon = (m, hit) => hit ? (m > 0 ? m / 100 : 100 / -m) : -1;
+// Break-even win rate (%) for an American price, and the tag for a pick: model chance 5+ points above it is Value, 5+ below is Not worth it.
+export const needP = m => m < 0 ? -m / (-m + 100) * 100 : 100 / (m + 100) * 100;
+export const verdictOf = (p, m) => p == null || m == null ? null : p - needP(m) >= 5 ? 'val' : p - needP(m) <= -5 ? 'no' : 'fair';
