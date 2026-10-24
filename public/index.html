@@ -102,6 +102,7 @@ details.how h5.hw{margin:14px 0 2px;font-size:12px;font-weight:650;color:var(--d
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .sec{padding:16px 18px 2px;font-size:14px;font-weight:650}
 .mbx,.mbl2{margin:6px 18px 0}.mbr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.mbr:first-child{border-top:0}
+.mbl2 small.pr{color:var(--dim)}small.pr b{color:var(--ink)}small.pr.none{color:var(--faint)}.pv{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--line);margin-left:4px}.pv.val{color:#0B1210;background:var(--grass);border-color:var(--grass)}.pv.no{color:var(--miss);border-color:rgba(224,122,95,.45)}.pv.fair{color:var(--amber);border-color:rgba(240,181,74,.5)}.up{color:var(--grass)}.dn{color:var(--miss)}
 .edg{display:inline-block;margin:4px 0 0 8px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--faint)}.mbl small+.edg{margin-left:0}.edg.proven{color:#0B1210;background:var(--grass);border-color:var(--grass)}.edg.prom{color:var(--amber);border-color:rgba(240,181,74,.5)}.edg.none{color:var(--miss);border-color:rgba(224,122,95,.45)}
 .mbl small,.mbv small{display:block;color:var(--faint);font-size:11.5px}.mbv{text-align:right}.mbv b{font-size:16px}
 .mbg{padding:10px 0;border-top:1px solid var(--line)}.mbg:first-child{border-top:0}.mbt{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}.mbg small{display:block;color:var(--faint);font-size:11.5px;margin-top:2px}
@@ -1096,6 +1097,17 @@ function trackedView() {
     return `<div class="mbr"><div class="mbl">${esc(t.name)}<small>${esc(t.rule)}</small><span class="edg ${e ? e.t : 'early'}">${e ? e.label : 'Too early'}</span></div><div class="mbv">${line('Live', t.live)}${line('Before', t.hist)}${chanceOf(t)}</div></div>`;
   }).join('')}</div>`;
 }
+// Prices (American odds, from ESPN's sportsbook block) are shown next to a pick for first divisions only. They never feed a model.
+const needP = m => m < 0 ? -m / (-m + 100) * 100 : 100 / (m + 100) * 100;
+const fmtOdds = m => (m > 0 ? '+' : '') + m;
+function priceFor(c, key) { const o = c.odds; if (!o) return null; const m = ({ H: o.h, D: o.d, A: o.a, O: o.over, U: o.under })[key]; return Number.isFinite(m) ? m : null; }
+function priceLine(c, L) {
+  if (!FIRST.has(c.league)) return '';
+  const m = L.price != null ? L.price : priceFor(c, L.key);
+  if (m == null) return `<small class="pr none">No price for this bet</small>`;
+  const need = needP(m), d = L.p != null ? L.p - need : null, t = d == null ? 'fair' : d >= 5 ? 'val' : d <= -5 ? 'no' : 'fair';
+  return `<small class="pr"><b>${fmtOdds(m)}</b> needs ${Math.round(need)}%${L.p != null ? ` · model ${L.p}%` : ''} <span class="pv ${t}">${t === 'val' ? 'Value' : t === 'no' ? 'Not worth it' : 'Fair price'}</span></small>`;
+}
 function mbetsToday() {
   const rows = (day.cards || []).filter(c => c.v2 && !SECOND_DIV.includes(c.leagueKey)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
     .sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
@@ -1104,8 +1116,16 @@ function mbetsToday() {
     if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><small>This game was already over when the Hub first saw it.</small></div>`;
     const st = c.lean ? (L.hit ? '<span class="mbs hit">Hit ✓</span>' : '<span class="mbs miss">Missed ✗</span>') : `<span class="mbs">${c.kickoff && new Date(c.kickoff) <= Date.now() ? 'In play' : 'Pending'}</span>`;
     return `<div class="mbg"><div class="mbt"><b>${esc(leanName(c, L.key))}</b>${st}</div><small>${esc(c.home)} vs ${esc(c.away)} · ${esc(c.ko || '')}${c.final ? ' · ' + c.final.h + '–' + c.final.a : ''}</small>
-      <small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.k === 'split' ? 'no majority, v2\'s own pick' : L.k === 'solo' ? 'only v2 had numbers' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
+      ${priceLine(c, L)}<small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.k === 'split' ? 'no majority, v2\'s own pick' : L.k === 'solo' ? 'only v2 had numbers' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
   }).join('');
+}
+function profitView(T) {
+  const P = T.pl; if (!P || !P.n) return '';
+  const u = x => (x >= 0 ? '+' : '') + x.toFixed(1) + 'u', roi = x => Math.round(100 * x.won / x.n);
+  const kinds = Object.keys(P.byKind || {});
+  return `<div class="sec">Profit at saved prices<small>First divisions only. 1 unit on each pick at the price saved when the game was graded. This is the real test of whether a pick is worth taking.</small></div><div class="mbx">
+    <div class="mbr"><div class="mbl">All priced picks<small>${P.n} bets</small></div><div class="mbv"><b class="${P.won >= 0 ? 'up' : 'dn'}">${u(P.won)}</b><small>${Math.round(100 * P.won / P.n)}% return per unit staked</small></div></div>
+    ${kinds.map(k => { const x = P.byKind[k]; return `<div class="mbr"><div class="mbl">${LEAN_KIND[k] || k}<small>${x.n} bets</small></div><div class="mbv"><b class="${x.won >= 0 ? 'up' : 'dn'}">${u(x.won)}</b><small>${roi(x)}% return · ${x.hits} of ${x.n} hit</small></div></div>`; }).join('')}</div>`;
 }
 function mbetsView() {
   if (!tally) return `<div class="empty">Loading…</div>`;
@@ -1117,8 +1137,9 @@ function mbetsView() {
   const backs = Object.keys(T.byBack).sort((a, b) => { const [ay, aa] = a.split(' of ').map(Number), [by, ba] = b.split(' of ').map(Number); return (ay === aa ? 0 : 1) - (by === ba ? 0 : 1) || ba - aa || by - ay; });
   const head = T.n ? `<div class="zsum"><b>${T.hits}</b> of <b>${T.n}</b> model bets hit (<b>${pct(T.hits, T.n)}%</b>${moe(T.hits, T.n) != null ? ` ± ${moe(T.hits, T.n)}` : ''}). One pick per card, graded when the game ends.</div>` : `<div class="zsum">No model bets are graded yet. Each card's headline pick is recorded when its game is graded, so the record starts with the next games that finish.</div>`;
   const recent = (T.recent || []).slice(0, 15).map(r => `<div class="mbg"><div class="mbt"><b>${esc(MB_PLAIN[r.key])}</b><span class="mbs ${r.hit ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : 'Missed ✗'}</span></div><small>${esc(r.home)} vs ${esc(r.away)} · ${r.final.h}–${r.final.a}</small><small><span class="mbk ${r.k}">${LEAN_KIND[r.k]}</span>${r.p != null ? ` ${r.p}%` : ''}${r.k === 'best' || r.k === 'lean' ? ` · ${r.y === r.a ? 'all ' + r.a + ' agree' : r.y + ' of ' + r.a + ' back it'}` : ''}</small></div>`).join('');
-  return `<div class="small" style="margin:8px 4px 0">Every card's headline pick (Best pick or Lean, the line the card leads with) is one fixed bet. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. No odds are used.</div>${head}
+  return `<div class="small" style="margin:8px 4px 0">Every card's headline pick (Best pick or Lean, the line the card leads with) is one fixed bet. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. For first divisions a sportsbook price is shown next to the pick; prices never change a pick or any model.</div>${head}
     <div class="sec">Today's model bets<small>${esc(S.date === cfg.today ? 'Today' : S.date)}. Picks still update until the game starts.</small></div><div class="mbl2">${mbetsToday()}</div>
+    ${profitView(T)}
     ${trackedView()}
     ${T.n ? `<div class="sec">By strength<small>Best pick: all models agree and average 60% or more. Lean: most agree. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k], expect(T.byKind[k]))).join('')}</div>
     <div class="sec">By kind of pick<small>Chance = how often it happens in all these games. Edge = the hit rate minus chance.</small></div><div class="mbx">${keys.map(k => mbRow(MB_PLAIN[k], '', T.byKey[k], chance[k])).join('')}</div>
