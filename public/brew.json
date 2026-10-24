@@ -1,6 +1,71 @@
 {
-  "updated": "2026-10-23T20:35:25Z",
+  "updated": "2026-10-24T10:08:25Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-10-24",
+      "title": "Gone phishing",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,955",
+          "change": -0.21
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,624",
+          "change": -0.52
+        },
+        {
+          "label": "Dow",
+          "value": "52,215",
+          "change": -1.24
+        },
+        {
+          "label": "10-yr",
+          "value": "4.988%",
+          "change": 4,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$81,369",
+          "change": 0.25
+        },
+        {
+          "label": "CrowdStrike",
+          "value": "$257.57",
+          "change": 8.25
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Stocks slip",
+          "t": "Higher oil and the AI-led selloff spread, sending the Dow down 1.24% and the S&P 500 down 0.52%."
+        },
+        {
+          "h": "Yields",
+          "t": "The 10-year yield rose 4 bps but still ended the week just under 5% at 4.988%."
+        },
+        {
+          "h": "Cyber rally",
+          "t": "CrowdStrike jumped 8.25% as cybersecurity names rose on worries about a vulnerability in a core web coding language."
+        },
+        {
+          "h": "AmEx cuts",
+          "t": "AmEx is cutting 5% of staff (~3,500 jobs) for AI efficiency, even as Q3 sales grew 9% and its outlook rose."
+        },
+        {
+          "h": "Warhound",
+          "t": "Startup from Palmer Luckey and Ben Lamm raised $200M seed at a ~$1.2B valuation to engineer military dogs."
+        },
+        {
+          "h": "Canada tariffs",
+          "t": "Trump exempted nine Maine-linked product categories from 50% tariffs but added new ones; $20B of goods stay tariffed from Oct. 30."
+        }
+      ],
+      "note": "Market numbers are the Friday close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-10-23",
@@ -64,71 +129,6 @@
           "t": "US luxury spending fell 6% in September while high earners drove most Beige Book districts."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-10-23",
-      "title": "Dynamic Duo",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "26,009",
-          "change": -2.6
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,663",
-          "change": -1.21
-        },
-        {
-          "label": "Dow",
-          "value": "52,868",
-          "change": 0.02
-        },
-        {
-          "label": "10-yr",
-          "value": "4.953%",
-          "change": -19,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$81,325",
-          "change": -3.89
-        },
-        {
-          "label": "Moderna",
-          "value": "$202.63",
-          "change": -17.57
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Tech selloff",
-          "t": "Renewed AI-overspending worries pushed the Nasdaq down 2.60% and the S&P 500 down 1.21%."
-        },
-        {
-          "h": "Moderna -17.6%",
-          "t": "Shares plunged after cancer-vaccine study results reportedly leaked on social media."
-        },
-        {
-          "h": "Skydance",
-          "t": "Musk reportedly put about $1B into Skydance, the Paramount and Warner Bros. Discovery combination."
-        },
-        {
-          "h": "Banks vs AI agents",
-          "t": "JPMorgan, Morgan Stanley and Bank of America are racing to restrict unvetted AI agents on customer accounts."
-        },
-        {
-          "h": "Data center boom",
-          "t": "PPG expects data center paint sales to triple this year; its quarterly sales grew 7% to $4.5B."
-        },
-        {
-          "h": "iPhone Duo",
-          "t": "Apple's $1,999 foldable got mixed reviews: strong battery and screen, but heavy, hot, with no Face ID."
-        }
-      ],
-      "note": "Market numbers are the Oct 22 close."
     },
     {
       "source": "Brew Markets",
