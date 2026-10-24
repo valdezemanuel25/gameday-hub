@@ -1,0 +1,13 @@
+import { parseOdds } from '../src/data.js';
+import { priceFor, unitsWon } from '../src/pick.js';
+let bad = 0; const ok = (n, c) => { console.log((c ? 'PASS  ' : 'FAIL  ') + n); if (!c) bad++; };
+const a = parseOdds([{ provider: { name: 'DraftKings' }, moneyline: { home: { close: { odds: '-150' } }, draw: { close: { odds: '+280' } }, away: { close: { odds: '+400' } } }, total: { over: { close: { line: 'o2.5', odds: '-120' } }, under: { close: { line: 'u2.5', odds: '+100' } } } }]);
+ok('moneyline and 2.5 total read from the new block', a && a.h === -150 && a.d === 280 && a.a === 400 && a.over === -120 && a.under === 100);
+const b = parseOdds([{ homeTeamOdds: { moneyLine: -200 }, drawOdds: { moneyLine: 300 }, awayTeamOdds: { moneyLine: 550 }, overUnder: 3.5 }]);
+ok('old block: moneylines read, a 3.5 total is ignored', b && b.h === -200 && b.d === 300 && b.a === 550 && b.over === undefined);
+ok('EVEN is +100', parseOdds([{ moneyline: { home: { close: { odds: 'EVEN' } } } }]).h === 100);
+ok('no odds -> null', parseOdds([]) === null && parseOdds(undefined) === null && parseOdds([{ details: 'x' }]) === null);
+ok('junk prices ignored', parseOdds([{ moneyline: { home: { close: { odds: 'abc' } } } }]) === null);
+ok('priceFor maps the pick key', priceFor(a, 'H') === -150 && priceFor(a, 'O') === -120 && priceFor(a, 'B') === null && priceFor(null, 'H') === null);
+ok('units: a -200 hit wins 0.5, a miss loses 1, a +150 hit wins 1.5', unitsWon(-200, true) === 0.5 && unitsWon(-200, false) === -1 && unitsWon(150, true) === 1.5);
+process.exit(bad ? 1 : 0);

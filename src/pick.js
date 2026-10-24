@@ -66,3 +66,8 @@ export function hockeyHit(key, f, line) {
   const t = f.total != null ? f.total : f.h + f.a;
   return key === 'H' ? f.h > f.a : key === 'A' ? f.h < f.a : t === line ? null : key === 'O' ? t > line : t < line;
 }
+
+// The saved price (American odds) for a pick's bet, or null when the book did not offer it.
+export function priceFor(odds, key) { const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.over, U: odds.under })[key]; return Number.isFinite(m) ? m : null; }
+// Units won by 1 unit staked at a price: a hit pays the price, a miss loses the stake.
+export const unitsWon = (m, hit) => hit ? (m > 0 ? m / 100 : 100 / -m) : -1;

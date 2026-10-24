@@ -1,7 +1,7 @@
 import { v2, grade, pickOutcome, bestBet } from './model.js';
 import { usualOverSide, supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
-  TZ, LEAGUES, UNTRACKED, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
+  TZ, LEAGUES, UNTRACKED, FIRST_DIV, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
   findTeam, getContext, missingContexts, fixturesForLeague, shotsCoverage,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
@@ -11,7 +11,7 @@ import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { addStrats } from './strats.js';
-import { leanPick, leanHit } from './pick.js';
+import { leanPick, leanHit, priceFor, unitsWon } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
@@ -195,6 +195,8 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     // Once the game has kicked off the v4 made before it stands: a later re-analysis must not wipe it.
     if (old?.v4 && new Date(f.date).getTime() <= now.getTime()) { card.v4 = old.v4; why = null; if (old.v4why) delete card.v4why; }
     if (!card.v4 && why) card.v4why = why;
+    if (FIRST_DIV.has(slug) && f.odds) card.odds = f.odds;
+    if (old?.odds && (!card.odds || new Date(f.date).getTime() <= now.getTime())) card.odds = old.odds; // the price from before kickoff stands
     if (old?.sm) card.sm = old.sm;
     if (old?.note) card.note = old.note;
     if (old?.mine) card.mine = old.mine;
@@ -253,7 +255,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     if (c.v4) c.grade.v4 = grade(toPred(c.v4), c.final);
     if (c.sm && c.v2) c.smGrade = smGrade(c.sm, c.final);
     // The card's headline pick is locked here, from what the card held when it finished, and scored on the final score.
-    if (c.v2 && !c.lean) { const l = leanPick(c); if (l) { l.hit = leanHit(l.key, c.final); c.lean = l; } }
+    if (c.v2 && !c.lean) { const l = leanPick(c); if (l) { l.hit = leanHit(l.key, c.final); const m = FIRST_DIV.has(c.league) ? priceFor(c.odds, l.key) : null; if (m != null) l.price = m; c.lean = l; } }
     graded++;
   }
   // Remember the attempt so a league whose games aren't final yet (postponed, feed lagging) can't
@@ -391,6 +393,7 @@ async function tally(env) {
         const L = c.lean; LB.n++; LB.hits += L.hit ? 1 : 0; lbAdd(LB.byKind, L.k, L.hit, L.key); lbAdd(LB.byKey, L.key, L.hit);
         if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.y} of ${L.a}`, L.hit, L.key);
         LB.base.home += c.final.h > c.final.a ? 1 : 0; LB.base.draw += c.final.h === c.final.a ? 1 : 0; LB.base.away += c.final.h < c.final.a ? 1 : 0; LB.base.over += c.final.h + c.final.a >= 3 ? 1 : 0; LB.base.btts += c.final.h > 0 && c.final.a > 0 ? 1 : 0;
+        if (L.price != null) { const P = LB.pl || (LB.pl = { n: 0, won: 0, byKind: {} }), u = unitsWon(L.price, L.hit), x = P.byKind[L.k] || (P.byKind[L.k] = { n: 0, hits: 0, won: 0 }); P.n++; P.won += u; x.n++; x.hits += L.hit ? 1 : 0; x.won += u; }
         LB.recent.push({ date: day.date, kickoff: c.kickoff, home: c.home, away: c.away, leagueName: c.leagueName, final: c.final, k: L.k, key: L.key, p: L.p, y: L.y, a: L.a, hit: !!L.hit });
       }
       live.push({ date: day.date, ...c });
