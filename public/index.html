@@ -102,6 +102,7 @@ details.how h5.hw{margin:14px 0 2px;font-size:12px;font-weight:650;color:var(--d
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .sec{padding:16px 18px 2px;font-size:14px;font-weight:650}
 .mbx,.mbl2{margin:6px 18px 0}.mbr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.mbr:first-child{border-top:0}
+.oddsbar{margin:6px 18px 0;display:flex;align-items:center;gap:12px}.oddsbar .btn{flex:none;width:auto;padding:9px 14px;font-size:13px}.oddsbar small{color:var(--faint);font-size:11.5px;line-height:1.35}
 .mbl2 small.pr{color:var(--dim)}small.pr b{color:var(--ink)}small.pr.none{color:var(--faint)}.pv{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--line);margin-left:4px}.pv.val{color:#0B1210;background:var(--grass);border-color:var(--grass)}.pv.no{color:var(--miss);border-color:rgba(224,122,95,.45)}.pv.fair{color:var(--amber);border-color:rgba(240,181,74,.5)}.up{color:var(--grass)}.dn{color:var(--miss)}
 .edg{display:inline-block;margin:4px 0 0 8px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--faint)}.mbl small+.edg{margin-left:0}.edg.proven{color:#0B1210;background:var(--grass);border-color:var(--grass)}.edg.prom{color:var(--amber);border-color:rgba(240,181,74,.5)}.edg.none{color:var(--miss);border-color:rgba(224,122,95,.45)}
 .mbl small,.mbv small{display:block;color:var(--faint);font-size:11.5px}.mbv{text-align:right}.mbv b{font-size:16px}
@@ -1108,6 +1109,14 @@ function priceLine(c, L) {
   const need = needP(m), d = L.p != null ? L.p - need : null, t = d == null ? 'fair' : d >= 5 ? 'val' : d <= -5 ? 'no' : 'fair';
   return `<small class="pr"><b>${fmtOdds(m)}</b> needs ${Math.round(need)}%${L.p != null ? ` · model ${L.p}%` : ''} <span class="pv ${t}">${t === 'val' ? 'Value' : t === 'no' ? 'Not worth it' : 'Fair price'}</span></small>`;
 }
+// "Refresh prices": one request per first-division league that has a model pick not yet started on this day. Nothing else is touched.
+function oddsLeagues() { const n = Date.now(); return [...new Set((day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > n).map(c => c.league))]; }
+function oddsBar() {
+  const L = oddsLeagues(), n = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now()).length;
+  if (!n) return '';
+  const priced = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now() && c.odds).length;
+  return `<div class="oddsbar"><button type="button" class="btn g" data-oddsrefresh="1">Refresh prices</button><small id="oddsmsg">${priced} of ${n} first-division picks have a price. Reads each first-division league (${L.length}) for this day only.</small></div>`;
+}
 function mbetsToday() {
   const rows = (day.cards || []).filter(c => c.v2 && !SECOND_DIV.includes(c.leagueKey)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
     .sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
@@ -1138,7 +1147,7 @@ function mbetsView() {
   const head = T.n ? `<div class="zsum"><b>${T.hits}</b> of <b>${T.n}</b> model bets hit (<b>${pct(T.hits, T.n)}%</b>${moe(T.hits, T.n) != null ? ` ± ${moe(T.hits, T.n)}` : ''}). One pick per card, graded when the game ends.</div>` : `<div class="zsum">No model bets are graded yet. Each card's headline pick is recorded when its game is graded, so the record starts with the next games that finish.</div>`;
   const recent = (T.recent || []).slice(0, 15).map(r => `<div class="mbg"><div class="mbt"><b>${esc(MB_PLAIN[r.key])}</b><span class="mbs ${r.hit ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : 'Missed ✗'}</span></div><small>${esc(r.home)} vs ${esc(r.away)} · ${r.final.h}–${r.final.a}</small><small><span class="mbk ${r.k}">${LEAN_KIND[r.k]}</span>${r.p != null ? ` ${r.p}%` : ''}${r.k === 'best' || r.k === 'lean' ? ` · ${r.y === r.a ? 'all ' + r.a + ' agree' : r.y + ' of ' + r.a + ' back it'}` : ''}</small></div>`).join('');
   return `<div class="small" style="margin:8px 4px 0">Every card's headline pick (Best pick or Lean, the line the card leads with) is one fixed bet. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. For first divisions a sportsbook price is shown next to the pick; prices never change a pick or any model.</div>${head}
-    <div class="sec">Today's model bets<small>${esc(S.date === cfg.today ? 'Today' : S.date)}. Picks still update until the game starts.</small></div><div class="mbl2">${mbetsToday()}</div>
+    <div class="sec">Today's model bets<small>${esc(S.date === cfg.today ? 'Today' : S.date)}. Picks still update until the game starts.</small></div>${oddsBar()}<div class="mbl2">${mbetsToday()}</div>
     ${profitView(T)}
     ${trackedView()}
     ${T.n ? `<div class="sec">By strength<small>Best pick: all models agree and average 60% or more. Lean: most agree. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k], expect(T.byKind[k]))).join('')}</div>
@@ -1432,6 +1441,21 @@ document.addEventListener('click', async e => {
       msg.textContent = `Saved ${r.saved}. ${r.alreadyHad ? r.alreadyHad + ' already had a pick. ' : ''}${r.started ? r.started + ' already started (skipped). ' : ''}${r.notFound.length ? "Couldn't match: " + r.notFound.join(', ') + '.' : ''}`;
       if (r.saved) { delete counts[S.date]; tally = null; await loadDay(); }
     } catch (er) { msg.textContent = er.message; }
+    return;
+  }
+  const orf = e.target.closest('[data-oddsrefresh]');
+  if (orf) {
+    const L = oddsLeagues(), msg = $('#oddsmsg'), dt = S.date; if (!L.length) return;
+    orf.disabled = true; let games = 0, priced = 0;
+    try {
+      for (let i = 0; i < L.length; i++) {
+        if (msg) msg.textContent = `Reading prices… ${i + 1} of ${L.length} leagues`;
+        const r = await post('/api/odds', { date: dt, league: L[i] }); if (r.error) throw new Error(r.error);
+        games += r.games || 0; priced += r.priced || 0;
+      }
+      await loadDay(dt); render();
+      const m2 = $('#oddsmsg'); if (m2) m2.textContent = `Done: ${priced} of ${games} games have a price. A game with none has no line posted yet.`;
+    } catch (er) { if (msg) msg.textContent = er.message; orf.disabled = false; }
     return;
   }
   const as = e.target.closest('[data-assign]');

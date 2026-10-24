@@ -230,21 +230,30 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
 // ---------------------------------------------------------------------------------------------
 // Prices for games already analyzed: look at ONE first-division league per run (each at most every 6 hours, remembered in the free
 // edge cache so it costs no KV writes) and attach ESPN's current price to cards that have not started. Display only; no model reads it.
+// Fetch ESPN's current price for ONE first-division league on ONE day and attach it to games that have a model pick and have not started.
+export async function refreshOdds(env, date, slug, now = new Date()) {
+  const lg = leagueBySlug(slug); if (!lg || !FIRST_DIV.has(slug)) return { error: 'Prices are only read for first divisions' };
+  const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
+  const open = (day.cards || []).filter(c => c.league === slug && c.v2 && !c.final && new Date(c.kickoff).getTime() > now.getTime());
+  if (!open.length) return { games: 0, priced: 0, changed: 0 };
+  const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
+  let changed = 0, priced = 0;
+  for (const c of open) { const o = byId.get(c.id)?.odds; if (o) priced++; if (o && JSON.stringify(o) !== JSON.stringify(c.odds)) { c.odds = o; changed++; } }
+  if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  return { games: open.length, priced, changed };
+}
+// Background: look at ONE first-division league per run (each at most every 6 hours, remembered in the free edge cache so it costs no
+// KV writes). Display only; no model reads a price.
 export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
   const t = localDate(now.toISOString());
   for (const date of [t, addDays(t, 1)]) {
     const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) continue;
     for (const lg of LEAGUES.filter(l => FIRST_DIV.has(l.slug))) {
-      const open = (day.cards || []).filter(c => c.league === lg.slug && !c.final && new Date(c.kickoff).getTime() > now.getTime());
-      if (!open.length) continue;
+      if (!(day.cards || []).some(c => c.league === lg.slug && c.v2 && !c.final && new Date(c.kickoff).getTime() > now.getTime())) continue;
       const ck = new Request(`https://hub.local/odds/${date}/${lg.slug}`);
       try { if (cache && await cache.match(ck)) continue; } catch (e) { /* no cache: just look */ }
       try { if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': 'max-age=21600' } })); } catch (e) { /* ignore */ }
-      const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
-      let changed = 0;
-      for (const c of open) { const o = byId.get(c.id)?.odds; if (o && JSON.stringify(o) !== JSON.stringify(c.odds)) { c.odds = o; changed++; } }
-      if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
-      return { job: 'odds', league: lg.slug, date, changed };
+      return { job: 'odds', league: lg.slug, date, ...(await refreshOdds(env, date, lg.slug, now)) };
     }
   }
   return null;
@@ -672,6 +681,7 @@ const hub = {
       try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; return json({ updated: j && j.updated || null, issues: Array.isArray(j && j.issues) ? j.issues : [] }); } catch (e) { return json({ updated: null, issues: [] }); }
     }
     if (p === '/api/candidates') return json(await candidates(q('date') || today(), env));
+    if (req.method === 'POST' && p === '/api/odds') { try { const b = await req.json(); return json(await refreshOdds(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Prices: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/assign') { try { const b = await req.json(); const lg = leagueBySlug(String(b.league || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ ok: true, ...(await assignCandidate(String(b.date || ''), lg.slug, String(b.id || ''), String(b.key || ''), env, new Date(), { dismiss: !!b.dismiss })) }); } catch (e) { return json({ error: `Assign: ${e && e.message ? e.message : e}` }, 500); } }
     if (p.startsWith('/api/bets')) { // bet analyzer and tracker
       try {
