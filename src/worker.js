@@ -32,9 +32,20 @@ function counted(env) {
   return { env: { ...env, HUB: hub }, flush: async () => {
     if (!n) return;
     const d = new Date().toISOString().slice(0, 10);
+    // Counting must not eat the budget it counts: keep a running tally in the (free) edge cache and
+    // save it to KV only once about 15 writes have piled up.
+    let pending = n;
+    const cache = typeof caches !== 'undefined' ? caches.default : null, ck = new Request(`https://hub.local/writes/${d}`);
+    if (cache) { try { const r = await cache.match(ck); pending += r ? Number(await r.text()) || 0 : 0; } catch (e) { /* count from this run only */ } }
+    if (cache && pending < 15) { try { await cache.put(ck, new Response(String(pending), { headers: { 'cache-control': 'max-age=86400' } })); return; } catch (e) { /* fall through and save */ } }
     const c = (await base.get('meta:writes', 'json').catch(() => null)) || {};
-    await base.put('meta:writes', JSON.stringify({ d, n: (c.d === d ? c.n : 0) + n + 1 })).catch(() => {});
+    await base.put('meta:writes', JSON.stringify({ d, n: (c.d === d ? c.n : 0) + pending + 1 })).catch(() => {});
+    if (cache) { try { await cache.delete(ck); } catch (e) { /* ignore */ } }
   } };
+}
+
+async function pendingWrites(d) {
+  try { if (typeof caches === 'undefined') return 0; const r = await caches.default.match(new Request(`https://hub.local/writes/${d}`)); return r ? Number(await r.text()) || 0 : 0; } catch (e) { return 0; }
 }
 
 // Last problem per league (shown on the Status tab). Written only when it changes, to save writes.
@@ -692,7 +703,7 @@ const hub = {
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
-        now: Date.now(), forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: w && w.d === d ? w.n : 0, limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        now: Date.now(), forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
