@@ -102,6 +102,7 @@ details.how h5.hw{margin:14px 0 2px;font-size:12px;font-weight:650;color:var(--d
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .sec{padding:16px 18px 2px;font-size:14px;font-weight:650}
 .mbx,.mbl2{margin:6px 18px 0}.mbr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.mbr:first-child{border-top:0}
+.edg{display:inline-block;margin:4px 0 0 8px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--faint)}.mbl small+.edg{margin-left:0}.edg.proven{color:#0B1210;background:var(--grass);border-color:var(--grass)}.edg.prom{color:var(--amber);border-color:rgba(240,181,74,.5)}.edg.none{color:var(--miss);border-color:rgba(224,122,95,.45)}
 .mbl small,.mbv small{display:block;color:var(--faint);font-size:11.5px}.mbv{text-align:right}.mbv b{font-size:16px}
 .mbg{padding:10px 0;border-top:1px solid var(--line)}.mbg:first-child{border-top:0}.mbt{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}.mbg small{display:block;color:var(--faint);font-size:11.5px;margin-top:2px}
 .mbs{font-size:11.5px;font-weight:700;color:var(--dim)}.mbs.hit{color:var(--grass)}.mbs.miss{color:#e07a6a}.mbk{font-weight:700;color:var(--dim)}.mbk.best{color:#d9b85c}.mbk.lean{color:var(--grass)}
@@ -1066,9 +1067,19 @@ function leanHit(key, f) {
 const LEAN_KIND = { best: 'Best pick', lean: 'Lean', split: 'Split', solo: 'v2 alone' };
 const leanName = (c, key) => ({ H: `${strip(c.home)} to win`, D: 'Draw', A: `${strip(c.away)} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' })[key];
 const MB_PLAIN = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score', N: 'Not both score' };
+// Edge = the model hit rate minus what chance alone would score on the same kinds of bet (how often that outcome happens overall).
+// Proven: above chance with the whole ± range, and 30+ picks. Promising: above chance but not yet certain. No edge: at or below chance. Too early: under 5 picks.
+function edgeOf(x, exp) {
+  if (!x || exp == null) return null;
+  const n = x.n, h = x.hits, r = 100 * h / n;
+  if (n < 5) return { t: 'early', label: 'Too early', d: Math.round(r - exp) };
+  const lo = r - 196 * Math.sqrt((h / n) * (1 - h / n) / n), d = Math.round(r - exp);
+  if (r <= exp) return { t: 'none', label: 'No edge', d };
+  return lo > exp && n >= 30 ? { t: 'proven', label: 'Proven edge', d } : { t: 'prom', label: 'Promising', d };
+}
 function mbRow(label, sub, x, base) {
-  const n = x ? x.n : 0, h = x ? x.hits : 0, m = n ? moe(h, n) : null;
-  return `<div class="mbr"><div class="mbl">${label}${sub ? `<small>${sub}</small>` : ''}</div><div class="mbv">${n ? `<b>${Math.round(100 * h / n)}%</b><small>${h} of ${n}${m != null ? ` · ±${m}` : ''}${base != null ? ` · happens ${base}% overall` : ''}</small>` : '<small>none yet</small>'}</div></div>`;
+  const n = x ? x.n : 0, h = x ? x.hits : 0, m = n ? moe(h, n) : null, e = n && base != null ? edgeOf(x, base) : null;
+  return `<div class="mbr"><div class="mbl">${label}${sub ? `<small>${sub}</small>` : ''}${e ? `<span class="edg ${e.t}">${e.label}</span>` : ''}</div><div class="mbv">${n ? `<b>${Math.round(100 * h / n)}%</b><small>${h} of ${n}${m != null ? ` · ±${m}` : ''}${base != null ? ` · chance ${Math.round(base)}%` : ''}${e && e.t !== 'early' ? ` · edge ${e.d > 0 ? '+' : ''}${e.d}` : ''}</small>` : '<small>none yet</small>'}</div></div>`;
 }
 function mbetsToday() {
   const rows = (day.cards || []).filter(c => c.v2 && !SECOND_DIV.includes(c.leagueKey)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
@@ -1085,17 +1096,19 @@ function mbetsView() {
   if (!tally) return `<div class="empty">Loading…</div>`;
   const T = tally.leans || { n: 0, hits: 0, byKind: {}, byKey: {}, byBack: {}, base: {}, recent: [] }, pct = (h, n) => n ? Math.round(100 * h / n) : null;
   const bp = k => T.n ? pct(T.base[k] || 0, T.n) : null;
+  const chance = { H: bp('home'), D: bp('draw'), A: bp('away'), O: bp('over'), U: T.n ? 100 - bp('over') : null, B: bp('btts'), N: T.n ? 100 - bp('btts') : null };
+  const expect = x => { if (!x || !x.ks || !x.n) return null; let t = 0, c = 0; for (const [k, q] of Object.entries(x.ks)) if (chance[k] != null) { t += q * chance[k]; c += q; } return c ? t / c : null; };
   const kinds = ['best', 'lean', 'split', 'solo'].filter(k => T.byKind[k]), keys = ['H', 'D', 'A', 'O', 'U', 'B', 'N'].filter(k => T.byKey[k]);
   const backs = Object.keys(T.byBack).sort((a, b) => { const [ay, aa] = a.split(' of ').map(Number), [by, ba] = b.split(' of ').map(Number); return (ay === aa ? 0 : 1) - (by === ba ? 0 : 1) || ba - aa || by - ay; });
   const head = T.n ? `<div class="zsum"><b>${T.hits}</b> of <b>${T.n}</b> model bets hit (<b>${pct(T.hits, T.n)}%</b>${moe(T.hits, T.n) != null ? ` ± ${moe(T.hits, T.n)}` : ''}). One pick per card, graded when the game ends.</div>` : `<div class="zsum">No model bets are graded yet. Each card's headline pick is recorded when its game is graded, so the record starts with the next games that finish.</div>`;
   const recent = (T.recent || []).slice(0, 15).map(r => `<div class="mbg"><div class="mbt"><b>${esc(MB_PLAIN[r.key])}</b><span class="mbs ${r.hit ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : 'Missed ✗'}</span></div><small>${esc(r.home)} vs ${esc(r.away)} · ${r.final.h}–${r.final.a}</small><small><span class="mbk ${r.k}">${LEAN_KIND[r.k]}</span>${r.p != null ? ` ${r.p}%` : ''}${r.k === 'best' || r.k === 'lean' ? ` · ${r.y === r.a ? 'all ' + r.a + ' agree' : r.y + ' of ' + r.a + ' back it'}` : ''}</small></div>`).join('');
   return `<div class="small" style="margin:8px 4px 0">Every card's headline pick (Best pick or Lean, the line the card leads with) is one fixed bet. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. No odds are used.</div>${head}
     <div class="sec">Today's model bets<small>${esc(S.date === cfg.today ? 'Today' : S.date)}. Picks still update until the game starts.</small></div><div class="mbl2">${mbetsToday()}</div>
-    ${T.n ? `<div class="sec">By strength<small>Best pick: all models agree and average 60% or more. Lean: most agree. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k])).join('')}</div>
-    <div class="sec">By kind of pick<small>Compare each to how often it happens in all these games.</small></div><div class="mbx">${keys.map(k => mbRow(MB_PLAIN[k], '', T.byKey[k], k === 'H' ? bp('home') : k === 'O' ? bp('over') : k === 'U' ? 100 - bp('over') : k === 'B' ? bp('btts') : k === 'N' ? 100 - bp('btts') : null)).join('')}</div>
-    ${backs.length ? `<div class="sec">By how many models agree</div><div class="mbx">${backs.map(k => mbRow(k.replace(' of ', ' of '), 'models back it', T.byBack[k])).join('')}</div>` : ''}
+    ${T.n ? `<div class="sec">By strength<small>Best pick: all models agree and average 60% or more. Lean: most agree. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k], expect(T.byKind[k]))).join('')}</div>
+    <div class="sec">By kind of pick<small>Chance = how often it happens in all these games. Edge = the hit rate minus chance.</small></div><div class="mbx">${keys.map(k => mbRow(MB_PLAIN[k], '', T.byKey[k], chance[k])).join('')}</div>
+    ${backs.length ? `<div class="sec">By how many models agree</div><div class="mbx">${backs.map(k => mbRow(k.replace(' of ', ' of '), 'models back it', T.byBack[k], expect(T.byBack[k]))).join('')}</div>` : ''}
     <div class="sec">Recent model bets</div><div class="mbl2">${recent}</div>
-    <div class="bdn">Small samples swing a lot, and ± is the 95% margin. A row only means something if it beats how often that outcome happens anyway.</div>` : ''}`;
+    <div class="bdn"><b>Proven edge</b>: beats chance with the whole ± range above it and 30+ picks. <b>Promising</b>: beats chance but is not certain yet. <b>No edge</b>: at or below chance. <b>Too early</b>: under 5 picks. For strength and agreement rows, chance is what the same mix of bets would score on average. ± is the 95% margin.</div>` : ''}`;
 }
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;

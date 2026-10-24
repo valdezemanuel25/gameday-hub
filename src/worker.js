@@ -316,7 +316,7 @@ async function tally(env) {
   const promoV2 = blank(), promoV4 = blank(), v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [], mineT = { n: 0, mine: 0, model: 0 };
   // Model bets: every card's headline pick, locked when the game was graded. Counted by strength, by kind of pick and by how many models backed it.
-  const LB = { n: 0, hits: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, over: 0, btts: 0 }, recent: [] }, lbAdd = (o, k, hit) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; };
+  const LB = { n: 0, hits: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, draw: 0, away: 0, over: 0, btts: 0 }, recent: [] }, lbAdd = (o, k, hit, pk) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; if (pk) (x.ks || (x.ks = {}))[pk] = (x.ks[pk] || 0) + 1; }; // ks: which kinds of pick are inside, so the page can work out what chance alone would score
   // Per-league scorecard and goals-market calibration (v2 / v4 / Forebet), built from every graded game.
   const perLg = new Map(), GB = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60 to 69%', 60, 70], ['70% and up', 70, 101]];
   const calG = { over: { v2: [], v4: [], fb: [] }, btts: { v2: [], v4: [], fb: [] } };
@@ -385,9 +385,9 @@ async function tally(env) {
       }
       if (c.mine && c.final) { mineT.n++; mineT.model += c.grade.v2.outcomeHit ? 1 : 0; mineT.mine += c.mine === (c.final.h > c.final.a ? 'H' : c.final.h === c.final.a ? 'D' : 'A') ? 1 : 0; }
       if (c.lean && c.final) {
-        const L = c.lean; LB.n++; LB.hits += L.hit ? 1 : 0; lbAdd(LB.byKind, L.k, L.hit); lbAdd(LB.byKey, L.key, L.hit);
-        if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.y} of ${L.a}`, L.hit);
-        LB.base.home += c.final.h > c.final.a ? 1 : 0; LB.base.over += c.final.h + c.final.a >= 3 ? 1 : 0; LB.base.btts += c.final.h > 0 && c.final.a > 0 ? 1 : 0;
+        const L = c.lean; LB.n++; LB.hits += L.hit ? 1 : 0; lbAdd(LB.byKind, L.k, L.hit, L.key); lbAdd(LB.byKey, L.key, L.hit);
+        if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.y} of ${L.a}`, L.hit, L.key);
+        LB.base.home += c.final.h > c.final.a ? 1 : 0; LB.base.draw += c.final.h === c.final.a ? 1 : 0; LB.base.away += c.final.h < c.final.a ? 1 : 0; LB.base.over += c.final.h + c.final.a >= 3 ? 1 : 0; LB.base.btts += c.final.h > 0 && c.final.a > 0 ? 1 : 0;
         LB.recent.push({ date: day.date, kickoff: c.kickoff, home: c.home, away: c.away, leagueName: c.leagueName, final: c.final, k: L.k, key: L.key, p: L.p, y: L.y, a: L.a, hit: !!L.hit });
       }
       live.push({ date: day.date, ...c });
