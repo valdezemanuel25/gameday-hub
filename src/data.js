@@ -282,7 +282,8 @@ export async function fixturesForLeague(league, date, debug) {
 // game (where props such as Both teams to score would live) and reports what each one returns, so we can see where the data is, if anywhere.
 export async function rawOdds(slug, date) {
   const j = await getJson(`${BASE}/${slug}/scoreboard?dates=${String(date).replace(/-/g, '')}&limit=300`, []);
-  const evs = (j?.events || []).slice(0, 3), out = { games: evs.map(ev => ({ id: ev.id, name: ev.name, odds: ev.competitions?.[0]?.odds ?? null })), probes: [] };
+  const strip = o => JSON.parse(JSON.stringify(o ?? null, (k, v) => (k === 'link' || k === 'logos' || k === 'tracking' ? undefined : v))); // links and logos only bury the prices
+  const evs = (j?.events || []).slice(0, 1), out = { probes: [], games: evs.map(ev => ({ id: ev.id, name: ev.name, odds: strip(ev.competitions?.[0]?.odds) })) }; // probes first so they are never cut off
   const ev = evs[0]; if (!ev) return out;
   const core = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/events/${ev.id}/competitions/${ev.id}`;
   const probe = async (label, url) => {
