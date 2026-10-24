@@ -1124,7 +1124,7 @@ function oddsBar() {
   const L = oddsLeagues(), n = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now()).length;
   if (!n) return '';
   const priced = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now() && c.odds).length;
-  return `<div class="oddsbar"><button type="button" class="btn g" data-oddsrefresh="1">Refresh prices</button><small id="oddsmsg">${priced} of ${n} first-division picks have a price. Reads each first-division league (${L.length}) for this day only.</small></div><div style="margin:4px 18px 0"><button type="button" class="btn g" data-oddsraw="1" style="width:auto;padding:6px 12px;font-size:12px">Check raw prices</button><pre id="oddsraw" style="white-space:pre-wrap;word-break:break-all;font-size:10.5px;color:var(--faint);margin:6px 0 0;max-height:260px;overflow:auto"></pre></div>`;
+  return `<div class="oddsbar"><button type="button" class="btn g" data-oddsrefresh="1">Refresh prices</button><small id="oddsmsg">${priced} of ${n} first-division picks have a price. Reads each first-division league (${L.length}) for this day only.</small></div><div style="margin:4px 18px 0"><button type="button" class="btn g" data-oddsraw="1" style="width:auto;padding:6px 12px;font-size:12px">Check raw prices</button><pre id="oddsraw" style="white-space:pre-wrap;word-break:break-all;font-size:10.5px;color:var(--faint);margin:6px 0 0;max-height:420px;overflow:auto"></pre></div>`;
 }
 function mbetsToday() {
   const rows = (day.cards || []).filter(c => c.v2 && !SECOND_DIV.includes(c.leagueKey)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
@@ -1462,7 +1462,7 @@ document.addEventListener('click', async e => {
   if (orw) {
     const L = oddsLeagues(), out = $('#oddsraw'); if (!L.length || !out) return;
     out.textContent = 'Reading…';
-    try { const r = await api('/api/odds-raw?date=' + S.date + '&league=' + L[0]); out.textContent = JSON.stringify(r, null, 1).slice(0, 4000); } catch (er) { out.textContent = er.message; }
+    try { const r = await api('/api/odds-raw?date=' + S.date + '&league=' + L[0]); out.textContent = JSON.stringify(r, null, 1).slice(0, 6000); } catch (er) { out.textContent = er.message; }
     return;
   }
   const orf = e.target.closest('[data-oddsrefresh]');

@@ -278,8 +278,22 @@ export async function fixturesForLeague(league, date, debug) {
   return evs.filter(e => localDate(e.date) === date).sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
-// What ESPN sends for a game's odds, untouched, for the "check raw prices" button (shows whether props like Both score are in the feed at all).
+// What ESPN sends for a game's odds, untouched, for the "check raw prices" button. It also tries ESPN's other odds endpoints for the first
+// game (where props such as Both teams to score would live) and reports what each one returns, so we can see where the data is, if anywhere.
 export async function rawOdds(slug, date) {
   const j = await getJson(`${BASE}/${slug}/scoreboard?dates=${String(date).replace(/-/g, '')}&limit=300`, []);
-  return (j?.events || []).slice(0, 3).map(ev => ({ id: ev.id, name: ev.name, odds: ev.competitions?.[0]?.odds ?? null }));
+  const evs = (j?.events || []).slice(0, 3), out = { games: evs.map(ev => ({ id: ev.id, name: ev.name, odds: ev.competitions?.[0]?.odds ?? null })), probes: [] };
+  const ev = evs[0]; if (!ev) return out;
+  const core = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/events/${ev.id}/competitions/${ev.id}`;
+  const probe = async (label, url) => {
+    try {
+      const res = await fetch(url, { headers: { 'user-agent': 'gameday-hub/1.0' } }), text = await res.text();
+      let body = text.slice(0, 1500); try { const o = JSON.parse(text); body = { keys: Object.keys(o).slice(0, 20), count: o.count ?? null, items: (o.items || []).slice(0, 4).map(i => i.$ref || i.provider?.name || Object.keys(i).slice(0, 8)) }; } catch (e) { /* not JSON: keep the text */ }
+      out.probes.push({ label, url: url.replace('https://sports.core.api.espn.com/v2/sports/soccer/', ''), status: res.status, body });
+    } catch (e) { out.probes.push({ label, status: 'failed', body: String(e.message || e).slice(0, 80) }); }
+  };
+  await probe('core odds', `${core}/odds`);
+  await probe('props (provider 100)', `${core}/odds/100/propBets?limit=50`);
+  await probe('props (provider 58)', `${core}/odds/58/propBets?limit=50`);
+  return out;
 }
