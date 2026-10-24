@@ -10,6 +10,7 @@ import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
+import { addStrats } from './strats.js';
 import { leanPick, leanHit } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine } from './nhl.js';
@@ -316,6 +317,7 @@ async function tally(env) {
   const promoV2 = blank(), promoV4 = blank(), v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [], mineT = { n: 0, mine: 0, model: 0 };
   // Model bets: every card's headline pick, locked when the game was graded. Counted by strength, by kind of pick and by how many models backed it.
+  const TB = { strats: {}, base: { n: 0, home: 0, draw: 0, away: 0, over: 0, btts: 0 } };
   const LB = { n: 0, hits: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, draw: 0, away: 0, over: 0, btts: 0 }, recent: [] }, lbAdd = (o, k, hit, pk) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; if (pk) (x.ks || (x.ks = {}))[pk] = (x.ks[pk] || 0) + 1; }; // ks: which kinds of pick are inside, so the page can work out what chance alone would score
   // Per-league scorecard and goals-market calibration (v2 / v4 / Forebet), built from every graded game.
   const perLg = new Map(), GB = [['Under 40%', 0, 40], ['40 to 49%', 40, 50], ['50 to 59%', 50, 60], ['60 to 69%', 60, 70], ['70% and up', 70, 101]];
@@ -379,6 +381,7 @@ async function tally(env) {
         const gs = c.final.h + c.final.a, bs = c.final.h > 0 && c.final.a > 0, r = lgRow(c);
         r.n++; add(r.v2, c.grade.v2); if (g4) add(r.v4, g4);
         if (c.fb) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { r.fb.n++; r.fb.outcome += f.outcomeHit; r.fb.brier += f.brier; } if (f.ouHit != null) r.fb.ou += f.ouHit; if (f.bttsHit != null) r.fb.btts += f.bttsHit; }
+        addStrats(TB, c, day.date, leanHit);
         calAdd('over', 'v2', c.v2.over, gs >= 3); calAdd('btts', 'v2', c.v2.btts, bs);
         if (c.v4 && !promo) { calAdd('over', 'v4', c.v4.over, gs >= 3); calAdd('btts', 'v4', c.v4.btts, bs); }
         if (c.fb) { calAdd('over', 'fb', c.fb.over, gs >= 3); calAdd('btts', 'fb', c.fb.btts, bs); }
@@ -430,7 +433,7 @@ async function tally(env) {
   const leagues = [...perLg.values()].sort((a, b) => b.n - a.n).map(r => ({ slug: r.slug, name: r.name, n: r.n, v2: sc(r.v2), v4: sc(r.v4), fb: sc(r.fb) }));
   const calGoals = Object.fromEntries(Object.entries(calG).map(([m, o]) => [m, Object.fromEntries(Object.entries(o).map(([k, bs]) => [k, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]))]));
   return {
-    board, last30, top: topT, leans: { ...LB, recent: LB.recent.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || '')).slice(0, 40) }, leagues, calGoals,
+    board, last30, top: topT, tracked: TB, leans: { ...LB, recent: LB.recent.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || '')).slice(0, 40) }, leagues, calGoals,
     smCompare: {
       ...smT, importedMatches: legacySm.length, newMatches: smLive.length,
       recent: smLive.slice(0, 100).map(c => ({ date: c.date, home: c.home, away: c.away, final: c.final, modelPick: c.v2.pick, modelP: c.v2.p, sm: c.sm.text, hit: c.grade.v2, smHit: c.smGrade })),
