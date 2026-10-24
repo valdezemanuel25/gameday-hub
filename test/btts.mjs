@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { parseBtts, matchEvent, fetchBtts } from '../src/btts.js';
+import { priceFor } from '../src/pick.js';
+const ev = { bookmakers: [{ key: 'fanduel', markets: [{ key: 'btts', outcomes: [{ name: 'Yes', price: -120 }, { name: 'No', price: 100 }] }] }, { key: 'draftkings', markets: [{ key: 'btts', outcomes: [{ name: 'Yes', price: -135 }, { name: 'No', price: 105 }] }] }] };
+assert.deepEqual(parseBtts(ev), { by: -135, bn: 105, bk: 'draftkings' });
+assert.equal(parseBtts({ bookmakers: [] }), null);
+const card = { id: '1', home: 'Aston Villa', away: 'Manchester City', kickoff: '2026-10-24T14:00:00Z' };
+const events = [{ id: 'e1', home_team: 'Aston Villa', away_team: 'Manchester City', commence_time: '2026-10-24T14:00:00Z' }, { id: 'e2', home_team: 'Chelsea', away_team: 'Arsenal', commence_time: '2026-10-24T14:00:00Z' }];
+assert.equal(matchEvent(card, events).id, 'e1');
+assert.equal(matchEvent({ ...card, kickoff: '2026-10-25T14:00:00Z' }, events), null);
+const f = async u => ({ ok: true, headers: { get: () => '480' }, json: async () => u.includes('/events?') ? events : ev });
+const r = await fetchBtts('k', 'eng.1', [card, { id: '2', home: 'X', away: 'Y', kickoff: card.kickoff }], f);
+assert.equal(r.prices.get('1').by, -135); assert.equal(r.left, 480); assert.equal(r.skipped.length, 1);
+assert.equal((await fetchBtts('', 'eng.1', [card], f)).error.includes('ODDS_API_KEY'), true);
+assert.equal(priceFor({ by: -135, bn: 105 }, 'B'), -135); assert.equal(priceFor({ by: -135, bn: 105 }, 'N'), 105);
+console.log('btts ok');

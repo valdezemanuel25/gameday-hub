@@ -1101,7 +1101,7 @@ function trackedView() {
 // Prices (American odds, from ESPN's sportsbook block) are shown next to a pick for first divisions only. They never feed a model.
 const needP = m => m < 0 ? -m / (-m + 100) * 100 : 100 / (m + 100) * 100;
 const fmtOdds = m => (m > 0 ? '+' : '') + m;
-function priceFor(c, key) { const o = c.odds; if (!o) return null; const m = ({ H: o.h, D: o.d, A: o.a, O: o.tl === 2.5 ? o.to : null, U: o.tl === 2.5 ? o.tu : null })[key]; return Number.isFinite(m) ? m : null; }
+function priceFor(c, key) { const o = c.odds; if (!o) return null; const m = ({ H: o.h, D: o.d, A: o.a, O: o.tl === 2.5 ? o.to : null, U: o.tl === 2.5 ? o.tu : null, B: o.by, N: o.bn })[key]; return Number.isFinite(m) ? m : null; }
 // The model's chance that the game total goes over / under a book line (half lines only), from v2's expected goals.
 function pTotal(c, line, over) { const lam = c.v2 && c.v2.lam ? c.v2.lam[0] + c.v2.lam[1] : null; if (lam == null || line % 1 !== 0.5) return null; let term = Math.exp(-lam), cdf = 0; for (let i = 0; i <= Math.floor(line); i++) { cdf += term; term *= lam / (i + 1); } return Math.round(100 * (over ? 1 - cdf : cdf)); }
 function priceLine(c, L) {
@@ -1124,7 +1124,7 @@ function oddsBar() {
   const L = oddsLeagues(), n = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now()).length;
   if (!n) return '';
   const priced = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now() && c.odds).length;
-  return `<div class="oddsbar"><button type="button" class="btn g" data-oddsrefresh="1">Refresh prices</button><small id="oddsmsg">${priced} of ${n} first-division picks have a price. Reads each first-division league (${L.length}) for this day only.</small></div><div style="margin:4px 18px 0"><button type="button" class="btn g" data-oddsraw="1" style="width:auto;padding:6px 12px;font-size:12px">Check raw prices</button><pre id="oddsraw" style="white-space:pre-wrap;word-break:break-all;font-size:10.5px;color:var(--faint);margin:6px 0 0;max-height:420px;overflow:auto"></pre></div>`;
+  return `<div class="oddsbar"><button type="button" class="btn g" data-oddsrefresh="1">Refresh prices</button><small id="oddsmsg">${priced} of ${n} first-division picks have a price. Reads each first-division league (${L.length}) for this day only.</small></div><div style="margin:4px 18px 0"><button type="button" class="btn g" data-btts="1" style="width:auto;padding:6px 12px;font-size:12px">Get Both-score prices</button> <button type="button" class="btn g" data-oddsraw="1" style="width:auto;padding:6px 12px;font-size:12px">Check raw prices</button><pre id="oddsraw" style="white-space:pre-wrap;word-break:break-all;font-size:10.5px;color:var(--faint);margin:6px 0 0;max-height:420px;overflow:auto"></pre></div>`;
 }
 function mbetsToday() {
   const rows = (day.cards || []).filter(c => c.v2 && !SECOND_DIV.includes(c.leagueKey)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
@@ -1456,6 +1456,21 @@ document.addEventListener('click', async e => {
       msg.textContent = `Saved ${r.saved}. ${r.alreadyHad ? r.alreadyHad + ' already had a pick. ' : ''}${r.started ? r.started + ' already started (skipped). ' : ''}${r.notFound.length ? "Couldn't match: " + r.notFound.join(', ') + '.' : ''}`;
       if (r.saved) { delete counts[S.date]; tally = null; await loadDay(); }
     } catch (er) { msg.textContent = er.message; }
+    return;
+  }
+  const bt = e.target.closest('[data-btts]');
+  if (bt) {
+    const L = oddsLeagues(), out = $('#oddsraw'), dt = S.date; if (!L.length || !out) return;
+    bt.disabled = true; let games = 0, priced = 0, left = null, skipped = [];
+    try {
+      for (let i = 0; i < L.length; i++) {
+        out.textContent = `Reading Both-score prices… ${i + 1} of ${L.length} leagues`;
+        const r = await post('/api/btts', { date: dt, league: L[i] }); if (r.error) throw new Error(r.error);
+        games += r.games || 0; priced += r.priced || 0; if (r.left != null) left = r.left; skipped = skipped.concat(r.skipped || []);
+      }
+      await loadDay(dt); render();
+      const o2 = $('#oddsraw'); if (o2) o2.textContent = `Both-score prices: ${priced} of ${games} games.${skipped.length ? ' No match for: ' + skipped.join(', ') + '.' : ''}${left != null ? ' Credits left this month: ' + left + '.' : ''}`;
+    } catch (er) { out.textContent = er.message; bt.disabled = false; }
     return;
   }
   const orw = e.target.closest('[data-oddsraw]');

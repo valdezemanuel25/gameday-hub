@@ -11,6 +11,7 @@ import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { addStrats } from './strats.js';
+import { fetchBtts } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine } from './nhl.js';
@@ -195,7 +196,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     // Once the game has kicked off the v4 made before it stands: a later re-analysis must not wipe it.
     if (old?.v4 && new Date(f.date).getTime() <= now.getTime()) { card.v4 = old.v4; why = null; if (old.v4why) delete card.v4why; }
     if (!card.v4 && why) card.v4why = why;
-    if (FIRST_DIV.has(slug) && f.odds) card.odds = f.odds;
+    if (FIRST_DIV.has(slug) && f.odds) card.odds = { ...f.odds, ...(old?.odds && old.odds.by != null ? { by: old.odds.by, bn: old.odds.bn } : {}) };
     if (old?.odds && (!card.odds || new Date(f.date).getTime() <= now.getTime())) card.odds = old.odds; // the price from before kickoff stands
     if (old?.sm) card.sm = old.sm;
     if (old?.note) card.note = old.note;
@@ -238,12 +239,23 @@ export async function refreshOdds(env, date, slug, now = new Date()) {
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
   const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
   let changed = 0, priced = 0;
-  for (const c of open) { const o = byId.get(c.id)?.odds; if (o) priced++; if (o && JSON.stringify(o) !== JSON.stringify(c.odds)) { c.odds = o; changed++; } }
+  for (const c of open) { const o = byId.get(c.id)?.odds; if (o) priced++; if (o) { const n = { ...o, ...(c.odds && c.odds.by != null ? { by: c.odds.by, bn: c.odds.bn } : {}) }; if (JSON.stringify(n) !== JSON.stringify(c.odds)) { c.odds = n; changed++; } } }
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { games: open.length, priced, changed };
 }
 // Background: look at ONE first-division league per run (each at most every 6 hours, remembered in the free edge cache so it costs no
 // KV writes). Display only; no model reads a price.
+export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) {
+  if (!FIRST_DIV.has(slug)) return { error: 'Prices are only read for first divisions' };
+  const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0 };
+  const open = (day.cards || []).filter(c => c.league === slug && c.v2 && !c.final && new Date(c.kickoff).getTime() > now.getTime());
+  if (!open.length) return { games: 0, priced: 0 };
+  const r = await fetchBtts(env.ODDS_API_KEY, slug, open, f); if (r.error) return { error: r.error };
+  let changed = 0;
+  for (const c of open) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn }; changed++; } }
+  if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  return { games: open.length, priced: r.prices.size, skipped: r.skipped, left: r.left };
+}
 export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
   const t = localDate(now.toISOString());
   for (const date of [t, addDays(t, 1)]) {
@@ -682,6 +694,7 @@ const hub = {
     }
     if (p === '/api/candidates') return json(await candidates(q('date') || today(), env));
     if (p === '/api/odds-raw') { try { const lg = leagueBySlug(String(url.searchParams.get('league') || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ league: lg.slug, games: await rawOdds(lg.slug, String(url.searchParams.get('date') || '')) }); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
+    if (req.method === 'POST' && p === '/api/btts') { try { const b = await req.json(); return json(await refreshBtts(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Both score prices: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/odds') { try { const b = await req.json(); return json(await refreshOdds(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Prices: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/assign') { try { const b = await req.json(); const lg = leagueBySlug(String(b.league || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ ok: true, ...(await assignCandidate(String(b.date || ''), lg.slug, String(b.id || ''), String(b.key || ''), env, new Date(), { dismiss: !!b.dismiss })) }); } catch (e) { return json({ error: `Assign: ${e && e.message ? e.message : e}` }, 500); } }
     if (p.startsWith('/api/bets')) { // bet analyzer and tracker
