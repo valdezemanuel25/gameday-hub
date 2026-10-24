@@ -1138,9 +1138,14 @@ function oddsBar() {
   const priced = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now() && c.odds).length;
   return `<div class="oddsbar"><button type="button" class="btn g" data-oddsrefresh="1">Refresh prices</button><small id="oddsmsg">${priced} of ${n} first-division picks have a price. Reads each first-division league (${L.length}) for this day only.</small></div><div style="margin:4px 18px 0"><button type="button" class="btn g" data-btts="1" style="width:auto;padding:6px 12px;font-size:12px">Get Both-score prices</button> <button type="button" class="btn g" data-oddsraw="1" style="width:auto;padding:6px 12px;font-size:12px">Check raw prices</button><pre id="oddsraw" style="white-space:pre-wrap;word-break:break-all;font-size:10.5px;color:var(--faint);margin:6px 0 0;max-height:420px;overflow:auto"></pre></div>`;
 }
+function vdRank({ c, L }) {
+  if (!L || !FIRST.has(c.league)) return 3;
+  const m = L.price != null ? L.price : priceFor(c, L.key); if (m == null || L.p == null) return 3;
+  const d = L.p - needP(m); return d >= 5 ? 0 : d <= -5 ? 2 : 1;
+}
 function mbetsToday() {
   const rows = (day.cards || []).filter(c => c.v2 && !SECOND_DIV.includes(c.leagueKey)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
-    .sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
+    .sort((a, b) => vdRank(a) - vdRank(b) || new Date(a.c.kickoff) - new Date(b.c.kickoff)); // Value, then Fair price, then Not worth it, then no price; earliest start first within each
   if (!rows.length) return `<div class="small" style="margin:8px 4px 0">No picks for this day yet. Analyze the day on the Board first.</div>`;
   return rows.map(({ c, L }) => {
     if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><small>This game was already over when the Hub first saw it.</small></div>`;
