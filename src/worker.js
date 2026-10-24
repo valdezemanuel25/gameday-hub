@@ -1,7 +1,7 @@
 import { v2, grade, pickOutcome, bestBet } from './model.js';
 import { usualOverSide, supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
-  TZ, LEAGUES, UNTRACKED, FIRST_DIV, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
+  TZ, LEAGUES, UNTRACKED, isCounted, FIRST_DIV, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
   findTeam, getContext, missingContexts, fixturesForLeague, rawOdds, shotsCoverage,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
@@ -395,7 +395,7 @@ async function tally(env) {
   for (const k of list.keys) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
-      if (!c.grade || day.date <= LEGACY_THROUGH || UNTRACKED.has(c.league)) continue;
+      if (!c.grade || day.date <= LEGACY_THROUGH || !isCounted(c.league, day.date)) continue;
       // v4 on a newly promoted club (starting rating) is its own line: it stays out of every v4 total below.
       const promo = !!(c.v4 && c.v4.promo), g4 = promo ? null : c.grade.v4;
       if (promo && c.grade.v4 && c.grade.v2) { add(promoV2, c.grade.v2); add(promoV4, c.grade.v4); }

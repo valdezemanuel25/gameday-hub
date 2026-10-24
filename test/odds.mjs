@@ -22,7 +22,7 @@ ok('bands: -500 and -300 short, -200 and -150 next, -110 and +140 middle, +150 l
   const now = new Date('2026-10-24T15:00:00Z'), kv = new Map(), writes = [];
   const date = '2026-10-24', soon = '2026-10-24T20:00:00Z', started = '2026-10-24T14:00:00Z';
   kv.set('day:' + date, JSON.stringify({ date, cards: [
-    { id: '1', league: 'eng.1', kickoff: soon, home: 'A', away: 'B', v2: {} }, { id: '2', league: 'eng.1', kickoff: started, home: 'C', away: 'D', v2: {} }, { id: '3', league: 'eng.2', kickoff: soon, home: 'E', away: 'F', v2: {} }] }));
+    { id: '1', league: 'eng.1', kickoff: soon, home: 'A', away: 'B', v2: {} }, { id: '2', league: 'eng.1', kickoff: started, home: 'C', away: 'D', v2: {} }, { id: '3', league: 'esp.2', kickoff: soon, home: 'E', away: 'F', v2: {} }] }));
   const env = { HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv.set(k, v); writes.push(k); } } };
   const ev = (id, iso, odds) => ({ id, date: iso, competitions: [{ status: { type: { completed: false } }, competitors: [{ homeAway: 'home', team: { id: id + 'h', displayName: 'H' + id } }, { homeAway: 'away', team: { id: id + 'a', displayName: 'A' + id } }], odds }] });
   const board = [ev('1', soon, [{ moneyline: { home: { close: { odds: '-300' } }, draw: { close: { odds: '+400' } }, away: { close: { odds: '+800' } } } }]), ev('2', started, [{ moneyline: { home: { close: { odds: '-110' } } } }])];

@@ -477,7 +477,7 @@ function topView(cs) {
   return seg + `<div class="tcols ${m === 'all' ? 'all' : ''}">${body}</div>`;
 }
 /* ---------- assign tab: first-division games still waiting for a Forebet or SportsMole prediction ---------- */
-const FIRST = new Set(['eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1', 'usa.1', 'mex.1', 'bra.1']);
+const FIRST = new Set(['eng.2', 'eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1', 'usa.1', 'mex.1', 'bra.1']);
 let asg = null;
 async function loadAssign() {
   const ds = [0, 1, 2].map(o => addDays(S.date, o)), days = [], items = [];
@@ -670,7 +670,8 @@ function expanded(c) {
     </details></div></div>`;
 }
 const GAME_MS = 2 * 3600000;
-const SECOND_DIV = ['laliga2', 'bundesliga2', 'championship'];
+const SECOND_DIV = ['laliga2', 'bundesliga2', 'championship']; // no SportsMole page expected
+const UNCOUNTED = (c, date) => c.leagueKey === 'laliga2' || c.leagueKey === 'bundesliga2' || (c.leagueKey === 'championship' && date < '2026-10-24'); // Championship counts from 24 Oct 2026
 // Neon outline once every model for the game is in: v2, v4, Forebet, plus SportsMole (not needed in second divisions).
 const allIn = c => !!(c.v2 && c.v4 && c.fb && (SECOND_DIV.includes(c.leagueKey) || c.sm));
 const why = c => {
@@ -1144,7 +1145,7 @@ function vdRank({ c, L }) {
   const d = L.p - needP(m); return d >= 5 ? 0 : d <= -5 ? 2 : 1;
 }
 function mbetsToday() {
-  const rows = (day.cards || []).filter(c => c.v2 && !SECOND_DIV.includes(c.leagueKey)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
+  const rows = (day.cards || []).filter(c => c.v2 && !UNCOUNTED(c, day.date)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
     .sort((a, b) => vdRank(a) - vdRank(b) || new Date(a.c.kickoff) - new Date(b.c.kickoff)); // Value, then Fair price, then Not worth it, then no price; earliest start first within each
   if (!rows.length) return `<div class="small" style="margin:8px 4px 0">No picks for this day yet. Analyze the day on the Board first.</div>`;
   return rows.map(({ c, L }) => {

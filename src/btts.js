@@ -2,7 +2,7 @@
 // The key lives in the Worker secret ODDS_API_KEY, never in code. Button-only, so it cannot spend credits on its own.
 import { is as isName } from './forebetpage.js';
 
-export const SPORT = { 'eng.1': 'soccer_epl', 'ger.1': 'soccer_germany_bundesliga', 'esp.1': 'soccer_spain_la_liga', 'ita.1': 'soccer_italy_serie_a', 'fra.1': 'soccer_france_ligue_one', 'ned.1': 'soccer_netherlands_eredivisie', 'usa.1': 'soccer_usa_mls', 'mex.1': 'soccer_mexico_ligamx', 'bra.1': 'soccer_brazil_campeonato' };
+export const SPORT = { 'eng.2': 'soccer_efl_champ', 'eng.1': 'soccer_epl', 'ger.1': 'soccer_germany_bundesliga', 'esp.1': 'soccer_spain_la_liga', 'ita.1': 'soccer_italy_serie_a', 'fra.1': 'soccer_france_ligue_one', 'ned.1': 'soccer_netherlands_eredivisie', 'usa.1': 'soccer_usa_mls', 'mex.1': 'soccer_mexico_ligamx', 'bra.1': 'soccer_brazil_campeonato' };
 const BASE = 'https://api.the-odds-api.com/v4/sports';
 const HOUR = 3600e3;
 

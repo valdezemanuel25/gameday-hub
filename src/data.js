@@ -14,7 +14,10 @@ const STORE_V = 3;
 const CTX_V = 4; // contexts now carry dated history + rank // bump to discard cached results/contexts built by older code
 
 // Second divisions: cards stay on the Board, but their results are not counted in any record (the model's edge there is a third of the top flights').
-export const UNTRACKED = new Set(['esp.2', 'ger.2', 'eng.2']);
+export const UNTRACKED = new Set(['esp.2', 'ger.2']);
+// Championship counts in the records and Model bets from this day on (earlier days stay as they were).
+export const COUNT_FROM = { 'eng.2': '2026-10-24' };
+export const isCounted = (slug, date) => !UNTRACKED.has(slug) && (!COUNT_FROM[slug] || date >= COUNT_FROM[slug]);
 
 // Same order as the Hub's tabs. ls = league-strength key. calendar = season runs Jan-Dec.
 export const LEAGUES = [
@@ -81,7 +84,7 @@ function teamShots(c) {
 }
 
 // First divisions: the only leagues where a sportsbook price is shown next to a pick (display only, no model reads it).
-export const FIRST_DIV = new Set(['eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1', 'usa.1', 'mex.1', 'bra.1']);
+export const FIRST_DIV = new Set(['eng.2', 'eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1', 'usa.1', 'mex.1', 'bra.1']);
 // ESPN's odds block (DraftKings): American prices for home / draw / away and the Over/Under 2.5 line when it is offered. Anything missing is left out.
 const am = v => { if (v == null) return null; const t = String(v).trim().toUpperCase(); if (t === 'EVEN' || t === 'EV') return 100; const n = Number(t.replace('+', '')); return Number.isInteger(n) && Math.abs(n) >= 100 ? n : null; };
 export function parseOdds(list) {

@@ -22,3 +22,7 @@ let calls = 0; const f2 = async () => { calls++; throw new Error('should not fet
 const rr = await refreshBtts(env, '2026-10-24', 'eng.1', new Date(), f2);
 assert.equal(calls, 0); assert.equal(rr.priced, 1); assert.equal(rr.games, 1);
 console.log('btts skip ok');
+const { isCounted } = await import('../src/data.js');
+assert.equal(isCounted('eng.2', '2026-10-23'), false); assert.equal(isCounted('eng.2', '2026-10-24'), true);
+assert.equal(isCounted('esp.2', '2026-10-30'), false); assert.equal(isCounted('eng.1', '2026-10-23'), true);
+console.log('championship counting ok');
