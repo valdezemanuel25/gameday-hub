@@ -14,3 +14,11 @@ assert.equal(r.prices.get('1').by, -135); assert.equal(r.left, 480); assert.equa
 assert.equal((await fetchBtts('', 'eng.1', [card], f)).error.includes('ODDS_API_KEY'), true);
 assert.equal(priceFor({ by: -135, bn: 105 }, 'B'), -135); assert.equal(priceFor({ by: -135, bn: 105 }, 'N'), 105);
 console.log('btts ok');
+const { refreshBtts } = await import('../src/worker.js');
+const fut = new Date(Date.now() + 36e5).toISOString();
+const day = { cards: [{ id: '1', league: 'eng.1', v2: {}, home: 'Aston Villa', away: 'Manchester City', kickoff: fut, odds: { by: -110, bn: 100 } }] };
+const env = { ODDS_API_KEY: 'k', HUB: { get: async () => day, put: async () => {} } };
+let calls = 0; const f2 = async () => { calls++; throw new Error('should not fetch'); };
+const rr = await refreshBtts(env, '2026-10-24', 'eng.1', new Date(), f2);
+assert.equal(calls, 0); assert.equal(rr.priced, 1); assert.equal(rr.games, 1);
+console.log('btts skip ok');

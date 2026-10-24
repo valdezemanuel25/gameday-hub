@@ -250,11 +250,13 @@ export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) 
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && c.v2 && !c.final && new Date(c.kickoff).getTime() > now.getTime());
   if (!open.length) return { games: 0, priced: 0 };
-  const r = await fetchBtts(env.ODDS_API_KEY, slug, open, f); if (r.error) return { error: r.error };
+  const need = open.filter(c => !(c.odds && c.odds.by != null)), have = open.length - need.length; // already-priced games cost no credit
+  if (!need.length) return { games: open.length, priced: have, skipped: [], left: null };
+  const r = await fetchBtts(env.ODDS_API_KEY, slug, need, f); if (r.error) return { error: r.error };
   let changed = 0;
-  for (const c of open) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn }; changed++; } }
+  for (const c of need) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn }; changed++; } }
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
-  return { games: open.length, priced: r.prices.size, skipped: r.skipped, left: r.left };
+  return { games: open.length, priced: have + r.prices.size, skipped: r.skipped, left: r.left };
 }
 export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
   const t = localDate(now.toISOString());
