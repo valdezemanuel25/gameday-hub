@@ -20,6 +20,9 @@ export const V4 = {
   ITER: 20,
   WARM_ITER: 3,
   MIN_GAMES: 8,        // both clubs need this many games in the window, or v4 stays silent
+  // Dixon-Coles low-score correction (0 = plain Poisson); see grid(). Walk-forward on the seed (3,801 games, tools/backtest-v4.mjs):
+  // -0.04 cut 1X2 log loss by 0.0005 a game, better in both halves of the test window but small (z = 1.5). Cups keep plain Poisson.
+  RHO: -0.04,
   CAL_SLOPE: 0.55,     // how much of the model's own Over / BTTS signal is kept
   CAL_RECENT: 200,     // games used to find what the model says for an "average" game
   RATING_TTL_MS: 18 * 3600000,
@@ -38,13 +41,16 @@ export const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036
 const lg = p => { const q = Math.min(1 - 1e-6, Math.max(1e-6, p)); return Math.log(q / (1 - q)); };
 const sg = x => 1 / (1 + Math.exp(-x));
 
-// Poisson score grid, 0-8 goals each, normalised to 1.
-export function grid(lamH, lamA, withTop = true) {
+// Dixon-Coles factor for the four low scores (rho < 0 makes 0-0 and 1-1 likelier, 1-0 and 0-1 less likely); 1 everywhere else.
+export const dcTau = (x, y, lamH, lamA, rho) => !rho || x > 1 || y > 1 ? 1
+  : x === 0 && y === 0 ? Math.max(0, 1 - lamH * lamA * rho) : x === 0 ? Math.max(0, 1 + lamH * rho) : y === 0 ? Math.max(0, 1 + lamA * rho) : Math.max(0, 1 - rho);
+// Poisson score grid, 0-8 goals each, with the Dixon-Coles low-score correction, normalised to 1.
+export function grid(lamH, lamA, withTop = true, rho = V4.RHO) {
   const G = 9, ph = [Math.exp(-lamH)], pa = [Math.exp(-lamA)];
   for (let k = 1; k < G; k++) { ph[k] = ph[k - 1] * lamH / k; pa[k] = pa[k - 1] * lamA / k; }
   let home = 0, draw = 0, away = 0, over = 0, btts = 0, tot = 0; const sc = [];
   for (let x = 0; x < G; x++) for (let y = 0; y < G; y++) {
-    const p = ph[x] * pa[y]; tot += p; if (withTop) sc.push([x, y, p]);
+    const p = ph[x] * pa[y] * dcTau(x, y, lamH, lamA, rho); tot += p; if (withTop) sc.push([x, y, p]);
     if (x > y) home += p; else if (x === y) draw += p; else away += p;
     if (x + y >= 3) over += p; if (x > 0 && y > 0) btts += p;
   }

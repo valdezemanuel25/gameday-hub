@@ -34,7 +34,7 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 
 ## Tests
 
-- `npm test` runs all three:
+- `npm test` runs all of these (plus `test/market.mjs`, model vs market scoring, and `test/strats.mjs`, the v4 tracked-bet rules):
   - `test/verify.mjs`: the v2 math against your Arsenal–Lille card from Oct 13.
   - `test/parity.mjs`: the v2 model against **120 real cards from the old Hub** (expected goals, win/draw/loss, over/under, BTTS, top two scores). All 120 match.
   - `test/v4.mjs`: v4 club names line up with ESPN's, numbers match the research run, ratings cache and refresh.
@@ -43,8 +43,9 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 ## Known limits (read before trusting it)
 
 - **ESPN feed untested live.** It follows ESPN's public format but could not be run from the build environment. On first deploy, run Analyze for a day with games. If cards come back empty or skipped, open the browser console: the response lists any URL that failed. The standings feed is the most likely place for a mismatch; if it's missing, season totals fall back to the last ~50 days of results.
-- **v2 is verified.** v2 reproduces 120 of 120 old Hub cards exactly and is never changed.
-- **v4 is the shadow model (it replaced v3 on Oct 14, 2026).** It rates every club's attack and defence from about 2.5 years of league games (recent games count more, each result is judged against the opposition), turns that into a Poisson score grid like v2, and pulls Over 2.5 / both-score toward the league's recent scoring rate. In earlier-season tests it picked 2 to 4 points more winners than v2 and had lower log loss in Europe, MLS and Liga MX. It uses no betting odds. It covers the 11 league tabs (not cup games, and not a club with fewer than 8 games of history); everything else shows "no v4 prediction".
+- **v4 is the official model (since Oct 26, 2026).** On the tracked games v2 scored worse than always guessing the base rates, and v4 was the best of the three models (see `docs/model-review-2026-10-25.md`). The headline pick, Top picks, and the Tracked bets rules all run on v4; v2 is still worked out and shown next to it, and covers a game v4 has no numbers for.
+- **v2 is verified.** v2 reproduces 120 of 120 old Hub cards exactly and is never changed. Its old Tracked bets rules are kept with a frozen record under "Retired v2 rules".
+- **v4 (it replaced v3 on Oct 14, 2026)** rates every club's attack and defence from about 2.5 years of league games (recent games count more, each result is judged against the opposition), turns that into a Poisson score grid with the Dixon-Coles low-score correction (`V4.RHO` in `src/v4core.js`; a small gain, see the comment there), and pulls Over 2.5 / both-score toward the league's recent scoring rate. In earlier-season tests it picked 2 to 4 points more winners than v2 and had lower log loss in Europe, MLS and Liga MX. It uses no betting odds. It covers the 11 league tabs (not cup games, and not a club with fewer than 8 games of history); everything else shows "no v4 prediction".
 - **Where v4's history lives.** `src/v4seed.js` holds the game history from your CSV files (through Oct 12-14, 2026) and ratings fitted on it. The Hub adds the games it syncs afterwards, and a spare cron slot rebuilds one league's ratings about once a day (`rat:<league>` in KV, shown on the Status tab). Analyze only reads ratings, so it stays inside the free plan's 10 ms CPU limit. To rebuild the seed from newer CSVs: `node tools/make-v4-seed.mjs "<folder>"` (optional).
 - **The old v3 is retired.** Its 58-match record and any games it had already predicted stay under "Retired v3 shadow test" in Results. The v2 vs v4 record starts fresh on Oct 14, 2026.
 - **No xG.** ESPN has no expected-goals data, so v4 works from goals only. (Your 2026-27 CSVs for Europe do carry xG columns, but only for this season, which is too little to train on yet.)
@@ -52,6 +53,13 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 - **Cup games** (Champions League, Nations League) use each club's domestic form. A club outside the supported leagues is skipped with a note on the card.
 - **Not carried over from the Hub:** NHL, the Model vs SportsMole tab, scorer picks, and the old per-match result links. Old history rows have no kickoff times or leagues, so they show as a plain list.
 - **Mobile looks like the Hub but isn't pixel-tested.** Open it on your phone after deploy and tell me what looks off.
+
+## Models against the market
+
+* Prices (DraftKings, from ESPN) are recorded for every game that counts: the first divisions plus the Champions League and Europa League. Still display and scoring only: no model reads a price.
+* Each card keeps the first home / draw / away price the Hub saw (`odds.f`) and ESPN's opening line when it sends one (`odds.op`). The price at kickoff is the closing one (refreshed at most every 6 hours, so it can be a few hours old).
+* Results tab, "Models against the market" (`src/market.js`): each model against the market's own chances (margin removed) on the same games, by RPS and log loss; the best v4 share in a v4 + market mix (0% means v4 adds nothing the price does not already know); the headline picks' closing-line value; and v4's value bets (v4 5+ points over the price).
+* `python3 tools/score-backup.py <backup.json>` scores a backup the same way, plus calibration and the goals markets against the base rate.
 
 ## v4 cup shadow test (Champions League + Europa League)
 

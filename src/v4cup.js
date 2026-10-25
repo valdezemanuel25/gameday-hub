@@ -90,7 +90,7 @@ export function predictCup(R, comp, h, a) {
   const th = R?.t[h], ta = R?.t[a], mu = R?.mu[CUP.COMPS[comp]];
   if (!th || !ta || !mu) return null;
   if ((!th[3] && th[2] < CUP.MIN_CUP_GAMES) || (!ta[3] && ta[2] < CUP.MIN_CUP_GAMES)) return null;
-  const lh = mu[0] * th[0] * ta[1], la = mu[1] * ta[0] * th[1], p = grid(lh, la);
+  const lh = mu[0] * th[0] * ta[1], la = mu[1] * ta[0] * th[1], p = grid(lh, la, true, 0); // plain Poisson: the cup model was tested without the low-score correction
   return {
     lambda: { home: lh, away: la }, home: p.home, draw: p.draw, away: p.away,
     over25: p.over25, under25: 1 - p.over25, bttsYes: p.bttsYes, bttsNo: 1 - p.bttsYes,

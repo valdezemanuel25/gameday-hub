@@ -8,15 +8,19 @@
 //   DraftKings line. The line is taken from the card when the bet is placed and kept on the bet, so a later line move changes nothing.
 //   Settlement reads the finished score the Hub already grades from: a bet is stored once and settles by itself.
 
+import { V4, dcTau } from './v4core.js';
+import { CUP_MODEL } from './data.js';
+
 const MAXG = 11;
 export const LINES = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
 const MODELS = ['v2', 'v4', 'fb'];
+const CUP_GRID = new Set(CUP_MODEL.map(l => l.slug)); // v4's cup model is plain Poisson (see v4cup.js)
 
 function pois(l) { const p = [Math.exp(-l)]; for (let k = 1; k < MAXG; k++) p.push(p[k - 1] * l / k); return p; }
-// The model's score grid: P(home scores x, away scores y), rescaled to add up to 1.
-export function scoreGrid(lh, la) {
+// The model's score grid: P(home scores x, away scores y), rescaled to add up to 1. rho: v4's low-score correction (v2 has none).
+export function scoreGrid(lh, la, rho = 0) {
   const ph = pois(lh), pa = pois(la), cells = []; let tot = 0;
-  for (let x = 0; x < MAXG; x++) for (let y = 0; y < MAXG; y++) { const p = ph[x] * pa[y]; tot += p; cells.push([x, y, p]); }
+  for (let x = 0; x < MAXG; x++) for (let y = 0; y < MAXG; y++) { const p = ph[x] * pa[y] * dcTau(x, y, lh, la, rho); tot += p; cells.push([x, y, p]); }
   return cells.map(([x, y, p]) => [x, y, p / tot]);
 }
 
@@ -91,7 +95,7 @@ export function jointProb(c, legs, m, force = false) {
   const s = srcOf(c, m, legs[0]); if (!s || !s.lam) return null;
   if (isNhl(legs[0])) return hockeyJoint(s.lam, legs);
   const tests = legs.map(test); let sum = 0;
-  for (const [x, y, p] of scoreGrid(s.lam[0], s.lam[1])) if (tests.every(f => f(x, y))) sum += p;
+  for (const [x, y, p] of scoreGrid(s.lam[0], s.lam[1], m === 'v4' && !CUP_GRID.has(c.league) ? V4.RHO : 0)) if (tests.every(f => f(x, y))) sum += p;
   return sum;
 }
 export const gameKey = l => `${l.date}|${l.league}|${l.id}`;

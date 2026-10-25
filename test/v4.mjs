@@ -18,8 +18,10 @@ ok('an unknown club resolves to nothing, never to a guess', resolve('eng.1', 'To
 ok('11 leagues supported, cups are not', Object.keys(V4.PARAMS).every(supports) && !supports('uefa.champions') && !supports('por.1'));
 
 // 2. same numbers as the research run for the Oct 14 MLS card (rounded %: home/draw/away and expected goals exactly;
-//    Over 2.5 / both-score within 1 point, because here the league average is taken from today's ratings)
-const R = { ...seed['usa.1'].r, v: 1 };
+//    Over 2.5 / both-score within 1 point, because here the league average is taken from today's ratings).
+//    The research run used plain Poisson, so the low-score correction is switched off for this block only.
+const R = { ...seed['usa.1'].r, v: 1 }, RHO = V4.RHO;
+V4.RHO = 0;
 const frozen = [
   ['CF Montréal', 'Atlanta United FC', '41/26/33', '1.41-1.25', 59, 60],
   ['Columbus Crew', 'Charlotte FC', '38/24/38', '1.54-1.52', 64, 64],
@@ -32,6 +34,14 @@ for (const [h, a, hda, xg, o, b] of frozen) {
   const p = predict(R, resolve('usa.1', h), resolve('usa.1', a));
   const got = `${pc(p.home)}/${pc(p.draw)}/${pc(p.away)}`, gx = `${p.lambda.home.toFixed(2)}-${p.lambda.away.toFixed(2)}`;
   ok(`MLS ${h} v ${a}: ${hda}, xG ${xg}, Over ${o}, both ${b}`, got === hda && gx === xg && Math.abs(pc(p.over25) - o) <= 1 && Math.abs(pc(p.bttsYes) - b) <= 1, `got ${got} ${gx} ${pc(p.over25)} ${pc(p.bttsYes)}`);
+}
+V4.RHO = RHO;
+// 2b. the Dixon-Coles correction: same expected goals, a little more draw, still adds up to 1
+{
+  const q0 = (V4.RHO = 0, predict(R, 'CF Montréal', 'Atlanta United FC')); V4.RHO = RHO;
+  const q1 = predict(R, 'CF Montréal', 'Atlanta United FC');
+  ok('low-score correction is on (rho below 0)', V4.RHO < 0);
+  ok('it keeps expected goals and adds draw chance', q1.lambda.home === q0.lambda.home && q1.draw > q0.draw && Math.abs(q1.home + q1.draw + q1.away - 1) < 1e-9, `${q0.draw} -> ${q1.draw}`);
 }
 const p0 = predict(R, 'LAFC', 'Austin FC');
 ok('probabilities add up to 1 and Over/Under, Yes/No are complements', Math.abs(p0.home + p0.draw + p0.away - 1) < 1e-9 && Math.abs(p0.over25 + p0.under25 - 1) < 1e-9 && Math.abs(p0.bttsYes + p0.bttsNo - 1) < 1e-9);
