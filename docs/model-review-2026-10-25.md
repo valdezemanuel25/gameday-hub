@@ -44,6 +44,12 @@ To re-run on a newer backup: `python3 tools/score-backup.py <backup.json>`.
    - The Results tab has a "Models against the market" panel: RPS and log loss against the market, the best v4 + market mix, the headline picks' closing-line value, and v4's value bets.
 4. **`tools/score-backup.py`** scores a backup the same way as this review.
 
+5. **v2 hidden everywhere (follow-up, same day).**
+   - Every card's top bar, confidence tag, ✓/✗, Best bet line and model boxes now show v4.
+   - v2 no longer votes in the headline pick or the agree/split chips. With v4 alone, the pick is v4's own call ("no other model has numbers yet").
+   - The Results tab, winner calibration, SportsMole comparison and bet builder show v4 and Forebet. v2's record moved to a closed "Retired v2 record" section.
+   - v2 only shows, labelled "v2 (no v4)", on a game v4 has no numbers for.
+
 ## What to watch next
 
 - **The best-mix line.** Until the v4 share is clearly above 0% over a few hundred priced games, treat "Value" tags as unproven.

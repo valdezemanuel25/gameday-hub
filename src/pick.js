@@ -5,7 +5,8 @@
 //   The card leads with v4's winner pick (v4 has been the better winner model on tracked games). The other models still vote,
 //   and the kind says how many back it. A card with no v4 falls back to the old rule (consensusPick: what most models back).
 //   kind: 'best' (all models back v4's winner and v4 gives it at least 60%), 'lean' (a majority backs it), 'split' (no majority: v4's pick anyway),
-//         'solo' (no v4: only v2 had numbers, its own strongest pick).
+//         'solo' (only one model had numbers: v4 on its own, or v2 on a card with no v4, its own strongest pick).
+//   v2 was retired on Oct 26, 2026: it no longer votes when the card has v4.
 export const sideOfScore = (h, a) => (h > a ? 'H' : h < a ? 'A' : 'D');
 const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
 export const KEYS = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score', N: 'Not both score' };
@@ -14,8 +15,8 @@ export const KEYS = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U:
 function rowsOf(c) {
   const v = c.v2;
   const f = c.fb || {};
-  const M = [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
-  if (c.v4) M.push({ n: 'v4', w: c.v4.pick, p: c.v4.p, over: c.v4.over, btts: c.v4.btts, po: c.v4.over, pb: c.v4.btts });
+  // v2 was retired on Oct 26, 2026: it only votes on a card v4 has no numbers for.
+  const M = c.v4 && c.v4.p ? [{ n: 'v4', w: c.v4.pick, p: c.v4.p, over: c.v4.over, btts: c.v4.btts, po: c.v4.over, pb: c.v4.btts }] : [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
   if (f.p || f.score) M.push({ n: 'Forebet', w: f.p ? hda(f.p) : sideOfScore(f.score.h, f.score.a), p: f.p || null, over: f.over != null ? f.over : f.score ? (f.score.h + f.score.a >= 3 ? 100 : 0) : null, btts: f.btts != null ? f.btts : f.score ? (f.score.h > 0 && f.score.a > 0 ? 100 : 0) : null, po: f.over != null ? f.over : null, pb: f.btts != null ? f.btts : null });
   if (c.sm) M.push({ n: 'SportsMole', w: sideOfScore(c.sm.h, c.sm.a), p: null, over: c.sm.h + c.sm.a >= 3 ? 100 : 0, btts: c.sm.h > 0 && c.sm.a > 0 ? 100 : 0, po: null, pb: null });
   const O = [['H', m => m.w === 'H', m => m.p && m.p[0]], ['D', m => m.w === 'D', m => m.p && m.p[1]], ['A', m => m.w === 'A', m => m.p && m.p[2]],
@@ -48,7 +49,8 @@ export function leanPick(c) {
   const opts = [[q.p[0], 'H'], [q.p[1], 'D'], [q.p[2], 'A'], [q.over, 'O'], [typeof q.over === 'number' ? 100 - q.over : null, 'U'], [q.btts, 'B'], [typeof q.btts === 'number' ? 100 - q.btts : null, 'N']].filter(x => typeof x[0] === 'number');
   if (!opts.length) return base;
   const top = opts.reduce((m, x) => (x[0] > m[0] ? x : m)), key = top[1], p = Math.round(top[0]);
-  const r = rowsOf(c).find(x => x.key === key); if (!r || r.a.length < 2) return base;
+  const r = rowsOf(c).find(x => x.key === key); if (!r) return base;
+  if (r.a.length < 2) return { k: 'solo', key, p, y: 1, a: 1, by: ['v4'], no: [], src: 'v4' }; // no other model has numbers yet
   const maj = r.yes.length * 2 > r.a.length, all = r.no.length === 0;
   if (!maj) return { k: 'split', key, p, y: r.yes.length, a: r.a.length, by: ['v4'], no: [], src: 'v4' };
   return { k: all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src: 'v4' };
