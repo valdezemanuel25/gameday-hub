@@ -4,7 +4,7 @@
 //   Hockey: v2, v4 and Forebet take the same side (the Top tab's "All agree"), and/or all three land on the same side of the game's line.
 //   Second divisions and untracked leagues are left out, like every other record.
 // Storage: KV key 'push' holds { subs, sent } (one write when a device is added or removed, or when alerts go out) and 'push:vapid' holds the signing key.
-import { leanPick } from './pick.js';
+import { consensusPick } from './pick.js';
 
 const enc = new TextEncoder();
 export const b64u = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -85,7 +85,7 @@ const SKIP = new Set(['laliga2', 'bundesliga2', 'championship']);
 const KIND = { H: c => `${c.home} to win`, D: () => 'Draw', A: c => `${c.away} to win`, O: () => 'Over 2.5 goals', U: () => 'Under 2.5 goals', B: () => 'Both teams score', N: () => 'Not both teams score' };
 export function soccerAlert(c) {
   if (!c || !c.v2 || c.final || c.skipped || SKIP.has(c.leagueKey) || c.sport === 'nhl') return null;
-  const L = leanPick(c); if (!L || L.k !== 'best' || L.a < 3) return null;
+  const L = consensusPick(c); if (!L || L.k !== 'best' || L.a < 3) return null;
   return { title: `Best pick: ${KIND[L.key](c)}`, body: `${c.home} vs ${c.away} · ${c.ko || ''} · all ${L.a} models agree, ${L.p}%` };
 }
 export function hockeyAlert(c) {

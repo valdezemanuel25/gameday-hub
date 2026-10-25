@@ -1,19 +1,32 @@
 // Model bets: the headline pick as data, how it is graded, and that the page's copy of the rule matches the server's.
 import fs from 'fs';
-import { leanPick, leanHit, hockeyPick, hockeyHit } from '../src/pick.js';
+import { leanPick, consensusPick, leanHit, hockeyPick, hockeyHit } from '../src/pick.js';
 import { gradeCard } from '../src/nhl.js';
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
-const code = ['esc', 'strip', 'sideOfScore', 'hdaOf', 'leanPick', 'leanHit', 'headline'].map(grab).join('\n');
-const page = new Function(`const FIRST = new Set(), priceLine = () => ''; ${code}; return { leanPick, leanHit, headline };`)();
+const code = ['esc', 'strip', 'sideOfScore', 'hdaOf', 'rowsOf', 'consensusPick', 'leanPick', 'leanHit', 'headline'].map(grab).join('\n');
+const page = new Function(`const FIRST = new Set(), priceLine = () => ''; ${code}; return { leanPick, consensusPick, leanHit, headline };`)();
 let fails = 0; const ok = (n, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${x}`); };
 const mk = o => ({ home: 'Club Brugge', away: 'Lens', v2: { pick: 'H', p: [52, 26, 21], over: 66, btts: 58 }, v4: { pick: 'H', p: [60, 20, 20], over: 65, btts: 61 }, fb: { p: [48, 26, 26], over: 64, btts: 56 }, sm: { h: 2, a: 1, text: '2–1' }, ...o });
 // Brugge game: all four back Brugge, Over and both-score; the card leads with the most-backed, highest-average pick
-{ const l = leanPick(mk({}));
+{ const l = consensusPick(mk({}));
   ok('all four agree: the pick is a Best pick or Lean with everyone backing it', (l.k === 'best' || l.k === 'lean') && l.y === 4 && l.a === 4, JSON.stringify(l));
-  ok('the headline picks Over 2.5 (highest average of the all-agree markets)', l.key === 'O', JSON.stringify(l)); }
+  ok('the consensus rule still picks Over 2.5 (highest average of the all-agree markets); it now only drives the Best-pick alert', l.key === 'O', JSON.stringify(l)); }
+// the headline is v4's single strongest call (result, Over/Under 2.5 or both-score)
+{ const l = leanPick(mk({}));
+  ok('v4 rates Over 2.5 highest (65%) and all four back it: Best pick on Over', l.k === 'best' && l.key === 'O' && l.p === 65 && l.y === 4 && l.a === 4 && l.src === 'v4', JSON.stringify(l)); }
+{ const l = leanPick(mk({ v4: { pick: 'H', p: [50, 25, 25], over: 50, btts: 58 } }));
+  ok('Aston Villa-Man City shape: v4 BTTS 58% beats winner 50%, all four say both score', l.k === 'lean' && l.key === 'B' && l.p === 58 && l.y === 4 && l.a === 4, JSON.stringify(l)); }
+{ const l = leanPick(mk({ v4: { pick: 'H', p: [70, 15, 15], over: 55, btts: 50 } }));
+  ok('v4 winner is its strongest call: headline is the winner at 70%', l.key === 'H' && l.p === 70 && l.k === 'best', JSON.stringify(l)); }
+{ const l = leanPick(mk({ v4: { pick: 'A', p: [25, 25, 50], over: 50, btts: 50 } }));
+  ok('v4 backs the away side alone against three: Split, v4 still leads', l.k === 'split' && l.key === 'A' && l.by[0] === 'v4' && l.a === 4, JSON.stringify(l)); }
+{ const l = leanPick(mk({ v4: { pick: 'H', p: [50, 25, 25], over: 50, btts: 58 }, sm: { h: 1, a: 0, text: 'x' } }));
+  ok('3 of 4 back v4\'s both-score pick: Lean, SportsMole disagrees', l.k === 'lean' && l.key === 'B' && l.y === 3 && l.no.join() === 'SportsMole', JSON.stringify(l)); }
+{ const l = leanPick(mk({ v4: null })), b = consensusPick(mk({ v4: null }));
+  ok('no v4 on the card: the old consensus rule is used', JSON.stringify(l) === JSON.stringify(b), JSON.stringify(l)); }
 { const l = leanPick(mk({ v2: { pick: 'H', p: [40, 30, 30], over: 50, btts: 50 }, v4: { pick: 'A', p: [30, 30, 40], over: 50, btts: 50 }, fb: null, sm: null }));
-  ok('a 1-1 split is a Split with v2\'s own pick', l.k === 'split' && l.key === 'H', JSON.stringify(l)); }
+  ok('a 1-1 split is a Split led by v4 (its strongest call)', l.k === 'split' && l.by[0] === 'v4' && l.src === 'v4', JSON.stringify(l)); }
 { const l = leanPick(mk({ v4: null, fb: null, sm: null })); ok('v2 alone is solo', l.k === 'solo' && l.a === 1, JSON.stringify(l)); }
 ok('no v2, no pick', leanPick({ home: 'a', away: 'b' }) === null);
 const F = (h, a) => ({ h, a });

@@ -773,6 +773,12 @@ function splitText(c) {
 // The one line a card leads with: what most of the models back. Every model gets one vote on the result, Over/Under 2.5 and
 // both-score (SportsMole's vote comes from its score). A pick only leads when a majority backs it; with no majority the card says Split.
 function headline(c) {
+  const L = c.v4 && c.v4.p && typeof leanPick === 'function' ? leanPick(c) : null;
+  if (L && L.src === 'v4') { // v4 leads: its single strongest call, with the other models counted as agree / disagree on that same market
+    const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key], names = r => r.join(', ');
+    const ag = L.k === 'split' ? `<span class="ag">v4's pick · no majority across the models</span>` : L.no.length === 0 ? `<span class="ag all">v4's pick · all ${L.a} models agree</span>` : `<span class="ag">v4's pick · ${L.y} of ${L.a} back it (${names(L.by)}) · ${names(L.no)} disagree${L.no.length === 1 ? 's' : ''}</span>`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}</div>`;
+  }
   const v = c.v2, v4 = c.v4 || {}, f = c.fb || {};
   const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
   const M = [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
@@ -1098,8 +1104,9 @@ function triRows(c) {
 const hdaOf = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
 const LEAN_KEYS = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score', N: 'Not both score' };
 
-function leanPick(c) {
-  const v = c && c.v2; if (!v || !v.p) return null;
+// Every model's vote on every market (result, Over/Under 2.5, both-score), with how many were asked and the average chance.
+function rowsOf(c) {
+  const v = c.v2;
   const f = c.fb || {};
   const M = [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
   if (c.v4) M.push({ n: 'v4', w: c.v4.pick, p: c.v4.p, over: c.v4.over, btts: c.v4.btts, po: c.v4.over, pb: c.v4.btts });
@@ -1110,6 +1117,11 @@ function leanPick(c) {
     ['B', m => m.btts != null && m.btts > 50, m => m.pb], ['N', m => m.btts != null && m.btts < 50, m => (m.pb == null ? null : 100 - m.pb)]];
   const asked = o => M.filter(m => (o === 'H' || o === 'D' || o === 'A') ? true : (o === 'O' || o === 'U') ? m.over != null : m.btts != null);
   const rows = O.map(([key, back, pr]) => { const a = asked(key), yes = a.filter(back), ps = a.map(pr).filter(x => typeof x === 'number'); return { key, a, yes, no: a.filter(m => !back(m)), p: ps.length ? Math.round(ps.reduce((x, y) => x + y, 0) / ps.length) : null }; });
+  return rows;
+}
+function consensusPick(c) {
+  const v = c && c.v2; if (!v || !v.p) return null;
+  const rows = rowsOf(c);
   const score = r => [r.a.length ? r.yes.length / r.a.length : 0, r.yes.length, r.p == null ? 0 : r.p];
   const best = rows.filter(r => r.a.length >= 2).sort((x, y) => { const a = score(x), b = score(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; })[0];
   if (!best) {
@@ -1120,6 +1132,19 @@ function leanPick(c) {
   const maj = best.yes.length * 2 > best.a.length, all = best.yes.length === best.a.length;
   if (!maj) { const mx = Math.max(...v.p), wi = v.p.indexOf(mx); return { k: 'split', key: 'HDA'[wi], p: mx, y: best.yes.length, a: best.a.length, by: ['v2'], no: [] }; }
   return { k: all && best.p != null && best.p >= 60 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n) };
+}
+// The card's headline: v4's single strongest call (result, Over/Under 2.5 or both-score, whichever v4 rates highest), with the
+// other models counted as agree / disagree on that same market. A card with no v4 falls back to consensusPick.
+function leanPick(c) {
+  const base = consensusPick(c); if (!base) return null;
+  const q = c.v4; if (!q || !q.p) return base;
+  const opts = [[q.p[0], 'H'], [q.p[1], 'D'], [q.p[2], 'A'], [q.over, 'O'], [typeof q.over === 'number' ? 100 - q.over : null, 'U'], [q.btts, 'B'], [typeof q.btts === 'number' ? 100 - q.btts : null, 'N']].filter(x => typeof x[0] === 'number');
+  if (!opts.length) return base;
+  const top = opts.reduce((m, x) => (x[0] > m[0] ? x : m)), key = top[1], p = Math.round(top[0]);
+  const r = rowsOf(c).find(x => x.key === key); if (!r || r.a.length < 2) return base;
+  const maj = r.yes.length * 2 > r.a.length, all = r.no.length === 0;
+  if (!maj) return { k: 'split', key, p, y: r.yes.length, a: r.a.length, by: ['v4'], no: [], src: 'v4' };
+  return { k: all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src: 'v4' };
 }
 // Did the pick land on this final score? Over/Under use 2.5 goals.
 function leanHit(key, f) {
@@ -1205,7 +1230,7 @@ function mbetsToday() {
     if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><small>This game was already over when the Hub first saw it.</small></div>`;
     const st = c.lean ? (L.hit ? '<span class="mbs hit">Hit ✓</span>' : '<span class="mbs miss">Missed ✗</span>') : `<span class="mbs">${c.kickoff && new Date(c.kickoff) <= Date.now() ? 'In play' : 'Pending'}</span>`;
     return `<div class="mbg"><div class="mbt"><b>${esc(leanName(c, L.key))}</b>${st}</div><small>${esc(c.home)} vs ${esc(c.away)} · ${esc(c.ko || '')}${c.final ? ' · ' + c.final.h + '–' + c.final.a : ''}</small>
-      ${priceLine(c, L)}<small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.k === 'split' ? 'no majority, v2\'s own pick' : L.k === 'solo' ? 'only v2 had numbers' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
+      ${priceLine(c, L)}<small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.k === 'split' ? `no majority, ${esc((L.by || ['v2']).join(', '))}\'s own pick` : L.k === 'solo' ? 'only v2 had numbers' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
   }).join('');
 }
 function profitView(T) {
@@ -1236,7 +1261,7 @@ function mbetsView() {
     <div class="sec">Today's model bets<small>${esc(S.date === cfg.today ? 'Today' : S.date)}. Picks still update until the game starts.</small></div>${oddsBar()}<div class="mbl2">${mbetsToday()}</div>
     ${profitView(T)}
     ${trackedView()}
-    ${T.n ? `<div class="sec">By strength<small>Best pick: all models agree and average 60% or more. Lean: most agree. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k], expect(T.byKind[k]))).join('')}</div>
+    ${T.n ? `<div class="sec">By strength<small>The pick is v4's single strongest call (result, goals or both-score). Best pick: all models back it and v4 gives it 60% or more. Lean: most back it. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k], expect(T.byKind[k]))).join('')}</div>
     <div class="sec">By kind of pick<small>Chance = how often it happens in all these games. Edge = the hit rate minus chance.</small></div><div class="mbx">${keys.map(k => mbRow(MB_PLAIN[k], '', T.byKey[k], chance[k])).join('')}</div>
     ${backs.length ? `<div class="sec">By how many models agree</div><div class="mbx">${backs.map(k => mbRow(k.replace(' of ', ' of '), 'models back it', T.byBack[k], expect(T.byBack[k]))).join('')}</div>` : ''}
     <div class="sec">Recent model bets</div><div class="mbl2">${recent}</div>
