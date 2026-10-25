@@ -2,13 +2,15 @@
 // kept here so the server can lock the pick when a game is graded and the Model bets record can score it. test/pick.mjs checks both agree.
 //   Every model gives one vote on the result, on Over/Under 2.5 and on both-score (SportsMole's vote comes from its score).
 //   A pick only leads when most of the models that were asked back it. No odds are used anywhere.
-//   kind: 'best' (all agree and average at least 60%), 'lean' (a majority backs it), 'split' (no majority: v2's own pick),
-//         'solo' (only v2 had numbers: its own strongest pick).
+//   The card leads with v4's winner pick (v4 has been the better winner model on tracked games). The other models still vote,
+//   and the kind says how many back it. A card with no v4 falls back to the old rule (consensusPick: what most models back).
+//   kind: 'best' (all models back v4's winner and v4 gives it at least 60%), 'lean' (a majority backs it), 'split' (no majority: v4's pick anyway),
+//         'solo' (no v4: only v2 had numbers, its own strongest pick).
 export const sideOfScore = (h, a) => (h > a ? 'H' : h < a ? 'A' : 'D');
 const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
 export const KEYS = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score', N: 'Not both score' };
 
-export function leanPick(c) {
+export function consensusPick(c) {
   const v = c && c.v2; if (!v || !v.p) return null;
   const f = c.fb || {};
   const M = [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
@@ -30,6 +32,25 @@ export function leanPick(c) {
   const maj = best.yes.length * 2 > best.a.length, all = best.yes.length === best.a.length;
   if (!maj) { const mx = Math.max(...v.p), wi = v.p.indexOf(mx); return { k: 'split', key: 'HDA'[wi], p: mx, y: best.yes.length, a: best.a.length, by: ['v2'], no: [] }; }
   return { k: all && best.p != null && best.p >= 60 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n) };
+}
+
+// Who backs which result (home / draw / away), one vote per model. SportsMole's vote comes from its score.
+function winVotes(c) {
+  const f = c.fb || {}, V = [{ n: 'v2', w: c.v2.pick }];
+  if (c.v4) V.push({ n: 'v4', w: c.v4.pick });
+  if (f.p || f.score) V.push({ n: 'Forebet', w: f.p ? hda(f.p) : sideOfScore(f.score.h, f.score.a) });
+  if (c.sm) V.push({ n: 'SportsMole', w: sideOfScore(c.sm.h, c.sm.a) });
+  return V;
+}
+// The card's headline: v4's winner pick, with the other models counted as agree / disagree.
+export function leanPick(c) {
+  const base = consensusPick(c); if (!base) return null;
+  const w = c.v4 && c.v4.p && c.v4.pick, i = w ? 'HDA'.indexOf(w) : -1;
+  if (i < 0 || typeof c.v4.p[i] !== 'number') return base;
+  const V = winVotes(c), yes = V.filter(m => m.w === w), no = V.filter(m => m.w !== w), p = c.v4.p[i];
+  const all = no.length === 0, maj = yes.length * 2 > V.length;
+  if (!maj) return { k: 'split', key: w, p, y: yes.length, a: V.length, by: ['v4'], no: [] };
+  return { k: all && p >= 60 ? 'best' : 'lean', key: w, p, y: yes.length, a: V.length, by: yes.map(m => m.n), no: no.map(m => m.n) };
 }
 // Did the pick land on this final score? Over/Under use 2.5 goals.
 export function leanHit(key, f) {
