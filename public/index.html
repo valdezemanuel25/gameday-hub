@@ -442,7 +442,7 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .day:focus-visible,.chip:focus-visible,.tab:focus-visible,.btn:focus-visible,.m .hd:focus-visible,.sgt:focus-visible{outline:2px solid var(--grass)}
 .finb{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0}
 
-.ed-wrap{margin:0 16px}.ed-sum{margin:12px 0 0;font-size:12.5px;color:var(--dim);line-height:1.55}.ed-sum b{color:var(--ink)}.ed-sec{margin:18px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.ed-wrap{margin:0 16px}.ed-tog{margin-top:12px;background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:7px 14px;font:inherit;font-size:12.5px;cursor:pointer}.ed-tog.on{color:var(--ink);border-color:var(--acc-line)}.ed-none{padding:18px 0;font-size:13px;color:var(--dim);line-height:1.5}.ed-sum{margin:12px 0 0;font-size:12.5px;color:var(--dim);line-height:1.55}.ed-sum b{color:var(--ink)}.ed-sec{margin:18px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 .ed-row{padding:11px 0;border-top:1px solid var(--line)}.ed-row:first-child{border-top:0}.ed-t{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:14px}.ed-t b{font-weight:600}.ed-g{font-size:12px;font-weight:700;color:var(--grass);white-space:nowrap}
 .ed-g.strong{color:var(--acc-hi2)}.ed-s{display:block;margin-top:2px;font-size:11.5px;color:var(--faint)}.ed-n{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;font-size:11.5px;color:var(--dim)}.ed-n span{background:var(--panel2);border-radius:999px;padding:2px 9px}
 .ed-r{font-size:11.5px;font-weight:700;margin-left:8px}.ed-r.hit{color:var(--grass)}.ed-r.miss{color:#e07a6a}
@@ -1267,14 +1267,18 @@ function edgeRows(c) {
   });
 }
 function edgesView() {
-  const all = (day.cards || []).filter(c => c.v4 && c.odds && !UNCOUNTED(c, day.date)).flatMap(edgeRows);
-  if (!all.length) return `<div class="small" style="margin:8px 4px 0">No priced games with a v4 number for this day. Prices are saved for first-division games when the day is analyzed.</div>`;
-  const val = all.filter(r => r.edge >= 5).sort((a, b) => b.edge - a.edge), done = val.filter(r => r.hit != null), won = done.reduce((a, r) => a + r.units, 0);
-  const sum = `<div class="ed-sum"><b>${val.length}</b> of <b>${all.length}</b> priced markets show v4 at least 5 points above the price's break-even.${done.length ? ` Graded so far: <b>${done.filter(r => r.hit).length}</b> of <b>${done.length}</b> hit, <b>${won >= 0 ? '+' : ''}${won.toFixed(1)}u</b> at the saved prices.` : ''} One unit on each; prices never change a model.</div>`;
+  const priced = (day.cards || []).filter(c => c.v4 && c.odds && !UNCOUNTED(c, day.date)).flatMap(edgeRows);
+  if (!priced.length) return `<div class="small" style="margin:8px 4px 0">No priced games with a v4 number for this day. Prices are saved for first-division games when the day is analyzed.</div>`;
+  // Default: v4 itself must think it is likely (55%+) AND the price must undervalue it by 5+ points. "Show long shots" lifts the 55% floor.
+  const FLOOR = 55, edges = priced.filter(r => r.edge >= 5), shown = (S.edLong ? edges : edges.filter(r => r.p >= FLOOR)).sort((a, b) => b.edge - a.edge);
+  const done = shown.filter(r => r.hit != null), won = done.reduce((a, r) => a + r.units, 0), hidden = edges.length - edges.filter(r => r.p >= FLOOR).length;
+  const sum = `<div class="ed-sum">${S.edLong ? `All <b>${edges.length}</b> markets where v4 is at least 5 points above the price's break-even, long shots included.` : `<b>${shown.length}</b> of <b>${priced.length}</b> priced markets are ones v4 rates ${FLOOR}% or higher and the price undervalues by 5+ points.`}${done.length ? ` Graded so far: <b>${done.filter(r => r.hit).length}</b> of <b>${done.length}</b> hit, <b>${won >= 0 ? '+' : ''}${won.toFixed(1)}u</b> at the saved prices.` : ''} One unit on each; prices never change a model.</div>`;
+  const tog = `<button type="button" class="ed-tog ${S.edLong ? 'on' : ''}" data-edlong="1">${S.edLong ? 'Hide long shots' : `Show long shots${hidden ? ` (${hidden})` : ''}`}</button>`;
   const row = r => `<div class="ed-row"><div class="ed-t"><b>${esc(leanName(r.c, r.key))}</b><span><span class="ed-g ${r.edge >= 10 ? 'strong' : ''}">+${r.edge.toFixed(1)} pp</span>${r.hit == null ? '' : `<span class="ed-r ${r.hit ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : 'Missed ✗'}</span>`}</span></div>
     <span class="ed-s">${esc(strip(r.c.home))} vs ${esc(strip(r.c.away))} · ${esc(r.c.ko || '')}${r.c.final ? ' · ' + r.c.final.h + '–' + r.c.final.a : ''}</span>
     <div class="ed-n"><span>${fmtOdds(r.m)} needs ${r.need.toFixed(0)}%</span><span>v4 ${Math.round(r.p)}%</span><span>${r.ev >= 0 ? '+' : ''}${r.ev.toFixed(0)}% EV</span></div></div>`;
-  return `<div class="ed-wrap">` + sum + `<div class="ed-sec">Edges of 5+ points<span style="text-transform:none;letter-spacing:0"> · biggest first</span></div>` + (val.length ? val.map(row).join('') : `<div class="small" style="margin:8px 4px 0">Nothing clears 5 points today.</div>`) + `</div>`;
+  const none = `<div class="ed-none">${S.edLong ? 'Nothing clears 5 points today.' : `v4 found nothing it rates ${FLOOR}% or higher that the price undervalues today.`}</div>`;
+  return `<div class="ed-wrap">` + sum + tog + `<div class="ed-sec">${S.edLong ? 'Edges of 5+ points' : `v4 at ${FLOOR}%+ and 5+ points over the price`}<span style="text-transform:none;letter-spacing:0"> · biggest first</span></div>` + (shown.length ? shown.map(row).join('') : none) + `</div>`;
 }
 function mbetsView() {
   if (!tally) return `<div class="empty">Loading…</div>`;
@@ -1569,6 +1573,7 @@ async function runAll(kind) {
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
+  const edl = e.target.closest('[data-edlong]'); if (edl) { S.edLong = !S.edLong; return render(); }
   const rf = e.target.closest('[data-refetch]'); if (rf) return fbModal(rf.dataset.refetch);
   const fm = e.target.closest('[data-fbm]');
   if (fm) { const a = fm.dataset.fbm; if (a === 'go') return fbRun(fm.dataset.slug); const m = $('#fbm'); if (m && !m.dataset.busy) m.remove(); return; }
