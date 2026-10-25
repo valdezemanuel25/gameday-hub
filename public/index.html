@@ -186,7 +186,7 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .seg button{font-size:12.5px;padding:7px 12px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
 .seg button.on{background:var(--panel2);color:var(--ink);border-color:var(--acc-line)}
 .bd{margin:12px 18px 0;border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden}
-.bd .r{display:grid;grid-template-columns:84px repeat(3,minmax(0,1fr));gap:6px;padding:13px 12px;border-top:1px solid var(--line);align-items:center}
+.bd .r{display:grid;grid-template-columns:84px repeat(2,minmax(0,1fr));gap:6px;padding:13px 12px;border-top:1px solid var(--line);align-items:center}
 .bd .r.h{border-top:0;padding:10px 12px 8px;font-size:11.5px;color:var(--dim);align-items:end}
 .bd .r.h b{display:block;color:var(--ink);font-size:13px;font-weight:650}.bd .r.h .fb b{color:var(--sm)}
 .bd .lab{font-size:13px;font-weight:600}.bd .lab small{display:block;font-weight:400;font-size:11px;color:var(--faint);margin-top:1px}
@@ -197,7 +197,7 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .bd .r.bs{grid-template-columns:84px minmax(0,1fr) 2fr;background:rgba(255,255,255,.02)}.bd .r.bs .lab small{display:block;font-size:10.5px;color:var(--faint);margin-top:2px;line-height:1.3}.bd .r.bs .c .p{color:var(--dim);font-size:18px}.bd .r.bs .bsn{font-size:11px;color:var(--faint)}
 .bd .r.br{font-size:12px;color:var(--dim);padding:10px 12px}.bd .r.br b{color:var(--ink);font-weight:600}.bd .r.br b.best{color:var(--grass)}
 .bdn{margin:10px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.45}
-.tri{display:grid;grid-template-columns:84px repeat(3,minmax(0,1fr));gap:4px 6px;margin-top:7px;font-size:12px;color:var(--dim)}
+.tri{display:grid;grid-template-columns:84px repeat(2,minmax(0,1fr));gap:4px 6px;margin-top:7px;font-size:12px;color:var(--dim)}
 .tri span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tri .hh{color:var(--faint)}
 .cand{border-color:#5b4a22}.cand small{display:block;color:var(--amber);font-size:11.5px;margin-bottom:2px}
 .cr{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-top:5px}.cr span{flex:1;min-width:0;overflow-wrap:anywhere}
@@ -227,8 +227,8 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .xp .b .h{background:var(--grass)}.xp .b .d{background:#6b7f75}.xp .b .a{background:#7FA6D9}.xp .b .a.f{box-shadow:0 0 10px rgba(127,166,217,.45)}
 .xag{display:inline-flex;align-items:center;gap:6px;margin:10px 0 8px;font-size:11.5px;font-weight:650;padding:4px 9px;border-radius:99px;background:rgba(240,181,74,.12);color:var(--amber)}
 .xag.y{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.xag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
-.xl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
-.xl.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.xl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.xl.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .xq{background:#17241f;border-radius:10px;padding:6px 7px 7px;min-width:0}
 .xq .l{font-size:10px;color:var(--faint);font-weight:650;margin-bottom:3px}
 .xq b{display:block;font-size:13.5px;font-weight:750;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -283,13 +283,13 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .lsb .it.amber{color:var(--amber)}
 .lsb .it.off{opacity:.35;cursor:default}
 .lsb .lsp{height:1px;background:var(--line);margin:5px 6px;font-size:0;padding:0}
-.bdy .xl:not(.three){grid-template-columns:repeat(2,minmax(0,1fr))}
+.bdy .xl:not(.two){grid-template-columns:repeat(3,minmax(0,1fr))}
 .bdy .rail{margin:10px 0 0;padding-left:0}.bdy .rail:before,.bdy .slot:before{display:none}
 .bdy .slot .t{position:static;width:auto;text-align:left;margin:0 0 4px 4px;font-size:11.5px}.bdy .slot .t small{display:inline;margin-left:3px}
 @media(min-width:900px){
   .wrap:has(.bdy){max-width:960px}
   .bdy{grid-template-columns:210px minmax(0,1fr);gap:18px;padding:0 18px}
-  .bdy .xl:not(.three){grid-template-columns:repeat(4,minmax(0,1fr))}
+  .bdy .xl:not(.two){grid-template-columns:repeat(3,minmax(0,1fr))}
   .lsb{top:64px;padding:8px}
   .lsb .it{flex-direction:row;justify-content:space-between;text-align:left;padding:8px 11px;font-size:13.5px;font-weight:500;letter-spacing:0}
   .lsb .it .cd{display:none}.lsb .it .nm{display:inline}
@@ -491,12 +491,13 @@ const say = (m, ready) => { const s = $('#status'); s.textContent = m; s.classNa
 /* ---------- helpers ---------- */
 const ord = n => { if (!n) return ''; const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
 const sideName = (c, side) => side === 'H' ? c.home : side === 'A' ? c.away : 'Draw';
-const pickText = c => c.v2.pick === 'D' ? 'Draw' : sideName(c, c.v2.pick);
+const pickText = c => vm(c).pick === 'D' ? 'Draw' : sideName(c, vm(c).pick);
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const pill = (ok, l) => `<span class="hit ${ok ? 'y' : 'n'}">${l}</span>`;
-// v4 is the official model (Oct 26, 2026): top picks rank on v4, or on v2 for a game v4 has no numbers for. The other one is shown beside it.
+// v4 is the official model and v2 is retired (Oct 26, 2026). Every card shows v4; v2 only stands in on a game v4 has no numbers for.
 const TOP_WIN = 55, TOP_GOALS = 60;
-const lead = c => c.v4 && Array.isArray(c.v4.p) ? { n: 'v4', m: c.v4, o: 'v2', x: c.v2 || {} } : { n: 'v2', m: c.v2, o: 'v4', x: {} };
+const lead = c => c.v4 && Array.isArray(c.v4.p) ? { n: 'v4', m: c.v4, o: null, x: {} } : { n: 'v2', m: c.v2, o: null, x: {} };
+const vm = c => lead(c).m, vg = c => (c.grade ? c.grade[lead(c).n] : null) || null; // the card's model and its grade
 const isTop = c => { if (!c.v2 && !c.v4) return false; const v = lead(c).m; return Math.max(v.over, 100 - v.over, v.btts, 100 - v.btts) >= TOP_GOALS || Math.max(...v.p) >= TOP_WIN; };
 // What makes a game a top pick: the lead model's winner at 55%+ and/or a goals market at 60%+, with what the other model and Forebet say.
 function topPicks(c) {
@@ -609,13 +610,14 @@ function trackRec(l, m, p) {
     if (!r || !r.n) return null;
     return { rate: Math.round(100 * (pos ? r.hits / r.n : 1 - r.hits / r.n)), n: r.n };
   }
-  if (l.market === 'win' && m === 'v2' && pc >= 50) { const r = (tally.calibration || []).find(x => pc >= x.lo && pc < x.hi) || (tally.calibration || []).find(x => x.label === '60% and up' && pc >= 60); return r && r.n ? { rate: Math.round(100 * r.hits / r.n), n: r.n } : null; }
+  if (l.market === 'win' && m === 'v4' && pc >= 50) { const r = (tally.calibration || []).find(x => pc >= x.lo && pc < x.hi) || (tally.calibration || []).find(x => x.label === '60% and up' && pc >= 60); return r && r.n ? { rate: Math.round(100 * r.hits / r.n), n: r.n } : null; }
   return null;
 }
 function probRow(l) {
   const cell = (k, name) => `<span class="${l.p[k] == null ? 'zna' : ''}"><span class="zk">${name}</span><b>${l.p[k] == null ? 'n/a' : bpc(l.p[k])}</b></span>`;
-  const recs = ['v2', 'v4'].map(m => { const r = trackRec(l, m, l.p[m]); return r ? `<span class="zrc ${r.n < 25 ? 'w' : ''}">${m} so far: picks like this landed ${r.rate}% (${r.n} finished games${r.n < 25 ? ', still a small sample' : ''})</span>` : ''; }).join('');
-  return `<div class="zpr">${cell('v2', 'v2')}${cell('v4', 'v4 shadow')}${cell('fb', 'Forebet')}</div>${recs}${l.grid ? `<span class="zrc">At this line the number comes from each model's score grid, which tends to overstate goals markets. There is no track record for it yet.</span>` : ''}`;
+  const nhl = l.sport === 'nhl' || l.league === 'nhl', ms = nhl ? ['v2', 'v4'] : ['v4']; // soccer v2 is retired; hockey's v2 is its own model
+  const recs = ms.map(m => { const r = trackRec(l, m, l.p[m]); return r ? `<span class="zrc ${r.n < 25 ? 'w' : ''}">${m} so far: picks like this landed ${r.rate}% (${r.n} finished games${r.n < 25 ? ', still a small sample' : ''})</span>` : ''; }).join('');
+  return `<div class="zpr">${nhl ? cell('v2', 'v2') + cell('v4', 'v4 shadow') : cell('v4', 'v4')}${cell('fb', 'Forebet')}</div>${recs}${l.grid ? `<span class="zrc">At this line the number comes from each model's score grid, which tends to overstate goals markets. There is no track record for it yet.</span>` : ''}`;
 }
 const MK = [['win', 'Winner'], ['dc', 'Double chance'], ['ou', 'Over/Under'], ['btts', 'Both score']];
 function selChips(g) {
@@ -655,7 +657,7 @@ function gamePreview(c) {
     return row('v2', line('v2', c.v2 && c.v2.w, c.v2 && c.v2.o)) + (c.v4 ? row('v4 shadow', line('v4', c.v4.w, c.v4.o)) : '') + (fb != null ? row('Forebet', `${esc(strip(c.home))} ${fb}% · ${esc(strip(c.away))} ${100 - fb}%`) : '') + (c.ln ? '' : `<div class="zrc">No Over/Under line for this game yet.</div>`);
   }
   const one = (m, x) => !x ? '' : (x.p ? `${esc(strip(c.home))} ${x.p[0]}% · Draw ${x.p[1]}% · ${esc(strip(c.away))} ${x.p[2]}%` : '') + (x.over != null ? `<br><small>Over 2.5 ${x.over}%${x.btts != null ? ` · Both score ${x.btts}%` : ''}</small>` : '');
-  return row('v2', one('v2', c.v2)) + (c.v4 ? row('v4 shadow', one('v4', c.v4)) : '') + (c.fb && c.fb.p ? row('Forebet', one('fb', c.fb)) : '');
+  return (c.v4 && c.v4.p ? row('v4', one('v4', c.v4)) : row('v2 (no v4)', one('v2', c.v2))) + (c.fb && c.fb.p ? row('Forebet', one('fb', c.fb)) : '');
 }
 function statusChip(s) { return `<span class="zst ${s}">${s === 'pending' ? 'Pending' : s === 'hit' ? 'Hit' : s === 'miss' ? 'Missed' : 'Void'}</span>`; }
 function betsView() {
@@ -675,16 +677,17 @@ function betsView() {
     ${slip && slip.error ? `<div class="zrc w">${esc(slip.error)}</div>` : ''}
     ${(slip && slip.legs ? slip.legs : BS.slip.map(l => ({ ...l, label: '…', p: {} }))).map((l, i) => `<div class="zsl"><div class="zt"><b>${esc(l.label)}</b><button type="button" data-brm="${i}">Remove</button></div><small>${esc(l.home || '')} vs ${esc(l.away || '')}${l.ko ? ' · ' + esc(l.ko) : ''}</small></div>`).join('')}
     ${slip && slip.notes ? slip.notes.map(n => `<span class="zrc">${esc(n)}</span>`).join('') : ''}
-    ${slip && slip.p ? `<div style="margin-top:8px;font-size:11.5px;font-weight:700;color:var(--grass)">${BS.slip.length > 1 ? 'All picks hit' : 'Chance it hits'}</div>${probRow({ p: slip.p, market: BS.slip.length === 1 ? BS.slip[0].market : 'parlay', sel: BS.slip[0].sel, line: BS.slip[0].line, grid: false })}${slip.sameGame ? `<span class="zrc">Picks on the same game are worked out together on each model's score grid, so they are not just multiplied. Forebet has no number for those.</span>` : ''}${slip.parlay && !slip.sameGame ? `<span class="zrc">Different games, so each model's chances are multiplied. A model shows n/a if it has no number for one of the games.</span>` : ''}` : ''}
+    ${slip && slip.p ? `<div style="margin-top:8px;font-size:11.5px;font-weight:700;color:var(--grass)">${BS.slip.length > 1 ? 'All picks hit' : 'Chance it hits'}</div>${probRow({ p: slip.p, market: BS.slip.length === 1 ? BS.slip[0].market : 'parlay', sel: BS.slip[0].sel, line: BS.slip[0].line, grid: false, sport: BS.slip.every(l => l.sport === 'nhl') ? 'nhl' : null })}${slip.sameGame ? `<span class="zrc">Picks on the same game are worked out together on each model's score grid, so they are not just multiplied. Forebet has no number for those.</span>` : ''}${slip.parlay && !slip.sameGame ? `<span class="zrc">Different games, so each model's chances are multiplied. A model shows n/a if it has no number for one of the games.</span>` : ''}` : ''}
     <div><button type="button" class="zgo" data-btrack="1" ${BS.busy || !(slip && slip.p) ? 'disabled' : ''}>${BS.busy ? 'Saving…' : 'Track this bet'}</button><button type="button" class="zgo alt" data-bclear="1">Clear</button></div></div>` : '';
-  const sm = BS.sum, mdl = sm && sm.legs.n ? ['v2', 'v4', 'fb'].filter(k => sm.models[k].n).map(k => `${k === 'fb' ? 'Forebet' : k}: said <b>${sm.models[k].said}%</b>, landed <b>${sm.models[k].hit}%</b> (${sm.models[k].n})`).join(' · ') : '';
-  const mm = sm && sm.model, mmdl = mm && mm.legs.n ? ['v2', 'v4', 'fb'].filter(k => mm.models[k].n).map(k => `${k === 'fb' ? 'Forebet' : k}: said <b>${mm.models[k].said}%</b>, landed <b>${mm.models[k].hit}%</b> (${mm.models[k].n})`).join(' · ') : '';
+  const BM = ['v4', 'fb'], bm = b => b.legs.every(l => l.sport === 'nhl') ? ['v2', 'v4', 'fb'] : BM; // soccer v2 is retired; hockey keeps its v2
+  const sm = BS.sum, mdl = sm && sm.legs.n ? BM.filter(k => sm.models[k].n).map(k => `${k === 'fb' ? 'Forebet' : k}: said <b>${sm.models[k].said}%</b>, landed <b>${sm.models[k].hit}%</b> (${sm.models[k].n})`).join(' · ') : '';
+  const mm = sm && sm.model, mmdl = mm && mm.legs.n ? BM.filter(k => mm.models[k].n).map(k => `${k === 'fb' ? 'Forebet' : k}: said <b>${mm.models[k].said}%</b>, landed <b>${mm.models[k].hit}%</b> (${mm.models[k].n})`).join(' · ') : '';
   const mhead = mm && mm.bets.n ? `<div class="zsum"><b>Model parlays</b>: <b>${mm.bets.n}</b> tracked, <b>${mm.bets.hit}</b> hit, <b>${mm.bets.miss}</b> missed, ${mm.bets.pending} pending${mm.bets.void ? `, ${mm.bets.void} void` : ''}.${mmdl ? `<br>Settled picks, said against landed: ${mmdl}.` : ''}</div>` : '';
   const head = (sm && sm.bets.n ? `<div class="zsum"><b>Your bets</b>: <b>${sm.bets.n}</b> tracked ${sm.bets.n === 1 ? 'bet' : 'bets'}: <b>${sm.bets.hit}</b> hit, <b>${sm.bets.miss}</b> missed, ${sm.bets.pending} pending${sm.bets.void ? `, ${sm.bets.void} void` : ''}.${mdl ? `<br>Settled picks, what each model said on average against how often they landed: ${mdl}.` : ''}</div>` : '') + mhead;
   const list = (BS.bets || []).map(b => `<div class="zbet"><div class="zt"><b>${b.src === 'model' ? 'Model parlay' : b.legs.length === 1 ? 'Single' : b.legs.length + '-leg parlay'}</b>${statusChip(b.status)}</div>
     ${b.legs.map(l => `<div class="zbl"><span>${esc(l.label)}<small>${esc(l.home)} vs ${esc(l.away)} · ${esc(l.leagueName || '')}</small></span><i class="${l.res || ''}">${l.res === 'hit' ? '✓' : l.res === 'miss' ? '✗' : l.res === 'void' ? 'void' : '…'}</i></div>`).join('')}
-    <div class="zft"><span>Models said at the time: ${['v2', 'v4', 'fb'].filter(k => b.p && b.p[k] != null).map(k => (k === 'fb' ? 'Forebet' : k) + ' ' + bpc(b.p[k])).join(' · ') || 'no numbers'}</span><span>${b.status === 'pending' ? `<button type="button" data-bvoid="${esc(b.id)}">Void</button>` : ''}<button type="button" data-bdel="${esc(b.id)}">${BS.del === b.id ? 'Tap again to remove' : 'Remove'}</button></span></div></div>`).join('');
-  return `<div class="small" style="margin:8px 4px 0">Build a single bet or a parlay, see what v2, v4 and Forebet give it, then track it. When the games finish and the Hub grades them, each pick is marked hit or missed. Odds are not used or stored.</div>${BS.msg ? `<div class="alert" style="margin:10px 4px 0">${esc(BS.msg)}</div>` : ''}${builder}${slipBox}${head}${list || `<div class="empty">No tracked bets yet.</div>`}`;
+    <div class="zft"><span>Models said at the time: ${bm(b).filter(k => b.p && b.p[k] != null).map(k => (k === 'fb' ? 'Forebet' : k) + ' ' + bpc(b.p[k])).join(' · ') || 'no numbers'}</span><span>${b.status === 'pending' ? `<button type="button" data-bvoid="${esc(b.id)}">Void</button>` : ''}<button type="button" data-bdel="${esc(b.id)}">${BS.del === b.id ? 'Tap again to remove' : 'Remove'}</button></span></div></div>`).join('');
+  return `<div class="small" style="margin:8px 4px 0">Build a single bet or a parlay, see what v4 and Forebet give it (hockey: v2 and v4), then track it. When the games finish and the Hub grades them, each pick is marked hit or missed. Odds are not used or stored.</div>${BS.msg ? `<div class="alert" style="margin:10px 4px 0">${esc(BS.msg)}</div>` : ''}${builder}${slipBox}${head}${list || `<div class="empty">No tracked bets yet.</div>`}`;
 }
 
 const nowCT = () => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date());
@@ -692,22 +695,21 @@ const nowCT = () => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'nume
 /* ---------- one game ---------- */
 function expanded(c) {
   if (!c.v2) return `<div class="ex"><div class="in"><div class="small">${esc(c.skipped || 'No prediction yet.')}</div></div></div>`;
-  const v = c.v2, g = c.grade;
+  const v = vm(c), g = vg(c), on4 = lead(c).n === 'v4';
   const ou = v.over >= 50 ? ['Over 2.5 goals', v.over, 'Under', 100 - v.over] : ['Under 2.5 goals', 100 - v.over, 'Over', v.over];
   const bt = v.btts >= 50 ? ['Both teams score: yes', v.btts, 'No', 100 - v.btts] : ['Both teams score: no', 100 - v.btts, 'Yes', v.btts];
-  const mdl = `<div class="src m1"><small>Model said</small><b>${esc((agreeScore(v) || { s: v.scores[0][0] }).s)}</b><small>${esc(pickText(c))} ${Math.max(...v.p)}%</small>${g ? `<div class="hits">${pill(g.v2.outcomeHit, 'Winner')}${pill(g.v2.ouHit, 'O/U')}${pill(g.v2.bttsHit, 'Both')}</div>` : ''}</div>`;
+  const mdl = `<div class="src m1"><small>Model said</small><b>${esc((agreeScore(v) || { s: v.scores[0][0] }).s)}</b><small>${esc(pickText(c))} ${Math.max(...v.p)}%</small>${g ? `<div class="hits">${pill(g.outcomeHit, 'Winner')}${pill(g.ouHit, 'O/U')}${pill(g.bttsHit, 'Both')}</div>` : ''}</div>`;
   const sm = c.sm
     ? `<div class="src s1"><small>SportsMole said</small><b>${esc(c.sm.text.replace(/^.*?(\d+–\d+).*$/, '$1'))}</b><small>${esc(c.sm.text)}</small>${c.smGrade ? `<div class="hits">${pill(c.smGrade.outcomeHit, 'Winner')}${pill(c.smGrade.scoreHit, 'Score')}${pill(c.smGrade.ouHit, 'O/U')}${pill(c.smGrade.bttsHit, 'Both')}</div>` : ''}</div>`
     : `<div class="src s0"><small>SportsMole</small>No prediction found yet</div>`;
   const done = !!c.final; // before the game the top cards already say all of this; the boxes come back with the result marks
-  const v4 = c.v4, v3 = c.v3;
-  const shadow = v4
-    ? `<div class="small"><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. It picks <b>${OUT[v4.pick]}</b>${v4.pick === v.pick ? ', same as v2' : `, <b>not</b> v2's pick (${OUT[v.pick]})`}. Over 2.5 ${v4.over}%, both score ${v4.btts}%.${v4.promo ? `<br>A club in this game is newly promoted, so v4 used a starting rating that fades as it plays. These games are tracked on their own line, not in v4's main record.` : ''}
-      ${g && g.v4 ? `<br>v4 result: ${pill(g.v4.outcomeHit, 'Winner')} ${pill(g.v4.ouHit, 'O/U')} ${pill(g.v4.bttsHit, 'Both')}` : ''}</div>`
-    : v3
-      ? `<div class="small"><b>v3 (retired shadow test)</b>${v3.drawRisk ? ' (draw risk)' : ''}: ${esc(c.home)} ${v3.p[0]}%, draw ${v3.p[1]}%, ${esc(c.away)} ${v3.p[2]}%. It picks <b>${OUT[v3.pick]}</b>. Over 2.5 ${v3.over}%, both score ${v3.btts}%.
-      ${g && g.v3 ? `<br>v3 result: ${pill(g.v3.outcomeHit, 'Winner')} ${pill(g.v3.ouHit, 'O/U')} ${pill(g.v3.bttsHit, 'Both')}` : ''}</div>`
-      : c.v4 === null ? `<div class="small"><b>v4 shadow test</b>: no prediction for this game${c.v4why ? ': ' + esc(c.v4why) : ''}.</div>` : '';
+  const v3 = c.v3, g3 = c.grade && c.grade.v3;
+  // v2 is retired: the card is v4's. On a game v4 could not cover, v2 stands in and the reason is given here.
+  const shadow = on4
+    ? (c.v4.promo ? `<div class="small">A club in this game is newly promoted, so v4 used a starting rating that fades as it plays. These games are tracked on their own line, not in v4's main record.</div>` : '')
+    : `<div class="small"><b>No v4 prediction</b>${c.v4why ? ': ' + esc(c.v4why) : ''}. The numbers on this card are v2's (retired Oct 26, 2026), shown as a stand-in.</div>` +
+      (v3 ? `<div class="small"><b>v3 (retired shadow test)</b>${v3.drawRisk ? ' (draw risk)' : ''}: ${esc(c.home)} ${v3.p[0]}%, draw ${v3.p[1]}%, ${esc(c.away)} ${v3.p[2]}%. It picks <b>${OUT[v3.pick]}</b>. Over 2.5 ${v3.over}%, both score ${v3.btts}%.
+      ${g3 ? `<br>v3 result: ${pill(g3.outcomeHit, 'Winner')} ${pill(g3.ouHit, 'O/U')} ${pill(g3.bttsHit, 'Both')}` : ''}</div>` : '');
   return `<div class="ex"><div class="in"><div class="in">
     ${done ? `<div class="two">${mdl}${sm}</div>` : c.sm ? '' : `<div class="two">${sm}</div>`}
     <div class="two"><div class="box" style="${done || !c.fb ? '' : 'grid-column:1/-1'}">Most likely exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b><small style="display:block;margin-top:4px;font-size:11px;color:var(--faint)">The score on the card is the best one that fits the pick, Over/Under and both-score lean.</small></div>${done || !c.fb ? fbBox(c) : ''}</div>
@@ -720,24 +722,22 @@ function expanded(c) {
       ${shadow}
       ${fbLine(c)}
       <h5 class="hw">How the model got here</h5>
-      <p>Last 5 domestic league games per club (before kickoff). Expected goals: ${esc(c.home)} ${v.lam[0]}, ${esc(c.away)} ${v.lam[1]}. Official model v2: league-average prior 1.56, home 1.17×, away 0.83×, form weight 0.6.</p>
-      ${c.crossLeague ? `<p>${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, so form comes from different leagues. v2 has no league-strength adjustment; the v4 cup model does.</p>` : ''}
-      ${c.v4 && (c.leagueKey === 'ucl' || c.leagueKey === 'uel') ? `<p>v4 cup shadow model: each club's rating from its own league, a strength factor for each league, and a small correction from its Champions League and Europa League games of the last three seasons. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Tracked next to v2; it never changes v2's picks.</p>` : c.v4 ? `<p>v4 shadow model: attack and defence ratings for every club from about 2.5 years of league games, with recent games counting more and each result judged against the opposition faced. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Over 2.5 and both-score are pulled toward the league's recent scoring rate. It is tracked next to v2 and never changes v2's picks.</p>` : ''}
+      ${on4 && (c.leagueKey === 'ucl' || c.leagueKey === 'uel') ? `<p>v4 cup model: each club's rating from its own league, a strength factor for each league, and a small correction from its Champions League and Europa League games of the last three seasons. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}.</p>` : on4 ? `<p>v4: attack and defence ratings for every club from about 2.5 years of league games, with recent games counting more and each result judged against the opposition faced. Expected goals: ${esc(c.home)} ${c.v4.lam[0]}, ${esc(c.away)} ${c.v4.lam[1]}. Over 2.5 and both-score are pulled toward the league's recent scoring rate.</p>` : `<p>v2 (retired, standing in): last 5 domestic league games per club before kickoff. Expected goals: ${esc(c.home)} ${v.lam[0]}, ${esc(c.away)} ${v.lam[1]}. League-average prior 1.56, home 1.17×, away 0.83×, form weight 0.6.${c.crossLeague ? ` ${esc(c.home)} play in the ${esc(c.homeLeague)} and ${esc(c.away)} in the ${esc(c.awayLeague)}, and v2 has no league-strength adjustment.` : ''}</p>`}
     </details></div></div>`;
 }
 const GAME_MS = 2 * 3600000;
 const SECOND_DIV = ['laliga2', 'bundesliga2']; // no SportsMole page expected (SportsMole does cover the Championship)
 const UNCOUNTED = (c, date) => c.leagueKey === 'laliga2' || c.leagueKey === 'bundesliga2' || (c.leagueKey === 'championship' && date < '2026-10-24'); // Championship counts from 24 Oct 2026
-// Neon outline once every model for the game is in: v2, v4, Forebet, plus SportsMole (not needed in second divisions).
-const allIn = c => !!(c.v2 && c.v4 && c.fb && (SECOND_DIV.includes(c.leagueKey) || c.sm));
+// Neon outline once every model for the game is in: v4, Forebet, plus SportsMole (not needed in second divisions).
+const allIn = c => !!(c.v4 && c.fb && (SECOND_DIV.includes(c.leagueKey) || c.sm));
 const why = c => {
-  if (c.v2.pick === 'D') return '';
+  if (vm(c).pick === 'D') return '';
   const f = t => { const m = /(\d+) scored, (\d+) conceded in last (\d+)/.exec(t || ''); return m ? { gf: +m[1], ga: +m[2], n: +m[3] } : null; };
-  const H = c.v2.pick === 'H', pf = f(H ? c.form.home : c.form.away), of = f(H ? c.form.away : c.form.home);
+  const H = vm(c).pick === 'H', pf = f(H ? c.form.home : c.form.away), of = f(H ? c.form.away : c.form.home);
   if (!pf || !of) return '';
   return `<div class="why">${esc(H ? c.home : c.away)} scored ${pf.gf} in their last ${pf.n}. ${esc(H ? c.away : c.home)} conceded ${of.ga} in theirs.</div>`;
 };
-const conf = c => { const t = Math.max(...c.v2.p); return t >= 55 ? ['Strong', 's', ''] : t >= 45 ? ['Lean', 'ln', 'lean'] : ['Toss-up', 'tu', 'toss']; };
+const conf = c => { const t = Math.max(...vm(c).p); return t >= 55 ? ['Strong', 's', ''] : t >= 45 ? ['Lean', 'ln', 'lean'] : ['Toss-up', 'tu', 'toss']; };
 const hue = n => { let h = 7; for (const ch of String(n)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
 const strip = n => String(n).replace(/^(fc|afc|sc|ssc|ac|as|rc|ud|cd|sv|vfl|vfb|tsg|1\.)\s+/i, '').replace(/\s+(fc|afc|sc|cf)$/i, '');
 const ab = n => { const w = strip(n).split(/\s+/).filter(Boolean); return (w.length > 1 ? w[0][0] + w[1][0] + (w[2] ? w[2][0] : '') : (w[0] || '?').slice(0, 3)).toUpperCase().slice(0, 3); };
@@ -747,20 +747,20 @@ const sideName2 = (c, s) => s === 'H' ? ab(c.home) : s === 'A' ? ab(c.away) : 'D
 const sideOfScore = (h, a) => h > a ? 'H' : h < a ? 'A' : 'D';
 
 function picksOf(c) {
-  const o = [c.v2.pick]; if (c.v4) o.push(c.v4.pick); const f = c.fb;
+  const o = [vm(c).pick]; const f = c.fb;
   if (f && (f.p || f.score)) o.push(f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a));
   if (c.sm) o.push(sideOfScore(c.sm.h, c.sm.a));
   return o;
 }
 function consensus(c) {
   const p = picksOf(c), same = p.length >= 3 && p.every(x => x === p[0]);
-  return { same, strong: same && Math.max(...c.v2.p) >= 55, side: same ? p[0] : null, n: p.length };
+  return { same, strong: same && Math.max(...vm(c).p) >= 55, side: same ? p[0] : null, n: p.length };
 }
 function goalsCons(c) {
   const out = [];
   const sm = c.sm ? { over: c.sm.h + c.sm.a >= 3 ? 100 : 0, btts: c.sm.h > 0 && c.sm.a > 0 ? 100 : 0 } : null; // SportsMole votes through its score
   const mkc = (k, yes, no) => {
-    const col = [c.v2[k], c.v4 && c.v4[k], c.fb && c.fb[k], sm && sm[k]].filter(x => x != null), n = col.length;
+    const col = [vm(c)[k], c.fb && c.fb[k], sm && sm[k]].filter(x => x != null), n = col.length;
     const y = col.filter(x => x > 50).length, o = col.filter(x => x < 50).length; // same rule as the headline: above 50% is a yes, below 50% a no, exactly 50% no vote
     if (n >= 3 && y === n) out.push(`All say ${yes}`); else if (n >= 3 && o === n) out.push(`All say ${no}`);
     else if (n === 2 && y === 2) out.push(`Both say ${yes}`); else if (n === 2 && o === 2) out.push(`Both say ${no}`);
@@ -769,10 +769,10 @@ function goalsCons(c) {
   mkc('over', 'Over 2.5', 'Under 2.5'); mkc('btts', 'both score', 'not both');
   return out;
 }
-// Who picks what, in words: "Cottbus (v2) vs Nürnberg (Forebet)".
+// Who picks what, in words: "Cottbus (v4) vs Nürnberg (Forebet)".
 function splitText(c) {
   const by = new Map(), add = (side, m) => { if (!by.has(side)) by.set(side, []); by.get(side).push(m); };
-  add(c.v2.pick, 'v2'); if (c.v4) add(c.v4.pick, 'v4');
+  add(vm(c).pick, lead(c).n);
   const f = c.fb; if (f && (f.p || f.score)) add(f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a), 'Forebet');
   if (c.sm) add(sideOfScore(c.sm.h, c.sm.a), 'SportsMole');
   const nm = s => s === 'D' ? 'Draw' : esc(strip(s === 'H' ? c.home : c.away));
@@ -784,8 +784,8 @@ function headline(c) {
   const L = c.v4 && c.v4.p && typeof leanPick === 'function' ? leanPick(c) : null;
   if (L && L.src === 'v4') { // v4 leads: its single strongest call, with the other models counted as agree / disagree on that same market
     const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key], names = r => r.join(', ');
-    const ag = L.k === 'split' ? `<span class="ag">v4's pick · no majority across the models</span>` : L.no.length === 0 ? `<span class="ag all">v4's pick · all ${L.a} models agree</span>` : `<span class="ag">v4's pick · ${L.y} of ${L.a} back it (${names(L.by)}) · ${names(L.no)} disagree${L.no.length === 1 ? 's' : ''}</span>`;
-    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}</div>`;
+    const ag = L.k === 'solo' ? `<span class="ag">v4's pick · no other model has numbers yet</span>` : L.k === 'split' ? `<span class="ag">v4's pick · no majority across the models</span>` : L.no.length === 0 ? `<span class="ag all">v4's pick · all ${L.a} models agree</span>` : `<span class="ag">v4's pick · ${L.y} of ${L.a} back it (${names(L.by)}) · ${names(L.no)} disagree${L.no.length === 1 ? 's' : ''}</span>`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}</div>`;
   }
   const v = c.v2, v4 = c.v4 || {}, f = c.fb || {};
   const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
@@ -838,8 +838,8 @@ function chips(c) {
   const v = c.v2, g = c.grade || {}, out = [], picks = [];
   const gl = (o, b) => `<div class="g"><span>O2.5 ${o == null ? '<b>–</b>' : `<b class="${o >= 55 ? 'hi' : ''}">${o}%</b>`}</span><span>BTTS ${b == null ? '<b>–</b>' : `<b class="${b >= 55 ? 'hi' : ''}">${b}%</b>`}</span></div>`;
   const mk = (cls, label, side, pct, score, hit, goals, pre = 'likeliest') => { picks.push(side); return `<div class="xq ${cls}"><div class="l">${label}</div><b>${esc(sideName2(c, side))}${hit == null ? '' : ` <span class="ck ${hit ? 'ok' : 'no'}">${hit ? '✓' : '✗'}</span>`}</b>${pct != null ? `<small>${pct}% ${side === 'D' ? 'draw' : 'win'}</small>` : ''}${score && score.html ? score.html : score ? `<small class="sc">${pre} ${score}</small>` : ''}${goals || ''}</div>`; };
-  out.push(mk('', 'v2', v.pick, Math.max(...v.p), { html: scoreHtml(v) }, g.v2 ? g.v2.outcomeHit : null, gl(v.over, v.btts)));
-  out.push(c.v4 ? mk('', 'v4', c.v4.pick, Math.max(...c.v4.p), { html: scoreHtml(c.v4) }, g.v4 ? g.v4.outcomeHit : null, gl(c.v4.over, c.v4.btts)) : `<div class="xq none"><div class="l">v4</div><b>No pick</b></div>`);
+  // v2 is retired: its box only shows on a game v4 has no numbers for, labelled as the stand-in.
+  out.push(c.v4 && c.v4.p ? mk('', 'v4', c.v4.pick, Math.max(...c.v4.p), { html: scoreHtml(c.v4) }, g.v4 ? g.v4.outcomeHit : null, gl(c.v4.over, c.v4.btts)) : mk('', 'v2 (no v4)', v.pick, Math.max(...v.p), { html: scoreHtml(v) }, g.v2 ? g.v2.outcomeHit : null, gl(v.over, v.btts)));
   const f = c.fb;
   if (f && (f.p || f.score)) { const side = f.p ? 'HDA'[f.p.indexOf(Math.max(...f.p))] : sideOfScore(f.score.h, f.score.a); out.push(mk('', 'Forebet', side, f.p ? Math.max(...f.p) : null, f.score ? f.score.h + '–' + f.score.a : '', null, gl(f.over, f.btts), 'predicts')); }
   else out.push(`<div class="xq none"><div class="l">Forebet</div><b>Not read yet</b></div>`);
@@ -850,18 +850,18 @@ function chips(c) {
   }
   const cs = consensus(c), who = cs.side === 'D' ? 'a draw' : cs.side === 'H' ? c.home : c.away, gc = goalsCons(c);
   const tag = `<div class="xags">${cs.strong ? `<div class="xag s">Consensus · ${esc(who)}</div>` : cs.same ? `<div class="xag y">All ${cs.n} pick ${esc(who)}</div>` : cs.n >= 2 ? `<div class="xag">Split: ${splitText(c)}</div>` : ''}${gc.map(t => `<div class="xag gl">${t}</div>`).join('')}</div>`;
-  return `${tag}<div class="xl ${second ? 'three' : ''}">${out.join('')}</div>`;
+  return `${tag}<div class="xl ${second ? 'two' : ''}">${out.join('')}</div>`;
 }
 function game(c) {
   const open = S.open === c.id, ko = new Date(c.kickoff).getTime(), now = Date.now();
-  const v = c.v2, [h, d, a] = v.p, top = Math.max(h, d, a), [cl, ccls] = conf(c);
+  const v = vm(c), [h, d, a] = v.p, top = Math.max(h, d, a), [cl, ccls] = conf(c);
   let mid, pending = false, extra = '';
   if (c.final) {
-    const hit = c.grade ? c.grade.v2.outcomeHit : null;
+    const g = vg(c), hit = g ? g.outcomeHit : null;
     mid = `<div class="xm big">${c.final.h}–${c.final.a}${hit == null ? '' : `<small class="${hit ? 'ok' : 'no'}">${hit ? '✓ correct' : '✗ missed'}</small>`}</div>`;
   } else if (now < ko) {
     mid = `<div class="xm">vs<br>${esc(c.ko)}</div>`;
-    if (v.best.p >= 60) extra = `<div class="xb"><span>Best bet <b>${esc(v.best.pick)}</b></span><b>${v.best.p}%</b></div>`;
+    if (v.best && v.best.p >= 60) extra = `<div class="xb"><span>Best bet <b>${esc(v.best.pick)}</b></span><b>${v.best.p}%</b></div>`;
   } else if (now < ko + GAME_MS) mid = `<div class="xm"><span class="live">In play</span><br>${esc(c.ko)}</div>`;
   else { pending = true; mid = `<div class="xm">Result<br>pending</div>`; }
   const fav = h >= d && h >= a ? 'h' : a >= d ? 'a' : 'd', cons = consensus(c);
@@ -892,7 +892,7 @@ function alerts() {
 }
 
 /* ---------- board ---------- */
-// v4 shadow line for a game v2 could not cover (no v2 card, but the v4 cup model had a prediction)
+// v4 line for a game with no full card (a club's league results are missing, but the v4 cup model had a prediction)
 // Forebet picks entered by hand. Recorded and graded only; no model reads them.
 /* Games a fetch could not match by name: verify the pair, then assign it to this card. */
 function candBox(c) {
@@ -926,13 +926,13 @@ function fbLine(c) {
 function v4Only(c) {
   const v4 = c.v4; if (!v4) return '';
   const g = c.grade && c.grade.v4;
-  return `<small><b>v4 shadow test</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. Picks <b>${OUT[v4.pick]}</b>. Over 2.5 ${v4.over}%, both score ${v4.btts}%. Score that fits its picks: ${esc((agreeScore(v4) || { s: v4.scores[0][0] }).s)}; single most likely score ${esc(v4.scores[0][0])}.` +
+  return `<small><b>v4</b>: ${esc(c.home)} ${v4.p[0]}%, draw ${v4.p[1]}%, ${esc(c.away)} ${v4.p[2]}%. Picks <b>${OUT[v4.pick]}</b>. Over 2.5 ${v4.over}%, both score ${v4.btts}%. Score that fits its picks: ${esc((agreeScore(v4) || { s: v4.scores[0][0] }).s)}; single most likely score ${esc(v4.scores[0][0])}.` +
     (c.final ? ` Final ${c.final.h}–${c.final.a}${g ? ` ${pill(g.outcomeHit, 'Winner')} ${pill(g.ouHit, 'O/U')} ${pill(g.bttsHit, 'Both')}` : ''}` : '') + `</small>`;
 }
 function uncovered(list) {
   if (!list.length) return '';
   const n4 = list.filter(c => c.v4).length;
-  return `<details class="unc" ${n4 ? 'open' : ''}><summary>${list.length} game${list.length === 1 ? '' : 's'} not covered by v2${n4 ? `, ${n4} with a v4 shadow prediction` : ''}</summary>` +
+  return `<details class="unc" ${n4 ? 'open' : ''}><summary>${list.length} game${list.length === 1 ? '' : 's'} without a full card${n4 ? `, ${n4} with a v4 prediction` : ''}</summary>` +
     list.map(c => `<div class="u">${esc(c.home)} vs ${esc(c.away)}<small>${esc(c.leagueName)}, ${esc(c.ko)}. ${esc(c.skipped || 'No prediction yet.')}</small>${v4Only(c)}${fbLine(c)}</div>`).join('') + `</details>`;
 }
 // Compact model-bet line for the small league tiles: the pick, its strength, and (first divisions) the saved price with its tag.
@@ -944,14 +944,14 @@ function tileBet(c) {
     if (m != null && L.p != null) { const d = L.p - needP(m), t = d >= 5 ? 'val' : d <= -5 ? 'no' : 'fair'; pr = `<span class="tp">${fmtOdds(m)} <i class="pv ${t}">${t === 'val' ? 'Value' : t === 'no' ? 'Not worth it' : 'Fair'}</i></span>`; }
     else pr = '<span class="tp none">no price</span>';
   }
-  return `<div class="lb"><div class="lt"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span><b>${esc(leanName(c, L.key))}</b><em>${L.p != null ? L.p + '%' : ''}</em></div>${pr ? `<div class="lt2"><span>${L.y === L.a ? 'all ' + L.a + ' agree' : L.k === 'solo' ? 'v2 alone' : L.y + ' of ' + L.a + ' agree'}</span>${pr}</div>` : ''}</div>`;
+  return `<div class="lb"><div class="lt"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span><b>${esc(leanName(c, L.key))}</b><em>${L.p != null ? L.p + '%' : ''}</em></div>${pr ? `<div class="lt2"><span>${L.y === L.a ? 'all ' + L.a + ' agree' : L.k === 'solo' ? 'one model' : L.y + ' of ' + L.a + ' agree'}</span>${pr}</div>` : ''}</div>`;
 }
 function tileOf(c, on) {
-  const v = c.v2, [h, d, a] = v.p, f = c.final, ko = new Date(c.kickoff).getTime(), now = Date.now();
-  const fav = h >= d && h >= a ? 'h' : a >= d ? 'a' : 'd', hit = f && c.grade ? c.grade.v2.outcomeHit : null;
+  const v = vm(c), [h, d, a] = v.p, f = c.final, ko = new Date(c.kickoff).getTime(), now = Date.now(), g = vg(c);
+  const fav = h >= d && h >= a ? 'h' : a >= d ? 'a' : 'd', hit = f && g ? g.outcomeHit : null;
   const tag = f ? `<i>Final</i>` : now > ko && now < ko + GAME_MS ? `<i>In play</i>` : `<i>${esc(LCODE[c.leagueKey] || '')}</i>`;
   const row = (nm, side, id) => `<div class="r2${!f && fav === side ? ' fv' : ''}">${xcrest(nm, false, id)}<b>${esc(strip(nm))}</b><span>${f ? (side === 'h' ? f.h : f.a) : (side === 'h' ? h : a) + '%'}</span></div>`;
-  const foot = f ? `<span>${hit == null ? '' : 'v2 ' + (hit ? '✓' : '✗')}</span><span>${esc(LCODE[c.leagueKey] || '')}</span>` : `<span>Draw <b>${d}%</b></span><span>O2.5 <b>${v.over}%</b></span>`;
+  const foot = f ? `<span>${hit == null ? '' : lead(c).n + ' ' + (hit ? '✓' : '✗')}</span><span>${esc(LCODE[c.leagueKey] || '')}</span>` : `<span>Draw <b>${d}%</b></span><span>O2.5 <b>${v.over}%</b></span>`;
   return `<button type="button" class="sgt${on ? ' on' : ''}" data-ssel="${esc(c.id)}"><div class="m2"><span>${esc(c.ko)}</span>${tag}</div>${row(c.home, 'h', c.hId)}${row(c.away, 'a', c.aId)}${f ? '' : `<div class="pb"><i class="h" style="flex:${h}"></i><i class="d" style="flex:${d}"></i><i class="a" style="flex:${a}"></i></div>`}<div class="f2">${foot}</div>${f ? '' : tileBet(c)}</button>`;
 }
 const alertBox = () => { const a = alerts(); return a.length ? `<div class="alert">${a.join('<br>')}</div>` : ''; };
@@ -993,7 +993,7 @@ function recordBar() {
   }
   if (!l.n) return '';
   const row = (name, x) => x.n ? `<span class="rn">${name}</span><u>${pc(x.w, x.n)}</u><u>${pc(x.ou, x.n)}</u><u>${pc(x.bt, x.n)}</u>` : '';
-  return `<div class="rec"><b>Hit rate</b><div class="rg"><span></span><small>Winner</small><small>Over/Under</small><small>BTTS</small>${row('v2', l.v2)}${row('v4', l.v4)}${row('Forebet', l.fb)}</div><small>${l.n} games</small></div>`;
+  return `<div class="rec"><b>Hit rate</b><div class="rg"><span></span><small>Winner</small><small>Over/Under</small><small>BTTS</small>${row('v4', l.v4)}${row('Forebet', l.fb)}</div><small>${l.n} games</small></div>`;
 }
 function sidebar(leagues) {
   const n = k => day.cards.filter(c => c.v2 && c.leagueKey === k).length, on = k => S.league === k && !S.top ? 'on' : '';
@@ -1018,10 +1018,10 @@ function compare() {
   const s = tally.smCompare, n = s.n, G = 'var(--grass)', B = 'var(--sm)';
   const last = s.earlier.slice(0, 10).reverse();
   const live = s.recent.map(r => `<div class="li"><div class="a"><span>${esc(r.home)} vs ${esc(r.away)}</span><span>${r.final.h}–${r.final.a}</span></div>
-    <div class="b"><span>Model: ${OUT[r.modelPick]} <b class="${r.hit.outcomeHit ? 'ok' : 'no'}">${r.hit.outcomeHit ? '✓' : '✗'}</b></span><span style="color:var(--sm)">SportsMole: ${esc(r.sm)} <b>${r.smHit.outcomeHit ? '✓' : '✗'}</b></span></div></div>`).join('');
+    <div class="b"><span>${r.model ? esc(r.model) : 'Model'}: ${OUT[r.modelPick]} <b class="${r.hit.outcomeHit ? 'ok' : 'no'}">${r.hit.outcomeHit ? '✓' : '✗'}</b></span><span style="color:var(--sm)">SportsMole: ${esc(r.sm)} <b>${r.smHit.outcomeHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   const old = s.earlier.slice(0, 60).map(r => `<div class="li"><div class="a"><span>${esc(r.match)}</span><span>${esc(r.finalScore.replace(/^.* (\d+–\d+) .*$/, '$1'))}</span></div>
     <div class="b"><span>Model: ${esc(r.modelPick.replace(/ \(.*/, ''))} <b class="${r.modelHit ? 'ok' : 'no'}">${r.modelHit ? '✓' : '✗'}</b></span><span style="color:var(--sm)">SportsMole: ${esc(r.sportsmolePredict)} <b>${r.sportsmoleOutcomeHit ? '✓' : '✗'}</b></span></div></div>`).join('');
-  return `<div class="banner">Tracks SportsMole's published “We say” scorelines against final results, next to this site's v2 model: ${s.importedMatches} matches carried over from the old Hub and ${s.newMatches} tracked here since. New predictions are fetched automatically.</div>
+  return `<div class="banner">Tracks SportsMole's published “We say” scorelines against final results, next to this site's model (v4; v2 on the old Hub's games and on any game v4 had no numbers for): ${s.importedMatches} matches carried over from the old Hub and ${s.newMatches} tracked here since. New predictions are fetched automatically.</div>
     <div class="sec">Share of picks that came true<small>${n} matches. Longer bar is better, the leader is bold.</small></div>
     ${pairRow('Winner or draw', '3 outcomes', [{ name: 'Model', k: s.model.outcome, n, color: G }, { name: 'SportsMole', k: s.sm.outcome, n, color: B }])}
     ${pairRow('Over or under 2.5 goals', '2 outcomes', [{ name: 'Model', k: s.model.ou, n, color: G }, { name: 'SportsMole', k: s.sm.ou, n, color: B }])}
@@ -1044,16 +1044,16 @@ function resultsBlock(title, m) {
 function leagueScorecards(t) {
   const L = (t.leagues || []).filter(l => l.n >= 1); if (!L.length) return '';
   const cell = (m, best) => m && m.n ? `<td class="${best ? 'bst' : ''}"><b>${Math.round(100 * m.outcome / m.n)}%</b><small>${m.brier == null ? '' : m.brier.toFixed(2) + ' · '}${m.n}</small></td>` : `<td class="na">–</td>`;
-  const rows = L.map(l => { const bs = ['v2', 'v4', 'fb'].map(k => l[k] && l[k].n >= 5 ? l[k].brier : null), mn = Math.min(...bs.filter(x => x != null)); return `<tr><td class="n">${esc(l.name)}<small>${l.n} games</small></td>${['v2', 'v4', 'fb'].map((k, i) => cell(l[k], bs[i] != null && bs[i] === mn && bs.filter(x => x != null).length > 1)).join('')}</tr>`; }).join('');
+  const rows = L.map(l => { const bs = RM.map(k => l[k] && l[k].n >= 5 ? l[k].brier : null), mn = Math.min(...bs.filter(x => x != null)); return `<tr><td class="n">${esc(l.name)}<small>${l.n} games</small></td>${RM.map((k, i) => cell(l[k], bs[i] != null && bs[i] === mn && bs.filter(x => x != null).length > 1)).join('')}</tr>`; }).join('');
   return `<div class="sec" style="padding-top:20px">Each league, model by model<small>Winner hit rate on top, then Brier score (lower is better) and games. Green is the best Brier in that league once a model has 5+ games.</small></div>
-  <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>v2</th><th>v4</th><th>Forebet</th></tr>${rows}</table></div>`;
+  <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>v4</th><th>Forebet</th></tr>${rows}</table></div>`;
 }
 // Model vs market (src/market.js): each model against the sportsbook's own chances on the same games, the best v4 share in a blend,
 // closing-line value of the headline picks, and v4's value bets. Lower RPS / log loss is better.
 function marketView(t) {
   const M = t.market; if (!M || !M.n) return '';
   const f = x => x == null ? '–' : x.toFixed(3), sg = x => x == null ? '–' : `${x > 0 ? '+' : ''}${x.toFixed(1)}%`;
-  const rows = [['v4', 'v4'], ['v2', 'v2'], ['fb', 'Forebet']].filter(([k]) => M.pairs[k] && M.pairs[k].n).map(([k, name]) => {
+  const rows = [['v4', 'v4'], ['fb', 'Forebet']].filter(([k]) => M.pairs[k] && M.pairs[k].n).map(([k, name]) => {
     const x = M.pairs[k], win = x.model.rps < x.market.rps;
     return `<tr><td class="n">${name}<small>${x.n} games</small></td><td class="${win ? 'bst' : ''}"><b>${f(x.model.rps)}</b><small>log loss ${f(x.model.ll)}</small></td><td class="${win ? '' : 'bst'}"><b>${f(x.market.rps)}</b><small>log loss ${f(x.market.ll)}</small></td></tr>`;
   }).join('');
@@ -1068,11 +1068,11 @@ function marketView(t) {
 function goalsCalibration(t) {
   if (!t.calGoals) return '';
   const blocks = [['over', 'Over 2.5 goals'], ['btts', 'Both teams score']].map(([m, name]) => {
-    const rows = t.calGoals[m].v2.map((b, i) => {
-      const cs = ['v2', 'v4', 'fb'].map(k => { const x = t.calGoals[m][k][i]; if (!x.n) return `<td class="na">–</td>`; const act = Math.round(100 * x.hits / x.n), gap = act - x.avg, cls = x.n < 15 ? 'few' : gap <= -8 ? 'over' : gap >= 8 ? 'under' : 'ok'; return `<td class="${cls}"><b>${act}%</b><small>said ${Math.round(x.avg)} · ${x.n}</small></td>`; }).join('');
+    const rows = t.calGoals[m].v4.map((b, i) => {
+      const cs = RM.map(k => { const x = t.calGoals[m][k][i]; if (!x.n) return `<td class="na">–</td>`; const act = Math.round(100 * x.hits / x.n), gap = act - x.avg, cls = x.n < 15 ? 'few' : gap <= -8 ? 'over' : gap >= 8 ? 'under' : 'ok'; return `<td class="${cls}"><b>${act}%</b><small>said ${Math.round(x.avg)} · ${x.n}</small></td>`; }).join('');
       return `<tr><td class="n">${b.label}</td>${cs}</tr>`;
     }).join('');
-    return `<div class="pair" style="padding-top:6px"><div class="lab"><b style="font-weight:600">${name}</b><span>how often it happened</span></div><table class="lgt cg"><tr><th>Model said</th><th>v2</th><th>v4</th><th>Forebet</th></tr>${rows}</table></div>`;
+    return `<div class="pair" style="padding-top:6px"><div class="lab"><b style="font-weight:600">${name}</b><span>how often it happened</span></div><table class="lgt cg"><tr><th>Model said</th><th>v4</th><th>Forebet</th></tr>${rows}</table></div>`;
   }).join('');
   return `<div class="sec" style="padding-top:20px">Are the goals percentages honest?<small>Each row groups games by how likely a model said the outcome was, then shows how often it happened (bold) and the average it said. Red means it happens less than it says, blue more. Faded rows have under 15 games.</small></div>${blocks}`;
 }
@@ -1085,28 +1085,29 @@ function calibrationView(t) {
       <div class="tr2"><i style="width:${Math.round(b.avg)}%;background:#5f746b"></i></div><div class="tr2"><i style="width:${act}%;background:var(--grass)"></i></div><small>${verdict}</small></div>`;
   }).join('');
   const mine = t.mine && t.mine.n ? `<div class="small" style="margin-top:10px">Your own picks on ${t.mine.n} games: you got ${t.mine.mine}, the model got ${t.mine.model}.</div>` : '';
-  return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>Winner picks grouped by how sure the model was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}${mine}</div>`;
+  return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>v4's winner picks grouped by how sure it was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}${mine}</div>`;
 }
 const moe = (h, n) => (n >= 5 ? Math.round(196 * Math.sqrt((h / n) * (1 - h / n) / n)) : null); // 95% margin on a hit rate, in points
 const RB = { same: 'Same games', all: 'All games each model has' };
+const RM = ['v4', 'fb']; // models shown on the Results tab (v2 retired Oct 26, 2026; its record is in a closed section at the bottom)
 function boardBlock(t) {
   const bd = t.board; if (!bd) return '';
   const view = S.rb === 'all' ? 'all' : 'same', M = bd[view].models;
   const cell = (m, k, best) => { const [h, n] = M[m][k]; return n ? `<div class="c ${best ? 'best' : ''}"><div class="p">${Math.round(100 * h / n)}%</div><div class="f">${h} of ${n}${moe(h, n) != null ? ` · ±${moe(h, n)}` : ''}</div><div class="tr"><i style="width:${Math.round(100 * h / n)}%"></i></div></div>` : `<div class="c"><div class="p">–</div><div class="f">no games yet</div></div>`; };
   const row = (k, name, sub) => {
-    const pcts = ['v2', 'v4', 'fb'].map(m => { const [h, n] = M[m][k]; return n ? h / n : null; }), top = Math.max(...pcts.filter(x => x != null)), many = pcts.filter(x => x != null).length > 1;
-    return `<div class="r"><div class="lab">${name}<small>${sub}</small></div>${['v2', 'v4', 'fb'].map((m, i) => cell(m, k, many && pcts[i] === top)).join('')}</div>`;
+    const pcts = RM.map(m => { const [h, n] = M[m][k]; return n ? h / n : null; }), top = Math.max(...pcts.filter(x => x != null)), many = pcts.filter(x => x != null).length > 1;
+    return `<div class="r"><div class="lab">${name}<small>${sub}</small></div>${RM.map((m, i) => cell(m, k, many && pcts[i] === top)).join('')}</div>`;
   };
-  const br = ['v2', 'v4', 'fb'].map(m => M[m].brier), bl = Math.min(...br.filter(x => x != null));
+  const br = RM.map(m => M[m].brier), bl = Math.min(...br.filter(x => x != null));
   const n = view === 'same' ? bd.same.n : null;
   return `<div class="sec">Hit rate, side by side<small>${view === 'same' ? 'Every model scored on the same games, so the numbers are a fair comparison.' : 'Each model on every game it has been graded on, so the game counts differ.'} Green marks the best in each row.</small></div>
     <div class="seg">${['same', 'all'].map(v => `<button type="button" data-rb="${v}" class="${v === view ? 'on' : ''}">${RB[v]}${v === 'same' && view === 'same' ? ` (${n})` : ''}</button>`).join('')}</div>
-    <div class="bd"><div class="r h"><div></div><div><b>v2</b>official</div><div><b>v4</b>shadow</div><div class="fb"><b>Forebet</b>tracked only</div></div>
+    <div class="bd"><div class="r h"><div></div><div><b>v4</b>official</div><div class="fb"><b>Forebet</b>tracked only</div></div>
       ${row('outcome', 'Winner', 'home, draw, away')}${row('ou', 'Over/under', '2.5 goals')}${row('btts', 'Both score', 'both teams')}
       ${(() => { const B = bd[view].base; if (!B) return ''; const bc = ([h, n]) => n ? `<div class="c"><div class="p">${Math.round(100 * h / n)}%</div><div class="f">${h} of ${n}${moe(h, n) != null ? ` · ±${moe(h, n)}` : ''}</div></div>` : `<div class="c"><div class="p">–</div></div>`;
         return `<div class="r bs"><div class="lab">Always home<small>no model, just pick the home team</small></div>${bc(B.home)}<div class="bsn">beat this to add anything</div></div><div class="r bs"><div class="lab">Always Over<small>no model, just pick Over 2.5</small></div>${bc(B.over)}<div class="bsn">beat this to add anything</div></div>${B.usual && B.usual[1] ? `<div class="r bs"><div class="lab">League's usual side<small>Over or Under 2.5, whichever that league lands on more</small></div>${bc(B.usual)}<div class="bsn">history of that league, no model</div></div>` : ''}`; })()}
       <div class="r br"><div>Brier score<br><span class="fnt">lower is better</span></div>${br.map(x => `<div>${x == null ? '–' : `<b class="${x === bl && br.filter(y => y != null).length > 1 ? 'best' : ''}">${x}</b>`}</div>`).join('')}</div></div>
-    <div class="bdn">Small samples swing a lot. The baseline rows are the do-nothing picks each model has to beat. ± is the 95% margin: the true rate probably sits within that many points of the percentage shown, and it shrinks as games pile up${view === 'all' ? ' (counted on the games v2 was graded on)' : ''}. Forebet is recorded and graded only; no model uses it. A random guess scores 0.667 on Brier.${view === 'same' && !n ? ' No game has all three models graded yet.' : ''}</div>`;
+    <div class="bdn">Small samples swing a lot. The baseline rows are the do-nothing picks each model has to beat. ± is the 95% margin: the true rate probably sits within that many points of the percentage shown, and it shrinks as games pile up${view === 'all' ? ' (counted on the games v2 was graded on)' : ''}. Forebet is recorded and graded only; no model uses it. A random guess scores 0.667 on Brier. v2 was retired on Oct 26, 2026: its record is at the bottom of this page.${view === 'same' && !n ? ' No game has every model graded yet.' : ''}</div>`;
 }
 // What each model picked for one graded game, and whether it hit.
 function fbPicks(c) {
@@ -1118,10 +1119,10 @@ function fbPicks(c) {
 function triRows(c) {
   const nm = p => ({ H: c.home, D: 'Draw', A: c.away })[p];
   const mk = (m, g) => m && g ? { w: [nm(m.pick), g.outcomeHit], ou: [m.over >= 50 ? 'Over' : 'Under', g.ouHit], bt: [m.btts >= 50 ? 'Yes' : 'No', g.bttsHit] } : null;
-  const cols = [mk(c.v2, c.grade && c.grade.v2), mk(c.v4, c.grade && c.grade.v4), fbPicks(c)];
+  const cols = [c.v4 ? mk(c.v4, c.grade && c.grade.v4) : null, fbPicks(c)];
   const cl = x => x ? `${esc(x[0])} <b class="${x[1] ? 'ok' : 'no'}">${x[1] ? '✓' : '✗'}</b>` : '<span class="fnt">–</span>';
   const line = (label, key) => `<span>${label}</span>${cols.map(x => `<span>${cl(x && x[key])}</span>`).join('')}`;
-  return `<div class="tri"><span></span><span class="hh">v2</span><span class="hh">v4</span><span class="hh">Forebet</span>${line('Winner', 'w')}${line('Over/under', 'ou')}${line('Both score', 'bt')}</div>`;
+  return `<div class="tri"><span></span><span class="hh">v4</span><span class="hh">Forebet</span>${line('Winner', 'w')}${line('Over/under', 'ou')}${line('Both score', 'bt')}</div>`;
 }
 // ---------- Model bets: each card's headline pick, tracked as one fixed bet ----------
 // (leanPick and leanHit are the same code the server uses to lock and score the pick; test/pick.mjs keeps the two copies identical.)
@@ -1132,8 +1133,8 @@ const LEAN_KEYS = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: '
 function rowsOf(c) {
   const v = c.v2;
   const f = c.fb || {};
-  const M = [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
-  if (c.v4) M.push({ n: 'v4', w: c.v4.pick, p: c.v4.p, over: c.v4.over, btts: c.v4.btts, po: c.v4.over, pb: c.v4.btts });
+  // v2 was retired on Oct 26, 2026: it only votes on a card v4 has no numbers for.
+  const M = c.v4 && c.v4.p ? [{ n: 'v4', w: c.v4.pick, p: c.v4.p, over: c.v4.over, btts: c.v4.btts, po: c.v4.over, pb: c.v4.btts }] : [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
   if (f.p || f.score) M.push({ n: 'Forebet', w: f.p ? hdaOf(f.p) : sideOfScore(f.score.h, f.score.a), p: f.p || null, over: f.over != null ? f.over : f.score ? (f.score.h + f.score.a >= 3 ? 100 : 0) : null, btts: f.btts != null ? f.btts : f.score ? (f.score.h > 0 && f.score.a > 0 ? 100 : 0) : null, po: f.over != null ? f.over : null, pb: f.btts != null ? f.btts : null });
   if (c.sm) M.push({ n: 'SportsMole', w: sideOfScore(c.sm.h, c.sm.a), p: null, over: c.sm.h + c.sm.a >= 3 ? 100 : 0, btts: c.sm.h > 0 && c.sm.a > 0 ? 100 : 0, po: null, pb: null });
   const O = [['H', m => m.w === 'H', m => m.p && m.p[0]], ['D', m => m.w === 'D', m => m.p && m.p[1]], ['A', m => m.w === 'A', m => m.p && m.p[2]],
@@ -1165,7 +1166,8 @@ function leanPick(c) {
   const opts = [[q.p[0], 'H'], [q.p[1], 'D'], [q.p[2], 'A'], [q.over, 'O'], [typeof q.over === 'number' ? 100 - q.over : null, 'U'], [q.btts, 'B'], [typeof q.btts === 'number' ? 100 - q.btts : null, 'N']].filter(x => typeof x[0] === 'number');
   if (!opts.length) return base;
   const top = opts.reduce((m, x) => (x[0] > m[0] ? x : m)), key = top[1], p = Math.round(top[0]);
-  const r = rowsOf(c).find(x => x.key === key); if (!r || r.a.length < 2) return base;
+  const r = rowsOf(c).find(x => x.key === key); if (!r) return base;
+  if (r.a.length < 2) return { k: 'solo', key, p, y: 1, a: 1, by: ['v4'], no: [], src: 'v4' }; // no other model has numbers yet
   const maj = r.yes.length * 2 > r.a.length, all = r.no.length === 0;
   if (!maj) return { k: 'split', key, p, y: r.yes.length, a: r.a.length, by: ['v4'], no: [], src: 'v4' };
   return { k: all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src: 'v4' };
@@ -1176,7 +1178,7 @@ function leanHit(key, f) {
   return key === 'H' ? f.h > f.a : key === 'D' ? f.h === f.a : key === 'A' ? f.h < f.a : key === 'O' ? t >= 3 : key === 'U' ? t < 3 : key === 'B' ? f.h > 0 && f.a > 0 : !(f.h > 0 && f.a > 0);
 }
 
-const LEAN_KIND = { best: 'Best pick', lean: 'Lean', split: 'Split', solo: 'v2 alone' };
+const LEAN_KIND = { best: 'Best pick', lean: 'Lean', split: 'Split', solo: 'One model' };
 const leanName = (c, key) => ({ H: `${strip(c.home)} to win`, D: 'Draw', A: `${strip(c.away)} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' })[key];
 const MB_PLAIN = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score', N: 'Not both score' };
 // Edge = the model hit rate minus what chance alone would score on the same kinds of bet (how often that outcome happens overall).
@@ -1256,7 +1258,7 @@ function mbetsToday() {
     if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><small>This game was already over when the Hub first saw it.</small></div>`;
     const st = c.lean ? (L.hit ? '<span class="mbs hit">Hit ✓</span>' : '<span class="mbs miss">Missed ✗</span>') : `<span class="mbs">${c.kickoff && new Date(c.kickoff) <= Date.now() ? 'In play' : 'Pending'}</span>`;
     return `<div class="mbg"><div class="mbt"><b>${esc(leanName(c, L.key))}</b>${st}</div><small>${esc(c.home)} vs ${esc(c.away)} · ${esc(c.ko || '')}${c.final ? ' · ' + c.final.h + '–' + c.final.a : ''}</small>
-      ${priceLine(c, L)}<small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.k === 'split' ? `no majority, ${esc((L.by || ['v2']).join(', '))}\'s own pick` : L.k === 'solo' ? 'only v2 had numbers' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
+      ${priceLine(c, L)}<small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.k === 'split' ? `no majority, ${esc((L.by || ['v2']).join(', '))}\'s own pick` : L.k === 'solo' ? `only ${esc((L.by || ['v2'])[0])} had numbers` : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
   }).join('');
 }
 function profitView(T) {
@@ -1330,7 +1332,9 @@ function results() {
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
     boardBlock(t) + leagueScorecards(t) + marketView(t) + calibrationView(t) + goalsCalibration(t) +
     (t.promo && t.promo.v4 && t.promo.v4.n ? `<details class="old"><summary>v4 on newly promoted clubs (${t.promo.v4.n} games, own line)</summary><div class="small" style="margin:6px 4px">v4 starts these clubs from a weaker-than-average rating that fades as they play. These games are kept out of every v4 total above.</div>` +
-      resultsBlock('v2, same games', t.promo.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v4, starting rating', t.promo.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` : '') +
+      resultsBlock('v4, starting rating', t.promo.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` : '') +
+    (t.v2 && t.v2.n ? `<details class="old"><summary>Retired v2 record (official model until Oct 25, 2026)</summary><div class="small" style="margin:6px 4px">v2 was retired on Oct 26, 2026: on the tracked games it scored worse than always guessing the base rates. It still stands in on a game v4 has no numbers for.</div>` +
+      resultsBlock('v2, every graded game', t.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + (t.h2h && t.h2h.v2.n ? resultsBlock('v2, games v4 also had', t.h2h.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v4, same games', t.h2h.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') : '') + `</details>` : '') +
     `<details class="old"><summary>Retired v3 shadow test (${t.h2hOld.v3.n} games)</summary>` +
     resultsBlock('v2', t.h2hOld.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v3 (retired)', t.h2hOld.v3).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` +
     `<div class="sec" style="padding-top:20px">Recent games<small>Each model's pick and whether it hit.</small></div><div class="lst">${rows || '<div class="small">Nothing new graded yet. Results fill in automatically a few hours after each league finishes.</div>'}</div>` +

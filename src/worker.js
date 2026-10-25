@@ -167,12 +167,12 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     const r4cup = !f.done && league.cupModel ? await cupForecast(league, f, h0, a0, env, memo, debug) : null;
     if (!h || !a) {
       if (needsSync.length) notReady++;
-      card.skipped = 'Club not found in any synced league yet (v2 needs its league results)';
+      card.skipped = 'Club not found in any synced league yet (a full card needs its league results)';
       if (r4cup) { card.v4 = slim(r4cup); keepOdds(card, old, f, slug, now); }
       cards.push(card); continue;
     }
     if (h.team.form.n < 3 || a.team.form.n < 3) {
-      card.skipped = 'Not enough recent league results for one or both teams (v2 needs them)';
+      card.skipped = 'Not enough recent league results for one or both teams (a full card needs them)';
       if (r4cup) { card.v4 = slim(r4cup); keepOdds(card, old, f, slug, now); }
       cards.push(card); continue;
     }
@@ -398,7 +398,6 @@ async function tally(env) {
   const BASE = { all: { n: 0, home: 0, over: 0, un: 0, uh: 0 }, same: { home: 0, over: 0, un: 0, uh: 0 } }; // un/uh = games with a league 'usual side' and how many that side got right
   for (const r of legacy.v2Rows) {
     { const m = /(\d+)\s*[–-]\s*(\d+)\s*$/.exec(r.actual || ''); if (m) { BASE.all.n++; BASE.all.home += +m[1] > +m[2] ? 1 : 0; BASE.all.over += +m[1] + +m[2] >= 3 ? 1 : 0; } }
-    if (r.p) cal(r.p, r.outcomeHit);
     v2All.n++; v2All.outcome += r.outcomeHit; v2All.ou += r.ouHit; v2All.btts += r.bttsHit; v2All.brier += r.brier ?? 0;
   }
   for (const r of legacy.shadow) {
@@ -434,13 +433,13 @@ async function tally(env) {
         }
       }
       if (g4) add(v4All, g4); // every game v4 predicted, including cup games v2 cannot cover
+      if (g4 && c.v4 && c.v4.p) cal(c.v4.p, g4.outcomeHit); // winner calibration is v4's (the official model)
       if (!c.grade.v2) continue;
       add(v2All, c.grade.v2);
       const us = c.final ? usualOverSide(c.league) : null; if (us) { BASE.all.un++; BASE.all.uh += (c.final.h + c.final.a >= 3) === (us === 'over') ? 1 : 0; }
       if (c.final) { BASE.all.n++; BASE.all.home += c.final.h > c.final.a ? 1 : 0; BASE.all.over += c.final.h + c.final.a >= 3 ? 1 : 0; }
       if (g4) { add(h2hV2, c.grade.v2); add(h2hV4, g4); }
       if (c.grade.v3) { add(oldV2, c.grade.v2); add(oldV3, c.grade.v3); }
-      cal(c.v2.p, c.grade.v2.outcomeHit);
       if (c.final) {
         const gs = c.final.h + c.final.a, bs = c.final.h > 0 && c.final.a > 0, r = lgRow(c);
         r.n++; add(r.v2, c.grade.v2); if (g4) add(r.v4, g4);
@@ -483,10 +482,13 @@ async function tally(env) {
     smT.model.outcome += r.modelHit === true; smT.model.ou += r.modelOuHit === true; smT.model.btts += r.modelBttsHit === true;
     smT.sm.outcome += r.sportsmoleOutcomeHit === true; smT.sm.ou += r.smOuHit === true; smT.sm.btts += r.smBttsHit === true; smT.sm.score += r.sportsmoleScoreHit === true;
   }
+  // The Hub's side is the card's own model: v4, or v2 on a game v4 had no numbers for (and on the old Hub's games above).
+  const smModel = c => (c.v4 && c.v4.p && c.grade.v4 ? ['v4', c.grade.v4] : ['v2', c.grade.v2]);
   const smLive = live.filter(c => c.sm && c.smGrade);
   for (const c of smLive) {
     smT.n++;
-    smT.model.outcome += c.grade.v2.outcomeHit; smT.model.ou += c.grade.v2.ouHit; smT.model.btts += c.grade.v2.bttsHit;
+    const [, g] = smModel(c);
+    smT.model.outcome += g.outcomeHit; smT.model.ou += g.ouHit; smT.model.btts += g.bttsHit;
     smT.sm.outcome += c.smGrade.outcomeHit; smT.sm.ou += c.smGrade.ouHit; smT.sm.btts += c.smGrade.bttsHit; smT.sm.score += c.smGrade.scoreHit;
   }
   const avg = (x, n) => (n ? +(x / n).toFixed(3) : null);
@@ -503,12 +505,12 @@ async function tally(env) {
     board, last30, top: topT, tracked: TB, market: finishMarket(MKT), leans: { ...LB, recent: LB.recent.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || '')).slice(0, 40) }, leagues, calGoals,
     smCompare: {
       ...smT, importedMatches: legacySm.length, newMatches: smLive.length,
-      recent: smLive.slice(0, 100).map(c => ({ date: c.date, home: c.home, away: c.away, final: c.final, modelPick: c.v2.pick, modelP: c.v2.p, sm: c.sm.text, hit: c.grade.v2, smHit: c.smGrade })),
+      recent: smLive.slice(0, 100).map(c => { const [m, g] = smModel(c); return { date: c.date, home: c.home, away: c.away, final: c.final, model: m, modelPick: c[m].pick, modelP: c[m].p, sm: c.sm.text, hit: g, smHit: c.smGrade }; }),
       earlier: legacySm.slice().reverse(),
     },
     v2: fin(v2All),
     forebet: { ...fbT, brier: fbT.n ? +(fbT.brier / fbT.n).toFixed(3) : null, any: fbT.n + fbT.nOu + fbT.nBtts, vs: Object.fromEntries(Object.entries(fbVs).map(([k, x]) => [k, { ...x, fbBrier: x.n ? +(x.fbBrier / x.n).toFixed(3) : null, brier: x.n ? +(x.brier / x.n).toFixed(3) : null }])) },
-    calibration: CAL.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null })),
+    calibration: CAL.map(b => ({ label: b.label, lo: b.lo, hi: b.hi, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null })), // v4's winner picks
     mine: mineT,
     h2h: { v2: fin(h2hV2), v4: fin(h2hV4) },
     v4: fin(v4All),

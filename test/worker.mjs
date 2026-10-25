@@ -276,7 +276,7 @@ ok('form excludes the match itself and later games', ff.n === 3 && ff.gf === 3 &
   ok('note and own pick survive a re-analyze', after?.note === 'Key striker out' && after?.mine === 'D');
   const t = await (await worker.fetch(new Request('https://hub.test/api/tally', { headers: { 'x-admin-token': 'secret' } }), env)).json();
   const tot = t.calibration.reduce((a, b) => a + b.n, 0);
-  ok('calibration groups cover every graded winner pick', t.calibration.length === 4 && tot >= 280, String(tot));
+  ok('calibration groups cover every graded v4 winner pick (v2 is retired)', t.calibration.length === 4 && tot === t.v4.n && tot > 0, `${tot} vs ${t.v4.n}`);
 }
 console.log(fails ? `\n${fails} FAILED` : '\nAll wiring checks passed (incl. pre-kickoff form)');
 process.exit(fails ? 1 : 0);
