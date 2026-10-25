@@ -1,70 +1,38 @@
 {
-  "updated": "2026-10-24T10:08:25Z",
+  "updated": "2026-10-25T11:09:29Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-10-24",
-      "title": "Gone phishing",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,955",
-          "change": -0.21
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,624",
-          "change": -0.52
-        },
-        {
-          "label": "Dow",
-          "value": "52,215",
-          "change": -1.24
-        },
-        {
-          "label": "10-yr",
-          "value": "4.988%",
-          "change": 4,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$81,369",
-          "change": 0.25
-        },
-        {
-          "label": "CrowdStrike",
-          "value": "$257.57",
-          "change": 8.25
-        }
-      ],
+      "date": "2026-10-25",
+      "title": "Morning Boo",
+      "markets": [],
       "takeaways": [
         {
-          "h": "Stocks slip",
-          "t": "Higher oil and the AI-led selloff spread, sending the Dow down 1.24% and the S&P 500 down 0.52%."
+          "h": "Early shopping",
+          "t": "Nearly half of Americans shopped for Halloween before October last year, versus just over a third a decade ago."
         },
         {
-          "h": "Yields",
-          "t": "The 10-year yield rose 4 bps but still ended the week just under 5% at 4.988%."
+          "h": "Spending",
+          "t": "The NRF projects $13.5B in Halloween spending this year, up from $13.1B in 2023."
         },
         {
-          "h": "Cyber rally",
-          "t": "CrowdStrike jumped 8.25% as cybersecurity names rose on worries about a vulnerability in a core web coding language."
+          "h": "Porch stylists",
+          "t": "Pumpkin-decorating services charge a couple hundred to $2,000; Curated Pumpkin grew 5x in 2025."
         },
         {
-          "h": "AmEx cuts",
-          "t": "AmEx is cutting 5% of staff (~3,500 jobs) for AI efficiency, even as Q3 sales grew 9% and its outlook rose."
+          "h": "Monster Mash",
+          "t": "The 1962 song could still earn about $1M a year, per Billboard's 2023 estimate."
         },
         {
-          "h": "Warhound",
-          "t": "Startup from Palmer Luckey and Ben Lamm raised $200M seed at a ~$1.2B valuation to engineer military dogs."
+          "h": "Skelly",
+          "t": "Home Depot's 12-foot skeleton ($300) returned with a $379 app-enabled version this year."
         },
         {
-          "h": "Canada tariffs",
-          "t": "Trump exempted nine Maine-linked product categories from 50% tariffs but added new ones; $20B of goods stay tariffed from Oct. 30."
+          "h": "Reese's",
+          "t": "Pumpkin packaging now says \"Carving not on actual product\" after a $5M class-action suit was dismissed."
         }
       ],
-      "note": "Market numbers are the Friday close."
+      "note": "Sunday special edition: no market numbers."
     },
     {
       "source": "Brew Markets",
