@@ -2,7 +2,7 @@ import { v2, grade, pickOutcome, bestBet } from './model.js';
 import { usualOverSide, supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
   TZ, LEAGUES, UNTRACKED, isCounted, FIRST_DIV, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
-  findTeam, getContext, missingContexts, fixturesForLeague, rawOdds, shotsCoverage,
+  findTeam, getContext, missingContexts, fixturesForLeague, rawOdds, shotsCoverage, PRICED,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
 import { forebetStep, forebetFetch, FB_PAGES, matchRows, is as isName } from './forebetpage.js';
@@ -11,6 +11,7 @@ import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { addStrats } from './strats.js';
+import { blankMarket, addMarket, finishMarket } from './market.js';
 import { fetchBtts } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
@@ -114,7 +115,7 @@ const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', 
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/');
 
 // ---------------------------------------------------------------------------------------------
-// Analyze ONE league for ONE date: fixtures -> v2 (official) + v4 (shadow) cards.
+// Analyze ONE league for ONE date: fixtures -> v2 + v4 (official since 2026-10-26) cards.
 // ---------------------------------------------------------------------------------------------
 export async function analyzeLeague(date, slug, env, now = new Date(), { partial = false, leftover = false } = {}) {
   const league = leagueBySlug(slug);
@@ -167,12 +168,12 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     if (!h || !a) {
       if (needsSync.length) notReady++;
       card.skipped = 'Club not found in any synced league yet (v2 needs its league results)';
-      if (r4cup) card.v4 = slim(r4cup);
+      if (r4cup) { card.v4 = slim(r4cup); keepOdds(card, old, f, slug, now); }
       cards.push(card); continue;
     }
     if (h.team.form.n < 3 || a.team.form.n < 3) {
       card.skipped = 'Not enough recent league results for one or both teams (v2 needs them)';
-      if (r4cup) card.v4 = slim(r4cup);
+      if (r4cup) { card.v4 = slim(r4cup); keepOdds(card, old, f, slug, now); }
       cards.push(card); continue;
     }
     const r2 = v2(h.team.form, a.team.form);
@@ -196,8 +197,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     // Once the game has kicked off the v4 made before it stands: a later re-analysis must not wipe it.
     if (old?.v4 && new Date(f.date).getTime() <= now.getTime()) { card.v4 = old.v4; why = null; if (old.v4why) delete card.v4why; }
     if (!card.v4 && why) card.v4why = why;
-    if (FIRST_DIV.has(slug) && f.odds) card.odds = { ...f.odds, ...(old?.odds && old.odds.by != null ? { by: old.odds.by, bn: old.odds.bn } : {}) };
-    if (old?.odds && (!card.odds || new Date(f.date).getTime() <= now.getTime())) card.odds = old.odds; // the price from before kickoff stands
+    keepOdds(card, old, f, slug, now);
     if (old?.sm) card.sm = old.sm;
     if (old?.note) card.note = old.note;
     if (old?.mine) card.mine = old.mine;
@@ -228,18 +228,31 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   return { fixtures: fx.length, cards: cards.length, skipped: cards.filter(c => c.skipped).length, debug };
 }
 
+// Attach the price to a card being (re)built; once the game has kicked off the price from before kickoff stands.
+function keepOdds(card, old, f, slug, now) {
+  if (PRICED.has(slug) && f.odds) card.odds = withOdds(old?.odds, f.odds);
+  if (old?.odds && (!card.odds || new Date(f.date).getTime() <= now.getTime())) card.odds = old.odds;
+}
+// A fresh price for a card: keeps the both-score prices (they come from another source) and `f`, the first home / draw / away price the
+// Hub saw for this game. `f` is what a bet placed when the pick first showed would have got; the price at kickoff is the closing one.
+export function withOdds(old, fresh) {
+  const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}) };
+  const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? { h: old.h, d: old.d, a: old.a } : fresh.h != null && fresh.d != null && fresh.a != null ? { h: fresh.h, d: fresh.d, a: fresh.a } : null;
+  if (f) n.f = f;
+  return n;
+}
 // ---------------------------------------------------------------------------------------------
 // Prices for games already analyzed: look at ONE first-division league per run (each at most every 6 hours, remembered in the free
 // edge cache so it costs no KV writes) and attach ESPN's current price to cards that have not started. Display only; no model reads it.
 // Fetch ESPN's current price for ONE first-division league on ONE day and attach it to games that have a model pick and have not started.
 export async function refreshOdds(env, date, slug, now = new Date()) {
-  const lg = leagueBySlug(slug); if (!lg || !FIRST_DIV.has(slug)) return { error: 'Prices are only read for first divisions' };
+  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
-  const open = (day.cards || []).filter(c => c.league === slug && c.v2 && !c.final && new Date(c.kickoff).getTime() > now.getTime());
+  const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && new Date(c.kickoff).getTime() > now.getTime());
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
   const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
   let changed = 0, priced = 0;
-  for (const c of open) { const o = byId.get(c.id)?.odds; if (o) priced++; if (o) { const n = { ...o, ...(c.odds && c.odds.by != null ? { by: c.odds.by, bn: c.odds.bn } : {}) }; if (JSON.stringify(n) !== JSON.stringify(c.odds)) { c.odds = n; changed++; } } }
+  for (const c of open) { const o = byId.get(c.id)?.odds; if (o) priced++; if (o) { const n = withOdds(c.odds, o); if (JSON.stringify(n) !== JSON.stringify(c.odds)) { c.odds = n; changed++; } } }
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { games: open.length, priced, changed };
 }
@@ -262,8 +275,8 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
   const t = localDate(now.toISOString());
   for (const date of [t, addDays(t, 1)]) {
     const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) continue;
-    for (const lg of LEAGUES.filter(l => FIRST_DIV.has(l.slug))) {
-      if (!(day.cards || []).some(c => c.league === lg.slug && c.v2 && !c.final && new Date(c.kickoff).getTime() > now.getTime())) continue;
+    for (const lg of LEAGUES.filter(l => PRICED.has(l.slug))) {
+      if (!(day.cards || []).some(c => c.league === lg.slug && (c.v2 || c.v4) && !c.final && new Date(c.kickoff).getTime() > now.getTime())) continue;
       const ck = new Request(`https://hub.local/odds/${date}/${lg.slug}`);
       try { if (cache && await cache.match(ck)) continue; } catch (e) { /* no cache: just look */ }
       try { if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': 'max-age=21600' } })); } catch (e) { /* ignore */ }
@@ -353,7 +366,8 @@ export async function smLeague(date, slug, env, now = new Date(), { force = fals
 
 // ---------------------------------------------------------------------------------------------
 // Totals = history imported from the old Hub + everything graded here since.
-//  v2: official model, all graded matches.  h2h: v2 vs v4 on the SAME matches only (v4 started 2026-10-14).
+//  v2: all graded matches (official model until 2026-10-25; v4 since).  h2h: v2 vs v4 on the SAME matches only (v4 started 2026-10-14).
+//  market: each model against the sportsbook price (src/market.js).
 //  h2hOld: the retired v3 shadow test (58 imported matches + any live games predicted before v4 took over).
 // ---------------------------------------------------------------------------------------------
 function blank() { return { n: 0, outcome: 0, ou: 0, btts: 0, brier: 0 }; }
@@ -392,10 +406,12 @@ async function tally(env) {
     add(oldV2, grade(toPred(r.v2), { h, a }));
     add(oldV3, grade(toPred(r.v3), { h, a }));
   }
+  const MKT = blankMarket();
   for (const k of list.keys) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
       if (!c.grade || day.date <= LEGACY_THROUGH || !isCounted(c.league, day.date)) continue;
+      addMarket(MKT, c); // model vs market: every counted game with a price, v4-only cup games included
       // v4 on a newly promoted club (starting rating) is its own line: it stays out of every v4 total below.
       const promo = !!(c.v4 && c.v4.promo), g4 = promo ? null : c.grade.v4;
       if (promo && c.grade.v4 && c.grade.v2) { add(promoV2, c.grade.v2); add(promoV4, c.grade.v4); }
@@ -446,17 +462,19 @@ async function tally(env) {
     }
   }
   live.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''));
-  // How top picks did over the 30 most recently graded games: winner at 55%+, goals markets at 62%+, and every other winner pick.
+  // How top picks did over the 30 most recently graded games: winner at 55%+, goals markets at 60%+, and every other winner pick.
   for (const c of live.slice(0, 30)) {
     last30.n++;
     const hit = (x, o) => { x.n++; x.w += o.outcomeHit ? 1 : 0; x.ou += o.ouHit ? 1 : 0; x.bt += o.bttsHit ? 1 : 0; };
     if (c.grade.v2) hit(last30.v2, c.grade.v2);
     if (c.grade.v4 && !(c.v4 && c.v4.promo)) hit(last30.v4, c.grade.v4);
     if (c.fb && c.final) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { last30.fb.n++; last30.fb.w += f.outcomeHit ? 1 : 0; last30.fb.ou += f.ouHit ? 1 : 0; last30.fb.bt += f.bttsHit ? 1 : 0; } }
-    if (!c.final || !c.v2 || !c.v2.p) continue;
-    const t = topT[Math.max(...c.v2.p) >= 55 ? 'win' : 'rest']; t.n++; t.hits += c.grade.v2.outcomeHit ? 1 : 0;
-    const gs = c.final.h + c.final.a, bs = c.final.h > 0 && c.final.a > 0, ov = c.v2.over, bt = c.v2.btts;
-    if (ov != null && bt != null) for (const [pp, hit] of [[ov, gs >= 3], [100 - ov, gs < 3], [bt, bs], [100 - bt, !bs]]) if (pp >= 62) { topT.goals.n++; topT.goals.hits += hit ? 1 : 0; }
+    // Top picks rank on v4 (the official model), or v2 for a game v4 had no numbers for: winner at 55%+, goals at 60%+ (public/index.html lead()).
+    const ln = c.v4 && c.v4.p && c.grade.v4 ? 'v4' : c.v2 && c.v2.p && c.grade.v2 ? 'v2' : null;
+    if (!c.final || !ln) continue;
+    const q = c[ln], t = topT[Math.max(...q.p) >= 55 ? 'win' : 'rest']; t.n++; t.hits += c.grade[ln].outcomeHit ? 1 : 0;
+    const gs = c.final.h + c.final.a, bs = c.final.h > 0 && c.final.a > 0, ov = q.over, bt = q.btts;
+    if (ov != null && bt != null) for (const [pp, hit] of [[ov, gs >= 3], [100 - ov, gs < 3], [bt, bs], [100 - bt, !bs]]) if (pp >= 60) { topT.goals.n++; topT.goals.hits += hit ? 1 : 0; }
   }
   // Model vs SportsMole: the Hub's 141 tracked matches + everything graded here since.
   const smT = { n: 0, model: { outcome: 0, ou: 0, btts: 0 }, sm: { outcome: 0, ou: 0, btts: 0, score: 0 } };
@@ -482,7 +500,7 @@ async function tally(env) {
   const leagues = [...perLg.values()].sort((a, b) => b.n - a.n).map(r => ({ slug: r.slug, name: r.name, n: r.n, v2: sc(r.v2), v4: sc(r.v4), fb: sc(r.fb) }));
   const calGoals = Object.fromEntries(Object.entries(calG).map(([m, o]) => [m, Object.fromEntries(Object.entries(o).map(([k, bs]) => [k, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]))]));
   return {
-    board, last30, top: topT, tracked: TB, leans: { ...LB, recent: LB.recent.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || '')).slice(0, 40) }, leagues, calGoals,
+    board, last30, top: topT, tracked: TB, market: finishMarket(MKT), leans: { ...LB, recent: LB.recent.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || '')).slice(0, 40) }, leagues, calGoals,
     smCompare: {
       ...smT, importedMatches: legacySm.length, newMatches: smLive.length,
       recent: smLive.slice(0, 100).map(c => ({ date: c.date, home: c.home, away: c.away, final: c.final, modelPick: c.v2.pick, modelP: c.v2.p, sm: c.sm.text, hit: c.grade.v2, smHit: c.smGrade })),

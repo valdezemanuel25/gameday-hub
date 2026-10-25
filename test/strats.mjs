@@ -1,0 +1,20 @@
+// Tracked-bet rules: run on v4 from SINCE, the old v2 rules keep a frozen record.
+import { STRATS, RETIRED, SINCE, RETIRED_SINCE, addStrats } from '../src/strats.js';
+import { leanHit } from '../src/pick.js';
+let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) bad++; };
+const S = () => ({ strats: {}, base: { n: 0, home: 0, draw: 0, away: 0, over: 0, btts: 0 } });
+const card = (v4, v2, fb, final = { h: 2, a: 1 }) => ({ final, v4, v2, fb });
+const v4 = { p: [58, 24, 18], over: 61, btts: 62 }, v2 = { p: [60, 22, 18], over: 70, btts: 70 };
+const a = S(); addStrats(a, card(v4, v2, { p: [50, 30, 20] }), SINCE, leanHit);
+ok('every live rule is on v4 and fires on a strong v4 card', ['v4over', 'v4btts', 'v4home', 'v4fb'].every(id => a.strats[id] && a.strats[id].live.n === 1) && !a.strats.v4away, JSON.stringify(Object.keys(a.strats)));
+ok('no live rule reads v2', STRATS.every(s => !/v2/.test(s.rule)));
+ok('retired v2 rules add nothing from SINCE on', !a.strats.over && !a.strats.home55);
+const b = S(); addStrats(b, card(v4, v2, null), RETIRED_SINCE, leanHit);
+ok('before SINCE the retired rules still count, as their own live games', b.strats.over && b.strats.over.retired && b.strats.over.live.n === 1 && b.strats.v4over.hist.n === 1);
+const c = S(); addStrats(c, card(null, v2, null), SINCE, leanHit);
+ok('a card with no v4 counts in the base rates but triggers no rule', c.base.n === 1 && Object.keys(c.strats).length === 0);
+const d = S(); addStrats(d, card({ p: [20, 25, 55], over: 50, btts: 50 }, null, null, { h: 0, a: 1 }), SINCE, leanHit);
+ok('away rule fires at 50%+ and lands on an away win', d.strats.v4away && d.strats.v4away.live.hits === 1 && d.base.n === 1);
+ok('rule ids are unique across live and retired', new Set([...STRATS, ...RETIRED].map(s => s.id)).size === STRATS.length + RETIRED.length);
+console.log(bad ? `\n${bad} FAILED` : '\nAll tracked-bet checks passed');
+process.exit(bad ? 1 : 0);

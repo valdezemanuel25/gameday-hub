@@ -494,35 +494,38 @@ const sideName = (c, side) => side === 'H' ? c.home : side === 'A' ? c.away : 'D
 const pickText = c => c.v2.pick === 'D' ? 'Draw' : sideName(c, c.v2.pick);
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const pill = (ok, l) => `<span class="hit ${ok ? 'y' : 'n'}">${l}</span>`;
-const isTop = c => c.v2 && (c.v2.best.p >= 62 || Math.max(...c.v2.p) >= 55);
-// What makes a game a top pick: v2's winner at 55%+ and/or a goals market at 62%+, with what v4 and Forebet say about the same pick.
+// v4 is the official model (Oct 26, 2026): top picks rank on v4, or on v2 for a game v4 has no numbers for. The other one is shown beside it.
+const TOP_WIN = 55, TOP_GOALS = 60;
+const lead = c => c.v4 && Array.isArray(c.v4.p) ? { n: 'v4', m: c.v4, o: 'v2', x: c.v2 || {} } : { n: 'v2', m: c.v2, o: 'v4', x: {} };
+const isTop = c => { if (!c.v2 && !c.v4) return false; const v = lead(c).m; return Math.max(v.over, 100 - v.over, v.btts, 100 - v.btts) >= TOP_GOALS || Math.max(...v.p) >= TOP_WIN; };
+// What makes a game a top pick: the lead model's winner at 55%+ and/or a goals market at 60%+, with what the other model and Forebet say.
 function topPicks(c) {
-  const v = c.v2, out = [], f = c.fb || {}, v4 = c.v4 || {}, mx = Math.max(...v.p), i = v.p.indexOf(mx);
-  if (mx >= 55) out.push({ label: `${i === 0 ? c.home : i === 2 ? c.away : 'Draw'} to ${i === 1 ? 'draw' : 'win'}`, p: mx, v4: v4.p ? v4.p[i] : null, fb: f.p ? f.p[i] : null });
-  const mk = (label, p, a, b, flip) => { if (p >= 62) out.push({ label, p, v4: a == null ? null : flip ? 100 - a : a, fb: b == null ? null : flip ? 100 - b : b }); };
-  mk('Over 2.5 goals', v.over, v4.over, f.over); mk('Under 2.5 goals', 100 - v.over, v4.over, f.over, true);
-  mk('Both teams score', v.btts, v4.btts, f.btts); mk('Not both teams score', 100 - v.btts, v4.btts, f.btts, true);
-  return out.sort((a, b) => b.p - a.p);
+  const L = lead(c), v = L.m, out = [], f = c.fb || {}, w = L.x, mx = Math.max(...v.p), i = v.p.indexOf(mx);
+  if (mx >= TOP_WIN) out.push({ label: `${i === 0 ? c.home : i === 2 ? c.away : 'Draw'} to ${i === 1 ? 'draw' : 'win'}`, p: mx, alt: w.p ? w.p[i] : null, fb: f.p ? f.p[i] : null });
+  const mk = (label, p, a, b, flip) => { if (p >= TOP_GOALS) out.push({ label, p, alt: a == null ? null : flip ? 100 - a : a, fb: b == null ? null : flip ? 100 - b : b }); };
+  mk('Over 2.5 goals', v.over, w.over, f.over); mk('Under 2.5 goals', 100 - v.over, w.over, f.over, true);
+  mk('Both teams score', v.btts, w.btts, f.btts); mk('Not both teams score', 100 - v.btts, w.btts, f.btts, true);
+  return out.sort((a, b) => b.p - a.p).map(x => ({ ...x, n: L.n, o: L.o }));
 }
 function topBox(c) {
   const t = topPicks(c); if (!t.length) return '';
   const pc = n => n == null ? '' : `<span class="${n >= 55 ? 'hi' : ''}">${n}%</span>`;
-  return `<div class="tpk"><div class="tl">Top ${t.length === 1 ? 'pick' : 'picks'}</div>${t.map(x => `<div class="tr"><b>${esc(x.label)}</b><span class="tm"><u>v2</u>${pc(x.p)}${x.v4 != null ? `<u>v4</u>${pc(x.v4)}` : ''}${x.fb != null ? `<u>FB</u>${pc(x.fb)}` : ''}</span></div>`).join('')}</div>`;
+  return `<div class="tpk"><div class="tl">Top ${t.length === 1 ? 'pick' : 'picks'}</div>${t.map(x => `<div class="tr"><b>${esc(x.label)}</b><span class="tm"><u>${x.n}</u>${pc(x.p)}${x.alt != null ? `<u>${x.o}</u>${pc(x.alt)}` : ''}${x.fb != null ? `<u>FB</u>${pc(x.fb)}` : ''}</span></div>`).join('')}</div>`;
 }
 
-// Top picks view: one ranked list per market (winner, over/under, both teams score), highest probability first.
-const TMK = [['win', 'Winner', 55], ['ou', 'Over/Under', 62], ['btts', 'Both teams score', 62]];
+// Top picks view: one ranked list per market (winner, over/under, both teams score), highest probability first, on the lead model (v4).
+const TMK = [['win', 'Winner', TOP_WIN], ['ou', 'Over/Under', TOP_GOALS], ['btts', 'Both teams score', TOP_GOALS]];
 function topRows(c, m) {
-  const v = c.v2, f = c.fb || {}, v4 = c.v4 || {}, g = c.grade && c.grade.v2;
-  if (m === 'win') { const mx = Math.max(...v.p), i = v.p.indexOf(mx); return { p: mx, label: i === 1 ? 'Draw' : `${strip(i === 0 ? c.home : c.away)} to win`, v4: v4.p ? v4.p[i] : null, fb: f.p ? f.p[i] : null, hit: g ? g.outcomeHit : null }; }
-  const ov = m === 'ou', raw = ov ? v.over : v.btts, yes = raw >= 50, a = ov ? v4.over : v4.btts, b = ov ? f.over : f.btts, fl = x => x == null ? null : yes ? x : 100 - x;
-  return { p: yes ? raw : 100 - raw, label: ov ? (yes ? 'Over 2.5' : 'Under 2.5') : (yes ? 'BTTS yes' : 'BTTS no'), v4: fl(a), fb: fl(b), hit: g ? (ov ? g.ouHit : g.bttsHit) : null };
+  const L = lead(c), v = L.m, f = c.fb || {}, w = L.x, g = c.grade && c.grade[L.n], base = { n: L.n, o: L.o };
+  if (m === 'win') { const mx = Math.max(...v.p), i = v.p.indexOf(mx); return { ...base, p: mx, label: i === 1 ? 'Draw' : `${strip(i === 0 ? c.home : c.away)} to win`, alt: w.p ? w.p[i] : null, fb: f.p ? f.p[i] : null, hit: g ? g.outcomeHit : null }; }
+  const ov = m === 'ou', raw = ov ? v.over : v.btts, yes = raw >= 50, a = ov ? w.over : w.btts, b = ov ? f.over : f.btts, fl = x => x == null ? null : yes ? x : 100 - x;
+  return { ...base, p: yes ? raw : 100 - raw, label: ov ? (yes ? 'Over 2.5' : 'Under 2.5') : (yes ? 'BTTS yes' : 'BTTS no'), alt: fl(a), fb: fl(b), hit: g ? (ov ? g.ouHit : g.bttsHit) : null };
 }
 function topView(cs) {
   const m = S.tm, cols = TMK.filter(([k]) => m === 'all' || m === k);
   const body = cols.map(([k, name, thr]) => {
     const all = cs.map(c => ({ c, ...topRows(c, k) })).sort((x, y) => y.p - x.p), q = all.filter(x => x.p >= thr), rest = all.filter(x => x.p < thr), more = !!S.more[k];
-    const row = (x, i, low) => `<div class="trw ${low ? 'low' : ''} ${!low && i === 0 ? 'top1' : ''}"><button type="button" class="hd tr2" data-id="${esc(x.c.id)}" aria-expanded="${S.open === x.c.id}"><span class="pp">${x.p}<small>%</small></span><span class="tx"><b>${esc(x.label)}</b><small>${esc(strip(x.c.home))} vs ${esc(strip(x.c.away))}</small><small class="mt">${esc(LCODE[x.c.leagueKey] || '')} · ${esc(x.c.ko)}</small></span><span class="ag">${x.hit != null ? `<span class="${x.hit ? 'ok' : 'no'}">${x.hit ? '✓' : '✗'}</span> ` : ''}${x.v4 != null ? `<u>v4</u>${x.v4}%` : ''}${x.fb != null ? `<br><u>FB</u>${x.fb}%` : ''}</span></button>${S.open === x.c.id ? `<div class="m x open">${expanded(x.c)}</div>` : ''}</div>`;
+    const row = (x, i, low) => `<div class="trw ${low ? 'low' : ''} ${!low && i === 0 ? 'top1' : ''}"><button type="button" class="hd tr2" data-id="${esc(x.c.id)}" aria-expanded="${S.open === x.c.id}"><span class="pp">${x.p}<small>%</small></span><span class="tx"><b>${esc(x.label)}</b><small>${esc(strip(x.c.home))} vs ${esc(strip(x.c.away))}</small><small class="mt">${esc(LCODE[x.c.leagueKey] || '')} · ${esc(x.c.ko)}</small></span><span class="ag">${x.hit != null ? `<span class="${x.hit ? 'ok' : 'no'}">${x.hit ? '✓' : '✗'}</span> ` : ''}${x.n !== 'v4' ? `<u>${x.n}</u>${x.p}% ` : ''}${x.alt != null ? `<u>${x.o}</u>${x.alt}%` : ''}${x.fb != null ? `<br><u>FB</u>${x.fb}%` : ''}</span></button>${S.open === x.c.id ? `<div class="m x open">${expanded(x.c)}</div>` : ''}</div>`;
     return `<section class="tcol"><h3>${name}<small>${thr}%+ · ${q.length} ${q.length === 1 ? 'game' : 'games'}</small></h3>${q.length ? q.map((x, i) => row(x, i, false)).join('') : `<div class="tnone">Nothing at ${thr}% or more today.</div>`}${rest.length ? `<button type="button" class="tmore" data-more="${k}">${more ? 'Hide' : 'Show'} ${rest.length} below ${thr}%</button>${more ? rest.map(x => row(x, 1, true)).join('') : ''}` : ''}</section>`;
   }).join('');
   const cnt = k => { const thr = TMK.find(t => t[0] === k)[2]; return cs.filter(c => topRows(c, k).p >= thr).length; };
@@ -986,7 +989,7 @@ function recordBar() {
   if (S.top && t.top) {
     const w = t.top.win, g = t.top.goals, r = t.top.rest;
     if (w.n + g.n === 0) return '';
-    return `<div class="rec"><b>Top picks, last 30 games</b><span>Winner at 55%+ <u>${pc(w.hits, w.n)}</u> <small>${w.hits}/${w.n}</small></span><span>Goals at 62%+ <u>${pc(g.hits, g.n)}</u> <small>${g.hits}/${g.n}</small></span><span>All other winners <u>${pc(r.hits, r.n)}</u> <small>${r.hits}/${r.n}</small></span></div>`;
+    return `<div class="rec"><b>Top picks, last 30 games</b><span>Winner at ${TOP_WIN}%+ <u>${pc(w.hits, w.n)}</u> <small>${w.hits}/${w.n}</small></span><span>Goals at ${TOP_GOALS}%+ <u>${pc(g.hits, g.n)}</u> <small>${g.hits}/${g.n}</small></span><span>All other winners <u>${pc(r.hits, r.n)}</u> <small>${r.hits}/${r.n}</small></span></div>`;
   }
   if (!l.n) return '';
   const row = (name, x) => x.n ? `<span class="rn">${name}</span><u>${pc(x.w, x.n)}</u><u>${pc(x.ou, x.n)}</u><u>${pc(x.bt, x.n)}</u>` : '';
@@ -1044,6 +1047,22 @@ function leagueScorecards(t) {
   const rows = L.map(l => { const bs = ['v2', 'v4', 'fb'].map(k => l[k] && l[k].n >= 5 ? l[k].brier : null), mn = Math.min(...bs.filter(x => x != null)); return `<tr><td class="n">${esc(l.name)}<small>${l.n} games</small></td>${['v2', 'v4', 'fb'].map((k, i) => cell(l[k], bs[i] != null && bs[i] === mn && bs.filter(x => x != null).length > 1)).join('')}</tr>`; }).join('');
   return `<div class="sec" style="padding-top:20px">Each league, model by model<small>Winner hit rate on top, then Brier score (lower is better) and games. Green is the best Brier in that league once a model has 5+ games.</small></div>
   <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>v2</th><th>v4</th><th>Forebet</th></tr>${rows}</table></div>`;
+}
+// Model vs market (src/market.js): each model against the sportsbook's own chances on the same games, the best v4 share in a blend,
+// closing-line value of the headline picks, and v4's value bets. Lower RPS / log loss is better.
+function marketView(t) {
+  const M = t.market; if (!M || !M.n) return '';
+  const f = x => x == null ? '–' : x.toFixed(3), sg = x => x == null ? '–' : `${x > 0 ? '+' : ''}${x.toFixed(1)}%`;
+  const rows = [['v4', 'v4'], ['v2', 'v2'], ['fb', 'Forebet']].filter(([k]) => M.pairs[k] && M.pairs[k].n).map(([k, name]) => {
+    const x = M.pairs[k], win = x.model.rps < x.market.rps;
+    return `<tr><td class="n">${name}<small>${x.n} games</small></td><td class="${win ? 'bst' : ''}"><b>${f(x.model.rps)}</b><small>log loss ${f(x.model.ll)}</small></td><td class="${win ? '' : 'bst'}"><b>${f(x.market.rps)}</b><small>log loss ${f(x.market.ll)}</small></td></tr>`;
+  }).join('');
+  const B = M.blend, C = M.clv, V = M.value;
+  const blend = B && B.n ? `<div class="small" style="margin:8px 18px 0">Best mix: <b>${Math.round(100 * B.w)}% v4</b> + ${Math.round(100 * (1 - B.w))}% market (log loss ${f(B.ll)}; market alone ${f(B.llMarket)}, v4 alone ${f(B.llV4)}, ${B.n} games). ${B.w === 0 ? 'So far v4 adds nothing the price does not already know.' : B.n < 300 ? 'Too few games to trust the mix yet.' : ''}</div>` : '';
+  const clv = `<div class="small" style="margin:6px 18px 0">Headline picks against the closing price: ${C.n ? `<b>${sg(C.avg)}</b> on average, ${C.beat} of ${C.n} beat it` : 'none yet (the first price is kept from Oct 26, 2026)'}. Beating the close is the quickest honest sign of an edge.</div>`;
+  const val = `<div class="small" style="margin:6px 18px 0">v4 value bets (v4 5+ points over the price): ${V.n ? `${V.hits} of ${V.n} won, <b>${V.units > 0 ? '+' : ''}${V.units.toFixed(2)} units</b> (${sg(V.roi)})${V.clvN ? `, closing-line value ${sg(V.clv)} (${V.beat} of ${V.clvN} beat it)` : ''}` : 'none yet'}.</div>`;
+  return `<div class="sec" style="padding-top:20px">Models against the market<small>The sportsbook's home / draw / away price, margin removed, scored like a model on the same games. RPS: lower is better. Green is the better of the two.</small></div>
+  <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>Model</th><th>Market</th></tr>${rows}</table></div>${blend}${clv}${val}`;
 }
 // Over 2.5 and Both-teams-to-score: what each model said, grouped by confidence, against how often it happened.
 function goalsCalibration(t) {
@@ -1180,21 +1199,23 @@ function trackedView() {
   const bn = TB.base.n, pc = k => Math.round(100 * (TB.base[k] || 0) / bn);
   const ch = { H: pc('home'), D: pc('draw'), A: pc('away'), O: pc('over'), U: 100 - pc('over'), B: pc('btts'), N: 100 - pc('btts') };
   const exp = b => { let t = 0, c = 0; for (const [k, q] of Object.entries(b.ks || {})) if (ch[k] != null) { t += q * ch[k]; c += q; } return c ? t / c : null; };
-  const order = ['bttsY', 'under', 'over', 'agree', 'home55', 'bttsN'], rows = order.map(id => TB.strats[id]).filter(Boolean);
-  if (!rows.length) return '';
+  const order = ['v4over', 'v4btts', 'v4home', 'v4away', 'v4fb'], rows = order.map(id => TB.strats[id]).filter(Boolean);
+  const old = ['bttsY', 'under', 'over', 'agree', 'home55', 'bttsN'].map(id => TB.strats[id]).filter(Boolean);
+  if (!rows.length && !old.length) return '';
   const line = (tag, b) => { if (!b.n) return `<small>${tag}: none yet</small>`; const e = exp(b), r = Math.round(100 * b.hits / b.n), d = e == null ? null : Math.round(r - e); return `<small>${tag}: ${b.hits} of ${b.n} · ${r}%${d != null ? ` · edge ${d > 0 ? '+' : ''}${d}` : ''}</small>`; };
   const chanceOf = t => { const b = { ks: {} }; for (const x of [t.live, t.hist]) for (const [k, q] of Object.entries(x.ks || {})) b.ks[k] = (b.ks[k] || 0) + q; const e = exp(b); return e == null ? '' : `<small>chance ${Math.round(e)}%</small>`; };
-  return `<div class="sec">Tracked bets<small>Simple rules, each one fixed bet. Several can apply to one game, so they fill up faster than the headline picks. The label uses live games only; "before" games are the ones the rules were built from, so they look better than they should.</small></div><div class="mbx">${rows.map(t => {
+  const row = t => {
     const e = edgeOf(t.live, exp(t.live));
     return `<div class="mbr"><div class="mbl">${esc(t.name)}<small>${esc(t.rule)}</small><span class="edg ${e ? e.t : 'early'}">${e ? e.label : 'Too early'}</span></div><div class="mbv">${line('Live', t.live)}${line('Before', t.hist)}${chanceOf(t)}</div></div>`;
-  }).join('')}</div>`;
+  };
+  return `<div class="sec">Tracked bets<small>Simple rules on v4, each one fixed bet. Several can apply to one game, so they fill up faster than the headline picks. The label uses live games only (from Oct 26, 2026); "before" games came before the rules were set.</small></div><div class="mbx">${rows.map(row).join('')}</div>${old.length ? `<details class="old"><summary>Retired v2 rules (record frozen on Oct 25, 2026)</summary><div class="mbx" style="margin:0">${old.map(row).join('')}</div></details>` : ''}`;
 }
 // Prices (American odds, from ESPN's sportsbook block) are shown next to a pick for first divisions only. They never feed a model.
 const needP = m => m < 0 ? -m / (-m + 100) * 100 : 100 / (m + 100) * 100;
 const fmtOdds = m => (m > 0 ? '+' : '') + m;
 function priceFor(c, key) { const o = c.odds; if (!o) return null; const m = ({ H: o.h, D: o.d, A: o.a, O: o.tl === 2.5 ? o.to : null, U: o.tl === 2.5 ? o.tu : null, B: o.by, N: o.bn })[key]; return Number.isFinite(m) ? m : null; }
-// The model's chance that the game total goes over / under a book line (half lines only), from v2's expected goals.
-function pTotal(c, line, over) { const lam = c.v2 && c.v2.lam ? c.v2.lam[0] + c.v2.lam[1] : null; if (lam == null || line % 1 !== 0.5) return null; let term = Math.exp(-lam), cdf = 0; for (let i = 0; i <= Math.floor(line); i++) { cdf += term; term *= lam / (i + 1); } return Math.round(100 * (over ? 1 - cdf : cdf)); }
+// The model's chance that the game total goes over / under a book line (half lines only), from v4's expected goals (v2's when v4 has none).
+function pTotal(c, line, over) { const q = c.v4 && c.v4.lam ? c.v4 : c.v2, lam = q && q.lam ? q.lam[0] + q.lam[1] : null; if (lam == null || line % 1 !== 0.5) return null; let term = Math.exp(-lam), cdf = 0; for (let i = 0; i <= Math.floor(line); i++) { cdf += term; term *= lam / (i + 1); } return Math.round(100 * (over ? 1 - cdf : cdf)); }
 function priceLine(c, L) {
   if (!FIRST.has(c.league)) return '';
   const m = L.price != null ? L.price : priceFor(c, L.key);
@@ -1307,7 +1328,7 @@ function results() {
   const old = t.earlier.map(r => `<div class="li"><div class="a"><span>${esc(r.match)}</span><span>${esc(r.actual)}</span></div>
     <div class="b"><span>Winner <b class="${r.outcomeHit ? 'ok' : 'no'}">${r.outcomeHit ? '✓' : '✗'}</b></span><span>O/U <b class="${r.ouHit ? 'ok' : 'no'}">${r.ouHit ? '✓' : '✗'}</b></span><span>Both <b class="${r.bttsHit ? 'ok' : 'no'}">${r.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
-    boardBlock(t) + leagueScorecards(t) + calibrationView(t) + goalsCalibration(t) +
+    boardBlock(t) + leagueScorecards(t) + marketView(t) + calibrationView(t) + goalsCalibration(t) +
     (t.promo && t.promo.v4 && t.promo.v4.n ? `<details class="old"><summary>v4 on newly promoted clubs (${t.promo.v4.n} games, own line)</summary><div class="small" style="margin:6px 4px">v4 starts these clubs from a weaker-than-average rating that fades as they play. These games are kept out of every v4 total above.</div>` +
       resultsBlock('v2, same games', t.promo.v2).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + resultsBlock('v4, starting rating', t.promo.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` : '') +
     `<details class="old"><summary>Retired v3 shadow test (${t.h2hOld.v3.n} games)</summary>` +
