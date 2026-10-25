@@ -9,6 +9,8 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Game Day">
 <title>Game Day Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap">
 <style>
 :root{--acc-rgb:88,178,122;--acc-line:#35514a;--pick-bg:#1e3a2d;--pick-bd:#2c5a42;--acc-hi:#9ddcb4;--acc-hi2:#7fd3a0;--bg:#0B1210;--panel:#121C18;--panel2:#17241F;--line:#22332C;--ink:#E8EEE4;--dim:#8FA399;--faint:#5F746B;--grass:#58B27A;--sm:#7FA6D9;--amber:#F0B54A;--miss:#E07A5F}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -393,6 +395,52 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .lgt td.n{text-align:left;padding-left:10px;font-weight:600;color:var(--ink)}.lgt td small{display:block;font-size:10.5px;color:var(--faint);font-weight:500;margin-top:1px}
 .lgt td b{font-size:14px;color:var(--ink)}.lgt td.bst b{color:var(--grass)}.lgt td.na{color:var(--faint)}
 .lgt.cg td.over b{color:#ff9d84}.lgt.cg td.under b{color:var(--sm)}.lgt.cg td.ok b{color:var(--grass)}.lgt.cg td.few b,.lgt.cg td.few small{opacity:.5}
+/* ===== Neon minimal theme: near-black, one neon-lime accent, frosted cards, large light type. Colours and layout only. ===== */
+:root{--acc-rgb:200,255,46;--acc-line:rgba(200,255,46,.28);--pick-bg:#1b2408;--pick-bd:#394b10;--acc-hi:#dcff7a;--acc-hi2:#c8ff2e;--bg:#070908;--panel:rgba(255,255,255,.045);--panel2:rgba(255,255,255,.07);--line:rgba(255,255,255,.08);--ink:#EEF3E6;--dim:rgba(238,243,230,.62);--faint:rgba(238,243,230,.42);--grass:#C8FF2E;--sm:#8FB6FF;--amber:#FFC247;--miss:#FF6B7A}
+html{background:#070908}
+body{font-family:"DM Sans",Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;background:linear-gradient(180deg,#0B0D0A 0,#050605 100%) fixed}
+body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:340px;border-radius:50%;background:rgba(200,255,46,.13);filter:blur(90px);pointer-events:none;z-index:0}
+.wrap,.dock{position:relative;z-index:1}.dock{position:-webkit-sticky;position:sticky}
+#hub-bar{background:transparent;border:0;height:64px}#hub-bar .sw{background:transparent;gap:6px;justify-content:center;max-width:none;width:auto}
+#hub-bar a{flex:none;padding:9px 22px;background:rgba(255,255,255,.08);color:var(--dim);font-weight:500;font-size:13.5px}#hub-bar a.on{background:var(--grass);color:#070908;font-weight:600}
+.top{padding:10px 20px 4px}
+.title .wd{display:block;font-size:15px;font-weight:400;color:var(--dim);letter-spacing:0}.title .dt{display:inline-block;font-size:56px;font-weight:300;letter-spacing:-.045em;line-height:1.05}
+.title .tod{vertical-align:middle;margin-left:12px}
+.sub{font-size:14px;color:var(--dim);margin-top:4px}
+.days{gap:4px;margin:22px 0 4px}
+.day{background:transparent;border:0;border-radius:22px;padding:10px 0;color:var(--dim)}.day b{font-weight:300;font-size:20px;color:var(--ink)}.day small{color:var(--faint)}
+.day.on{background:var(--grass);color:rgba(7,9,8,.62)}.day.on b{color:#070908;font-weight:500}.day.on small{color:rgba(7,9,8,.55)}
+.tabs{border-bottom:0;padding:0 20px;margin-top:14px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tab{color:var(--faint);font-size:15px;white-space:nowrap;margin-right:6px}.tab.on{color:var(--ink);font-weight:500;border-bottom-color:transparent}
+.chips{padding:14px 20px 6px;gap:6px}
+.chip{background:transparent;border:1px solid rgba(255,255,255,.16);color:var(--dim);padding:6px 13px;font-size:12.5px}.chip.on{background:rgba(255,255,255,.12);border-color:transparent;color:var(--ink)}.chip i{color:var(--faint)}
+/* phones: league chips instead of the side list, and one column of game cards */
+@media(max-width:899px){.bdy{display:block;padding:0}.bdy .chips{display:flex}.lsb{display:none}}
+.sgrid{display:flex;flex-direction:column;gap:12px;overflow:visible;padding:12px 18px 6px;scroll-snap-type:none}
+.sgt{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px;padding:18px;scroll-snap-align:none}
+.sgt.on{border-color:rgba(200,255,46,.55);box-shadow:none}
+.sgt .m2{font-size:13px;font-weight:400;color:var(--dim);margin-bottom:12px}.sgt .m2 i{border:0;font-size:12px;font-weight:500;letter-spacing:.08em;color:var(--faint);padding:0}
+.sgt .r2{gap:10px;padding:4px 0}.sgt .r2 .xc{width:30px;height:30px}
+.sgt .r2 b{font-size:21px;font-weight:400;letter-spacing:-.025em;color:var(--dim)}.sgt .r2.fv b{color:var(--ink);font-weight:500}
+.sgt .r2 span{font-size:28px;font-weight:300;letter-spacing:-.04em;color:var(--faint)}.sgt .r2.fv span{color:var(--grass);font-weight:500}
+.pb{display:flex;gap:3px;height:4px;margin-top:12px}.pb i{display:block;height:100%;border-radius:2px}.pb .h{background:var(--grass)}.pb .d{background:rgba(255,255,255,.18)}.pb .a{background:rgba(255,255,255,.42)}
+.sgt .f2{border:0;margin-top:8px;padding-top:0;font-size:12px;color:var(--faint)}.sgt .f2 b{font-weight:500;color:var(--dim)}
+.sgt .lb{margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)}
+.sgt .lt{font-size:17px;gap:8px}.sgt .lt .mbk{display:none}.sgt .lt b{font-weight:500;letter-spacing:-.02em}.sgt .lt em{font-weight:500;color:var(--grass)}
+.sgt .lt2{margin-top:6px;font-size:12px;color:var(--faint)}.sgt .tp{color:var(--ink);font-weight:500;font-size:13px}.sgt .tp .pv{font-size:11px;padding:3px 10px;margin-left:8px}
+.pv{background:rgba(255,255,255,.1);border:1px solid transparent;color:var(--ink);font-weight:500}.pv.val{background:var(--grass);border-color:var(--grass);color:#070908}.pv.fair{background:rgba(255,255,255,.1);border-color:transparent;color:var(--ink)}.pv.no{background:transparent;border-color:rgba(255,255,255,.2);color:var(--faint)}
+.sdt{margin:-2px 0 0}
+.m,.m.x{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px}.m.open{background:rgba(255,255,255,.06)}
+.m.all,.m.open.all{border-color:rgba(200,255,46,.5);box-shadow:none}
+.xh .cfx{border-color:rgba(255,255,255,.14)}.xh .cfx.s{background:rgba(200,255,46,.14);border-color:rgba(200,255,46,.6);color:var(--grass);box-shadow:none;text-shadow:none}
+.xag.s{background:var(--grass);color:#070908}.xag.y{background:rgba(200,255,46,.12);color:var(--grass)}
+.xp .b{height:4px;gap:3px}.xp .b i{opacity:.35}.xp .b i.f{opacity:1;box-shadow:none}.xp .b .a.f{box-shadow:none}.xp .b .d{background:rgba(255,255,255,.3)}.xp .b .a{background:rgba(255,255,255,.55)}
+.xhl{background:transparent;border:0;border-top:1px solid rgba(255,255,255,.1);border-radius:0;padding:12px 0 2px}
+.box,.xq{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.06)}
+.btn{background:var(--grass);color:#070908;border-radius:999px;font-weight:600}.btn.g{background:transparent;color:var(--ink);border:1px solid rgba(255,255,255,.22)}
+.dock{background:linear-gradient(to top,#050605 72%,rgba(5,6,5,0))}
+.day:focus-visible,.chip:focus-visible,.tab:focus-visible,.btn:focus-visible,.m .hd:focus-visible,.sgt:focus-visible{outline:2px solid var(--grass)}
+.finb{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0}
 </style>
 </head>
 <body>
@@ -890,7 +938,7 @@ function tileOf(c, on) {
   const tag = f ? `<i>Final</i>` : now > ko && now < ko + GAME_MS ? `<i>In play</i>` : `<i>${esc(LCODE[c.leagueKey] || '')}</i>`;
   const row = (nm, side, id) => `<div class="r2${!f && fav === side ? ' fv' : ''}">${xcrest(nm, false, id)}<b>${esc(strip(nm))}</b><span>${f ? (side === 'h' ? f.h : f.a) : (side === 'h' ? h : a) + '%'}</span></div>`;
   const foot = f ? `<span>${hit == null ? '' : 'v2 ' + (hit ? '✓' : '✗')}</span><span>${esc(LCODE[c.leagueKey] || '')}</span>` : `<span>Draw <b>${d}%</b></span><span>O2.5 <b>${v.over}%</b></span>`;
-  return `<button type="button" class="sgt${on ? ' on' : ''}" data-ssel="${esc(c.id)}"><div class="m2"><span>${esc(c.ko)}</span>${tag}</div>${row(c.home, 'h', c.hId)}${row(c.away, 'a', c.aId)}<div class="f2">${foot}</div>${f ? '' : tileBet(c)}</button>`;
+  return `<button type="button" class="sgt${on ? ' on' : ''}" data-ssel="${esc(c.id)}"><div class="m2"><span>${esc(c.ko)}</span>${tag}</div>${row(c.home, 'h', c.hId)}${row(c.away, 'a', c.aId)}${f ? '' : `<div class="pb"><i class="h" style="flex:${h}"></i><i class="d" style="flex:${d}"></i><i class="a" style="flex:${a}"></i></div>`}<div class="f2">${foot}</div>${f ? '' : tileBet(c)}</button>`;
 }
 const alertBox = () => { const a = alerts(); return a.length ? `<div class="alert">${a.join('<br>')}</div>` : ''; };
 function board() {
@@ -899,8 +947,8 @@ function board() {
   const leagues = [...new Map(day.cards.map(c => [c.leagueKey, c.leagueName])).entries()];
   if (S.league !== 'all' && !leagues.some(([k]) => k === S.league)) S.league = 'all';
   const chips = `<div class="chips"><button type="button" class="chip ${S.league === 'all' && !S.top ? 'on' : ''}" data-league="all">All<i>${day.cards.filter(c => c.v2).length}</i></button>` +
-    leagues.map(([k, n]) => `<button type="button" class="chip ${S.league === k ? 'on' : ''}" data-league="${k}">${esc(n)}<i>${day.cards.filter(c => c.v2 && c.leagueKey === k).length}</i></button>`).join('') +
-    `<button type="button" class="chip amber ${S.top ? 'on' : ''}" data-top="1">Top picks</button></div>`;
+    `<button type="button" class="chip ${S.top ? 'on' : ''}" data-top="1">Top picks</button>` +
+    leagues.map(([k, n]) => `<button type="button" class="chip ${S.league === k && !S.top ? 'on' : ''}" data-league="${k}">${esc(LCODE[k] || n)}<i>${day.cards.filter(c => c.v2 && c.leagueKey === k).length}</i></button>`).join('') + `</div>`;
   if (!day.cards.length) return chips + `<div class="empty">No games analyzed for this day yet.<br>Tap <b>Analyze this day</b> below to load the fixtures and predictions.</div>`;
   if (S.league !== 'all') cs = cs.filter(c => c.leagueKey === S.league);
   const uncShown = S.top ? [] : unc.filter(c => S.league === 'all' || c.leagueKey === S.league);
@@ -914,7 +962,7 @@ function board() {
   // tiles: four games per column, swipe sideways; the selected game's full card sits underneath
   if (S.sel && !cs.find(c => c.id === S.sel)) S.sel = null;
   const cols = Math.ceil(cs.length / 4), sc = cs.find(c => c.id === S.sel);
-  const html = cs.length ? `<div class="sgrid" id="sgrid">${cs.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="sdots">${Array.from({ length: cols - 1 }, (_, i) => `<i></i>`).join('')}</div>` : ''}${sc ? `<div class="sdt" id="sdt">${game(sc)}</div>` : ''}` : '';
+  const html = cs.length ? `<div class="sgrid" id="sgrid">${cs.map(c => tileOf(c, c.id === S.sel) + (c.id === S.sel ? `<div class="sdt" id="sdt">${game(c)}</div>` : '')).join('')}</div>` : '';
   const fin = doneCs.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${S.fin}">Finished <b>${doneCs.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? doneCs.map(game).join('') : doneCs.map(c => `<div class="fr"><span class="lg">${esc(LCODE[c.leagueKey] || '')}</span><b>${esc(strip(c.home))} ${c.final ? `${c.final.h}–${c.final.a}` : 'vs'} ${esc(strip(c.away))}</b>${!c.final ? '<i class="pend">result pending</i>' : c.grade && c.grade.v2 ? `<i class="${c.grade.v2.outcomeHit ? 'ok' : 'no'}">${c.grade.v2.outcomeHit ? '✓' : '✗'}</i>` : ''}</div>`).join('')}</div>` : '';
   return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + html + fin + uncovered(uncShown) + `</div></div>`;
 }
@@ -1379,9 +1427,9 @@ async function exportAll() {
 /* ---------- page ---------- */
 function renderHeader() {
   const d = new Date(S.date + 'T12:00:00');
-  $('#title').innerHTML = esc(d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })) + (S.date !== cfg.today ? `<button type="button" class="tod" data-date="${cfg.today}">Today</button>` : '');
+  $('#title').innerHTML = `<span class="wd">${esc(d.toLocaleDateString('en-US', { weekday: 'long' }))}</span><span class="dt">${esc(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</span>` + (S.date !== cfg.today ? `<button type="button" class="tod" data-date="${cfg.today}">Today</button>` : '');
   const done = day.cards.filter(c => c.v2).length, need = day.cards.filter(c => !c.v2).length;
-  $('#sub').textContent = day.cards.length ? `${done} games with a prediction${need ? `, ${need} not covered` : ''}` : 'Nothing analyzed for this day yet';
+  $('#sub').textContent = day.cards.length ? `${day.cards.length} games · ${done} with a pick${need ? ` · ${need} not covered` : ''}` : 'Nothing analyzed for this day yet';
   $('#days').innerHTML = [-2, -1, 0, 1, 2].map(o => {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
