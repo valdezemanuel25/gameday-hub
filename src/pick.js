@@ -10,8 +10,9 @@ export const sideOfScore = (h, a) => (h > a ? 'H' : h < a ? 'A' : 'D');
 const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
 export const KEYS = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score', N: 'Not both score' };
 
-export function consensusPick(c) {
-  const v = c && c.v2; if (!v || !v.p) return null;
+// Every model's vote on every market (result, Over/Under 2.5, both-score), with how many were asked and the average chance.
+function rowsOf(c) {
+  const v = c.v2;
   const f = c.fb || {};
   const M = [{ n: 'v2', w: v.pick, p: v.p, over: v.over, btts: v.btts, po: v.over, pb: v.btts }];
   if (c.v4) M.push({ n: 'v4', w: c.v4.pick, p: c.v4.p, over: c.v4.over, btts: c.v4.btts, po: c.v4.over, pb: c.v4.btts });
@@ -22,6 +23,11 @@ export function consensusPick(c) {
     ['B', m => m.btts != null && m.btts > 50, m => m.pb], ['N', m => m.btts != null && m.btts < 50, m => (m.pb == null ? null : 100 - m.pb)]];
   const asked = o => M.filter(m => (o === 'H' || o === 'D' || o === 'A') ? true : (o === 'O' || o === 'U') ? m.over != null : m.btts != null);
   const rows = O.map(([key, back, pr]) => { const a = asked(key), yes = a.filter(back), ps = a.map(pr).filter(x => typeof x === 'number'); return { key, a, yes, no: a.filter(m => !back(m)), p: ps.length ? Math.round(ps.reduce((x, y) => x + y, 0) / ps.length) : null }; });
+  return rows;
+}
+export function consensusPick(c) {
+  const v = c && c.v2; if (!v || !v.p) return null;
+  const rows = rowsOf(c);
   const score = r => [r.a.length ? r.yes.length / r.a.length : 0, r.yes.length, r.p == null ? 0 : r.p];
   const best = rows.filter(r => r.a.length >= 2).sort((x, y) => { const a = score(x), b = score(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; })[0];
   if (!best) {
@@ -34,23 +40,18 @@ export function consensusPick(c) {
   return { k: all && best.p != null && best.p >= 60 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n) };
 }
 
-// Who backs which result (home / draw / away), one vote per model. SportsMole's vote comes from its score.
-function winVotes(c) {
-  const f = c.fb || {}, V = [{ n: 'v2', w: c.v2.pick }];
-  if (c.v4) V.push({ n: 'v4', w: c.v4.pick });
-  if (f.p || f.score) V.push({ n: 'Forebet', w: f.p ? hda(f.p) : sideOfScore(f.score.h, f.score.a) });
-  if (c.sm) V.push({ n: 'SportsMole', w: sideOfScore(c.sm.h, c.sm.a) });
-  return V;
-}
-// The card's headline: v4's winner pick, with the other models counted as agree / disagree.
+// The card's headline: v4's single strongest call (result, Over/Under 2.5 or both-score, whichever v4 rates highest), with the
+// other models counted as agree / disagree on that same market. A card with no v4 falls back to consensusPick.
 export function leanPick(c) {
   const base = consensusPick(c); if (!base) return null;
-  const w = c.v4 && c.v4.p && c.v4.pick, i = w ? 'HDA'.indexOf(w) : -1;
-  if (i < 0 || typeof c.v4.p[i] !== 'number') return base;
-  const V = winVotes(c), yes = V.filter(m => m.w === w), no = V.filter(m => m.w !== w), p = c.v4.p[i];
-  const all = no.length === 0, maj = yes.length * 2 > V.length;
-  if (!maj) return { k: 'split', key: w, p, y: yes.length, a: V.length, by: ['v4'], no: [] };
-  return { k: all && p >= 60 ? 'best' : 'lean', key: w, p, y: yes.length, a: V.length, by: yes.map(m => m.n), no: no.map(m => m.n) };
+  const q = c.v4; if (!q || !q.p) return base;
+  const opts = [[q.p[0], 'H'], [q.p[1], 'D'], [q.p[2], 'A'], [q.over, 'O'], [typeof q.over === 'number' ? 100 - q.over : null, 'U'], [q.btts, 'B'], [typeof q.btts === 'number' ? 100 - q.btts : null, 'N']].filter(x => typeof x[0] === 'number');
+  if (!opts.length) return base;
+  const top = opts.reduce((m, x) => (x[0] > m[0] ? x : m)), key = top[1], p = Math.round(top[0]);
+  const r = rowsOf(c).find(x => x.key === key); if (!r || r.a.length < 2) return base;
+  const maj = r.yes.length * 2 > r.a.length, all = r.no.length === 0;
+  if (!maj) return { k: 'split', key, p, y: r.yes.length, a: r.a.length, by: ['v4'], no: [], src: 'v4' };
+  return { k: all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src: 'v4' };
 }
 // Did the pick land on this final score? Over/Under use 2.5 goals.
 export function leanHit(key, f) {
