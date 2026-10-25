@@ -3,6 +3,7 @@ import seed from './v4seed.js';
 import { V4, norm, fit, predict, grid } from './v4core.js';
 import cupSeed from './v4cupseed.js';
 import { CUP, compIndex, fitCup, predictCup, resolveClub } from './v4cup.js';
+import { eloRun } from './v5core.js';
 export { V4, norm, fit, predict, grid, CUP, compIndex, fitCup, predictCup, resolveClub };
 
 const DAY = 86400000;
@@ -60,9 +61,14 @@ export async function getRatings(league, env, memo) {
   if (memo?.has('rat:' + slug)) return memo.get('rat:' + slug);
   let R = await env.HUB.get(`rat:${slug}`, 'json');
   if (!usable(R, slug)) R = { ...seed[slug].r, v: 1, seedThrough: seed[slug].through, builtAt: 0 };
+  if (!R.elo) R = { ...R, elo: seedElo(slug) }; // v5's Elo: built with the ratings by the cron; until then, from the bundled history
   memo?.set('rat:' + slug, R);
   return R;
 }
+
+// v5's Elo from the bundled history alone, once per Worker instance (well under a millisecond a league).
+const seedElos = new Map();
+function seedElo(slug) { if (!seedElos.has(slug)) seedElos.set(slug, eloRun(gamesFor(slug))); return seedElos.get(slug); }
 
 // ---- cups (Champions League, Europa League) ------------------------------------------------------------
 export const cupSupports = slug => compIndex(slug) >= 0;
@@ -131,7 +137,9 @@ export async function refreshRatings(env, now = new Date(), slugs = [...Object.k
   if (next.slug === 'cup') return refreshCup(env, now);
   const res = await env.HUB.get(`res:${next.slug}`, 'json');
   const warm = (next.R || seed[next.slug].r).t;
-  const R = fit(next.slug, gamesFor(next.slug, res?.games || []), now.getTime(), warm);
+  const games = gamesFor(next.slug, res?.games || []);
+  const R = fit(next.slug, games, now.getTime(), warm);
+  R.elo = eloRun(games.filter(g => g.d < now.getTime() / DAY)); // v5
   R.v = 1; R.seedThrough = seed[next.slug].through; R.builtAt = now.getTime();
   await env.HUB.put(`rat:${next.slug}`, JSON.stringify(R));
   return { league: next.slug, clubs: Object.keys(R.t).length, liveGames: (res?.games || []).length };
