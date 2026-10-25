@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#14110c">
+<meta name="theme-color" content="#0c0905">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Game Day">
 <title>Game Day Hub · Brew</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#14110c;--bar:#1a160f;--s:#1f1a12;--s2:#2a2418;--ink:#f4efe6;--mut:#a89f8c;--faint:#7b7261;--line:#3a3222;--amber:#f0b54a;--good:#5ee08f;--bad:#ff7b6b}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -33,12 +34,42 @@ body{background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,Blink
 .bt{display:flex;flex-direction:column;gap:1px;padding-left:10px;border-left:2px solid var(--line)}
 .bt b{font-size:13.5px;font-weight:700}.bt span{font-size:13px;color:var(--mut);line-height:1.45}
 .note{font-size:12px;color:var(--faint);margin-top:8px}
+/* ===== Neon minimal theme (brown). Same layout as the soccer page. Colours and layout only. ===== */
+:root{--acc-rgb:224,166,98;--acc-hi:#F0C58A;--acc-ink:#0c0905;--acc-dim:#6b4e2c;--bg:#0c0905;--bar:transparent;--s:rgba(255,255,255,.045);--s2:rgba(255,255,255,.07);--ink:#F5EFE6;--mut:rgba(245,239,230,.62);--faint:rgba(245,239,230,.42);--line:rgba(255,255,255,.08);--blue:#E0A662;--chip:rgba(255,255,255,.06);--card-top:rgba(255,255,255,.05);--card-bot:rgba(255,255,255,.035);--gold:#FFC247}
+html{background:#0c0905}
+body{font-family:"DM Sans",Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;background:linear-gradient(180deg,#110d08 0,#050403 100%) fixed}
+body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:340px;border-radius:50%;background:rgba(224,166,98,.14);filter:blur(90px);pointer-events:none;z-index:0}
+.wrap,.dock{position:relative;z-index:1}.dock{position:-webkit-sticky;position:sticky}
+#hub-bar{background:transparent;border:0;height:64px}#hub-bar .sw{background:transparent;gap:6px;justify-content:center;max-width:none;width:auto}
+#hub-bar a{flex:none;padding:9px 22px;background:rgba(255,255,255,.08);color:var(--mut);font-weight:500;font-size:13.5px}#hub-bar a.on{background:var(--blue);color:#0c0905;font-weight:600}
+.top{padding:10px 20px 4px}
+.title{font-weight:400;letter-spacing:0}.title .wd{display:block;font-size:15px;color:var(--mut)}.title .dt2{display:block;font-size:56px;font-weight:300;letter-spacing:-.045em;line-height:1.05}
+.sub{font-size:13px;color:var(--mut);margin-top:6px}
+.days{gap:4px;margin:22px 0 4px}
+.day{background:transparent;border:0;border-radius:22px;padding:10px 0;color:var(--faint);font-size:12px}.day b{font-weight:300;font-size:20px;color:var(--ink)}
+.day.on{background:var(--blue);color:rgba(12,9,5,.6)}.day.on b{color:#0c0905;font-weight:500}
+.tabs{border-bottom:0;padding:0 20px;margin-top:14px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tab{color:var(--faint);font-size:15px;white-space:nowrap;margin-right:6px}.tab.on{color:var(--ink);font-weight:500;border-bottom-color:transparent}
+button:focus-visible{outline:2px solid var(--blue)}
+
+:root{--amber:#E0A662;--good:#8fe3a8}
+.wrap{padding:0 20px}
+.title{margin-top:8px}
+.card{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px;padding:18px;margin-bottom:12px}
+.src{text-transform:none;letter-spacing:0;font-size:13px;font-weight:400;color:var(--mut)}
+.ttl{font-size:21px;font-weight:500;letter-spacing:-.025em;margin:6px 0 14px}
+.chip{background:rgba(255,255,255,.06);border:0;border-radius:16px;padding:10px}.chip b{font-size:16px;font-weight:500}
+.empty{border-color:rgba(255,255,255,.16);border-radius:24px}
+body{padding-bottom:48px}
+
+.bt{display:flex;flex-direction:column;gap:1px;border-left:0;padding-left:0;background:none;border-radius:0}
+.list .bt+.bt{border-top:1px solid rgba(255,255,255,.08);padding-top:10px}
 </style>
 </head>
 <body>
 <div id="hub-bar"><div class="sw"><a href="/">⚽ Soccer</a><a href="/nhl">🏒 NHL</a><a href="/brew" class="on">☕ Brew</a></div></div>
 <div class="wrap">
-  <div class="title">Brew</div>
+  <div class="title" id="title"></div>
   <div class="sub" id="sub">Quick read of your Brew Markets and Morning Brew emails.</div>
   <div id="view"><div class="empty">Loading…</div></div>
 </div>
@@ -49,6 +80,7 @@ const chip = m => { const c = Number(m.change), flat = c === 0 || (Math.abs(c) <
 const card = i => `<div class="card"><div class="src">${esc(i.source || '')} · ${esc(i.date || '')}</div><div class="ttl">${esc(i.title || '')}</div>
   ${(i.markets || []).length ? `<div class="strip">${i.markets.map(chip).join('')}</div>` : ''}
   <div class="list">${(i.takeaways || []).map(t => typeof t === 'string' ? `<div class="bt"><span>${esc(t)}</span></div>` : `<div class="bt"><b>${esc(t.h)}</b><span>${esc(t.t)}</span></div>`).join('')}</div>${i.note ? `<div class="note">${esc(i.note)}</div>` : ''}</div>`;
+{ const d = new Date(); const $t = document.getElementById('title'); $t.innerHTML = `<span class="wd">Brew · ${d.toLocaleDateString('en-US',{weekday:'long',timeZone:'America/Chicago'})}</span><span class="dt2">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Chicago'})}</span>`; }
 (async () => {
   try {
     const r = await fetch('/api/brew'); if (!r.ok) throw new Error(r.status);

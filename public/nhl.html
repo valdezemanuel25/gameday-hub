@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0f17">
+<meta name="theme-color" content="#0b0708">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Game Day">
 <title>Game Day Hub · NHL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--acc-rgb:229,72,77;--acc-hi:#ff9a9d;--acc-ink:#ffe0e1;--acc-dim:#7a3338;--card-top:#261519;--card-bot:#1c1014;--bg:#120b0d;--bar:#170f11;--s:#1e1316;--s2:#281a1e;--ink:#f6eeee;--mut:#b9a3a6;--faint:#86696d;--line:#3d2429;--blue:#e5484d;--chip:#2e1c21;--good:#5ee08f;--bad:#ff7b6b;--amber:#f0c35a;--gold:#f6c64a}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -151,13 +152,53 @@ h4{margin:20px 18px 6px;font-size:14px}
 .gd{color:var(--gold)!important}.mt .w b.gd,.mt .o b.gd,.mt .o.hi b.gd{text-shadow:0 0 10px rgba(246,198,74,.45)}
 .tpp b.gd,.tpp b i{color:var(--gold)}
 .tpn{margin:4px 18px 0;font-size:11.5px;color:var(--faint);line-height:1.5}
-.tpe{margin:6px 18px 0;padding:18px 14px;border:1px dashed var(--line);border-radius:14px;text-align:center;color:var(--mut);font-size:13px;line-height:1.5}</style>
+.tpe{margin:6px 18px 0;padding:18px 14px;border:1px dashed var(--line);border-radius:14px;text-align:center;color:var(--mut);font-size:13px;line-height:1.5}/* ===== Neon minimal theme (red). Same layout as the soccer page. Colours and layout only. ===== */
+:root{--acc-rgb:255,77,87;--acc-hi:#ff8a90;--acc-ink:#070405;--acc-dim:#7a3338;--bg:#0b0708;--bar:transparent;--s:rgba(255,255,255,.045);--s2:rgba(255,255,255,.07);--ink:#F4EDEE;--mut:rgba(244,237,238,.62);--faint:rgba(244,237,238,.42);--line:rgba(255,255,255,.08);--blue:#FF4D57;--chip:rgba(255,255,255,.06);--card-top:rgba(255,255,255,.05);--card-bot:rgba(255,255,255,.035);--gold:#FFC247}
+html{background:#0b0708}
+body{font-family:"DM Sans",Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;background:linear-gradient(180deg,#100a0b 0,#060404 100%) fixed}
+body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:340px;border-radius:50%;background:rgba(255,77,87,.14);filter:blur(90px);pointer-events:none;z-index:0}
+.wrap,.dock{position:relative;z-index:1}.dock{position:-webkit-sticky;position:sticky}
+#hub-bar{background:transparent;border:0;height:64px}#hub-bar .sw{background:transparent;gap:6px;justify-content:center;max-width:none;width:auto}
+#hub-bar a{flex:none;padding:9px 22px;background:rgba(255,255,255,.08);color:var(--mut);font-weight:500;font-size:13.5px}#hub-bar a.on{background:var(--blue);color:#070405;font-weight:600}
+.top{padding:10px 20px 4px}
+.title{font-weight:400;letter-spacing:0}.title span{color:inherit}.title .wd{display:block;font-size:15px;color:var(--mut)}.title .dt2{display:block;font-size:56px;font-weight:300;letter-spacing:-.045em;line-height:1.05}
+.sub{font-size:13px;color:var(--mut);margin-top:6px}
+.days{gap:4px;margin:22px 0 4px}
+.day{background:transparent;border:0;border-radius:22px;padding:10px 0;color:var(--faint);font-size:12px}.day b{font-weight:300;font-size:20px;color:var(--ink)}
+.day.on{background:var(--blue);color:rgba(7,4,5,.6)}.day.on b{color:#070405;font-weight:500}
+.tabs{border-bottom:0;padding:0 20px;margin-top:14px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tab{color:var(--faint);font-size:15px;white-space:nowrap;margin-right:6px}.tab.on{color:var(--ink);font-weight:500;border-bottom-color:transparent}
+.bgrid{display:flex;flex-direction:column;gap:12px;overflow:visible;padding:12px 18px 6px}.bdots{display:none}
+.bt{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px;padding:18px}
+.bt.on{border-color:rgba(255,77,87,.6);box-shadow:none}
+.bt .m{font-size:13px;font-weight:400;color:var(--mut);margin-bottom:12px}.bt .m i{background:none;color:var(--faint);font-size:12px;font-weight:500;letter-spacing:.06em;padding:0}
+.bt .r{gap:10px;padding:4px 0}.bt .r .cr{width:30px;height:30px}
+.bt .r b{font-size:21px;font-weight:400;letter-spacing:-.025em;color:var(--mut)}.bt .r span{font-size:28px;font-weight:300;letter-spacing:-.04em;color:var(--faint)}
+.bt .r.fv b{color:var(--ink);font-weight:500}.bt .r.fv span{color:var(--blue);font-weight:500}
+.pb{display:flex;gap:3px;height:4px;margin-top:12px}.pb i{display:block;height:100%;border-radius:2px}.pb .a{background:rgba(255,255,255,.4)}.pb .h{background:var(--blue)}
+.bt .ou{border:0;margin-top:8px;padding-top:0;font-size:12px}
+.card,.dt .card,.rail .card{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px;padding:18px}
+.card.all{border-color:rgba(255,77,87,.5);box-shadow:none}
+.xh .cfx.s{background:rgba(255,77,87,.14);border-color:rgba(255,77,87,.6);color:var(--blue);box-shadow:none;text-shadow:none}
+.xh .cfx.sp{background:rgba(255,194,71,.12);border-color:rgba(255,194,71,.5);color:var(--gold);box-shadow:none;text-shadow:none}
+.cr.win{box-shadow:0 0 0 2px #0b0708,0 0 0 4px var(--blue)}
+.ag.gl{background:rgba(255,77,87,.14);color:var(--acc-hi)}
+.sp .bar i.fav{box-shadow:none}.sp .bar{height:4px}
+.mt{border-radius:16px}.mt.hi{background:rgba(255,77,87,.12);box-shadow:inset 0 0 0 1px rgba(255,77,87,.45)}
+.tpr{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px;box-shadow:none;padding:16px}
+.seg button,.tpf button{border-color:rgba(255,255,255,.16);background:transparent}.seg button.on,.tpf button.on{background:rgba(255,255,255,.12);border-color:transparent;color:var(--ink)}
+.btn{background:var(--blue);color:#070405;border-radius:999px;font-weight:600}.btn.ghost,.btn.g{background:transparent;color:var(--ink);border:1px solid rgba(255,255,255,.22)}
+.dock{background:linear-gradient(to top,#060404 72%,rgba(6,4,4,0));border:0}
+table,.rl{border-radius:24px;background:rgba(255,255,255,.04)}
+.gd{color:var(--gold)!important}.mt .w b.gd,.mt .o b.gd,.mt .o.hi b.gd{text-shadow:none}
+button:focus-visible{outline:2px solid var(--blue)}
+</style>
 </head>
 <body>
 <div id="hub-bar"><div class="sw"><a href="/">⚽ Soccer</a><a href="/nhl" class="on">🏒 NHL</a><a href="/brew">☕ Brew</a></div></div>
 <div class="wrap">
   <div class="top">
-    <div class="title">NHL <span>Model</span></div>
+    <div class="title" id="title">NHL</div>
     <div class="sub">Winner and Over/Under at the sportsbook line (5.5 when no line is known). Overtime and shootout wins count. Times are Central.</div>
     <div class="days" id="days"></div>
   </div>
@@ -295,7 +336,7 @@ function tileOf(c, on) {
     return `<div class="r${fav ? ' fv' : ''}">${crest(ab)}<b>${esc(ab)}</b><span${fav && gw ? ' class="gd"' : ''}>${v}</span></div>`; };
   const ln = lineOf(c), ou = c.v2 ? pickOu(c.v2) : null;
   const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}</span>${ou ? `<span${gs ? ' class="gd"' : ''}><b${gs ? ' class="gd"' : ''}>${ou.side}</b> ${ou.p}%</span>` : ''}`;
-  return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}<div class="ou">${foot}</div></button>`;
+  return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}${hp == null || f ? '' : `<div class="pb"><i class="a" style="flex:${100 - hp}"></i><i class="h" style="flex:${hp}"></i></div>`}<div class="ou">${foot}</div></button>`;
 }
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
@@ -474,6 +515,7 @@ function statusView() {
   <button type="button" class="btn" id="xp" style="margin-top:12px">Export hockey data</button><div class="note">Downloads every saved hockey day (cards with v2, v4 and Forebet picks and results) plus the totals, as one file.</div></div></div>`;
 }
 function renderDays() {
+  { const d = new Date(S.date + 'T12:00:00Z'); $('#title').innerHTML = `<span class="wd">NHL · ${d.toLocaleDateString('en-US',{weekday:'long',timeZone:'UTC'})}</span><span class="dt2">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}</span>`; }
   const t = fmt(new Date()), list = [[addDays(t, -1), 'Yesterday'], [t, 'Today'], [addDays(t, 1), 'Tomorrow']];
   $('#days').innerHTML = list.map(([d, l]) => `<button type="button" class="day${d === S.date ? ' on' : ''}" data-d="${d}">${l}<b>${+d.slice(8)}</b></button>`).join('');
   $('#tabs').innerHTML = [['board', 'Board'], ['top', 'Top'], ['results', 'Results'], ['mbets', 'Model bets'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
