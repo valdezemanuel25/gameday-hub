@@ -34,7 +34,7 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 
 ## Tests
 
-- `npm test` runs all of these (plus `test/market.mjs`, model vs market scoring, and `test/strats.mjs`, the v4 tracked-bet rules):
+- `npm test` runs all of these (plus `test/market.mjs`, model vs market scoring, `test/strats.mjs`, the v4 tracked-bet rules, and `test/v5.mjs`, the v5 challenger):
   - `test/verify.mjs`: the v2 math against your Arsenal–Lille card from Oct 13.
   - `test/parity.mjs`: the v2 model against **120 real cards from the old Hub** (expected goals, win/draw/loss, over/under, BTTS, top two scores). All 120 match.
   - `test/v4.mjs`: v4 club names line up with ESPN's, numbers match the research run, ratings cache and refresh.
@@ -53,6 +53,11 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 - **Cup games** (Champions League, Nations League) use each club's domestic form. A club outside the supported leagues is skipped with a note on the card.
 - **Not carried over from the Hub:** NHL, the Model vs SportsMole tab, scorer picks, and the old per-match result links. Old history rows have no kickoff times or leagues, so they show as a plain list.
 - **Mobile looks like the Hub but isn't pixel-tested.** Open it on your phone after deploy and tell me what looks off.
+
+## v5 test (challenger)
+
+* v5 (`src/v5core.js`) is v4's ratings blended with a goal-difference Elo rating, with a small draw adjustment. It shows on league cards as "v5 test", is graded like the other models, and has its own section on the Results tab (against v4, and against Forebet on the games Forebet has). It never changes the headline pick. No cup games.
+* Walk-forward on the bundled history it beat v4 by 0.0019 log loss a game (z = 1.9): small. See `docs/v5-model.md`, `node tools/backtest-v5.mjs` and `node tools/fit-v5.mjs`.
 
 ## Models against the market
 

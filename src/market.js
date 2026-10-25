@@ -26,7 +26,7 @@ export function scoreOne(p0, r) {
 const blankPair = () => ({ n: 0, model: { rps: 0, ll: 0, brier: 0 }, market: { rps: 0, ll: 0, brier: 0 } });
 const W = Array.from({ length: 21 }, (_, i) => i / 20);
 export function blankMarket() {
-  return { n: 0, pairs: { v4: blankPair(), v2: blankPair(), fb: blankPair() }, blend: W.map(() => 0), nBlend: 0,
+  return { n: 0, pairs: { v4: blankPair(), v5: blankPair(), v2: blankPair(), fb: blankPair() }, blend: W.map(() => 0), nBlend: 0,
     clv: { n: 0, sum: 0, beat: 0 }, value: { n: 0, hits: 0, units: 0, clvN: 0, clvSum: 0, beat: 0 } };
 }
 // Fold one graded card in. The closing price is the card's last price before kickoff; the first price is `f` (or ESPN's opening line).
@@ -35,7 +35,7 @@ export function addMarket(M, c) {
   const mk = devig(c.odds); if (!mk) return;
   const r = resOf(c.final), sm = scoreOne(mk, r);
   M.n++;
-  for (const k of ['v4', 'v2', 'fb']) {
+  for (const k of ['v4', 'v5', 'v2', 'fb']) {
     const p = c[k] && Array.isArray(c[k].p) ? c[k].p : null; if (!p || (k === 'v4' && c.v4.promo)) continue;
     const s = scoreOne(p, r), t = M.pairs[k]; t.n++;
     for (const x of ['rps', 'll', 'brier']) { t.model[x] += s[x]; t.market[x] += sm[x]; }

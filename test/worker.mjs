@@ -101,6 +101,8 @@ ok('card no longer carries v3', c.v3 === undefined);
 ok('v2 λ = 1.21 / 0.95 (same inputs as the real Arsenal–Lille card)', c.v2.lam[0] === 1.21 && c.v2.lam[1] === 0.95, JSON.stringify(c.v2.lam));
 ok('v2 / v4 sum to ~100', Math.abs(c.v2.p.reduce((x, y) => x + y) - 100) <= 1 && Math.abs(c.v4.p.reduce((x, y) => x + y) - 100) <= 1);
 ok('v4 has a pick, score list and expected goals', ['H', 'D', 'A'].includes(c.v4.pick) && c.v4.scores.length === 3 && c.v4.lam.length === 2, JSON.stringify(c.v4));
+ok('card has a v5 shadow prediction beside v4, adding to ~100', c.v5 && ['H', 'D', 'A'].includes(c.v5.pick) && Math.abs(c.v5.p.reduce((x, y) => x + y) - 100) <= 1, JSON.stringify(c.v5));
+ok('cup game: no v5 (Elo needs both clubs in one league)', (await call('/api/day?date=2026-10-14')).cards.find(x => x.id === 'ucl1')?.v5 == null);
 ok('card carries the Hub tab key', c.leagueKey === 'epl');
 
 // ---- other league with no games is a cheap no-op ----
@@ -154,10 +156,14 @@ ok('retired v3 test keeps the 58 imported shadow matches', t.h2hOld.v2.n === 58 
   await call('/api/analyze?league=eng.1&date=2026-10-15&leftover=1', 'POST', 'secret');
   const filled = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
   ok('leftover: a card saved before v4 gets analyzed and now has a v4 key', 'v4' in filled && filled.v3 === undefined && filled.v2.lam[0] !== 1, JSON.stringify(filled.v4));
-  mkDay({ ...card, v4: null });
+  mkDay({ ...card, v4: null, v5: null });
   await call('/api/analyze?league=eng.1&date=2026-10-15&leftover=1', 'POST', 'secret');
   const kept = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
-  ok('leftover: a card that already has a v4 key is left exactly as it was', JSON.stringify(kept.v2) === JSON.stringify(v2x) && kept.v4 === null);
+  ok('leftover: a card that already has v4 and v5 keys is left exactly as it was', JSON.stringify(kept.v2) === JSON.stringify(v2x) && kept.v4 === null && kept.v5 === null);
+  mkDay({ ...card, v4: null });
+  await call('/api/analyze?league=eng.1&date=2026-10-15&leftover=1', 'POST', 'secret');
+  const gained = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
+  ok('leftover: a card saved before v5 existed is analyzed once more and gets a v5 key', 'v5' in gained, JSON.stringify(gained.v5));
   kv.delete(key);
 }
 

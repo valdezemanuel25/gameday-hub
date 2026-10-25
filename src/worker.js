@@ -1,4 +1,5 @@
 import { v2, grade, pickOutcome, bestBet } from './model.js';
+import { predict5 } from './v5core.js';
 import { usualOverSide, supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
   TZ, LEAGUES, UNTRACKED, isCounted, FIRST_DIV, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
@@ -11,7 +12,7 @@ import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { addStrats } from './strats.js';
-import { blankMarket, addMarket, finishMarket } from './market.js';
+import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
@@ -149,7 +150,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     const old = prior.get(f.id);
     if (old?.final && date > LEGACY_THROUGH) { cards.push(old); continue; } // never overwrite a graded card
     // 'Analyze leftover': keep finished predictions as they are. A card saved before v4 existed (no v4 key yet) still gets analyzed.
-    if (leftover && old?.v2 && 'v4' in old && !(league.cupModel && old.v4 === null)) { cards.push(old); continue; }
+    if (leftover && old?.v2 && 'v4' in old && ('v5' in old || league.cupModel || f.done) && !(league.cupModel && old.v4 === null)) { cards.push(old); continue; } // a card from before v5 gets it now
 
     const hint = league.cup ? undefined : slug;
     const h0 = await findTeam(f.home.id, env, memo, hint);
@@ -180,7 +181,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     card.v2 = slim(r2);
     // v4 shadow: only for league games that haven't been played yet, and only when both clubs have enough history.
     // (null = v4 has nothing to say: cup game, club not found, or too little history.)
-    let r4 = null, why = null; // why = the plain-words reason a game has no v4 (shown on the card)
+    let r4 = null, r5 = null, why = null; // why = the plain-words reason a game has no v4 (shown on the card)
     if (league.cup && !league.cupModel) why = null;
     else if (f.done) why = 'the game was already played when the Hub first saw it';
     else if (league.cupModel) why = memo.get('v4why:' + f.id) || null;
@@ -190,12 +191,14 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
       const R = await getRatings(league, env, memo);
       const hn = v4Resolve(slug, f.home.name) || v4Resolve(slug, h.team.name), an = v4Resolve(slug, f.away.name) || v4Resolve(slug, a.team.name);
       if (!hn || !an) why = `club not recognized: ${!hn ? f.home.name : f.away.name}`;
-      else { r4 = v4Predict(R, hn, an); if (!r4) why = 'one club has no games on record'; }
+      else { r4 = v4Predict(R, hn, an); if (!r4) why = 'one club has no games on record'; else if (!r4.promo) r5 = predict5(r4, R.elo, hn, an); }
     }
     if (league.cupModel) r4 = r4cup;
     card.v4 = r4 ? slim(r4) : null;
+    card.v5 = r5 ? slim(r5) : null; // v5 shadow (league games only; not for a newly promoted club's starting rating)
     // Once the game has kicked off the v4 made before it stands: a later re-analysis must not wipe it.
     if (old?.v4 && new Date(f.date).getTime() <= now.getTime()) { card.v4 = old.v4; why = null; if (old.v4why) delete card.v4why; }
+    if (new Date(f.date).getTime() <= now.getTime() && old && 'v5' in old) card.v5 = old.v5; // likewise v5
     if (!card.v4 && why) card.v4why = why;
     keepOdds(card, old, f, slug, now);
     if (old?.sm) card.sm = old.sm;
@@ -312,6 +315,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     if (c.v2) c.grade.v2 = grade(toPred(c.v2), c.final);
     if (c.v3) c.grade.v3 = grade(toPred(c.v3), c.final); // cards predicted before v4 took over keep their v3 grade
     if (c.v4) c.grade.v4 = grade(toPred(c.v4), c.final);
+    if (c.v5) c.grade.v5 = grade(toPred(c.v5), c.final);
     if (c.sm && c.v2) c.smGrade = smGrade(c.sm, c.final);
     // The card's headline pick is locked here, from what the card held when it finished, and scored on the final score.
     if (c.v2 && !c.lean) { const l = leanPick(c); if (l) { l.hit = leanHit(l.key, c.final); const m = FIRST_DIV.has(c.league) ? priceFor(c.odds, l.key) : null; if (m != null) { l.price = m; l.vd = verdictOf(l.p, m); } c.lean = l; } }
@@ -386,9 +390,9 @@ async function tally(env) {
   const calG = { over: { v2: [], v4: [], fb: [] }, btts: { v2: [], v4: [], fb: [] } };
   for (const m of ['over', 'btts']) for (const k of ['v2', 'v4', 'fb']) calG[m][k] = GB.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 }));
   const calAdd = (m, k, pct, hit) => { if (pct == null) return; const b = calG[m][k].find(x => pct >= x.lo && pct < x.hi); if (b) { b.n++; b.hits += hit ? 1 : 0; b.sum += pct; } };
-  const lgRow = c => { let r = perLg.get(c.league); if (!r) perLg.set(c.league, r = { slug: c.league, name: c.leagueName || c.league, n: 0, v2: blank(), v4: blank(), fb: blank() }); return r; };
+  const lgRow = c => { let r = perLg.get(c.league); if (!r) perLg.set(c.league, r = { slug: c.league, name: c.leagueName || c.league, n: 0, v2: blank(), v4: blank(), v5: blank(), fb: blank() }); return r; };
   // Last 30 days (winner hit rate per model) and how the Board's "top picks" have done: winner at 55%+, goals markets at 62%+.
-  const mh = () => ({ n: 0, w: 0, ou: 0, bt: 0 }), last30 = { n: 0, v2: mh(), v4: mh(), fb: mh() }, topT = { win: { n: 0, hits: 0 }, goals: { n: 0, hits: 0 }, rest: { n: 0, hits: 0 } };
+  const mh = () => ({ n: 0, w: 0, ou: 0, bt: 0 }), last30 = { n: 0, v2: mh(), v4: mh(), v5: mh(), fb: mh() }, topT = { win: { n: 0, hits: 0 }, goals: { n: 0, hits: 0 }, rest: { n: 0, hits: 0 } };
   const fbT = { n: 0, outcome: 0, score: 0, brier: 0, nOu: 0, ou: 0, nBtts: 0, btts: 0 }, mk = () => ({ n: 0, fbOutcome: 0, fbBrier: 0, outcome: 0, brier: 0, nOu: 0, fbOu: 0, ou: 0, nBtts: 0, fbBtts: 0, btts: 0 }), fbVs = { v2: mk(), v4: mk() };
   // Same-games table for the Results tab: a metric counts a game only when v2, v4 and Forebet all have it.
   const SB = { outcome: { n: 0, v2: 0, v4: 0, fb: 0 }, ou: { n: 0, v2: 0, v4: 0, fb: 0 }, btts: { n: 0, v2: 0, v4: 0, fb: 0 }, brier: { n: 0, v2: 0, v4: 0, fb: 0 } };
@@ -406,6 +410,9 @@ async function tally(env) {
     add(oldV3, grade(toPred(r.v3), { h, a }));
   }
   const MKT = blankMarket();
+  // v5 shadow test: v5 against v4 on the same games (and Forebet where it has the game too), by hit rate, RPS and log loss.
+  const sc5 = () => ({ n: 0, outcome: 0, ou: 0, btts: 0, rps: 0, ll: 0 }), V5T = { all: { v4: sc5(), v5: sc5() }, fb: { v4: sc5(), v5: sc5(), fb: sc5() } };
+  const add5 = (t, p, g, r) => { const s = scoreOne(p, r); t.n++; t.outcome += g.outcomeHit; t.ou += g.ouHit; t.btts += g.bttsHit; t.rps += s.rps; t.ll += s.ll; };
   for (const k of list.keys) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
@@ -432,6 +439,12 @@ async function tally(env) {
           if (f.bttsHit != null) { x.nBtts++; x.fbBtts += f.bttsHit; x.btts += g.bttsHit; }
         }
       }
+      if (g4 && c.grade.v5 && c.v5 && c.final) {
+        const r = c.final.h > c.final.a ? 0 : c.final.h === c.final.a ? 1 : 2;
+        add5(V5T.all.v4, c.v4.p, g4, r); add5(V5T.all.v5, c.v5.p, c.grade.v5, r);
+        const f = c.fb && c.fb.p ? fbGrade(c.fb, c.final) : null;
+        if (f && f.outcomeHit != null && f.ouHit != null && f.bttsHit != null) { add5(V5T.fb.v4, c.v4.p, g4, r); add5(V5T.fb.v5, c.v5.p, c.grade.v5, r); add5(V5T.fb.fb, c.fb.p, f, r); }
+      }
       if (g4) add(v4All, g4); // every game v4 predicted, including cup games v2 cannot cover
       if (g4 && c.v4 && c.v4.p) cal(c.v4.p, g4.outcomeHit); // winner calibration is v4's (the official model)
       if (!c.grade.v2) continue;
@@ -442,7 +455,7 @@ async function tally(env) {
       if (c.grade.v3) { add(oldV2, c.grade.v2); add(oldV3, c.grade.v3); }
       if (c.final) {
         const gs = c.final.h + c.final.a, bs = c.final.h > 0 && c.final.a > 0, r = lgRow(c);
-        r.n++; add(r.v2, c.grade.v2); if (g4) add(r.v4, g4);
+        r.n++; add(r.v2, c.grade.v2); if (g4) add(r.v4, g4); if (c.grade.v5) add(r.v5, c.grade.v5);
         if (c.fb) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { r.fb.n++; r.fb.outcome += f.outcomeHit; r.fb.brier += f.brier; } if (f.ouHit != null) r.fb.ou += f.ouHit; if (f.bttsHit != null) r.fb.btts += f.bttsHit; }
         addStrats(TB, c, day.date, leanHit);
         calAdd('over', 'v2', c.v2.over, gs >= 3); calAdd('btts', 'v2', c.v2.btts, bs);
@@ -467,6 +480,7 @@ async function tally(env) {
     const hit = (x, o) => { x.n++; x.w += o.outcomeHit ? 1 : 0; x.ou += o.ouHit ? 1 : 0; x.bt += o.bttsHit ? 1 : 0; };
     if (c.grade.v2) hit(last30.v2, c.grade.v2);
     if (c.grade.v4 && !(c.v4 && c.v4.promo)) hit(last30.v4, c.grade.v4);
+    if (c.grade.v5) hit(last30.v5, c.grade.v5);
     if (c.fb && c.final) { const f = fbGrade(c.fb, c.final); if (f.outcomeHit != null) { last30.fb.n++; last30.fb.w += f.outcomeHit ? 1 : 0; last30.fb.ou += f.ouHit ? 1 : 0; last30.fb.bt += f.bttsHit ? 1 : 0; } }
     // Top picks rank on v4 (the official model), or v2 for a game v4 had no numbers for: winner at 55%+, goals at 60%+ (public/index.html lead()).
     const ln = c.v4 && c.v4.p && c.grade.v4 ? 'v4' : c.v2 && c.v2.p && c.grade.v2 ? 'v2' : null;
@@ -499,10 +513,12 @@ async function tally(env) {
     all: { base: { home: [BASE.all.home, BASE.all.n], over: [BASE.all.over, BASE.all.n], usual: [BASE.all.uh, BASE.all.un] }, models: { v2: mAll(fin(v2All)), v4: mAll(fin(v4All)), fb: { outcome: [fbT.outcome, fbT.n], ou: [fbT.ou, fbT.nOu], btts: [fbT.btts, fbT.nBtts], brier: avg(fbT.brier, fbT.n) } } },
   };
   const sc = x => ({ n: x.n, outcome: x.outcome, ou: x.ou, btts: x.btts, brier: x.n ? +(x.brier / x.n).toFixed(3) : null });
-  const leagues = [...perLg.values()].sort((a, b) => b.n - a.n).map(r => ({ slug: r.slug, name: r.name, n: r.n, v2: sc(r.v2), v4: sc(r.v4), fb: sc(r.fb) }));
+  const leagues = [...perLg.values()].sort((a, b) => b.n - a.n).map(r => ({ slug: r.slug, name: r.name, n: r.n, v2: sc(r.v2), v4: sc(r.v4), v5: sc(r.v5), fb: sc(r.fb) }));
+  const fin5 = t => ({ n: t.n, outcome: t.outcome, ou: t.ou, btts: t.btts, rps: t.n ? +(t.rps / t.n).toFixed(4) : null, ll: t.n ? +(t.ll / t.n).toFixed(4) : null });
+  const v5test = { all: { v4: fin5(V5T.all.v4), v5: fin5(V5T.all.v5) }, fb: { v4: fin5(V5T.fb.v4), v5: fin5(V5T.fb.v5), fb: fin5(V5T.fb.fb) } };
   const calGoals = Object.fromEntries(Object.entries(calG).map(([m, o]) => [m, Object.fromEntries(Object.entries(o).map(([k, bs]) => [k, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]))]));
   return {
-    board, last30, top: topT, tracked: TB, market: finishMarket(MKT), leans: { ...LB, recent: LB.recent.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || '')).slice(0, 40) }, leagues, calGoals,
+    board, last30, top: topT, tracked: TB, market: finishMarket(MKT), v5test, leans: { ...LB, recent: LB.recent.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || '')).slice(0, 40) }, leagues, calGoals,
     smCompare: {
       ...smT, importedMatches: legacySm.length, newMatches: smLive.length,
       recent: smLive.slice(0, 100).map(c => { const [m, g] = smModel(c); return { date: c.date, home: c.home, away: c.away, final: c.final, model: m, modelPick: c[m].pick, modelP: c[m].p, sm: c.sm.text, hit: g, smHit: c.smGrade }; }),
