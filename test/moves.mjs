@@ -69,6 +69,8 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const R = finishMarket(M);
   ok('moves: two games moved, one followed; both big', R.moves.n === 2 && R.moves.follow === 1 && R.moves.big === 2 && R.moves.bigFollow === 1, JSON.stringify(R.moves));
   ok('v4 had already leaned home on both big moves', R.moves.modelWith === 2 && R.moves.modelAgainst === 0);
+  const M2 = blankMarket(); addMarket(M2, { final: { h: 1, a: 1 }, odds, v6o: { btts: 50 }, v6: { btts: 56, p: [40, 30, 30] } }); addMarket(M2, { final: { h: 2, a: 0 }, odds, v6o: { btts: 50 }, v6: { btts: 54, p: [40, 30, 30] } }); addMarket(M2, { final: { h: 2, a: 0 }, odds, v6o: { btts: 50 }, v6: { btts: 50, p: [40, 30, 30] } });
+  ok('both score: two moved 1+ points, one went the way of the move; no move, not counted', (b => b.n === 2 && b.follow === 1)(finishMarket(M2).moves.btts), JSON.stringify(finishMarket(M2).moves.btts));
   ok('your picks: two, one beat the close (from the first price seen, else the opening line)', R.mine.n === 2 && R.mine.beat === 1, JSON.stringify(R.mine));
 }
 // 6. hockey: moneyline and total, the same schedule, the page's copy and the Results tally

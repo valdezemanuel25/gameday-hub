@@ -878,7 +878,8 @@ const locked = c => c.final || new Date(c.kickoff).getTime() - Date.now() <= 20 
 function moveLine(c) {
   const mv = moveOf(c.odds); if (!mv) return '';
   const part = i => `${esc(sideOf(c, i))} ${Math.round(mv.p0[i])}→${Math.round(mv.p1[i])}${Math.abs(mv.d[i]) >= 1 ? ` <b>(${sgn(Math.round(mv.d[i]))})</b>` : ''}`;
-  return `<div class="ss">Price move (DraftKings, ${mv.from === 'open' ? 'opening' : 'first seen'} → ${locked(c) ? 'close' : 'now'}): ${[0, 1, 2].map(part).join(' · ')}${mv.ou ? ` · Over ${mv.ou.line} ${Math.round(mv.ou.p0)}→${Math.round(mv.ou.p1)}${Math.abs(mv.ou.d) >= 1 ? ` <b>(${sgn(Math.round(mv.ou.d))})</b>` : ''}` : ''}</div>`;
+  const bt = c.v6o && c.v6 ? ` · Both score ${c.v6o.btts}→${c.v6.btts}${Math.abs(c.v6.btts - c.v6o.btts) >= 1 ? ` <b>(${sgn(c.v6.btts - c.v6o.btts)})</b>` : ''}` : '';
+  return `<div class="ss">Price move (DraftKings, ${mv.from === 'open' ? 'opening' : 'first seen'} → ${locked(c) ? 'close' : 'now'}): ${[0, 1, 2].map(part).join(' · ')}${mv.ou ? ` · Over ${mv.ou.line} ${Math.round(mv.ou.p0)}→${Math.round(mv.ou.p1)}${Math.abs(mv.ou.d) >= 1 ? ` <b>(${sgn(Math.round(mv.ou.d))})</b>` : ''}` : ''}${bt}</div>`;
 }
 function movesBox(cs) {
   const rows = cs.map(c => ({ c, mv: moveOf(c.odds) })).filter(x => x.mv && x.mv.big).sort((a, b) => b.mv.size - a.mv.size);
@@ -1095,11 +1096,14 @@ function movesView() {
     const o = c.odds, op = o.op || o.f, fin = c.final, out = fin ? (fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2) : null;
     const row = (label, a, b, p0, p1, d, hit) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${Math.round(p0)}→${Math.round(p1)}%</td><td class="${Math.abs(d) >= BIG_MOVE ? 'bg' : ''}"><b>${sgn(Math.round(d))}</b></td></tr>`;
     const ouRow = mv.ou ? (() => { const ot = o.opt || o.f; return row(`Over ${mv.ou.line}`, ot.to, o.to, mv.ou.p0, mv.ou.p1, mv.ou.d, fin ? fin.h + fin.a > mv.ou.line : false); })() : '';
+    // Both score has no price in the feed: its chance comes from the score card built on the opening price (v6o) and on now / the close (v6).
+    const btRow = c.v6o && c.v6 ? row('Both score', null, null, c.v6o.btts, c.v6.btts, c.v6.btts - c.v6o.btts, fin ? fin.h > 0 && fin.a > 0 : false) : '';
     const follow = fin ? (mv.size < 2 ? 'the price barely moved' : mv.d[out] > 0 ? 'the result went the way of the move' : 'the result went against the move') : '';
     return `<div class="mvg"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><span class="cs ${st.k}">${st.t}</span></div>
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}${mv.big ? ` · <span class="mvf">big move: ${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}${v4Read(c, mv) ? ', ' + v4Read(c, mv) : ''}</span>` : ''}</small>
       <table class="mvx"><tr><th></th><th>${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
-      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}</table>
+      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>
+      ${btRow ? `<small class="mvn">Both score has no price of its own here: its chance is read off the score card at each price.</small>` : ''}
       ${o.ts ? `<small class="mvn">Price last changed ${tmCT(o.ts)}</small>` : ''}</div>`;
   };
   return seg + head + (shown.length ? shown.map(card).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices are read for the first divisions and the two European cups once a day is analyzed.'}</div>`);
@@ -1158,7 +1162,7 @@ function marketView(t) {
   const clv = `<div class="small" style="margin:6px 18px 0">Headline picks against the closing price: ${C.n ? `<b>${sg(C.avg)}</b> on average, ${C.beat} of ${C.n} beat it` : 'none yet (the first price is kept from Oct 26, 2026)'}. Beating the close is the quickest honest sign of an edge.</div>`;
   const val = `<div class="small" style="margin:6px 18px 0">Retired value rule (v4 5+ points over the price), kept for the record: ${V.n ? `${V.hits} of ${V.n} won, <b>${V.units > 0 ? '+' : ''}${V.units.toFixed(2)} units</b> (${sg(V.roi)})${V.clvN ? `, closing-line value ${sg(V.clv)} (${V.beat} of ${V.clvN} beat it)` : ''}` : 'none yet'}.</div>`;
   const Mv = M.moves, Mi = M.mine, pct = (k, n) => n ? `${Math.round(100 * k / n)}%` : '–';
-  const mvs = Mv && Mv.n ? `<div class="small" style="margin:6px 18px 0">Price moves (opening → close): results went the way of the biggest move in ${pct(Mv.follow, Mv.n)} of ${Mv.n} games; on big moves (5+ points) ${pct(Mv.bigFollow, Mv.big)} of ${Mv.big}${Mv.modelWith + Mv.modelAgainst ? ` (where v4 already leaned that way ${pct(Mv.modelWithFollow, Mv.modelWith)} of ${Mv.modelWith}; against v4 ${pct(Mv.modelAgainstFollow, Mv.modelAgainst)} of ${Mv.modelAgainst})` : ''}. On past seasons it was 56-57%.</div>` : '';
+  const mvs = Mv && Mv.n ? `<div class="small" style="margin:6px 18px 0">Price moves (opening → close): results went the way of the biggest move in ${pct(Mv.follow, Mv.n)} of ${Mv.n} games; on big moves (5+ points) ${pct(Mv.bigFollow, Mv.big)} of ${Mv.big}${Mv.modelWith + Mv.modelAgainst ? ` (where v4 already leaned that way ${pct(Mv.modelWithFollow, Mv.modelWith)} of ${Mv.modelWith}; against v4 ${pct(Mv.modelAgainstFollow, Mv.modelAgainst)} of ${Mv.modelAgainst})` : ''}. On past seasons it was 56-57%.${Mv.btts && Mv.btts.n ? ` Both score went the way of its move in ${pct(Mv.btts.follow, Mv.btts.n)} of ${Mv.btts.n} games where it moved 1+ points.` : ''}</div>` : '';
   const mine = `<div class="small" style="margin:6px 18px 0">Your own picks against the closing price: ${Mi && Mi.n ? `<b>${sg(Mi.avg)}</b> on average, ${Mi.beat} of ${Mi.n} beat it` : 'none yet (set "Your pick" on a priced card before kickoff)'}. Clearly positive over a few hundred picks would mean you see something the price does not.</div>`;
   return `<div class="sec" style="padding-top:20px">Models against the market<small>The sportsbook's home / draw / away price, margin removed, scored like a model on the same games. RPS: lower is better. Green is the better of the two.</small></div>
   <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>Model</th><th>Market</th></tr>${rows}</table></div>${blend}${clv}${mine}${mvs}${val}`;

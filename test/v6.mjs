@@ -27,7 +27,8 @@ const odds = { h: -165, d: 290, a: 450, tl: 2.5, to: -135, tu: 110 }, s = scoreC
 ok('home / draw / away land within a point of the price', near(s.home, T.hda[0], 0.01) && near(s.draw, T.hda[1], 0.015) && near(s.away, T.hda[2], 0.01), JSON.stringify([s.home, s.draw, s.away, T.hda]));
 ok('Over 2.5 lands within a point of the price', near(s.over25, T.over[1], 0.01), `${s.over25} ${T.over[1]}`);
 const g = grid(s.lambda.home, s.lambda.away, true);
-ok('both-score and the likeliest scores come from the same grid', near(s.bttsYes, g.bttsYes, 1e-12) && s.topScores[0].score === g.top[0].score && s.model === 'v6');
+const lgt = p => Math.log(p / (1 - p)), sgm = x => 1 / (1 + Math.exp(-x));
+ok('both-score is the grid\'s, shifted up by BTTS_SHIFT on the log-odds scale (the grid under-counts it); the likeliest scores are the grid\'s', near(s.bttsYes, sgm(lgt(g.bttsYes) + V6.BTTS_SHIFT), 1e-12) && s.bttsYes > g.bttsYes && s.bttsYes - g.bttsYes < 0.035 && s.topScores[0].score === g.top[0].score && s.model === 'v6');
 ok('a bigger favourite gets a bigger home chance and more home goals', scoreCard({ ...odds, h: -300, a: 800 }).home > s.home && scoreCard({ ...odds, h: -300, a: 800 }).lambda.home > s.lambda.home);
 ok('v4 is not mixed in while W_MODEL is 0', V6.W_MODEL === 0 && JSON.stringify(scoreCard(odds, { home: 0.2, draw: 0.2, away: 0.6 })) === JSON.stringify(s));
 

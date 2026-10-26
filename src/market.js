@@ -31,7 +31,7 @@ const W = Array.from({ length: 21 }, (_, i) => i / 20);
 export function blankMarket() {
   return { n: 0, pairs: { v4: blankPair(), v5: blankPair(), v2: blankPair(), fb: blankPair() }, blend: W.map(() => 0), nBlend: 0,
     clv: { n: 0, sum: 0, beat: 0 }, value: { n: 0, hits: 0, units: 0, clvN: 0, clvSum: 0, beat: 0 },
-    mine: { n: 0, sum: 0, beat: 0 }, moves: { n: 0, follow: 0, big: 0, bigFollow: 0, modelWith: 0, modelWithFollow: 0, modelAgainst: 0, modelAgainstFollow: 0 } };
+    mine: { n: 0, sum: 0, beat: 0 }, moves: { n: 0, follow: 0, big: 0, bigFollow: 0, modelWith: 0, modelWithFollow: 0, modelAgainst: 0, modelAgainstFollow: 0, btts: { n: 0, follow: 0 } } };
 }
 // Fold one graded card in. The closing price is the card's last price before kickoff; the first price is `f` (or ESPN's opening line).
 export function addMarket(M, c) {
@@ -62,6 +62,8 @@ export function addMarket(M, c) {
       if (p4) { const with4 = (100 * p4[mv.top] - mv.p0[mv.top] > 0) === (mv.d[mv.top] > 0); if (with4) { t.modelWith++; t.modelWithFollow += fol ? 1 : 0; } else { t.modelAgainst++; t.modelAgainstFollow += fol ? 1 : 0; } }
     }
   }
+  // Both score: the score card's chance at the opening price (v6o) against the close (v6); a move of 1+ points counts.
+  if (c.v6o && c.v6 && Math.abs(c.v6.btts - c.v6o.btts) >= 1) { const b = M.moves.btts; b.n++; b.follow += (c.v6.btts > c.v6o.btts) === (c.final.h > 0 && c.final.a > 0) ? 1 : 0; }
   // v4 value bets against the first price (the closing one for older cards).
   if (p4) {
     const ref = first || mk, refOdds = first ? firstOdds : c.odds, e = p4.map((q, i) => q - ref[i]), i = e.indexOf(Math.max(...e));

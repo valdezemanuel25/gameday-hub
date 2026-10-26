@@ -30,6 +30,17 @@ The market beat every model by about 0.03 log loss a game (see `docs/model-revie
 
 The sample is small, so the Results tab tracks v6 against v4 on the same games ("Score card (v6)").
 
+## Both-score correction (Oct 26, 2026)
+
+The grid fitted to the 1X2 and total prices under-counts games where both teams score. On 8,389 closing prices (`data/football-data`) it said 53% where 55–57% happened. v6 now adds `BTTS_SHIFT = 0.105` to the both-score chance on the log-odds scale, which is about +2.6 points at 50%. Winner, Over 2.5 and the likeliest scores are unchanged.
+
+| Held-out 2025/26–2026/27 (3,169 games) | Said | Happened | Log loss |
+|---|---|---|---|
+| Grid as fitted | about 53% | 56.6% | 0.6777 |
+| With the shift (tuned on 2023/24–2024/25) | 55.6% | 56.6% | 0.6753 |
+
+Each card also keeps the both-score and Over 2.5 chances from the opening price (`v6o`). The Movement tab and the card then show the both-score move from open to close. In past seasons, when the chance rose 3+ points both teams scored 59.9% of the time; when it fell 3+ points, 51.7%.
+
 ## Removing the margin (Oct 26, 2026)
 
 The book's margin is removed with the **power method**: each implied chance is raised to the same power so they add up to 1. Books put more margin on long shots, so this takes more out of them than removing it in proportion.

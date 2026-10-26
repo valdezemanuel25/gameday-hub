@@ -237,11 +237,18 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
 
 // v6 score card from the card's price (src/v6core.js). Before kickoff it follows the latest price; after kickoff the one made before stands.
 // No price, no v6. Returns true when the card's v6 changed.
+// v6o: the same score card from the opening price (op / opt, else the first price seen), so the Movement tab can show how the
+// both-score chance (which has no price of its own in the feed) moved from opening to close.
 function setV6(card, old, now = new Date()) {
-  const was = JSON.stringify(card.v6 ?? old?.v6 ?? null);
-  if (old && 'v6' in old && new Date(card.kickoff).getTime() <= now.getTime()) card.v6 = old.v6;
-  else { const r = card.odds ? scoreCard(card.odds, card.v4 ? toPred(card.v4) : null) : null; card.v6 = r ? slim(r) : null; }
-  return JSON.stringify(card.v6) !== was;
+  const was = JSON.stringify([card.v6 ?? old?.v6 ?? null, card.v6o ?? old?.v6o ?? null]);
+  if (old && 'v6' in old && new Date(card.kickoff).getTime() <= now.getTime()) { card.v6 = old.v6; if (old.v6o) card.v6o = old.v6o; }
+  else {
+    const r = card.odds ? scoreCard(card.odds, card.v4 ? toPred(card.v4) : null) : null; card.v6 = r ? slim(r) : null;
+    const o = card.odds, op = o && (o.op || o.f), ot = o && (o.opt || (o.f && o.f.tl != null ? o.f : null));
+    const r0 = op ? scoreCard({ h: op.h, d: op.d, a: op.a, ...(ot ? { tl: ot.tl, to: ot.to, tu: ot.tu } : {}) }) : null;
+    if (r0) card.v6o = { btts: Math.round(100 * r0.bttsYes), over: Math.round(100 * r0.over25) }; else delete card.v6o;
+  }
+  return JSON.stringify([card.v6 ?? null, card.v6o ?? null]) !== was;
 }
 // Attach the price to a card being (re)built; from PRICE_LOCK minutes before kickoff the price read before then stands.
 function keepOdds(card, old, f, slug, now) {
