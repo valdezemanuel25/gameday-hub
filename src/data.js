@@ -103,6 +103,9 @@ export function parseOdds(list) {
     out.tl = line;
     const ov = pick(t.over?.close?.odds, t.over?.open?.odds, o.overOdds), un = pick(t.under?.close?.odds, t.under?.open?.odds, o.underOdds);
     if (ov != null) out.to = ov; if (un != null) out.tu = un;
+    // The opening total, kept apart like the opening moneyline (its line can differ from today's).
+    const ol = Number(String(t.over?.open?.line ?? '').replace(/[^0-9.]/g, '')), oo = am(t.over?.open?.odds), ou = am(t.under?.open?.odds);
+    if (ol >= 0.5 && ol <= 7.5 && oo != null && ou != null) out.opt = { tl: ol, to: oo, tu: ou };
   }
   return Object.keys(out).length ? out : null;
 }

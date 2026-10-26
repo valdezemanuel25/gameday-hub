@@ -236,7 +236,9 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .xq .g{margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--faint);line-height:1.55}.xq .g span{display:flex;justify-content:space-between;gap:2px;white-space:nowrap}.xq .g b{display:inline;font-size:11.5px;font-weight:650;color:var(--dim)}.xq .g b.hi{color:var(--grass)}
 .xags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}.xags .xag{margin:0}
 .xag.s{background:var(--grass);color:#07150d;font-weight:750}.xag.s:before{content:"✓";width:auto;height:auto;background:none;font-weight:800}
-.xag.gl{background:rgba(127,166,217,.15);color:#b6cdf0}
+.xag.gl{background:rgba(127,166,217,.15);color:#b6cdf0}.xag.mv{background:rgba(201,168,255,.14);color:#d9c4ff}
+.mvb{margin:8px 18px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(201,168,255,.05);font-size:12px;color:var(--dim)}.mvb summary{cursor:pointer;color:var(--ink);font-weight:650;font-size:12.5px}
+.mvb .mr{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line)}.mvb .mr:first-of-type{border-top:0}.mvb .mr b{color:var(--ink);font-weight:600}.mvb .mr em{font-style:normal;color:#d9c4ff;font-weight:650;white-space:nowrap}
 .xc.win{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--grass),0 0 14px rgba(var(--acc-rgb),.65)}
 .xp .n b.cg{color:var(--grass)}
 .scd{margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--line);font-size:12px;color:var(--dim)}
@@ -839,6 +841,44 @@ function scoreHtml(m) { // one short line on the card; the exact top three are i
   const xg = m.lam ? `<small class="sc xg">xG ${(+m.lam[0]).toFixed(1)} - ${(+m.lam[1]).toFixed(1)}</small>` : '';
   return xg + `<small class="sc">Score ${esc(a ? a.s : top[0])} · ${a ? a.p : top[1]}%</small>`;
 }
+// Price moves (same rule as src/moves.js; test/moves.mjs keeps the two in step): the book's own chances, margin removed with the power
+// method, at the opening price (ESPN's opening line, else the first price the Hub saw) against now, or the close once prices are locked
+// 20 minutes before kickoff (the last read is about 30 minutes before, after the lineups). 5+ points on one result is a big move:
+// news reaching the price. A flag to check the team news, never a bet.
+const BIG_MOVE = 5;
+function devigP(...ms) {
+  if (!ms.every(Number.isFinite)) return null;
+  const q = ms.map(m => 1 / (m > 0 ? 1 + m / 100 : 1 + 100 / -m)); let lo = 0.5, hi = 2, k = 1;
+  for (let i = 0; i < 50; i++) { k = (lo + hi) / 2; const s = q.reduce((a, x) => a + Math.pow(x, k), 0); if (s > 1) lo = k; else hi = k; }
+  const p = q.map(x => Math.pow(x, k)), s = p.reduce((a, b) => a + b, 0); return p.map(x => x / s);
+}
+function moveOf(odds) {
+  if (!odds) return null;
+  const open = odds.op || odds.f, from = odds.op ? 'open' : 'first';
+  const a = open && devigP(open.h, open.d, open.a), b = devigP(odds.h, odds.d, odds.a);
+  if (!a || !b) return null;
+  const r1 = x => Math.round(10 * x) / 10, p0 = a.map(x => r1(100 * x)), p1 = b.map(x => r1(100 * x)), d = p1.map((x, i) => r1(x - p0[i]));
+  const top = d.reduce((m, x, i) => (Math.abs(x) > Math.abs(d[m]) ? i : m), 0), size = Math.abs(d[top]);
+  const ot = odds.opt || (odds.f && odds.f.tl != null ? odds.f : null);
+  let ou = null;
+  if (ot && ot.tl === odds.tl) { const x = devigP(ot.to, ot.tu), y = devigP(odds.to, odds.tu); if (x && y) ou = { line: odds.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
+  return { from, p0, p1, d, top, size, big: size >= BIG_MOVE, ou };
+}
+const sgn = x => (x > 0 ? '+' : '') + x;
+const sideOf = (c, i) => (i === 1 ? 'Draw' : strip(i === 0 ? c.home : c.away));
+// Did v4 already lean the way the price moved? (its chance for the moved result against the opening price)
+const v4Read = (c, mv) => (c.v4 && c.v4.p ? ((c.v4.p[mv.top] - mv.p0[mv.top] > 0) === (mv.d[mv.top] > 0) ? 'v4 already leaned this way' : 'against v4') : '');
+const locked = c => c.final || new Date(c.kickoff).getTime() - Date.now() <= 20 * 60000;
+function moveLine(c) {
+  const mv = moveOf(c.odds); if (!mv) return '';
+  const part = i => `${esc(sideOf(c, i))} ${Math.round(mv.p0[i])}→${Math.round(mv.p1[i])}${Math.abs(mv.d[i]) >= 1 ? ` <b>(${sgn(Math.round(mv.d[i]))})</b>` : ''}`;
+  return `<div class="ss">Price move (DraftKings, ${mv.from === 'open' ? 'opening' : 'first seen'} → ${locked(c) ? 'close' : 'now'}): ${[0, 1, 2].map(part).join(' · ')}${mv.ou ? ` · Over ${mv.ou.line} ${Math.round(mv.ou.p0)}→${Math.round(mv.ou.p1)}${Math.abs(mv.ou.d) >= 1 ? ` <b>(${sgn(Math.round(mv.ou.d))})</b>` : ''}` : ''}</div>`;
+}
+function movesBox(cs) {
+  const rows = cs.map(c => ({ c, mv: moveOf(c.odds) })).filter(x => x.mv && x.mv.big).sort((a, b) => b.mv.size - a.mv.size);
+  if (!rows.length) return '';
+  return `<details class="mvb" open><summary>Big price moves today · ${rows.length}</summary><div class="small" style="margin:4px 0 6px">5+ points on one result since the opening price. Usually team news or informed money: check the lineups. Not a bet.</div>${rows.map(({ c, mv }) => `<div class="mr"><span><b>${esc(strip(c.home))} v ${esc(strip(c.away))}</b><br><small>${esc(c.ko || '')} · ${esc(LCODE[c.leagueKey] || c.leagueName || '')}${v4Read(c, mv) ? ' · ' + v4Read(c, mv) : ''}</small></span><em>${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}<br><small>${Math.round(mv.p0[mv.top])}→${Math.round(mv.p1[mv.top])}%</small></em></div>`).join('')}</details>`;
+}
 // Score card: winner, Over/Under 2.5, both-score and the likeliest scores, all read off one score grid, with fair odds (100 / chance).
 // v6 when the card has a sportsbook price (the grid that matches that price, margin removed), otherwise v4's own numbers.
 const fairOdds = p => { const q = Math.min(0.99, Math.max(0.01, p / 100)); return q >= 0.5 ? `${Math.round(-100 * q / (1 - q))}` : `+${Math.round(100 * (1 - q) / q)}`; };
@@ -851,7 +891,7 @@ function scoreCard(c) {
   return `<div class="scd"><div class="sh"><b>Score card</b><small>${fromPrice ? 'from the sportsbook price, margin removed (v6)' : 'v4 · no sportsbook price yet'}</small></div>
     <div class="sr">${cell(esc(strip(c.home)), m.p[0], out == null ? null : out === 0)}${cell('Draw', m.p[1], out == null ? null : out === 1)}${cell(esc(strip(c.away)), m.p[2], out == null ? null : out === 2)}</div>
     <div class="sr two">${m.over >= 50 ? cell('Over 2.5', m.over, ov == null ? null : ov) : cell('Under 2.5', 100 - m.over, ov == null ? null : !ov)}${m.btts >= 50 ? cell('Both score', m.btts, bt == null ? null : bt) : cell('Not both score', 100 - m.btts, bt == null ? null : !bt)}</div>
-    <div class="ss">Likeliest scores: ${sc}${m.lam ? ` · xG ${(+m.lam[0]).toFixed(1)}–${(+m.lam[1]).toFixed(1)}` : ''}</div></div>`;
+    <div class="ss">Likeliest scores: ${sc}${m.lam ? ` · xG ${(+m.lam[0]).toFixed(1)}–${(+m.lam[1]).toFixed(1)}` : ''}</div>${moveLine(c)}</div>`;
 }
 function chips(c) {
   const v = c.v2, g = c.grade || {}, out = [], picks = [];
@@ -869,8 +909,9 @@ function chips(c) {
     if (c.sm) { const m = /(\d+)[–-](\d+)/.exec(c.sm.text); const side = sideOfScore(c.sm.h, c.sm.a); out.push(mk('sm', 'SportsMole', side, null, `${c.sm.h}–${c.sm.a}`, c.smGrade ? c.smGrade.outcomeHit : null, '', 'says')); }
     else out.push(`<div class="xq none"><div class="l">SportsMole</div><b>Not found yet</b></div>`);
   }
-  const cs = consensus(c), who = cs.side === 'D' ? 'a draw' : cs.side === 'H' ? c.home : c.away, gc = goalsCons(c);
-  const tag = `<div class="xags">${cs.strong ? `<div class="xag s">Consensus · ${esc(who)}</div>` : cs.same ? `<div class="xag y">${cs.n === 2 ? 'Both' : 'All ' + cs.n} pick ${esc(who)}</div>` : cs.n >= 2 ? `<div class="xag">Split: ${splitText(c)}</div>` : ''}${gc.map(t => `<div class="xag gl">${t}</div>`).join('')}</div>`;
+  const cs = consensus(c), who = cs.side === 'D' ? 'a draw' : cs.side === 'H' ? c.home : c.away, gc = goalsCons(c), mv = moveOf(c.odds);
+  const mvTag = mv && mv.big ? `<div class="xag mv">Big price move · ${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}${v4Read(c, mv) ? ' · ' + v4Read(c, mv) : ''}</div>` : '';
+  const tag = `<div class="xags">${mvTag}${cs.strong ? `<div class="xag s">Consensus · ${esc(who)}</div>` : cs.same ? `<div class="xag y">${cs.n === 2 ? 'Both' : 'All ' + cs.n} pick ${esc(who)}</div>` : cs.n >= 2 ? `<div class="xag">Split: ${splitText(c)}</div>` : ''}${gc.map(t => `<div class="xag gl">${t}</div>`).join('')}</div>`;
   return `${tag}<div class="xl n${out.length}">${out.join('')}</div>`;
 }
 function game(c) {
@@ -998,8 +1039,8 @@ function board() {
   if (S.sel && !cs.find(c => c.id === S.sel)) S.sel = null;
   const cols = Math.ceil(cs.length / 4), sc = cs.find(c => c.id === S.sel);
   const html = cs.length ? `<div class="sgrid" id="sgrid">${cs.map(c => tileOf(c, c.id === S.sel) + (c.id === S.sel ? `<div class="sdt" id="sdt">${game(c)}</div>` : '')).join('')}</div>` : '';
-  const fin = doneCs.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${S.fin}">Finished <b>${doneCs.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? doneCs.map(game).join('') : doneCs.map(c => `<div class="fr"><span class="lg">${esc(LCODE[c.leagueKey] || '')}</span><b>${esc(strip(c.home))} ${c.final ? `${c.final.h}–${c.final.a}` : 'vs'} ${esc(strip(c.away))}</b>${!c.final ? '<i class="pend">result pending</i>' : c.grade && c.grade.v2 ? `<i class="${c.grade.v2.outcomeHit ? 'ok' : 'no'}">${c.grade.v2.outcomeHit ? '✓' : '✗'}</i>` : ''}</div>`).join('')}</div>` : '';
-  return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + html + fin + uncovered(uncShown) + `</div></div>`;
+  const fin = doneCs.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${S.fin}">Finished <b>${doneCs.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? doneCs.map(game).join('') : doneCs.map(c => `<div class="fr"><span class="lg">${esc(LCODE[c.leagueKey] || '')}</span><b>${esc(strip(c.home))} ${c.final ? `${c.final.h}–${c.final.a}` : 'vs'} ${esc(strip(c.away))}</b>${!c.final ? '<i class="pend">result pending</i>' : vg(c) ? `<i class="${vg(c).outcomeHit ? 'ok' : 'no'}">${vg(c).outcomeHit ? '✓' : '✗'}</i>` : ''}</div>`).join('')}</div>` : '';
+  return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + movesBox([...cs, ...doneCs]) + html + fin + uncovered(uncShown) + `</div></div>`;
 }
 // Left league list for wide screens: leagues with games first, the rest dimmed underneath.
 const LCODE = { bundesliga: 'GER', bundesliga2: 'GER2', laliga: 'SP', laliga2: 'SP2', seriea: 'ITA', ligue1: 'FRA', eredivisie: 'NED', epl: 'ENG', championship: 'ENG2', ligamx: 'MEX', mls: 'USA', brasileirao: 'BRA', ucl: 'UCL', uel: 'UEL', nationsleague: 'NL' };
@@ -1106,9 +1147,12 @@ function marketView(t) {
   const B = M.blend, C = M.clv, V = M.value;
   const blend = B && B.n ? `<div class="small" style="margin:8px 18px 0">Best mix: <b>${Math.round(100 * B.w)}% v4</b> + ${Math.round(100 * (1 - B.w))}% market (log loss ${f(B.ll)}; market alone ${f(B.llMarket)}, v4 alone ${f(B.llV4)}, ${B.n} games). ${B.w === 0 ? 'So far v4 adds nothing the price does not already know.' : B.n < 300 ? 'Too few games to trust the mix yet.' : ''}</div>` : '';
   const clv = `<div class="small" style="margin:6px 18px 0">Headline picks against the closing price: ${C.n ? `<b>${sg(C.avg)}</b> on average, ${C.beat} of ${C.n} beat it` : 'none yet (the first price is kept from Oct 26, 2026)'}. Beating the close is the quickest honest sign of an edge.</div>`;
-  const val = `<div class="small" style="margin:6px 18px 0">v4 value bets (v4 5+ points over the price): ${V.n ? `${V.hits} of ${V.n} won, <b>${V.units > 0 ? '+' : ''}${V.units.toFixed(2)} units</b> (${sg(V.roi)})${V.clvN ? `, closing-line value ${sg(V.clv)} (${V.beat} of ${V.clvN} beat it)` : ''}` : 'none yet'}.</div>`;
+  const val = `<div class="small" style="margin:6px 18px 0">Retired value rule (v4 5+ points over the price), kept for the record: ${V.n ? `${V.hits} of ${V.n} won, <b>${V.units > 0 ? '+' : ''}${V.units.toFixed(2)} units</b> (${sg(V.roi)})${V.clvN ? `, closing-line value ${sg(V.clv)} (${V.beat} of ${V.clvN} beat it)` : ''}` : 'none yet'}.</div>`;
+  const Mv = M.moves, Mi = M.mine, pct = (k, n) => n ? `${Math.round(100 * k / n)}%` : '–';
+  const mvs = Mv && Mv.n ? `<div class="small" style="margin:6px 18px 0">Price moves (opening → close): results went the way of the biggest move in ${pct(Mv.follow, Mv.n)} of ${Mv.n} games; on big moves (5+ points) ${pct(Mv.bigFollow, Mv.big)} of ${Mv.big}${Mv.modelWith + Mv.modelAgainst ? ` (where v4 already leaned that way ${pct(Mv.modelWithFollow, Mv.modelWith)} of ${Mv.modelWith}; against v4 ${pct(Mv.modelAgainstFollow, Mv.modelAgainst)} of ${Mv.modelAgainst})` : ''}. On past seasons it was 56-57%.</div>` : '';
+  const mine = `<div class="small" style="margin:6px 18px 0">Your own picks against the closing price: ${Mi && Mi.n ? `<b>${sg(Mi.avg)}</b> on average, ${Mi.beat} of ${Mi.n} beat it` : 'none yet (set "Your pick" on a priced card before kickoff)'}. Clearly positive over a few hundred picks would mean you see something the price does not.</div>`;
   return `<div class="sec" style="padding-top:20px">Models against the market<small>The sportsbook's home / draw / away price, margin removed, scored like a model on the same games. RPS: lower is better. Green is the better of the two.</small></div>
-  <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>Model</th><th>Market</th></tr>${rows}</table></div>${blend}${clv}${val}`;
+  <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>Model</th><th>Market</th></tr>${rows}</table></div>${blend}${clv}${mine}${mvs}${val}`;
 }
 // Over 2.5 and Both-teams-to-score: what each model said, grouped by confidence, against how often it happened.
 function goalsCalibration(t) {

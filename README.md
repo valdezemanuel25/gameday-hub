@@ -54,6 +54,16 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 - **Not carried over from the Hub:** NHL, the Model vs SportsMole tab, scorer picks, and the old per-match result links. Old history rows have no kickoff times or leagues, so they show as a plain list.
 - **Mobile looks like the Hub but isn't pixel-tested.** Open it on your phone after deploy and tell me what looks off.
 
+## Opening and closing prices
+
+* **When prices are read:** every 6 hours as a rule, every hour in the last 3 hours before a league's next kickoff, and once 30–20 minutes before kickoff, after the official lineups are out (`LINEUP_READ`, `PRICE_LOCK` in `src/worker.js`). From 20 minutes before kickoff a card's price is locked, so the lineup read is the closing price.
+* **What each card keeps:** the opening price (ESPN's opening line for home / draw / away and the total, `odds.op` / `odds.opt`, else the first price the Hub saw, `odds.f`) next to the current or closing one.
+* **On the card:** the score card shows the move (e.g. `Arsenal 46→58 (+12)`). A move of 5+ points on one result gets a "Big price move" flag, saying whether v4 already leaned that way. The Board lists the day's big moves. It is a prompt to check the team news, not a bet (`src/moves.js`).
+* **On the Results tab** ("Models against the market"):
+  * how often results went the way of the move (56–57% on past seasons)
+  * the same split by whether v4 agreed
+  * your own picks ("Your pick" on a card) against the closing price
+
 ## Score card (v6)
 
 * Every card has a Score card panel: winner, Over/Under 2.5, both-score, the likeliest scores and fair odds, all read off one score grid. With a sportsbook price the grid is fitted to that price, margin removed (`src/v6core.js`, tracked as v6 on the Results tab); without one it shows v4's numbers. See `docs/v6-score-card.md`.
