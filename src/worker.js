@@ -261,6 +261,7 @@ function keepOdds(card, old, f, slug, now) {
 // ts (when the price last changed) and cl (when the lineup read was taken: the closing price) carry over from the old price.
 export function withOdds(old, fresh) {
   const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
+  for (const k of ['bf', 'bk', 'bcl']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
   const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
@@ -277,7 +278,42 @@ export const LINEUP_READ = 30, PRICE_LOCK = 20;
 const canon = v => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canon(v[k])])) : v);
 const sameJson = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 const priceOpen = (c, now) => new Date(c.kickoff).getTime() - now.getTime() > PRICE_LOCK * 60000;
-export async function refreshOdds(env, date, slug, now = new Date()) {
+// Both-score prices (The Odds API, only with the ODDS_API_KEY secret) for cards that already carry an ESPN price, on the same schedule:
+//   opening: the first read for a game (kept in odds.bf); skipped once fewer than BTTS_RESERVE credits are left this month, so the
+//            closing reads still have credits;
+//   close:   the read inside the lineup window (LINEUP_READ to PRICE_LOCK minutes before kickoff), noted in odds.bcl.
+// Each game costs one credit per read, so two a game. Returns the number of cards changed. Never throws: a failed read is skipped.
+export const BTTS_RESERVE = 100;
+// Credits left this month, kept in the free edge cache (no KV write) for the Status tab.
+const CREDITS = 'https://hub.local/btts-credits';
+async function noteCredits(left) {
+  try { if (typeof caches !== 'undefined') await caches.default.put(CREDITS, new Response(JSON.stringify({ left, at: new Date().toISOString() }), { headers: { 'cache-control': 'max-age=2592000' } })); } catch (e) { /* ignore */ }
+}
+async function readCredits() {
+  try { const r = typeof caches !== 'undefined' ? await caches.default.match(CREDITS) : null; return r ? await r.json() : null; } catch (e) { return null; }
+}
+export async function addBtts(env, cards, slug, now = new Date(), f = fetch) {
+  if (!env.ODDS_API_KEY) return 0;
+  const inWin = c => new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000;
+  const close = c => inWin(c) && !c.odds.bcl, open = c => !c.odds.bf;
+  let changed = 0;
+  for (const c of cards) if (c.odds && c.odds.by != null && !c.odds.bf) { c.odds.bf = { by: c.odds.by, bn: c.odds.bn }; changed++; } // read by the button earlier
+  const want = cards.filter(c => c.odds && (close(c) || open(c))); if (!want.length) return changed;
+  const reserve = num(env.BTTS_RESERVE, BTTS_RESERVE);
+  let r; try { r = await fetchBtts(env.ODDS_API_KEY, slug, want, f, (c, left) => close(c) || left == null || left > reserve); } catch (e) { return changed; }
+  if (r.error) return changed;
+  if (r.left != null) await noteCredits(r.left);
+  for (const c of want) {
+    const p = r.prices.get(c.id); if (!p) continue;
+    const o = c.odds, was = JSON.stringify([o.by, o.bn, o.bf, o.bcl]);
+    o.by = p.by; o.bn = p.bn; o.bk = p.bk;
+    if (!o.bf) o.bf = { by: p.by, bn: p.bn };
+    if (inWin(c)) o.bcl = now.toISOString();
+    if (JSON.stringify([o.by, o.bn, o.bf, o.bcl]) !== was) changed++;
+  }
+  return changed;
+}
+export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && priceOpen(c, now));
@@ -293,21 +329,23 @@ export async function refreshOdds(env, date, slug, now = new Date()) {
     if (c.odds && setV6(c, c, now)) ch = true; // the score card follows the price (and a card priced before v6 existed gets one)
     if (ch) changed++;
   }
+  changed += await addBtts(env, open, slug, now, f);
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { games: open.length, priced, changed };
 }
 // Background: look at ONE first-division league per run (each at most every 6 hours, remembered in the free edge cache so it costs no
 // KV writes). Display only; no model reads a price.
 export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) {
-  if (!FIRST_DIV.has(slug)) return { error: 'Prices are only read for first divisions' };
+  if (!PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0 };
-  const open = (day.cards || []).filter(c => c.league === slug && c.v2 && !c.final && new Date(c.kickoff).getTime() > now.getTime());
+  const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && new Date(c.kickoff).getTime() > now.getTime());
   if (!open.length) return { games: 0, priced: 0 };
   const need = open.filter(c => !(c.odds && c.odds.by != null)), have = open.length - need.length; // already-priced games cost no credit
   if (!need.length) return { games: open.length, priced: have, skipped: [], left: null };
   const r = await fetchBtts(env.ODDS_API_KEY, slug, need, f); if (r.error) return { error: r.error };
+  if (r.left != null) await noteCredits(r.left);
   let changed = 0;
-  for (const c of need) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn }; changed++; } }
+  for (const c of need) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn, bk: p.bk }; if (!c.odds.bf) c.odds.bf = { by: p.by, bn: p.bn }; changed++; } }
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { games: open.length, priced: have + r.prices.size, skipped: r.skipped, left: r.left };
 }
@@ -846,7 +884,7 @@ const hub = {
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
-        now: Date.now(), forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        now: Date.now(), btts: { key: !!env.ODDS_API_KEY, credits: await readCredits(), reserve: num(env.BTTS_RESERVE, BTTS_RESERVE) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }

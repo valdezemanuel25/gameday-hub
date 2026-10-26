@@ -103,4 +103,49 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const T = await nhlTally(env);
   ok('hockey Results: winner followed the moneyline move once in two, totals went against the Over move twice', T.moves.ml.n === 2 && T.moves.ml.follow === 1 && T.moves.ou.n === 2 && T.moves.ou.follow === 0, JSON.stringify(T.moves));
 }
+
+// Both-score book prices (The Odds API): opening on the first read, close at the lineup read, credits kept for closing reads.
+{
+  const { bttsMove } = await import('../src/moves.js');
+  const { addBtts, withOdds } = await import('../src/worker.js');
+  const { blankMarket, addMarket, finishMarket } = await import('../src/market.js');
+  const bm = bttsMove({ bf: { by: -120, bn: 100 }, by: -150, bn: 120 });
+  ok('both-score move from the book price: Yes chance rose', bm && bm.d > 0 && bm.b0[0] === -120 && bm.b1[0] === -150, JSON.stringify(bm));
+  ok('no first both-score price: no book move', bttsMove({ by: -150, bn: 120 }) === null);
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
+  const page = new Function(`${['devigP', 'bttsMove'].map(grab).join('\n')}; return bttsMove;`)();
+  const bc = [{ bf: { by: -120, bn: 100 }, by: -150, bn: 120 }, { by: -150, bn: 120 }, { bf: { by: 105, bn: -125 }, by: 105, bn: -125 }];
+  ok('page and server agree on the both-score move', bc.every(o => JSON.stringify(page(o)) === JSON.stringify(bttsMove(o))));
+  ok('a fresh ESPN price keeps the both-score prices and their history', (() => { const n = withOdds({ h: 1, d: 2, a: 3, by: -110, bn: -110, bf: { by: -105, bn: -115 }, bk: 'draftkings', bcl: 'x' }, { h: 4, d: 5, a: 6 }); return n.by === -110 && n.bf.by === -105 && n.bk === 'draftkings' && n.bcl === 'x'; })());
+
+  const now = new Date('2026-10-26T12:00:00Z');
+  const ev = (id, h, a, t) => ({ id, home_team: h, away_team: a, commence_time: t });
+  const T1 = '2026-10-26T12:25:00Z', T2 = '2026-10-26T18:00:00Z';
+  const events = [ev('e1', 'Paris Saint Germain', 'Lyon', T1), ev('e2', 'Lille', 'Nice', T2)];
+  const price = { e1: [-140, 110], e2: [-115, -105] };
+  const mk = (left, log) => async u => { log.push(u); const id = (u.match(/events\/(\w+)\/odds/) || [])[1];
+    return { ok: true, headers: { get: k => (k === 'x-requests-remaining' ? String(left) : null) }, json: async () => (id ? { bookmakers: [{ key: 'draftkings', markets: [{ key: 'btts', outcomes: [{ name: 'Yes', price: price[id][0] }, { name: 'No', price: price[id][1] }] }] }] } : events) }; };
+  const cards = () => [
+    { id: '1', home: 'Paris Saint-Germain', away: 'Lyon', kickoff: T1, odds: { h: -310, d: 475, a: 750, bf: { by: -120, bn: 100 }, by: -120, bn: 100 } }, // in the lineup window, opened earlier
+    { id: '2', home: 'Lille', away: 'Nice', kickoff: T2, odds: { h: 120, d: 240, a: 230 } }, // first read: opening
+  ];
+  let log = [], cs = cards();
+  const n = await addBtts({ ODDS_API_KEY: 'k' }, cs, 'fra.1', now, mk(400, log));
+  ok('lineup read: the close is read and noted, the opening kept', cs[0].odds.by === -140 && cs[0].odds.bf.by === -120 && cs[0].odds.bcl === now.toISOString(), JSON.stringify(cs[0].odds));
+  ok('first read: the opening both-score price is stored', cs[1].odds.bf && cs[1].odds.bf.by === -115 && cs[1].odds.by === -115 && !cs[1].odds.bcl && n === 2, JSON.stringify(cs[1].odds));
+  log = []; await addBtts({ ODDS_API_KEY: 'k' }, cs, 'fra.1', now, mk(400, log));
+  ok('nothing left to read: only the free events list is fetched', log.length === 0, JSON.stringify(log));
+  log = []; cs = cards(); await addBtts({ ODDS_API_KEY: 'k' }, cs, 'fra.1', now, mk(50, log));
+  ok('credits low: the closing read still happens, the opening read waits', cs[0].odds.bcl && !cs[1].odds.bf && log.filter(u => u.includes('/odds')).length === 1, JSON.stringify(log));
+  log = []; cs = cards(); const n0 = await addBtts({}, cs, 'fra.1', now, mk(400, log));
+  ok('no key: no read at all', n0 === 0 && log.length === 0);
+  cs = [{ id: '3', home: 'A', away: 'B', kickoff: T2, odds: { h: 1, d: 2, a: 3, by: -110, bn: -110 } }];
+  await addBtts({ ODDS_API_KEY: 'k' }, cs, 'fra.1', now, mk(400, []));
+  ok('a price read by the button before becomes the opening one', cs[0].odds.bf && cs[0].odds.bf.by === -110);
+
+  const M = blankMarket();
+  addMarket(M, { odds: { h: -150, d: 280, a: 400, bf: { by: -120, bn: 100 }, by: -150, bn: 120 }, final: { h: 1, a: 1 }, v6o: { btts: 60 }, v6: { btts: 55 } });
+  ok('Results: the book both-score move is used ahead of the score card', finishMarket(M).moves.btts.n === 1 && finishMarket(M).moves.btts.follow === 1 && finishMarket(M).moves.btts.book === 1, JSON.stringify(finishMarket(M).moves.btts));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);

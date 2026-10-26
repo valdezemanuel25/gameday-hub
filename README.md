@@ -65,7 +65,12 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
   * **Pending (time):** shows when the closing read is due.
   * **No lineup read:** the price locked without a read in the window, so the last price stands as the close.
   * Filters: big moves, pending, closed. Finished games say whether the result went the way of the move.
-  * **Both score row:** the score card's both-score chance at the opening price (`v6o`) against now or the close. There is no both-score price of its own; it is read off the score card at each price.
+  * **Both score row:** DraftKings' both-score Yes price, first seen → now or the close, with the chance (margin removed) and the move. Without a book price it falls back to the score card's chance at the opening price (`v6o`) against now or the close.
+* **Both-score prices (Oct 26, 2026):** ESPN has none, so they come from The Odds API (`src/btts.js`), only once the Worker secret `ODDS_API_KEY` is set (`npx wrangler secret put ODDS_API_KEY`).
+  * Read with the ESPN price: once when a game is first priced (the opening, `odds.bf`) and once at the lineup read 30–20 minutes before kickoff (the close, noted in `odds.bcl`). DraftKings first, else the first US book with the market.
+  * Cost: the events list is free; each game's read is one credit, so about two credits a game. The free plan (500 a month) covers roughly 250 games; the first divisions and the two cups play more than that in a month, so a paid plan is needed for full coverage.
+  * When fewer than 100 credits are left (`BTTS_RESERVE`, can be set as a Worker variable), opening reads pause so the closing reads keep going. The Status tab shows whether the key is set and the credits left.
+  * The "Get Both-score prices" button still reads on demand.
 * **On the Results tab** ("Models against the market"):
   * how often results went the way of the move (56–57% on past seasons)
   * the same split by whether v4 agreed
