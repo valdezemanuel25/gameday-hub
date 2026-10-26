@@ -64,6 +64,21 @@ body{padding-bottom:48px}
 
 .bt{display:flex;flex-direction:column;gap:1px;border-left:0;padding-left:0;background:none;border-radius:0}
 .list .bt+.bt{border-top:1px solid rgba(255,255,255,.08);padding-top:10px}
+
+.cal{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px;padding:14px 12px 12px;margin:6px 0 14px}
+.cal-h{display:flex;align-items:center;justify-content:space-between;padding:0 4px 8px}
+.cal-h b{font-size:16px;font-weight:500}
+.cal-h button{background:rgba(255,255,255,.08);border:0;color:var(--ink);width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer}
+.cal-h button:disabled{opacity:.3;cursor:default}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.cal-g .dow{font-size:11px;color:var(--faint);padding:4px 0}
+.cal-g button{position:relative;background:transparent;border:0;border-radius:50%;aspect-ratio:1;color:var(--faint);font:inherit;font-size:14px;cursor:default}
+.cal-g button.has{color:var(--ink);cursor:pointer}
+.cal-g button.has:after{content:"";position:absolute;left:50%;bottom:5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--amber)}
+.cal-g button.today{box-shadow:inset 0 0 0 1px var(--faint)}
+.cal-g button.sel{background:var(--blue);color:#0c0905;font-weight:600}
+.cal-g button.sel:after{background:#0c0905}
+.cal-g button:focus-visible{outline:2px solid var(--blue)}
 </style>
 </head>
 <body>
@@ -71,6 +86,7 @@ body{padding-bottom:48px}
 <div class="wrap">
   <div class="title" id="title"></div>
   <div class="sub" id="sub">Quick read of your Brew Markets and Morning Brew emails.</div>
+  <div class="cal" id="cal"></div>
   <div id="view"><div class="empty">Loading…</div></div>
 </div>
 <script>
@@ -81,13 +97,41 @@ const card = i => `<div class="card"><div class="src">${esc(i.source || '')} · 
   ${(i.markets || []).length ? `<div class="strip">${i.markets.map(chip).join('')}</div>` : ''}
   <div class="list">${(i.takeaways || []).map(t => typeof t === 'string' ? `<div class="bt"><span>${esc(t)}</span></div>` : `<div class="bt"><b>${esc(t.h)}</b><span>${esc(t.t)}</span></div>`).join('')}</div>${i.note ? `<div class="note">${esc(i.note)}</div>` : ''}</div>`;
 { const d = new Date(); const $t = document.getElementById('title'); $t.innerHTML = `<span class="wd">Brew · ${d.toLocaleDateString('en-US',{weekday:'long',timeZone:'America/Chicago'})}</span><span class="dt2">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Chicago'})}</span>`; }
+const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const ymd = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+let issues = [], byDate = {}, sel = today, vy = 0, vm = 0, minM = 0, maxM = 0;
+const mIdx = (y, m) => y * 12 + m;
+function drawCal() {
+  const first = new Date(Date.UTC(vy, vm, 1)).getUTCDay(), n = new Date(Date.UTC(vy, vm + 1, 0)).getUTCDate();
+  let h = ['S','M','T','W','T','F','S'].map(d => `<div class="dow">${d}</div>`).join('') + '<span></span>'.repeat(first);
+  for (let d = 1; d <= n; d++) { const k = ymd(vy, vm, d), has = !!byDate[k]; h += `<button data-d="${k}" class="${has ? 'has' : ''}${k === today ? ' today' : ''}${k === sel ? ' sel' : ''}" ${has ? '' : 'tabindex="-1"'} aria-label="${k}${has ? ', has summaries' : ''}">${d}</button>`; }
+  document.getElementById('cal').innerHTML = `<div class="cal-h"><button id="pm" aria-label="Previous month" ${mIdx(vy, vm) <= minM ? 'disabled' : ''}>‹</button><b>${MN[vm]} ${vy}</b><button id="nm" aria-label="Next month" ${mIdx(vy, vm) >= maxM ? 'disabled' : ''}>›</button></div><div class="cal-g">${h}</div>`;
+}
+function drawView() {
+  const list = byDate[sel] || [];
+  document.getElementById('view').innerHTML = list.length ? list.map(card).join('') : `<div class="empty">No newsletter summaries for ${esc(new Date(sel + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' }))}.</div>`;
+}
+function draw() { drawCal(); drawView(); }
+document.getElementById('cal').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'pm' || b.id === 'nm') { const i = mIdx(vy, vm) + (b.id === 'pm' ? -1 : 1); if (i < minM || i > maxM) return; vy = Math.floor(i / 12); vm = i % 12; drawCal(); return; }
+  if (b.dataset.d && byDate[b.dataset.d]) { sel = b.dataset.d; draw(); }
+});
 (async () => {
   try {
     const r = await fetch('/api/brew'); if (!r.ok) throw new Error(r.status);
     const j = await r.json();
     if (j.updated) document.getElementById('sub').textContent = `Quick read of your Brew Markets and Morning Brew emails. Updated ${ago(j.updated)}.`;
-    document.getElementById('view').innerHTML = (j.issues || []).length ? j.issues.map(card).join('') : '<div class="empty">No newsletter summaries yet.</div>';
-  } catch (e) { document.getElementById('view').innerHTML = '<div class="empty">Could not load the summaries. Pull to refresh.</div>'; }
+    issues = j.issues || [];
+    if (!issues.length) { document.getElementById('cal').remove(); document.getElementById('view').innerHTML = '<div class="empty">No newsletter summaries yet.</div>'; return; }
+    for (const i of issues) if (i.date) (byDate[i.date] = byDate[i.date] || []).push(i);
+    const dates = Object.keys(byDate).sort();
+    if (!byDate[sel]) sel = dates[dates.length - 1]; // today has nothing yet: show the newest day
+    const ym = k => [Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1];
+    minM = mIdx(...ym(dates[0])); maxM = Math.max(mIdx(...ym(dates[dates.length - 1])), mIdx(...ym(today)));
+    [vy, vm] = ym(sel); draw();
+  } catch (e) { document.getElementById('cal').remove(); document.getElementById('view').innerHTML = '<div class="empty">Could not load the summaries. Pull to refresh.</div>'; }
 })();
 </script>
 </body>
