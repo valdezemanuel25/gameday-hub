@@ -26,6 +26,6 @@ const mk = o => ({ home: 'Lille', away: 'Galatasaray', v2: { pick: 'H', p: [52, 
 { const c = mk({ v2: { pick: 'H', p: [50, 25, 25], over: 50, btts: 50 }, v4: { pick: 'H', p: [50, 25, 25], over: 52, btts: 48 }, fb: null, sm: null });
   const g = api.goalsCons(c).join(' | '); ok('exactly 50% is no vote', !/All say|Both say/.test(g), g); }
 { const c = mk({ league: 'eng.1', odds: { h: -150, d: 280, a: 380 }, v4: { pick: 'H', p: [60, 20, 20], over: 50, btts: 50 } }), h = api.headline(c), n = api.headline(mk({ league: 'xxx.1', odds: { h: -150, d: 280, a: 380 } }));
-  ok('first-division card shows its price line with a tag', /needs \d+%/.test(h) && /(Value|Fair price|Not worth it)/.test(h), h);
+  ok('first-division card shows its price and break-even chance, with no Value / Fair / Not worth it tag (removed Oct 26, 2026)', /-150<\/b> needs \d+%/.test(h) && !/(Value|Fair price|Not worth it)/.test(h), h);
   ok('other leagues show no price line', !/needs \d+%|No price/.test(n), n); }
 console.log(fails ? `\n${fails} FAILED` : '\nAll headline checks passed'); process.exit(fails ? 1 : 0);
