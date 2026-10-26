@@ -243,16 +243,18 @@ function setV6(card, old, now = new Date()) {
   else { const r = card.odds ? scoreCard(card.odds, card.v4 ? toPred(card.v4) : null) : null; card.v6 = r ? slim(r) : null; }
   return JSON.stringify(card.v6) !== was;
 }
-// Attach the price to a card being (re)built; once the game has kicked off the price from before kickoff stands.
+// Attach the price to a card being (re)built; from PRICE_LOCK minutes before kickoff the price read before then stands.
 function keepOdds(card, old, f, slug, now) {
   if (PRICED.has(slug) && f.odds) card.odds = withOdds(old?.odds, f.odds);
-  if (old?.odds && (!card.odds || new Date(f.date).getTime() <= now.getTime())) card.odds = old.odds;
+  if (old?.odds && (!card.odds || new Date(f.date).getTime() - now.getTime() <= PRICE_LOCK * 60000)) card.odds = old.odds; // locked from PRICE_LOCK minutes before kickoff
 }
 // A fresh price for a card: keeps the both-score prices (they come from another source) and `f`, the first home / draw / away price the
 // Hub saw for this game. `f` is what a bet placed when the pick first showed would have got; the price at kickoff is the closing one.
+// The first price also keeps the total (line and Over / Under prices) when the book had one, so totals can be tracked from it too.
 export function withOdds(old, fresh) {
   const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}) };
-  const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? { h: old.h, d: old.d, a: old.a } : fresh.h != null && fresh.d != null && fresh.a != null ? { h: fresh.h, d: fresh.d, a: fresh.a } : null;
+  const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
+  const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
   return n;
 }
@@ -260,10 +262,14 @@ export function withOdds(old, fresh) {
 // Prices for games already analyzed: look at ONE first-division league per run (each at most every 6 hours, remembered in the free
 // edge cache so it costs no KV writes) and attach ESPN's current price to cards that have not started. Display only; no model reads it.
 // Fetch ESPN's current price for ONE first-division league on ONE day and attach it to games that have a model pick and have not started.
+// The closing price is read about 30 minutes before kickoff, once the official lineups are out (LINEUP_READ). From PRICE_LOCK minutes
+// before kickoff a card's price is no longer touched, so the lineup read stands as the close (a later read would not replace it).
+export const LINEUP_READ = 30, PRICE_LOCK = 20;
+const priceOpen = (c, now) => new Date(c.kickoff).getTime() - now.getTime() > PRICE_LOCK * 60000;
 export async function refreshOdds(env, date, slug, now = new Date()) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
-  const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && new Date(c.kickoff).getTime() > now.getTime());
+  const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && priceOpen(c, now));
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
   const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
   let changed = 0, priced = 0;
@@ -297,10 +303,15 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
   for (const date of [t, addDays(t, 1)]) {
     const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) continue;
     for (const lg of LEAGUES.filter(l => PRICED.has(l.slug))) {
-      if (!(day.cards || []).some(c => c.league === lg.slug && (c.v2 || c.v4) && !c.final && new Date(c.kickoff).getTime() > now.getTime())) continue;
+      const live = (day.cards || []).filter(c => c.league === lg.slug && (c.v2 || c.v4) && !c.final && priceOpen(c, now));
+      if (!live.length) continue;
+      // When this league is looked at again: every 6 hours as a rule, every hour in the last 3 hours before its next kickoff, and always
+      // once in the window from LINEUP_READ to PRICE_LOCK minutes before it (the wait never runs past LINEUP_READ minutes before).
+      const mins = (Math.min(...live.map(c => new Date(c.kickoff).getTime())) - now.getTime()) / 60000;
+      const ttl = Math.max(300, Math.min(mins <= 180 ? 3600 : 21600, Math.round((mins - LINEUP_READ) * 60)));
       const ck = new Request(`https://hub.local/odds/${date}/${lg.slug}`);
       try { if (cache && await cache.match(ck)) continue; } catch (e) { /* no cache: just look */ }
-      try { if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': 'max-age=21600' } })); } catch (e) { /* ignore */ }
+      try { if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': `max-age=${ttl}` } })); } catch (e) { /* ignore */ }
       return { job: 'odds', league: lg.slug, date, ...(await refreshOdds(env, date, lg.slug, now)) };
     }
   }
