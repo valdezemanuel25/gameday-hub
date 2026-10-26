@@ -1,8 +1,10 @@
 // Both-teams-to-score prices from The Odds API (DraftKings). Display and tracking only: no model ever reads a price.
-// The key lives in the Worker secret ODDS_API_KEY, never in code. Button-only, so it cannot spend credits on its own.
+// The key lives in the Worker secret ODDS_API_KEY, never in code. Read on the same schedule as the ESPN price (src/worker.js addBtts):
+// once when a game is first priced (the opening both-score price) and once at the lineup read (the close). Without the key nothing runs.
 import { is as isName } from './forebetpage.js';
 
-export const SPORT = { 'eng.2': 'soccer_efl_champ', 'eng.1': 'soccer_epl', 'ger.1': 'soccer_germany_bundesliga', 'esp.1': 'soccer_spain_la_liga', 'ita.1': 'soccer_italy_serie_a', 'fra.1': 'soccer_france_ligue_one', 'ned.1': 'soccer_netherlands_eredivisie', 'usa.1': 'soccer_usa_mls', 'mex.1': 'soccer_mexico_ligamx', 'bra.1': 'soccer_brazil_campeonato' };
+export const SPORT = { 'eng.2': 'soccer_efl_champ', 'eng.1': 'soccer_epl', 'ger.1': 'soccer_germany_bundesliga', 'esp.1': 'soccer_spain_la_liga', 'ita.1': 'soccer_italy_serie_a', 'fra.1': 'soccer_france_ligue_one', 'ned.1': 'soccer_netherlands_eredivisie', 'usa.1': 'soccer_usa_mls', 'mex.1': 'soccer_mexico_ligamx', 'bra.1': 'soccer_brazil_campeonato',
+  'uefa.champions': 'soccer_uefa_champs_league', 'uefa.europa': 'soccer_uefa_europa_league' };
 const BASE = 'https://api.the-odds-api.com/v4/sports';
 const HOUR = 3600e3;
 
@@ -24,7 +26,9 @@ export function matchEvent(card, events) {
   return hit.length === 1 ? hit[0] : null;
 }
 // Fetch Both-score prices for the given cards of ONE league. Returns Map(cardId -> {by,bn}) plus counts and credits left.
-export async function fetchBtts(key, slug, cards, f = fetch) {
+// The events list costs no credit; each game's price costs one. keep(card, left) is asked per game once the credits left are known
+// (from the events call), so optional reads can be dropped when the month's credits run low.
+export async function fetchBtts(key, slug, cards, f = fetch, keep = () => true) {
   const sport = SPORT[slug]; if (!sport) return { error: 'No price source for this league' };
   if (!key) return { error: 'ODDS_API_KEY is not set. Add it as a Worker secret.' };
   const out = new Map(); let left = null, used = 0, skipped = [];
@@ -33,6 +37,7 @@ export async function fetchBtts(key, slug, cards, f = fetch) {
   note(er); if (!er.ok) return { error: `Odds API ${er.status}` };
   const events = await er.json();
   for (const c of cards) {
+    if (!keep(c, left)) continue;
     const e = matchEvent(c, events); if (!e) { skipped.push(`${c.home} v ${c.away}`); continue; }
     const r = await f(`${BASE}/${sport}/events/${e.id}/odds?apiKey=${encodeURIComponent(key)}&regions=us&markets=btts&oddsFormat=american&dateFormat=iso`);
     note(r); used++; if (!r.ok) { skipped.push(`${c.home} v ${c.away}`); continue; }

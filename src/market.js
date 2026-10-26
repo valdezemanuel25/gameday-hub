@@ -8,7 +8,7 @@
 //   value: every game where v4 rates a result 5+ points above the market's first price, bet at that price. A game priced before the
 //   first price was kept (Oct 26, 2026) uses its closing price instead, and has no closing-line value.
 import { devig as devigPrices } from './v6core.js';
-import { moveOf } from './moves.js';
+import { moveOf, bttsMove } from './moves.js';
 
 const ix = k => 'HDA'.indexOf(k);
 const dec = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
@@ -62,8 +62,10 @@ export function addMarket(M, c) {
       if (p4) { const with4 = (100 * p4[mv.top] - mv.p0[mv.top] > 0) === (mv.d[mv.top] > 0); if (with4) { t.modelWith++; t.modelWithFollow += fol ? 1 : 0; } else { t.modelAgainst++; t.modelAgainstFollow += fol ? 1 : 0; } }
     }
   }
-  // Both score: the score card's chance at the opening price (v6o) against the close (v6); a move of 1+ points counts.
-  if (c.v6o && c.v6 && Math.abs(c.v6.btts - c.v6o.btts) >= 1) { const b = M.moves.btts; b.n++; b.follow += (c.v6.btts > c.v6o.btts) === (c.final.h > 0 && c.final.a > 0) ? 1 : 0; }
+  // Both score: the book's own both-score price, first seen against the close (bttsMove) when it has both, else the score card's chance
+  // at the opening price (v6o) against the close (v6). A move of 1+ points counts.
+  const bm = bttsMove(c.odds), bd = bm ? bm.d : c.v6o && c.v6 ? c.v6.btts - c.v6o.btts : 0;
+  if (Math.abs(bd) >= 1) { const b = M.moves.btts; b.n++; b.follow += (bd > 0) === (c.final.h > 0 && c.final.a > 0) ? 1 : 0; if (bm) b.book = (b.book || 0) + 1; }
   // v4 value bets against the first price (the closing one for older cards).
   if (p4) {
     const ref = first || mk, refOdds = first ? firstOdds : c.odds, e = p4.map((q, i) => q - ref[i]), i = e.indexOf(Math.max(...e));

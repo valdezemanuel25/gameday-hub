@@ -36,3 +36,11 @@ export function hockeyMove(px) {
   const top = !ou || (ml && Math.abs(ml.d) >= Math.abs(ou.d)) ? 'ml' : 'ou', size = Math.abs((top === 'ml' ? ml : ou).d);
   return { from, ml, ou, top, size, big: size >= BIG_MOVE };
 }
+
+// Both score (book prices from The Odds API, src/btts.js): the first both-score price seen (odds.bf) against now / the close (odds.by,
+// odds.bn). { b0: [yes, no], b1: [yes, no], p0, p1, d (Yes %) } or null without both prices.
+export function bttsMove(odds) {
+  const f = odds && odds.bf; if (!f || odds.by == null) return null;
+  const a = devig(f.by, f.bn), b = devig(odds.by, odds.bn); if (!a || !b) return null;
+  return { b0: [f.by, f.bn], b1: [odds.by, odds.bn], p0: r1(100 * a[0]), p1: r1(100 * b[0]), d: r1(100 * (b[0] - a[0])) };
+}
