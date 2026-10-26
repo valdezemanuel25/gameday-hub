@@ -1,38 +1,60 @@
 {
-  "updated": "2026-10-25T11:09:29Z",
+  "updated": "2026-10-26T10:09:44Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-10-25",
-      "title": "Morning Boo",
-      "markets": [],
-      "takeaways": [
+      "date": "2026-10-26",
+      "title": "Money loses sleep",
+      "markets": [
         {
-          "h": "Early shopping",
-          "t": "Nearly half of Americans shopped for Halloween before October last year, versus just over a third a decade ago."
+          "label": "Nasdaq",
+          "value": "25,955",
+          "change": -0.21
         },
         {
-          "h": "Spending",
-          "t": "The NRF projects $13.5B in Halloween spending this year, up from $13.1B in 2023."
+          "label": "S&P 500",
+          "value": "7,624",
+          "change": -0.52
         },
         {
-          "h": "Porch stylists",
-          "t": "Pumpkin-decorating services charge a couple hundred to $2,000; Curated Pumpkin grew 5x in 2025."
+          "label": "Dow",
+          "value": "52,215",
+          "change": -1.24
         },
         {
-          "h": "Monster Mash",
-          "t": "The 1962 song could still earn about $1M a year, per Billboard's 2023 estimate."
-        },
-        {
-          "h": "Skelly",
-          "t": "Home Depot's 12-foot skeleton ($300) returned with a $379 app-enabled version this year."
-        },
-        {
-          "h": "Reese's",
-          "t": "Pumpkin packaging now says \"Carving not on actual product\" after a $5M class-action suit was dismissed."
+          "label": "10-yr",
+          "value": "4.988%",
+          "change": 4,
+          "unit": "bps"
         }
       ],
-      "note": "Sunday special edition: no market numbers."
+      "takeaways": [
+        {
+          "h": "AI banking",
+          "t": "Big US banks like JPMorgan, BofA, Citi and Morgan Stanley are restricting third-party AI agents and moving toward read-only access."
+        },
+        {
+          "h": "Fed week",
+          "t": "The Fed decides Wednesday; most analysts expect a hold, with a hike possible in December as PCE inflation is seen accelerating Thursday."
+        },
+        {
+          "h": "Earnings",
+          "t": "About a third of the S&P 500 reports this week, with Alphabet and Microsoft Wednesday and Amazon Thursday."
+        },
+        {
+          "h": "Apple",
+          "t": "Stock is up 28.3% year to date at $347.73, with a touch-screen MacBook Pro expected Wednesday."
+        },
+        {
+          "h": "Brazil",
+          "t": "Lula won the runoff 51.8% to 48.2% over Flávio Bolsonaro for a fourth term."
+        },
+        {
+          "h": "YTD",
+          "t": "Nasdaq +11.7%, S&P +11.4%, Dow +8.6%, while Bitcoin sits at $79,309, down 9.4%."
+        }
+      ],
+      "note": "Market numbers are the Friday close."
     },
     {
       "source": "Brew Markets",
