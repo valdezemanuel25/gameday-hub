@@ -22,3 +22,17 @@ export function moveOf(odds) {
   if (ot && ot.tl === odds.tl) { const x = devig(ot.to, ot.tu), y = devig(odds.to, odds.tu); if (x && y) ou = { line: odds.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
   return { from, p0, p1, d, top, size, big: size >= BIG_MOVE, ou };
 }
+
+// Hockey (src/nhl.js keeps c.px): moneyline (home / away, overtime and shootout count) and the total with its Over / Under prices.
+// { from, ml: { p0, p1, d } (home win %), ou: { line, p0, p1, d } (Over %) | null, top: 'ml' | 'ou', size, big } or null.
+export function hockeyMove(px) {
+  if (!px) return null;
+  const open = px.op || px.f, from = px.op ? 'open' : 'first', a = open && devig(open.h, open.a), b = devig(px.h, px.a);
+  const ml = a && b ? { p0: r1(100 * a[0]), p1: r1(100 * b[0]), d: r1(100 * (b[0] - a[0])) } : null;
+  const ot = px.opt || (px.f && px.f.tl != null ? px.f : null);
+  let ou = null;
+  if (ot && px.tl != null && ot.tl === px.tl) { const x = devig(ot.to, ot.tu), y = devig(px.to, px.tu); if (x && y) ou = { line: px.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
+  if (!ml && !ou) return null;
+  const top = !ou || (ml && Math.abs(ml.d) >= Math.abs(ou.d)) ? 'ml' : 'ou', size = Math.abs((top === 'ml' ? ml : ou).d);
+  return { from, ml, ou, top, size, big: size >= BIG_MOVE };
+}

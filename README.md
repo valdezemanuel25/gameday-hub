@@ -70,6 +70,15 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
   * the same split by whether v4 agreed
   * your own picks ("Your pick" on a card) against the closing price
 
+### Hockey prices (Oct 26, 2026)
+
+* **What is captured:** each NHL card keeps DraftKings' moneyline and total with its Over / Under prices from ESPN (`c.px`). That includes the opening line (`px.op` / `px.opt`, else the first price seen, `px.f`) and the current or closing one.
+* **Read schedule:** same as soccer. A price counts every 6 hours, every hour in the last 3 hours, and once 30–20 minutes before puck drop (after the morning skate and starting goalies; noted in `px.cl`). From 20 minutes before it is locked.
+* **Storage writes:** a card is only written when its price changed (`setPrice` in `src/nhl.js`).
+* **On the hockey card:** a moneyline line and an Over/Under line (opening → now / close, with the chance and the move), plus a "Big price move" flag at 5+ points.
+* **Hockey Movement tab:** every priced game with its closing-price status, the same as soccer.
+* **Hockey Results:** how often the winner and the total went the way of the move.
+
 ## Score card (v6)
 
 * Every card has a Score card panel: winner, Over/Under 2.5, both-score, the likeliest scores and fair odds, all read off one score grid. With a sportsbook price the grid is fitted to that price, margin removed (`src/v6core.js`, tracked as v6 on the Results tab); without one it shows v4's numbers. See `docs/v6-score-card.md`.
