@@ -1,5 +1,6 @@
 // NHL section: separate from soccer (own storage keys, own page, own model code).
-//   v2  = Poisson goals model (official).      v4 = shadow: Elo + xG-rate blend (tracked only).
+//   v2  = Poisson goals model (official).      v4 = shadow: Elo + xG-rate blend (tracked only); the frozen xG rates fade as the season goes on.
+//   Both count the overtime goal in totals and boost tied regulation scores (TIE, OT_GOAL below; docs/hockey-review-2026-10-26.md).
 //   Forebet = recorded and graded only. No model reads market odds. The one market number kept is the sportsbook's Over/Under
 //   total (ESPN's odds block, DraftKings): it is only the line that Over/Under is rated and graded against, and it never changes
 //   what the model expects. Until a line is known a game uses 5.5.
@@ -12,6 +13,12 @@ const TZ = 'America/Chicago';
 export const LINE = 5.5;
 export const GOALIE_W = 0; // season goalie ratings did not help in the 3-season backtest, so they are stored but not used
 const HOME = 1.05, N0 = 25, HOUR = 3600000;
+// A regulation tie is likelier than two independent Poisson scores say: with 1.55x on the tied scores about 23% of games go past
+// regulation, the NHL's rate in the 3-on-3 overtime era (plain Poisson gave 16%; the Hub's first 75 games had 27%).
+export const TIE = 1.55;
+// Share of games past regulation that overtime settles (the rest go to a shootout). The overtime goal counts in the graded total;
+// the shootout goal does not (see refresh: totals leave it out), so a tied game ends one goal higher with this chance.
+export const OT_GOAL = 0.65;
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard';
 const FB_URL = 'https://www.forebet.com/en/hockey/usa/nhl';
 
@@ -25,23 +32,27 @@ const round = x => Math.round(x * 100);
 // ---- model -------------------------------------------------------------------------------------
 function pois(l, n = 16) { const p = [Math.exp(-l)]; for (let k = 1; k < n; k++) p.push(p[k - 1] * l / k); return p; }
 // P(home wins incl. overtime / shootout; a regulation tie is split 50/50), and for a total-goals line: P(over), P(exactly on the line)
-// (only a whole-number line can push) and P(under). At 5.5 over means 6 or more goals.
+// (only a whole-number line can push) and P(under). At 5.5 over means 6 or more goals. Tied regulation scores get the TIE boost, and
+// the final total counts the overtime goal (OT_GOAL of tied games), as the Hub grades it.
 export function probs(lh, la, line = LINE) {
-  const ph = pois(lh), pa = pois(la); let win = 0, tie = 0, over = 0, push = 0;
+  const ph = pois(lh), pa = pois(la); let win = 0, tie = 0, over = 0, push = 0, tot = 0;
+  const add = (t, x) => { if (t > line) over += x; else if (t === line) push += x; };
   for (let i = 0; i < ph.length; i++) for (let j = 0; j < pa.length; j++) {
-    const x = ph[i] * pa[j];
+    const x = ph[i] * pa[j] * (i === j ? TIE : 1); tot += x;
     if (i > j) win += x; else if (i === j) tie += x;
-    if (i + j > line) over += x; else if (i + j === line) push += x;
+    if (i === j) { add(i + j + 1, x * OT_GOAL); add(i + j, x * (1 - OT_GOAL)); } else add(i + j, x);
   }
-  return { home: win + tie * 0.5, over, push, under: 1 - over - push };
+  over /= tot; push /= tot;
+  return { home: (win + tie * 0.5) / tot, over, push, under: 1 - over - push };
 }
 // The single likeliest final score. A hockey game cannot end level, so a tied regulation score goes to overtime or a shootout and its
 // chance is split 50/50 between the one-goal wins (the same 50/50 the winner chance uses). Returns { h, a, p } with p in percent.
 export function topScore(lh, la, n = 16) {
   const ph = pois(lh, n), pa = pois(la, n), m = {}, add = (i, j, x) => { const k = i + ',' + j; m[k] = (m[k] || 0) + x; };
-  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const x = ph[i] * pa[j]; if (i === j) { add(i + 1, j, x / 2); add(i, j + 1, x / 2); } else add(i, j, x); }
+  let tot = 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const x = ph[i] * pa[j] * (i === j ? TIE : 1); tot += x; if (i === j) { add(i + 1, j, x / 2); add(i, j + 1, x / 2); } else add(i, j, x); }
   let best = null; for (const [k, x] of Object.entries(m)) if (!best || x > best.x) best = { k, x };
-  const [h, a] = best.k.split(',').map(Number); return { h, a, p: round(best.x) };
+  const [h, a] = best.k.split(',').map(Number); return { h, a, p: round(best.x / tot) };
 }
 // Over chance with a push taken out: the chance of Over among games that do not land exactly on the line.
 const ovr = pr => pr.over / Math.max(1e-9, pr.over + pr.under);
@@ -66,9 +77,12 @@ export function predict(S, hc, ac, line = LINE) {
   const xla = Math.max(0.5, LX * (rate(A, 'xf', 'pxf', LX, A.nx) / LX) * (rate(H, 'xa', 'pxa', LX, H.nx) / LX) / HOME * sc - gAdj(H));
   const px = probs(xlh, xla, line);
   const pe = 1 / (1 + Math.pow(10, -(H.elo + 35 - A.elo) / 400));
-  const w4 = 0.4 * pe + 0.3 * px.home + 0.3 * p2.home;
-  const p4 = probs(0.5 * lh + 0.5 * xlh, 0.5 * la + 0.5 * xla, line);
-  return { v2: { w: round(p2.home), o: round(ovr(p2)), sc: topScore(lh, la), ...(p2.push > 0.0005 ? { push: round(p2.push) } : {}) }, v4: { w: round(w4), o: round(ovr(p4)), sc: topScore(0.5 * lh + 0.5 * xlh, 0.5 * la + 0.5 * xla), ...(p4.push > 0.0005 ? { push: round(p4.push) } : {}) }, lam: [+lh.toFixed(2), +la.toFixed(2)] };
+  // The xG rates are frozen at the seed (ESPN has no xG), so they fade as a team plays past it: c = the share of its games they cover.
+  // Their weight moves to the goals rates, which keep updating. At the seed date c = 1 and v4 is unchanged.
+  const cov = t => Math.min(1, (t.nx ?? t.n) / Math.max(1, t.n)), c = (cov(H) + cov(A)) / 2, ax = 0.5 * c;
+  const w4 = 0.4 * pe + 0.3 * c * px.home + (0.6 - 0.3 * c) * p2.home;
+  const lh4 = (1 - ax) * lh + ax * xlh, la4 = (1 - ax) * la + ax * xla, p4 = probs(lh4, la4, line);
+  return { v2: { w: round(p2.home), o: round(ovr(p2)), sc: topScore(lh, la), ...(p2.push > 0.0005 ? { push: round(p2.push) } : {}) }, v4: { w: round(w4), o: round(ovr(p4)), sc: topScore(lh4, la4), ...(p4.push > 0.0005 ? { push: round(p4.push) } : {}) }, lam: [+lh.toFixed(2), +la.toFixed(2)] };
 }
 // A finished game moves the ratings (goals and Elo). xG is not in ESPN's feed, so xG rates stay as seeded.
 export function applyGame(S, hc, ac, h, a, last) {
