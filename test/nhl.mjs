@@ -1,6 +1,6 @@
 // NHL section: model sanity, finished games teaching the ratings, cards, Forebet hockey reader, grading, Results board.
 import { readFileSync } from 'node:fs';
-import { fbOu, freshState, predict, applyGame, nhlStep, nhlTally, parseForebetHockey, fbFor, probs } from '../src/nhl.js';
+import { fbOu, freshState, predict, applyGame, nhlStep, nhlTally, parseForebetHockey, fbFor, probs, TIE, OT_GOAL } from '../src/nhl.js';
 
 const kv = new Map(), writes = [];
 const env = { HUB: {
@@ -170,6 +170,23 @@ import { topScore } from '../src/nhl.js';
   const mine = tl.recent.filter(r => r.date === '2026-10-30');
   ok('hockey Model bets: each graded card is counted once with its locked pick (one hit, one missed)', mine.length === 2 && mine.find(r => r.home === 'A').hit === true && mine.find(r => r.home === 'C').hit === false && tl.n === tl.recent.length && tl.hits === tl.recent.filter(r => r.hit).length, JSON.stringify(tl));
   ok('hockey Model bets: base rates come from the same games', tl.base.home <= tl.n && tl.base.overN <= tl.n && tl.base.over <= tl.base.overN, JSON.stringify(tl.base));
+}
+// Oct 26, 2026 adjustments: tied regulation scores boosted, the overtime goal counted in the total, frozen xG rates fading
+{
+  const pois = l => { const p = [Math.exp(-l)]; for (let k = 1; k < 16; k++) p.push(p[k - 1] * l / k); return p; };
+  const plain = (lh, la, line) => { const ph = pois(lh), pa = pois(la); let o = 0, u = 0, t = 0; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) { const x = ph[i] * pa[j]; if (i === j) t += x; if (i + j > line) o += x; else if (i + j < line) u += x; } return { o, u, t }; };
+  const q = probs(3.1, 2.9, 6.5), p0 = plain(3.1, 2.9, 6.5);
+  ok('a 3-3 regulation tie can end 4-3 in overtime, so Over 6.5 is likelier than plain Poisson says', q.over > p0.o + 0.02, `${q.over} vs ${p0.o}`);
+  ok('over, push and under still add up to 1', Math.abs(q.over + q.push + q.under - 1) < 1e-9);
+  const ph = pois(3.1), pa = pois(2.9); let tie = 0, all = 0; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) { const x = ph[i] * pa[j] * (i === j ? TIE : 1); all += x; if (i === j) tie += x; }
+  ok(`tied regulation scores are boosted to about the NHL's rate of games past regulation (${(100 * tie / all).toFixed(1)}%)`, tie / all > 0.2 && tie / all < 0.26 && p0.t < 0.2);
+  ok('equal teams are still 50/50 and a whole-number line can still push', Math.abs(probs(3, 3).home - 0.5) < 1e-9 && probs(3, 3, 6).push > 0 && OT_GOAL > 0 && OT_GOAL < 1);
+  // give EDM a huge xG attack: v4 (which reads xG) then expects many more goals than v2 (which does not)
+  const S4 = freshState(); S4.teams.EDM.xf *= 3;
+  const S6 = JSON.parse(JSON.stringify(S4)); for (const t of ['EDM', 'UTA']) { const T = S6.teams[t], g = 3 * 40; T.n += 40; T.gf += g * T.gf / Math.max(1, T.n - 40) / 3; T.ga += g * T.ga / Math.max(1, T.n - 40) / 3; } // 40 more games at the same goal rates, no new xG
+  const early = predict(S4, 'EDM', 'UTA'), late = predict(S6, 'EDM', 'UTA');
+  ok('frozen xG rates fade once a team has played past them: the xG pull on v4 shrinks', early.v4.o - early.v2.o > 4 && late.v4.o - late.v2.o < (early.v4.o - early.v2.o) / 2, `early ${early.v4.o}-${early.v2.o}, late ${late.v4.o}-${late.v2.o}`);
+  ok('at the seed date xG covers every game, so v4 starts unfaded', freshState().teams.EDM.nx === freshState().teams.EDM.n);
 }
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);

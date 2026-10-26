@@ -10,6 +10,7 @@
 
 import { V4, dcTau } from './v4core.js';
 import { CUP_MODEL } from './data.js';
+import { TIE, OT_GOAL } from './nhl.js';
 
 const MAXG = 11;
 export const LINES = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
@@ -77,14 +78,15 @@ export function legProb(c, l, m) {
   if (l.market === 'btts' && s.btts != null) return l.sel === 'Y' ? s.btts / 100 : 1 - s.btts / 100;
   return s.lam ? jointProb(c, [l], m, true) : null;
 }
-// Hockey: a level regulation score goes to overtime or a shootout, so each tied cell is split evenly between the two winners, and the
-// total is one higher when overtime (not a shootout) decides it: also an even split. v2 only; the other models have no score grid.
+// Hockey: a level regulation score goes to overtime or a shootout, so each tied cell (boosted by TIE, as in the model) is split evenly
+// between the two winners, and the total is one higher when overtime (not a shootout) decides it: OT_GOAL of the time (src/nhl.js).
+// v2 only; the other models have no score grid.
 function hockeyJoint(lam, legs) {
   const N = 16, pois = l => { const p = [Math.exp(-l)]; for (let k = 1; k < N; k++) p.push(p[k - 1] * l / k); return p; }, ph = pois(lam[0]), pa = pois(lam[1]), tests = legs.map(test);
   let sum = 0, tot = 0;
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
-    const x = ph[i] * pa[j]; tot += x;
-    const outs = i === j ? [[i + 1, i, 2 * i + 1, .25], [i + 1, i, 2 * i, .25], [i, i + 1, 2 * i + 1, .25], [i, i + 1, 2 * i, .25]] : [[i, j, i + j, 1]];
+    const x = ph[i] * pa[j] * (i === j ? TIE : 1); tot += x;
+    const ot = OT_GOAL / 2, so = (1 - OT_GOAL) / 2, outs = i === j ? [[i + 1, i, 2 * i + 1, ot], [i + 1, i, 2 * i, so], [i, i + 1, 2 * i + 1, ot], [i, i + 1, 2 * i, so]] : [[i, j, i + j, 1]];
     for (const [h, a, t, w] of outs) if (tests.every(f => f(h, a, t))) sum += x * w;
   }
   return sum / tot;
