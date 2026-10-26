@@ -1,5 +1,5 @@
 // Model vs market: the sportsbook's home / draw / away price as a benchmark. Pure functions, no I/O.
-//   The price is turned into chances by removing the book's margin in proportion (devig). Every model is scored on the games where
+//   The price is turned into chances by removing the book's margin (devig, power method). Every model is scored on the games where
 //   both it and the price exist, with the same three scores: RPS (ranked probability score: lower is better, and it knows a draw sits
 //   between a home and an away win), log loss and Brier.
 //   blend: the share of v4 that gives the best log loss when mixed with the market (0 = v4 adds nothing the price does not already know).
@@ -7,13 +7,15 @@
 //   is the quickest honest sign of an edge; hit rate and profit need hundreds of bets to say anything.
 //   value: every game where v4 rates a result 5+ points above the market's first price, bet at that price. A game priced before the
 //   first price was kept (Oct 26, 2026) uses its closing price instead, and has no closing-line value.
+import { devig as devigPrices } from './v6core.js';
+
 const ix = k => 'HDA'.indexOf(k);
 const dec = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
-// American prices { h, d, a } -> chances [home, draw, away] adding to 1, or null when a price is missing.
+// American prices { h, d, a } -> chances [home, draw, away] adding to 1, or null when a price is missing. Same margin removal as the
+// score card (power method, src/v6core.js), so the market here is the market the score card is built from.
 export function devig(o) {
-  if (!o || ![o.h, o.d, o.a].every(Number.isFinite)) return null;
-  const q = [o.h, o.d, o.a].map(m => 1 / dec(m)), s = q[0] + q[1] + q[2];
-  return q.map(x => x / s);
+  if (!o) return null;
+  return devigPrices(o.h, o.d, o.a);
 }
 const resOf = f => (f.h > f.a ? 0 : f.h === f.a ? 1 : 2);
 const norm = p => { const s = p[0] + p[1] + p[2]; return s > 0 ? p.map(x => x / s) : null; };

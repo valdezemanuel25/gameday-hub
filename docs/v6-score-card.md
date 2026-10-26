@@ -30,6 +30,26 @@ The market beat every model by about 0.03 log loss a game (see `docs/model-revie
 
 The sample is small, so the Results tab tracks v6 against v4 on the same games ("Score card (v6)").
 
+## Removing the margin (Oct 26, 2026)
+
+The book's margin is removed with the **power method**: each implied chance is raised to the same power so they add up to 1. Books put more margin on long shots, so this takes more out of them than removing it in proportion.
+
+Tested on 8,389 closing prices (2023–2026, `data/football-data`):
+
+| Method | Favourites rated 60%+: said / won | Log loss |
+|---|---|---|
+| Proportional (before) | 69.9% / 71.8% | 0.9748 |
+| Power (now) | 70.9% / 70.8% | 0.9743 |
+
+The "Models against the market" panel uses the same method, so it scores the market the score card is built from.
+
+**v5 checked at the same time, and left unchanged.** On 9,908 history games v5's own 60%+ favourites are already calibrated (68.8% said, 69.6% won):
+- Sharpening its probabilities did not help.
+- Shrinking team ratings half as much changed nothing (z −0.4).
+- Shrinking them twice as much was worse (z −2.6).
+
+v5 does look low on the *market's* favourites, but that is the market knowing more, not a bias that can be tuned away.
+
 ## The model's share
 
 `V6.W_MODEL` is how much of v4's home / draw / away is mixed into the price before fitting. It is 0 because the "Models against the market" panel's best v4 + market mix is currently 0% v4. Raise it only when that panel shows v4 adding something over a few hundred priced games.

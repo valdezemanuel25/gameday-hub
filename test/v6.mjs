@@ -8,6 +8,10 @@ const near = (a, b, e) => Math.abs(a - b) < e;
 // 1. reading the price
 const d = devig(-150, 280, 400);
 ok('the margin is removed: chances add up to 1, favourite first', near(d[0] + d[1] + d[2], 1, 1e-12) && d[0] > d[2] && d[2] < d[1]);
+{ // power method: a long shot keeps less of its implied chance than with the margin removed in proportion; no margin, no change
+  const q = [-300, 400, 900].map(m => 1 / (m > 0 ? 1 + m / 100 : 1 + 100 / -m)), sq = q.reduce((x, y) => x + y), pp = devig(-300, 400, 900);
+  ok('power method: the favourite gets more and the long shot less than in proportion', pp[0] > q[0] / sq && pp[2] < q[2] / sq && Math.abs(pp[0] + pp[1] + pp[2] - 1) < 1e-9, JSON.stringify(pp));
+  const fair = devig(100, 100); ok('a price with no margin is left as it is', Math.abs(fair[0] - 0.5) < 1e-9); }
 ok('a missing price reads as nothing', devig(-150, null, 400) === null && targets({ h: -150, d: 280 }) === null && scoreCard(null) === null);
 ok('only a half-goal total is used (a whole line can push)', targets({ h: 120, d: 240, a: 230, tl: 2.5, to: -120, tu: 100 }).over[0] === 2.5 && targets({ h: 120, d: 240, a: 230, tl: 3, to: -120, tu: 100 }).over === null);
 
