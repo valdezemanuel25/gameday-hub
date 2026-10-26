@@ -962,7 +962,7 @@ function tileBet(c) {
   let pr = '';
   if (FIRST.has(c.league)) {
     const m = L.price != null ? L.price : priceFor(c, L.key);
-    if (m != null && L.p != null) { const d = L.p - needP(m), t = d >= 5 ? 'val' : d <= -5 ? 'no' : 'fair'; pr = `<span class="tp">${fmtOdds(m)} <i class="pv ${t}">${t === 'val' ? 'Value' : t === 'no' ? 'Not worth it' : 'Fair'}</i></span>`; }
+    if (m != null) pr = `<span class="tp">${fmtOdds(m)}</span>`; // the price only: Value / Fair / Not worth it tags were removed on Oct 26, 2026 (docs/odds-history-2026-10-26.md)
     else pr = '<span class="tp none">no price</span>';
   }
   return `<div class="lb"><div class="lt"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span><b>${esc(leanName(c, L.key))}</b><em>${L.p != null ? L.p + '%' : ''}</em></div>${pr ? `<div class="lt2"><span>${L.y === L.a ? 'all ' + L.a + ' agree' : L.k === 'solo' ? 'one model' : L.y + ' of ' + L.a + ' agree'}</span>${pr}</div>` : ''}</div>`;
@@ -1270,13 +1270,14 @@ function priceLine(c, L) {
   if (m == null) {
     const o = c.odds;
     if ((L.key === 'O' || L.key === 'U') && o && o.tl != null && o.tl !== 2.5) { // the book's main total is a different line: show it, and what the model says about THAT line
-      const ov = L.key === 'O', bp = ov ? o.to : o.tu, mp = pTotal(c, o.tl, ov), nd = bp != null ? needP(bp) : null, d = mp != null && nd != null ? mp - nd : null, t = d == null ? null : d >= 5 ? 'val' : d <= -5 ? 'no' : 'fair';
-      return `<small class="pr none">No price at 2.5 · book total ${o.tl}: Over ${o.to != null ? fmtOdds(o.to) : '–'} · Under ${o.tu != null ? fmtOdds(o.tu) : '–'}</small>${mp != null && bp != null ? `<small class="pr">At ${o.tl}: ${ov ? 'Over' : 'Under'} <b>${fmtOdds(bp)}</b> needs ${Math.round(nd)}% · model ${mp}% <span class="pv ${t}">${t === 'val' ? 'Value' : t === 'no' ? 'Not worth it' : 'Fair price'}</span> <i>(a different bet than the tracked one)</i></small>` : ''}`;
+      const ov = L.key === 'O', bp = ov ? o.to : o.tu, mp = pTotal(c, o.tl, ov), nd = bp != null ? needP(bp) : null;
+      return `<small class="pr none">No price at 2.5 · book total ${o.tl}: Over ${o.to != null ? fmtOdds(o.to) : '–'} · Under ${o.tu != null ? fmtOdds(o.tu) : '–'}</small>${mp != null && bp != null ? `<small class="pr">At ${o.tl}: ${ov ? 'Over' : 'Under'} <b>${fmtOdds(bp)}</b> needs ${Math.round(nd)}% · model ${mp}% <i>(a different bet than the tracked one)</i></small>` : ''}`;
     }
     return `<small class="pr none">No price for this bet</small>`;
   }
-  const need = needP(m), d = L.p != null ? L.p - need : null, t = d == null ? 'fair' : d >= 5 ? 'val' : d <= -5 ? 'no' : 'fair';
-  return `<small class="pr"><b>${fmtOdds(m)}</b> needs ${Math.round(need)}%${L.p != null ? ` · model ${L.p}%` : ''} <span class="pv ${t}">${t === 'val' ? 'Value' : t === 'no' ? 'Not worth it' : 'Fair price'}</span></small>`;
+  // The price and the chance it needs to break even, next to the model's chance. No Value / Fair / Not worth it tag: on 8,026 past
+  // games, picks the model rated 5+ points over the price lost 15-20% and their price drifted against them by kickoff.
+  return `<small class="pr"><b>${fmtOdds(m)}</b> needs ${Math.round(needP(m))}%${L.p != null ? ` · model ${L.p}%` : ''}</small>`;
 }
 // "Refresh prices": one request per first-division league that has a model pick not yet started on this day. Nothing else is touched.
 function oddsLeagues() { const n = Date.now(); return [...new Set((day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > n).map(c => c.league))]; }
@@ -1286,19 +1287,9 @@ function oddsBar() {
   const priced = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now() && c.odds).length;
   return `<div class="oddsbar"><button type="button" class="btn g" data-oddsrefresh="1">Refresh prices</button><small id="oddsmsg">${priced} of ${n} first-division picks have a price. Reads each first-division league (${L.length}) for this day only.</small></div><div style="margin:4px 18px 0"><button type="button" class="btn g" data-btts="1" style="width:auto;padding:6px 12px;font-size:12px">Get Both-score prices</button> <button type="button" class="btn g" data-oddsraw="1" style="width:auto;padding:6px 12px;font-size:12px">Check raw prices</button><pre id="oddsraw" style="white-space:pre-wrap;word-break:break-all;font-size:10.5px;color:var(--faint);margin:6px 0 0;max-height:420px;overflow:auto"></pre></div>`;
 }
-function vdRank({ c, L }) {
-  if (!L || !FIRST.has(c.league)) return 3;
-  const m = L.price != null ? L.price : priceFor(c, L.key), o = c.odds;
-  let d = null;
-  if (m != null && L.p != null) d = L.p - needP(m);
-  else if ((L.key === 'O' || L.key === 'U') && o && o.tl != null && o.tl !== 2.5) { // the tag shown is for the book's own line, so sort by that
-    const ov = L.key === 'O', bp = ov ? o.to : o.tu, mp = pTotal(c, o.tl, ov); if (mp != null && bp != null) d = mp - needP(bp);
-  }
-  return d == null ? 3 : d >= 5 ? 0 : d <= -5 ? 2 : 1;
-}
 function mbetsToday() {
   const rows = (day.cards || []).filter(c => c.v2 && !UNCOUNTED(c, day.date)).map(c => ({ c, L: c.lean || (c.final ? null : leanPick(c)) })).filter(x => x.L || x.c.final)
-    .sort((a, b) => vdRank(a) - vdRank(b) || new Date(a.c.kickoff) - new Date(b.c.kickoff)); // Value, then Fair price, then Not worth it, then no price; earliest start first within each
+    .sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff)); // earliest start first
   if (!rows.length) return `<div class="small" style="margin:8px 4px 0">No picks for this day yet. Analyze the day on the Board first.</div>`;
   return rows.map(({ c, L }) => {
     if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><small>This game was already over when the Hub first saw it.</small></div>`;
@@ -1318,7 +1309,7 @@ function profitView(T) {
   return `<div class="sec">Profit at saved prices<small>First divisions only. 1 unit on each pick at the price saved when the game was graded. This is the real test of whether a pick is worth taking.</small></div><div class="mbx">
     ${row('All priced picks', `${P.n} bets`, P)}
     ${kinds.map(k => row(LEAN_KIND[k] || k, `${P.byKind[k].n} bets`, P.byKind[k])).join('')}</div>
-    ${vds.length ? `<div class="sec">By price tag<small>Did "Value" picks really return more than "Not worth it" ones? If the tag works, Value should be clearly ahead. Under about 100 bets this is mostly luck.</small></div><div class="mbx">${vds.map(v => row(VD[v], `${P.byVerdict[v].n} bets`, P.byVerdict[v])).join('')}${combos.map(([l, x]) => row(l, `${x.n} bets`, x)).join('')}</div>` : ''}
+    ${vds.length ? `<details class="old"><summary>Retired price tags (Value / Fair / Not worth it)</summary><div class="small" style="margin:6px 4px">The tags were removed on Oct 26, 2026: on 8,026 past games, picks rated 5+ points over the price lost 15-20% and their price moved against them by kickoff. Their record here is kept for reference.</div><div class="mbx" style="margin:0">${vds.map(v => row(VD[v], `${P.byVerdict[v].n} bets`, P.byVerdict[v])).join('')}${combos.map(([l, x]) => row(l, `${x.n} bets`, x)).join('')}</div></details>` : ''}
     ${bands.length ? `<div class="sec">By price<small>Where the money is made or lost. A short price (-300 or shorter) pays little and needs a very high hit rate. Once a band is clearly negative over 100+ bets, it is a candidate for a cap.</small></div><div class="mbx">${bands.map(([k, l]) => row(l, `${P.byBand[k].n} bets · needs ${k === 'b1' ? '75%+' : k === 'b2' ? '60 to 75%' : k === 'b3' ? '40 to 60%' : 'under 40%'}`, P.byBand[k])).join('')}</div>` : ''}`;
 }
 
@@ -1563,7 +1554,7 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets'], ['edges', 'Edges']].map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function updSDots() { const g = document.getElementById('sgrid'), ds = document.querySelectorAll('.sdots i'); if (!g || !ds.length) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2);
