@@ -65,9 +65,11 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
   * **Pending (time):** shows when the closing read is due.
   * **No lineup read:** the price locked without a read in the window, so the last price stands as the close.
   * Filters: big moves, pending, closed. Finished games say whether the result went the way of the move.
+  * **Both score row:** the score card's both-score chance at the opening price (`v6o`) against now or the close. There is no both-score price of its own; it is read off the score card at each price.
 * **On the Results tab** ("Models against the market"):
   * how often results went the way of the move (56–57% on past seasons)
   * the same split by whether v4 agreed
+  * how often both-score went the way of its move (moves of 1+ points)
   * your own picks ("Your pick" on a card) against the closing price
 
 ### Hockey prices (Oct 26, 2026)

@@ -13,7 +13,11 @@
 // No price, no v6. Pure functions, no I/O; one fit is a few hundred small grid evaluations (well under a millisecond).
 import { grid, dcTau, V4 } from './v4core.js';
 
-export const V6 = { W_MODEL: 0, ITER: 200 };
+// BTTS_SHIFT: added to the both-score chance on the log-odds scale (about +2.6 points at 50%). The grid fitted to 1X2 and the total
+// under-counts games where both score: on 8,389 closing prices (data/football-data) it said 53% where 55-57% happened. Tuned on
+// 2023/24-2024/25 and checked on 2025/26-2026/27 (3,169 games): said 55.6% vs 56.6% happened, log loss 0.6777 -> 0.6753.
+export const V6 = { W_MODEL: 0, ITER: 200, BTTS_SHIFT: 0.105 };
+const sgm = x => 1 / (1 + Math.exp(-x)), lgt = p => Math.log(p / (1 - p));
 
 const dec = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
 // American prices -> chances adding to 1 with the book's margin removed, or null when one is missing. Power method: each implied
@@ -68,10 +72,10 @@ export function scoreCard(odds, p4 = null) {
     const w = V6.W_MODEL, q = T.hda.map((m, i) => Math.exp((1 - w) * Math.log(m) + w * Math.log(Math.max(1e-6, [p4.home, p4.draw, p4.away][i])))), s = q[0] + q[1] + q[2];
     T.hda = q.map(v => v / s);
   }
-  const F = fitGoals(T), g = grid(F.lh, F.la, true);
+  const F = fitGoals(T), g = grid(F.lh, F.la, true), btts = sgm(lgt(g.bttsYes) + V6.BTTS_SHIFT);
   return {
     lambda: { home: F.lh, away: F.la }, home: g.home, draw: g.draw, away: g.away,
-    over25: g.over25, under25: 1 - g.over25, bttsYes: g.bttsYes, bttsNo: 1 - g.bttsYes,
+    over25: g.over25, under25: 1 - g.over25, bttsYes: btts, bttsNo: 1 - btts,
     topScores: g.top, drawRisk: false, model: 'v6', fit: +F.err.toFixed(4),
   };
 }
