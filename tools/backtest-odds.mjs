@@ -5,9 +5,11 @@
 // Closing-price test: the football-data.co.uk season files (E0 E1 SP1 I1 D1 F1 N1, 2023/24 to 2026/27) add Pinnacle's and the market
 // average's pre-match and closing prices. Every pick is bet at the average pre-match price and judged against both closing prices:
 // closing-line value (did the pick's chance, margin removed, go up by kickoff?) and the return the closing price says the bet was worth.
-// Games in those files that the xgabora copy lacks (the newest weeks) are added to the history.
-// Run: node tools/backtest-odds.mjs [dir]  (downloads a 45 MB file from raw.githubusercontent.com and 28 files from football-data.co.uk,
-// kept in dir, default $TMPDIR/football-data; a file already in dir is read instead of downloaded; about 10 seconds after that)
+// Games in those files that the xgabora copy lacks (the newest weeks) are added to the history. Pinnacle's prices stop partway
+// through 2025/26 in those files; the market average's go on, so every game counts for the average and Pinnacle uses the games it has.
+// Run: node tools/backtest-odds.mjs data/football-data  (the season files are kept in the repo there; the 45 MB history file is
+// downloaded from raw.githubusercontent.com. With another dir, or none ($TMPDIR/football-data), a season file missing from it is
+// downloaded from football-data.co.uk. About 10 seconds after the download.)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -83,25 +85,32 @@ const n = TO.length;
 // book's pre-match chance, minus 1 (the app's closing-line value). ev: the bet price times the closing chance, minus 1 (what the close
 // says the bet was worth: far less noisy than the result). roi: what the bet actually returned. z: the mean over its standard error.
 const mz = xs => { const k = xs.length, mu = xs.reduce((a, x) => a + x, 0) / k, sd = Math.sqrt(xs.reduce((a, x) => a + (x - mu) ** 2, 0) / (k - 1)); return { avg: +(100 * mu).toFixed(2), z: +(mu / (sd / Math.sqrt(k))).toFixed(1) }; };
-const C = test.filter(r => r.cl && r.cl.ps && r.cl.psc && r.cl.av && r.cl.avc), fair = o => nrm(o.map(x => 1 / x)), fair2 = o => { const t = 1 / o[0] + 1 / o[1]; return [1 / o[0] / t, 1 / o[1] / t]; };
-const judge = bets => { // bets: [{ i, bet, won, pre: { ps, av }, cl: { psc, avc } }] with chances, not prices, in pre and cl
+// Every game with the market average's pre-match and closing prices counts. Pinnacle's prices stop partway through 2025/26 in the
+// football-data.co.uk files, so the Pinnacle numbers use the games that still have them (CP) and say how many.
+const C = test.filter(r => r.cl && r.cl.av && r.cl.avc), CP = C.filter(r => r.cl.ps && r.cl.psc), fair = o => nrm(o.map(x => 1 / x)), fair2 = o => { const t = 1 / o[0] + 1 / o[1]; return [1 / o[0] / t, 1 / o[1] / t]; };
+const judge = bets => { // bets: [{ i, bet, won, pre: { ps, av }, cl: { psc, avc } }] with chances, not prices, in pre and cl (ps / psc null without Pinnacle)
   if (!bets.length) return { bets: 0 };
-  const v = k => bets.map(b => b.cl[k] / b.pre[k === 'psc' ? 'ps' : 'av'] - 1), e = k => bets.map(b => b.bet * b.cl[k] - 1), cv = v('psc');
-  return { bets: bets.length, roi: +(100 * bets.reduce((a, b) => a + (b.won ? b.bet - 1 : -1), 0) / bets.length).toFixed(1), beatPinnacleClose: +(100 * cv.filter(x => x > 0).length / cv.length).toFixed(1),
-    clv: { pinnacle: mz(cv), average: mz(v('avc')) }, ev: { pinnacleClose: mz(e('psc')), averageClose: mz(e('avc')) } };
+  const withP = bets.filter(b => b.pre.ps != null && b.cl.psc != null), v = (bs, k) => bs.map(b => b.cl[k] / b.pre[k === 'psc' ? 'ps' : 'av'] - 1), e = (bs, k) => bs.map(b => b.bet * b.cl[k] - 1);
+  const ca = v(bets, 'avc'), cp = v(withP, 'psc');
+  return { bets: bets.length, roi: +(100 * bets.reduce((a, b) => a + (b.won ? b.bet - 1 : -1), 0) / bets.length).toFixed(1),
+    beatAverageClose: +(100 * ca.filter(x => x > 0).length / ca.length).toFixed(1), clvAverage: mz(ca), evAverageClose: mz(e(bets, 'avc')),
+    pinnacle: withP.length > 30 ? { bets: withP.length, beatClose: +(100 * cp.filter(x => x > 0).length / cp.length).toFixed(1), clv: mz(cp), evClose: mz(e(withP, 'psc')) } : { bets: withP.length } };
 };
-const pick1x2 = rule => C.flatMap(r => { const i = rule(r); if (i == null) return []; const F = k => fair(r.cl[k])[i];
+const pick1x2 = rule => C.flatMap(r => { const i = rule(r); if (i == null) return []; const F = k => (r.cl[k] ? fair(r.cl[k])[i] : null);
   return [{ i, bet: r.cl.av[i], won: res(r) === i, pre: { ps: F('ps'), av: F('av') }, cl: { psc: F('psc'), avc: F('avc') } }]; });
 const over = (p, q, rule) => p - q >= 0.05 && p >= rule; // Edges-tab rule: the model 55%+ and 5+ points over the price
 const edgeIx = (r, m, lo = 0) => { const q = mk(r), p = nrm(r[m]), e = p.map((x, i) => x - q[i]), i = e.indexOf(Math.max(...e)); return over(p[i], q[i], lo) ? i : null; };
-const CO = test.filter(r => r.cl && r.cl.ou.ps && r.cl.ou.psc && r.cl.ou.av && r.cl.ou.avc), ouBets = CO.flatMap(r => {
+const CO = test.filter(r => r.cl && r.cl.ou.av && r.cl.ou.avc), ouBets = CO.flatMap(r => {
   const q = fair2(r.cl.ou.av)[0], j = over(r.v4o, q, 0.55) ? 0 : over(1 - r.v4o, 1 - q, 0.55) ? 1 : null; if (j == null) return [];
-  const F = k => fair2(r.cl.ou[k])[j]; return [{ i: j, bet: r.cl.ou.av[j], won: (r.hg + r.ag >= 3) === (j === 0), pre: { ps: F('ps'), av: F('av') }, cl: { psc: F('psc'), avc: F('avc') } }]; });
-const SC = { avgPre: score(C, r => fair(r.cl.av)), pinnaclePre: score(C, r => fair(r.cl.ps)), avgClose: score(C, r => fair(r.cl.avc)), pinnacleClose: score(C, r => fair(r.cl.psc)), v4: score(C, r => r.v4), v5: score(C, r => r.v5) };
-const shareC = m => [0, 0.05, 0.1, 0.2, 0.3].map(w => [w, score(C, r => fair(r.cl.psc).map((x, i) => Math.exp((1 - w) * Math.log(x) + w * Math.log(Math.max(1e-6, r[m][i]))))).ll]).sort((a, b) => a[1] - b[1])[0][0];
-const closing = { games: C.length, from: new Date(C[0].d * DAY).toISOString().slice(0, 10), to: new Date(C[C.length - 1].d * DAY).toISOString().slice(0, 10),
-  winner: Object.fromEntries(Object.entries(SC).map(([k, x]) => [k, { ll: r4(x.ll), rps: r4(x.rps) }])), pinnacleCloseOverV4: zOf(SC.v4, SC.pinnacleClose), pinnacleCloseOverAvgPre: zOf(SC.avgPre, SC.pinnacleClose),
-  bestModelShareInPinnacleClose: { v4: shareC('v4'), v5: shareC('v5'), note: 'chosen on the same games: an upper bound' },
+  const F = k => (r.cl.ou[k] ? fair2(r.cl.ou[k])[j] : null); return [{ i: j, bet: r.cl.ou.av[j], won: (r.hg + r.ag >= 3) === (j === 0), pre: { ps: F('ps'), av: F('av') }, cl: { psc: F('psc'), avc: F('avc') } }]; });
+const SC = { avgPre: score(C, r => fair(r.cl.av)), avgClose: score(C, r => fair(r.cl.avc)), v4: score(C, r => r.v4), v5: score(C, r => r.v5) };
+const SP = { pinnaclePre: score(CP, r => fair(r.cl.ps)), pinnacleClose: score(CP, r => fair(r.cl.psc)), avgClose: score(CP, r => fair(r.cl.avc)), v4: score(CP, r => r.v4), v5: score(CP, r => r.v5) };
+const shareC = (rs, k, m) => [0, 0.05, 0.1, 0.2, 0.3].map(w => [w, score(rs, r => fair(r.cl[k]).map((x, i) => Math.exp((1 - w) * Math.log(x) + w * Math.log(Math.max(1e-6, r[m][i]))))).ll]).sort((a, b) => a[1] - b[1])[0][0];
+const span = rs => ({ games: rs.length, from: new Date(rs[0].d * DAY).toISOString().slice(0, 10), to: new Date(rs[rs.length - 1].d * DAY).toISOString().slice(0, 10) }), ws = S => Object.fromEntries(Object.entries(S).map(([k, x]) => [k, { ll: r4(x.ll), rps: r4(x.rps) }]));
+const closing = { ...span(C), pinnacleGames: span(CP),
+  winner: ws(SC), averageCloseOverV4: zOf(SC.v4, SC.avgClose), averageCloseOverAveragePre: zOf(SC.avgPre, SC.avgClose),
+  winnerPinnacleGames: ws(SP), pinnacleCloseOverV4: zOf(SP.v4, SP.pinnacleClose), pinnacleCloseOverPinnaclePre: zOf(SP.pinnaclePre, SP.pinnacleClose),
+  bestModelShareInClose: { average: { v4: shareC(C, 'avc', 'v4'), v5: shareC(C, 'avc', 'v5') }, pinnacle: { v4: shareC(CP, 'psc', 'v4'), v5: shareC(CP, 'psc', 'v5') }, note: 'chosen on the same games: an upper bound' },
   picks: { marketFavourite: judge(pick1x2(r => { const q = mk(r); return q.indexOf(Math.max(...q)); })), v4Winner: judge(pick1x2(r => { const p = r.v4; return p.indexOf(Math.max(...p)); })),
     v5Winner: judge(pick1x2(r => { const p = r.v5; return p.indexOf(Math.max(...p)); })), v4Value5pts: judge(pick1x2(r => edgeIx(r, 'v4'))), v5Value5pts: judge(pick1x2(r => edgeIx(r, 'v5'))),
     edgesTabWinner: judge(pick1x2(r => edgeIx(r, 'v4', 0.55))), edgesTabOverUnder25: judge(ouBets) } };
