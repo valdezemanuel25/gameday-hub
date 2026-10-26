@@ -59,6 +59,12 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * **When prices are read:** every 6 hours as a rule, every hour in the last 3 hours before a league's next kickoff, and once 30–20 minutes before kickoff, after the official lineups are out (`LINEUP_READ`, `PRICE_LOCK` in `src/worker.js`). From 20 minutes before kickoff a card's price is locked, so the lineup read is the closing price.
 * **What each card keeps:** the opening price (ESPN's opening line for home / draw / away and the total, `odds.op` / `odds.opt`, else the first price the Hub saw, `odds.f`) next to the current or closing one.
 * **On the card:** the score card shows the move (e.g. `Arsenal 46→58 (+12)`). A move of 5+ points on one result gets a "Big price move" flag, saying whether v4 already leaned that way. The Board lists the day's big moves. It is a prompt to check the team news, not a bet (`src/moves.js`).
+* **Movement tab** (it replaced the Compare tab on Oct 26, 2026): every priced game of the selected day with its opening odds, current or closing odds, the chance (margin removed) and the move for home / draw / away and the total. Each game shows its closing-price status:
+  * **Closing ✓ (time):** the lineup read was taken (`odds.cl`).
+  * **Lineup read due now:** inside the last 30 minutes, not yet read.
+  * **Pending (time):** shows when the closing read is due.
+  * **No lineup read:** the price locked without a read in the window, so the last price stands as the close.
+  * Filters: big moves, pending, closed. Finished games say whether the result went the way of the move.
 * **On the Results tab** ("Models against the market"):
   * how often results went the way of the move (56–57% on past seasons)
   * the same split by whether v4 agreed

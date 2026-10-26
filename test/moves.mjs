@@ -34,6 +34,7 @@ const p = parseOdds([{ moneyline: { home: { open: { odds: '+110' }, close: { odd
 ok('ESPN\'s opening total is kept apart from the current one', p.opt && p.opt.tl === 2.5 && p.opt.to === 105 && p.opt.tu === -125 && p.to === -120, JSON.stringify(p));
 const w = withOdds(null, { h: -150, d: 280, a: 400, tl: 2.5, to: -120, tu: 100 });
 ok('the first price seen keeps the total too', w.f.tl === 2.5 && w.f.to === -120 && w.f.tu === 100);
+ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -150, d: 280, a: 400, ts: 'T1', cl: 'T2' }, { h: -160, d: 290, a: 420 }).cl === 'T2' && withOdds({ h: 1, d: 1, a: 1, ts: 'T1' }, { h: -160, d: 290, a: 420 }).ts === 'T1');
 
 // 4. the schedule: hourly in the last 3 hours, a read 30-20 minutes before kickoff (after the lineups), then the price is locked
 {
@@ -46,10 +47,12 @@ ok('the first price seen keeps the total too', w.f.tl === 2.5 && w.f.to === -120
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ events: [{ id: '1', date: new Date(ko).toISOString(), competitions: [{ status: { type: { completed: false } }, competitors: [{ homeAway: 'home', team: { id: 'h', displayName: 'A' } }, { homeAway: 'away', team: { id: 'a', displayName: 'B' } }], odds: [{ moneyline: { home: { close: { odds: String(price) } }, draw: { close: { odds: '+280' } }, away: { close: { odds: '+400' } } } }] }] }] }) });
   kv.set('day:' + date, JSON.stringify({ date, cards: [{ id: '1', league: 'eng.1', kickoff: new Date(ko).toISOString(), home: 'A', away: 'B', v4: { p: [50, 25, 25] } }] }));
   await oddsStep(env, at(600), cache); await oddsStep(env, at(150), cache); await oddsStep(env, at(50), cache);
+  ok('reads before the lineup window are not the close', !JSON.parse(kv.get('day:' + date)).cards[0].odds.cl);
   ok('10 hours out: next look in 6 hours; 2.5 hours out: in an hour; 50 minutes out: exactly at 30 minutes before', ttls[0] === 21600 && ttls[1] === 3600 && ttls[2] === 1200, JSON.stringify(ttls));
   price = -170; await oddsStep(env, at(28), cache);
   const c28 = JSON.parse(kv.get('day:' + date)).cards[0];
   ok('the read 28 minutes before kickoff (lineups out) is taken', c28.odds.h === -170, JSON.stringify(c28.odds));
+  ok('that read is noted as the closing (lineup) read, and when the price changed', c28.odds.cl === at(28).toISOString() && c28.odds.ts === at(28).toISOString(), JSON.stringify(c28.odds));
   price = -250; const r = await oddsStep(env, at(15), cache);
   const c15 = JSON.parse(kv.get('day:' + date)).cards[0];
   ok('15 minutes before kickoff the price is locked: the lineup read stands as the close', c15.odds.h === -170 && r === null, JSON.stringify([c15.odds, r]));
