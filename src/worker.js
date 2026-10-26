@@ -251,8 +251,9 @@ function keepOdds(card, old, f, slug, now) {
 // A fresh price for a card: keeps the both-score prices (they come from another source) and `f`, the first home / draw / away price the
 // Hub saw for this game. `f` is what a bet placed when the pick first showed would have got; the price at kickoff is the closing one.
 // The first price also keeps the total (line and Over / Under prices) when the book had one, so totals can be tracked from it too.
+// ts (when the price last changed) and cl (when the lineup read was taken: the closing price) carry over from the old price.
 export function withOdds(old, fresh) {
-  const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}) };
+  const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
   const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
@@ -265,6 +266,9 @@ export function withOdds(old, fresh) {
 // The closing price is read about 30 minutes before kickoff, once the official lineups are out (LINEUP_READ). From PRICE_LOCK minutes
 // before kickoff a card's price is no longer touched, so the lineup read stands as the close (a later read would not replace it).
 export const LINEUP_READ = 30, PRICE_LOCK = 20;
+// Same value whatever the order of the keys (a price object gains ts / cl over time, so key order alone must not count as a change).
+const canon = v => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canon(v[k])])) : v);
+const sameJson = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 const priceOpen = (c, now) => new Date(c.kickoff).getTime() - now.getTime() > PRICE_LOCK * 60000;
 export async function refreshOdds(env, date, slug, now = new Date()) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
@@ -276,7 +280,9 @@ export async function refreshOdds(env, date, slug, now = new Date()) {
   for (const c of open) {
     const o = byId.get(c.id)?.odds; if (o) priced++;
     let ch = false;
-    if (o) { const n = withOdds(c.odds, o); if (JSON.stringify(n) !== JSON.stringify(c.odds)) { c.odds = n; ch = true; } }
+    if (o) { const n = withOdds(c.odds, o); if (sameJson(n, c.odds) === false) { n.ts = now.toISOString(); c.odds = n; ch = true; } }
+    // The read inside the lineup window (LINEUP_READ to PRICE_LOCK minutes before kickoff) is the closing price: note when it was taken.
+    if (o && c.odds && !c.odds.cl && new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000) { c.odds.cl = now.toISOString(); ch = true; }
     if (c.odds && setV6(c, c, now)) ch = true; // the score card follows the price (and a card priced before v6 existed gets one)
     if (ch) changed++;
   }

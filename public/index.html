@@ -237,6 +237,12 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .xags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}.xags .xag{margin:0}
 .xag.s{background:var(--grass);color:#07150d;font-weight:750}.xag.s:before{content:"✓";width:auto;height:auto;background:none;font-weight:800}
 .xag.gl{background:rgba(127,166,217,.15);color:#b6cdf0}.xag.mv{background:rgba(201,168,255,.14);color:#d9c4ff}
+.mvg{margin:10px 18px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:12px;color:var(--dim)}
+.mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
+.mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--dim)}.cs.due{background:rgba(240,181,74,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
+.mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
+.mvx{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}.mvx th{font-size:10.5px;color:var(--faint);font-weight:650;text-align:right;padding:2px 4px}.mvx td{text-align:right;padding:4px;border-top:1px solid var(--line);color:var(--ink)}
+.mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}.mvx tr.won td.n{color:var(--grass);font-weight:650}
 .mvb{margin:8px 18px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(201,168,255,.05);font-size:12px;color:var(--dim)}.mvb summary{cursor:pointer;color:var(--ink);font-weight:650;font-size:12.5px}
 .mvb .mr{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line)}.mvb .mr:first-of-type{border-top:0}.mvb .mr b{color:var(--ink);font-weight:600}.mvb .mr em{font-style:normal;color:#d9c4ff;font-weight:650;white-space:nowrap}
 .xc.win{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--grass),0 0 14px rgba(var(--acc-rgb),.65)}
@@ -481,7 +487,7 @@ const S = { date: '', tab: 'board', league: 'all', top: false, open: null, fin: 
 try { const f = JSON.parse(localStorage.getItem('hubFilter') || 'null'); if (f) { S.league = f.league || 'all'; S.top = !!f.top; if (f.tm) S.tm = f.tm; } } catch (e) {}
 const keepFilter = () => { try { localStorage.setItem('hubFilter', JSON.stringify({ league: S.league, top: S.top, tm: S.tm })); } catch (e) {} };
 const counts = {};
-try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); if (['board', 'results', 'compare', 'status'].includes(v.tab)) S.tab = v.tab; if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }
+try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); if (['board', 'results', 'moves', 'status'].includes(v.tab)) S.tab = v.tab; if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }
 const saveView = () => { try { localStorage.setItem('hubView', JSON.stringify({ tab: S.tab, league: S.league })); } catch (e) { /* ignore */ } };
 
 /* ---------- admin token (protects Analyze / Update so strangers can't use your free quota) ---------- */
@@ -1067,33 +1073,36 @@ function sidebar(leagues) {
     (idle.length ? `<div class="lsp">No games on this day</div>` + idle.map(l => `<div class="it off" aria-label="${esc(l.name)}">${lab(l.key, l.name)}<i>0</i></div>`).join('') : '') + `</aside>`;
 }
 
-/* ---------- Model vs SportsMole ---------- */
-function pairRow(label, note, rows) {
-  const best = Math.max(...rows.map(r => r.k / r.n));
-  return `<div class="pair"><div class="lab"><b style="font-weight:600">${label}</b><span>${note}</span></div>` + rows.map(r => {
-    const p = r.n ? Math.round(100 * r.k / r.n) : 0, lead = rows.length > 1 && r.k / r.n === best && rows.some(o => o !== r && o.k / o.n < best);
-    return `<div class="pb ${lead ? 'lead' : ''}"><div class="n">${r.name}</div><div class="tr"><i style="width:${p}%;background:${r.color}"></i></div><div class="v">${p}% <u>${r.k}/${r.n}</u></div></div>`;
-  }).join('') + `</div>`;
+/* ---------- Movement: opening -> closing price for every priced game of the day ---------- */
+// Status of the closing price: captured (the lineup read, 30-20 minutes before kickoff), missed (locked with no lineup read, so the last
+// price before the lock stands), due (inside the lineup window now) or pending (with the time the closing read is due).
+const tmCT = iso => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+function closeState(c) {
+  const ko = new Date(c.kickoff).getTime(), o = c.odds || {};
+  if (locked(c)) return o.cl ? { k: 'ok', t: `Closing ✓ ${tmCT(o.cl)}` } : { k: 'miss', t: 'No lineup read · last price is the close' };
+  if (ko - Date.now() <= 30 * 60000) return { k: 'due', t: 'Lineup read due now' };
+  return { k: 'pend', t: `Pending · closing read ~${tmCT(new Date(ko - 30 * 60000).toISOString())}` };
 }
-function compare() {
-  if (!tally) return `<div class="empty">Loading…</div>`;
-  const s = tally.smCompare, n = s.n, G = 'var(--grass)', B = 'var(--sm)';
-  const last = s.earlier.slice(0, 10).reverse();
-  const live = s.recent.map(r => `<div class="li"><div class="a"><span>${esc(r.home)} vs ${esc(r.away)}</span><span>${r.final.h}–${r.final.a}</span></div>
-    <div class="b"><span>${r.model ? esc(r.model) : 'Model'}: ${OUT[r.modelPick]} <b class="${r.hit.outcomeHit ? 'ok' : 'no'}">${r.hit.outcomeHit ? '✓' : '✗'}</b></span><span style="color:var(--sm)">SportsMole: ${esc(r.sm)} <b>${r.smHit.outcomeHit ? '✓' : '✗'}</b></span></div></div>`).join('');
-  const old = s.earlier.slice(0, 60).map(r => `<div class="li"><div class="a"><span>${esc(r.match)}</span><span>${esc(r.finalScore.replace(/^.* (\d+–\d+) .*$/, '$1'))}</span></div>
-    <div class="b"><span>Model: ${esc(r.modelPick.replace(/ \(.*/, ''))} <b class="${r.modelHit ? 'ok' : 'no'}">${r.modelHit ? '✓' : '✗'}</b></span><span style="color:var(--sm)">SportsMole: ${esc(r.sportsmolePredict)} <b>${r.sportsmoleOutcomeHit ? '✓' : '✗'}</b></span></div></div>`).join('');
-  return `<div class="banner">Tracks SportsMole's published “We say” scorelines against final results, next to this site's model (v4; v2 on the old Hub's games and on any game v4 had no numbers for): ${s.importedMatches} matches carried over from the old Hub and ${s.newMatches} tracked here since. New predictions are fetched automatically.</div>
-    <div class="sec">Share of picks that came true<small>${n} matches. Longer bar is better, the leader is bold.</small></div>
-    ${pairRow('Winner or draw', '3 outcomes', [{ name: 'Model', k: s.model.outcome, n, color: G }, { name: 'SportsMole', k: s.sm.outcome, n, color: B }])}
-    ${pairRow('Over or under 2.5 goals', '2 outcomes', [{ name: 'Model', k: s.model.ou, n, color: G }, { name: 'SportsMole', k: s.sm.ou, n, color: B }])}
-    ${pairRow('Both teams to score', '2 outcomes', [{ name: 'Model', k: s.model.btts, n, color: G }, { name: 'SportsMole', k: s.sm.btts, n, color: B }])}
-    ${pairRow('Exact score', 'SportsMole only', [{ name: 'SportsMole', k: s.sm.score, n, color: B }])}
-    ${last.length ? `<div class="sec" style="padding-top:18px">Last 10 winner picks<small>One square per game, newest on the right.</small></div>
-      <div class="pair" style="padding-top:8px"><div class="small" style="margin:0">Model</div><div class="dots">${last.map(r => `<i class="${r.modelHit ? 'y' : 'n'}"></i>`).join('')}</div>
-      <div class="small" style="margin:10px 0 0">SportsMole</div><div class="dots s">${last.map(r => `<i class="${r.sportsmoleOutcomeHit ? 'y' : 'n'}"></i>`).join('')}</div></div>` : ''}
-    ${live ? `<div class="sec" style="padding-top:18px">Tracked here</div><div class="lst">${live}</div>` : ''}
-    <details class="old"><summary>Carried over from the old Hub (${s.earlier.length})</summary><div class="lst" style="padding:0">${old}</div></details>`;
+function movesView() {
+  if (!day || !day.cards) return `<div class="empty">Loading…</div>`;
+  const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
+  const rows = priced.map(c => ({ c, mv: moveOf(c.odds), st: closeState(c) }));
+  const f = S.mvf || 'all', shown = rows.filter(r => f === 'big' ? r.mv.big : f === 'pend' ? r.st.k === 'pend' || r.st.k === 'due' : f === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true);
+  const n = k => rows.filter(r => k === 'big' ? r.mv.big : k === 'pend' ? r.st.k === 'pend' || r.st.k === 'due' : r.st.k === 'ok' || r.st.k === 'miss').length;
+  const seg = `<div class="tseg"><button type="button" class="${f === 'all' ? 'on' : ''}" data-mvf="all">All<i>${rows.length}</i></button><button type="button" class="${f === 'big' ? 'on' : ''}" data-mvf="big">Big moves<i>${n('big')}</i></button><button type="button" class="${f === 'pend' ? 'on' : ''}" data-mvf="pend">Pending<i>${n('pend')}</i></button><button type="button" class="${f === 'closed' ? 'on' : ''}" data-mvf="closed">Closed<i>${n('closed')}</i></button></div>`;
+  const head = `<div class="small" style="margin:8px 18px 0">DraftKings prices, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before kickoff, after the lineups, then locked. A move of ${BIG_MOVE}+ points on one result is a big move: news reaching the price, not a bet.${unpriced ? ` ${unpriced} game${unpriced === 1 ? '' : 's'} on this day ha${unpriced === 1 ? 's' : 've'} no price.` : ''}</div>`;
+  const card = ({ c, mv, st }) => {
+    const o = c.odds, op = o.op || o.f, fin = c.final, out = fin ? (fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2) : null;
+    const row = (label, a, b, p0, p1, d, hit) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${Math.round(p0)}→${Math.round(p1)}%</td><td class="${Math.abs(d) >= BIG_MOVE ? 'bg' : ''}"><b>${sgn(Math.round(d))}</b></td></tr>`;
+    const ouRow = mv.ou ? (() => { const ot = o.opt || o.f; return row(`Over ${mv.ou.line}`, ot.to, o.to, mv.ou.p0, mv.ou.p1, mv.ou.d, fin ? fin.h + fin.a > mv.ou.line : false); })() : '';
+    const follow = fin ? (mv.size < 2 ? 'the price barely moved' : mv.d[out] > 0 ? 'the result went the way of the move' : 'the result went against the move') : '';
+    return `<div class="mvg"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><span class="cs ${st.k}">${st.t}</span></div>
+      <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}${mv.big ? ` · <span class="mvf">big move: ${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}${v4Read(c, mv) ? ', ' + v4Read(c, mv) : ''}</span>` : ''}</small>
+      <table class="mvx"><tr><th></th><th>${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
+      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}</table>
+      ${o.ts ? `<small class="mvn">Price last changed ${tmCT(o.ts)}</small>` : ''}</div>`;
+  };
+  return seg + head + (shown.length ? shown.map(card).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices are read for the first divisions and the two European cups once a day is analyzed.'}</div>`);
 }
 
 /* ---------- Results ---------- */
@@ -1598,7 +1607,7 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['compare', 'Compare'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['moves', 'Movement'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function updSDots() { const g = document.getElementById('sgrid'), ds = document.querySelectorAll('.sdots i'); if (!g || !ds.length) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2);
@@ -1607,7 +1616,7 @@ document.addEventListener('scroll', e => { if (e.target && e.target.id === 'sgri
 function render() {
   keepFilter();
   renderHeader();
-  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : compare();
+  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : S.tab === 'moves' ? movesView() : board();
   updSDots();
 }
 async function loadCounts() {
@@ -1680,6 +1689,7 @@ async function runAll(kind) {
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
   const edl = e.target.closest('[data-edlong]'); if (edl) { S.edLong = !S.edLong; return render(); }
+  const mvf = e.target.closest('[data-mvf]'); if (mvf) { S.mvf = mvf.dataset.mvf; return render(); }
   const rf = e.target.closest('[data-refetch]'); if (rf) return fbModal(rf.dataset.refetch);
   const fm = e.target.closest('[data-fbm]');
   if (fm) { const a = fm.dataset.fbm; if (a === 'go') return fbRun(fm.dataset.slug); const m = $('#fbm'); if (m && !m.dataset.busy) m.remove(); return; }
@@ -1810,7 +1820,7 @@ $('#btn-grade').onclick = () => runAll('grade');
 
 (async () => {
   cfg = await api('/api/config'); S.date = cfg.today; await loadDay();
-  if (S.tab === 'results' || S.tab === 'compare' || S.tab === 'mbets') { await ensureTally(); render(); }
+  if (S.tab === 'results' || S.tab === 'mbets') { await ensureTally(); render(); }
   try { stat = await api('/api/status'); if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') render(); } catch (e) { /* alerts are optional */ }
 })();
 try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js'); } catch (e) { /* installing is optional */ }
