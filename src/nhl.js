@@ -8,11 +8,17 @@
 import SEED from './nhlseed.js';
 import { hockeyPick, hockeyHit } from './pick.js';
 import { fbHeaders, FB_HV } from './forebetpage.js';
+import { hockeyMove } from './moves.js';
 
 const TZ = 'America/Chicago';
 export const LINE = 5.5;
 export const GOALIE_W = 0; // season goalie ratings did not help in the 3-season backtest, so they are stored but not used
 const HOME = 1.05, N0 = 25, HOUR = 3600000;
+// Prices (c.px): DraftKings moneyline and total with its Over / Under prices from ESPN, opening and current, for the Movement tab.
+// Same schedule as soccer: a price counts every 6 hours, every hour in the last 3 hours before puck drop, and once 30-20 minutes
+// before it (after the morning skate and the starting goalies: the closing price, noted in px.cl). From 20 minutes before, locked.
+// A card is only written when its price changed (or the lineup read is noted), so this costs few writes. Display and tracking only.
+export const LINEUP_READ = 30, PRICE_LOCK = 20;
 // A regulation tie is likelier than two independent Poisson scores say: with 1.55x on the tied scores about 23% of games go past
 // regulation, the NHL's rate in the 3-on-3 overtime era (plain Poisson gave 16%; the Hub's first 75 games had 27%).
 export const TIE = 1.55;
@@ -138,6 +144,36 @@ export function fbFor(card, rows) {
 }
 
 // ---- ESPN --------------------------------------------------------------------------------------
+const am = v => { if (v == null) return null; const t = String(v).trim().toUpperCase(); if (t === 'EVEN' || t === 'EV') return 100; const n = Number(t.replace('+', '')); return Number.isInteger(n) && Math.abs(n) >= 100 ? n : null; };
+const lineNum = v => { const n = Number(String(v ?? '').replace(/[^0-9.]/g, '')); return n >= 3.5 && n <= 9.5 ? n : null; };
+// ESPN's NHL odds block -> { h, a, tl, to, tu, op: { h, a }, opt: { tl, to, tu } } (American prices; anything missing is left out), or null.
+export function parseHockeyOdds(list) {
+  const o = (list || []).find(x => x && (x.moneyline || x.homeTeamOdds || x.total || x.overUnder != null)); if (!o) return null;
+  const pick = (...xs) => { for (const x of xs) { const v = am(x); if (v != null) return v; } return null; }, ml = o.moneyline || {}, t = o.total || {}, out = {};
+  const h = pick(ml.home?.close?.odds, ml.home?.open?.odds, o.homeTeamOdds?.moneyLine), a = pick(ml.away?.close?.odds, ml.away?.open?.odds, o.awayTeamOdds?.moneyLine);
+  if (h != null && a != null) { out.h = h; out.a = a; }
+  const oh = am(ml.home?.open?.odds), oa = am(ml.away?.open?.odds); if (oh != null && oa != null) out.op = { h: oh, a: oa };
+  const tl = lineNum(t.over?.close?.line ?? t.over?.open?.line ?? o.overUnder), to = pick(t.over?.close?.odds, t.over?.open?.odds, o.overOdds), tu = pick(t.under?.close?.odds, t.under?.open?.odds, o.underOdds);
+  if (tl != null && to != null && tu != null) { out.tl = tl; out.to = to; out.tu = tu; }
+  const otl = lineNum(t.over?.open?.line), oto = am(t.over?.open?.odds), otu = am(t.under?.open?.odds); if (otl != null && oto != null && otu != null) out.opt = { tl: otl, to: oto, tu: otu };
+  return out.h != null || out.tl != null ? out : null;
+}
+const canon = v => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canon(v[k])])) : v);
+// Fold a fresh ESPN price into a card on schedule. f = the first price seen; ts = when it last changed; rd = when it was last taken;
+// cl = when the lineup read was taken. Returns true when the card changed (and so must be saved).
+export function setPrice(c, fresh, now = new Date()) {
+  const mins = (new Date(c.kickoff).getTime() - now.getTime()) / 60000, old = c.px;
+  if (!fresh || mins <= PRICE_LOCK) return false;
+  const lineup = mins <= LINEUP_READ && !(old && old.cl), due = !old || !old.rd || now.getTime() - new Date(old.rd).getTime() >= (mins <= 180 ? 1 : 6) * HOUR;
+  if (!due && !lineup) return false;
+  const snap = x => ({ ...(x.h != null ? { h: x.h, a: x.a } : {}), ...(x.tl != null ? { tl: x.tl, to: x.to, tu: x.tu } : {}) });
+  const n = { ...fresh, f: old && old.f ? old.f : snap(fresh), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.rd ? { rd: old.rd } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
+  const changed = JSON.stringify(canon(n)) !== JSON.stringify(canon(old || null));
+  if (changed) { n.ts = now.toISOString(); n.rd = now.toISOString(); }
+  if (lineup) n.cl = now.toISOString();
+  if (!changed && !lineup) return false;
+  c.px = n; return true;
+}
 async function scoreboard(date, fetchFn, debug) {
   try {
     const res = await fetchFn(`${ESPN}?dates=${date.replace(/-/g, '')}&limit=100`, { headers: { 'user-agent': 'gameday-hub/1.0' } });
@@ -150,7 +186,7 @@ async function scoreboard(date, fetchFn, debug) {
       const det = String(t.shortDetail || t.detail || ''), last = /SO/.test(det) ? 'SO' : /OT/.test(det) ? 'OT' : 'REG';
       // Only the Over/Under total is taken from the odds block (the sportsbook line); spreads and moneylines are ignored.
       const od = (comp.odds || []).find(o => Number.isFinite(Number(o.overUnder)) && Number(o.overUnder) >= 3.5 && Number(o.overUnder) <= 9.5), line = od ? Number(od.overUnder) : null;
-      out.push({ id: String(ev.id), date: ev.date, done, last, line, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
+      out.push({ id: String(ev.id), date: ev.date, done, last, line, px: done ? null : parseHockeyOdds(comp.odds), lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
     }
     return out;
   } catch (e) { debug.push(`scoreboard ${date}: ${e.message}`); return null; }
@@ -210,8 +246,10 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         c = { id: e.id, kickoff: e.date, ko: localTime(e.date), home: e.hName, away: e.aName, hAbbr: e.hc, aAbbr: e.ac, final: null, ver: S.ver };
         if (e.line) c.ln = { v: e.line, src: e.lineSrc };
         if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; } else c.skipped = 'Team not in the NHL ratings yet';
+        setPrice(c, e.px, now);
         day.cards.push(c); dirty = true; out.created++;
-      } else if (!c.final && new Date(c.kickoff).getTime() > now.getTime() && pr) {
+      } else if (!c.final && new Date(c.kickoff).getTime() > now.getTime() && setPrice(c, e.px, now)) dirty = true;
+      if (c && !c.final && new Date(c.kickoff).getTime() > now.getTime() && pr) {
         const moved = !manual && e.line && (!c.ln || c.ln.v !== e.line); // the sportsbook moved the total
         if (moved) c.ln = { v: e.line, src: e.lineSrc };
         if (c.ver !== S.ver || moved) { // ratings moved since this card was made, or the line did
@@ -286,10 +324,15 @@ export async function nhlTally(env) {
   // Calibration: winner picks grouped by how sure the model was, against how often they won.
   const BANDS = [['50 to 54%', 50, 55], ['55 to 59%', 55, 60], ['60 to 64%', 60, 65], ['65% and up', 65, 101]], cal = { v2: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })), v4: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })) };
   let graded = 0, lined = 0;
+  const MV = { ml: { n: 0, follow: 0, big: 0, bigFollow: 0 }, ou: { n: 0, follow: 0, big: 0, bigFollow: 0 } };
   // Model bets: every card's headline pick, locked when the game was graded. A total exactly on the line is a push (no result).
   const LB = { n: 0, hits: 0, push: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, over: 0, overN: 0 }, recent: [] }, lbAdd = (o, k, hit, pk) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; if (pk) (x.ks || (x.ks = {}))[pk] = (x.ks[pk] || 0) + 1; }; // ks: which kinds of pick are inside, so the page can work out what chance alone would score
   for (const d of days.filter(Boolean).sort((a, b) => b.date.localeCompare(a.date))) {
     for (const c of d.cards.filter(x => x.final && x.grade).sort((a, b) => b.kickoff.localeCompare(a.kickoff))) {
+      // Price moves: did the result go the way the price moved, on the moneyline and on the total (a push is left out)?
+      const hm = hockeyMove(c.px);
+      if (hm && hm.ml && hm.ml.d !== 0) { const fol = (hm.ml.d > 0) === (c.final.h > c.final.a); MV.ml.n++; MV.ml.follow += fol ? 1 : 0; if (Math.abs(hm.ml.d) >= 5) { MV.ml.big++; MV.ml.bigFollow += fol ? 1 : 0; } }
+      if (hm && hm.ou && hm.ou.d !== 0 && c.final.total !== hm.ou.line) { const fol = (hm.ou.d > 0) === (c.final.total > hm.ou.line); MV.ou.n++; MV.ou.follow += fol ? 1 : 0; if (Math.abs(hm.ou.d) >= 5) { MV.ou.big++; MV.ou.bigFollow += fol ? 1 : 0; } }
       graded++; const real = !!(c.ln && c.grade.line === c.ln.v); if (real) lined++; // Over/Under only counts at a real sportsbook line
       let g = c.grade;
       if (g.fb && g.fb.ou == null) { const o = fbOu(c.fb, c.final, c.ln ? c.ln.v : LINE); if (o != null) g = { ...g, fb: { ...g.fb, ou: o } }; } // games graded before Forebet O/U existed
@@ -320,7 +363,7 @@ export async function nhlTally(env) {
   }
   const fix = b => ({ ...b, brier: { n: b.brier.n, v2: b.brier.n ? +(b.brier.v2 / b.brier.n).toFixed(3) : null, v4: b.brier.n ? +(b.brier.v4 / b.brier.n).toFixed(3) : null } });
   const calOut = Object.fromEntries(Object.entries(cal).map(([m, bs]) => [m, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]));
-  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent, leans: LB };
+  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent, leans: LB, moves: MV };
 }
 export async function nhlStatus(env) {
   const [S, fb] = await Promise.all([env.HUB.get('nhl:state', 'json'), env.HUB.get('nhl:fbmeta', 'json')]);

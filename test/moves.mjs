@@ -1,7 +1,8 @@
 // Price moves: opening -> now / close, the big-move flag, the lineup read 30 minutes before kickoff and the lock after it,
 // and the Results tallies (results following the move, your own picks against the close). The page's moveOf matches the server's.
 import fs from 'fs';
-import { moveOf, BIG_MOVE } from '../src/moves.js';
+import { moveOf, hockeyMove, BIG_MOVE } from '../src/moves.js';
+import { parseHockeyOdds, setPrice, nhlTally } from '../src/nhl.js';
 import { parseOdds } from '../src/data.js';
 import { withOdds, oddsStep, LINEUP_READ, PRICE_LOCK } from '../src/worker.js';
 import { blankMarket, addMarket, finishMarket } from '../src/market.js';
@@ -69,5 +70,35 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   ok('moves: two games moved, one followed; both big', R.moves.n === 2 && R.moves.follow === 1 && R.moves.big === 2 && R.moves.bigFollow === 1, JSON.stringify(R.moves));
   ok('v4 had already leaned home on both big moves', R.moves.modelWith === 2 && R.moves.modelAgainst === 0);
   ok('your picks: two, one beat the close (from the first price seen, else the opening line)', R.mine.n === 2 && R.mine.beat === 1, JSON.stringify(R.mine));
+}
+// 6. hockey: moneyline and total, the same schedule, the page's copy and the Results tally
+{
+  const px = parseHockeyOdds([{ moneyline: { home: { open: { odds: '-120' }, close: { odds: '-150' } }, away: { open: { odds: '+100' }, close: { odds: '+130' } } },
+    total: { over: { open: { line: 'o6.5', odds: '+105' }, close: { line: 'o6.5', odds: '-115' } }, under: { open: { line: 'u6.5', odds: '-125' }, close: { line: 'u6.5', odds: '-105' } } } }]);
+  ok('hockey: moneyline and total read, opening kept apart', px.h === -150 && px.a === 130 && px.op.h === -120 && px.op.a === 100 && px.tl === 6.5 && px.to === -115 && px.opt.to === 105, JSON.stringify(px));
+  ok('hockey: the old flat block still gives the moneyline and total', (q => q.h === -200 && q.a === 170 && q.tl === 5.5 && q.to === -110)(parseHockeyOdds([{ homeTeamOdds: { moneyLine: -200 }, awayTeamOdds: { moneyLine: 170 }, overUnder: 5.5, overOdds: -110, underOdds: -110 }])));
+  const hm = hockeyMove(px);
+  ok('hockey: home moneyline chance went up, Over went up, the bigger one is the moneyline', hm.ml.d > 0 && hm.ou.d > 0 && hm.from === 'open' && Math.abs(hm.ml.p0 + (100 - hm.ml.p0) - 100) < 1e-9, JSON.stringify(hm));
+  const html = fs.readFileSync(new URL('../public/nhl.html', import.meta.url), 'utf8');
+  const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
+  const page = new Function(`${['BIG_MOVE', 'devigP', 'hockeyMove'].map(grab).join('\n')}; return hockeyMove;`)();
+  const cases = [px, { ...px, op: null, f: { h: -140, a: 120, tl: 6.5, to: -110, tu: -110 } }, { h: -110, a: -110 }, { tl: 5.5, to: -120, tu: 100, opt: { tl: 6.5, to: 100, tu: -120 } }];
+  ok('hockey: page and server agree', cases.every(o => JSON.stringify(page(o)) === JSON.stringify(hockeyMove(o))), JSON.stringify(cases.map(o => [page(o), hockeyMove(o)])));
+  // schedule: first sight, not due again for 6 hours, hourly in the last 3, the pre-game read, then locked
+  const ko = Date.parse('2026-10-26T23:00:00Z'), at = m => new Date(ko - m * 60000), c = { kickoff: new Date(ko).toISOString() };
+  const p0 = { h: -150, a: 130, tl: 6.5, to: -115, tu: -105 };
+  ok('first sight keeps the price as the first price', setPrice(c, p0, at(600)) && c.px.f.h === -150 && c.px.rd === at(600).toISOString());
+  ok('a new price 2 hours later is not taken (not due for 6 hours)', !setPrice(c, { ...p0, h: -160 }, at(480)) && c.px.h === -150);
+  ok('2 hours before puck drop it is due again and the new price is taken', setPrice(c, { ...p0, h: -170 }, at(120)) && c.px.h === -170 && c.px.f.h === -150);
+  ok('30 minutes later it is not due yet (hourly in the last 3 hours)', !setPrice(c, { ...p0, h: -180 }, at(90)));
+  ok('the read 28 minutes before is taken and noted as the close', setPrice(c, { ...p0, h: -190 }, at(28)) && c.px.h === -190 && c.px.cl === at(28).toISOString());
+  ok('15 minutes before the price is locked', !setPrice(c, { ...p0, h: -300 }, at(15)) && c.px.h === -190);
+  ok('an unchanged price that is due writes nothing', !setPrice({ kickoff: c.kickoff, px: { ...p0, f: p0, rd: at(900).toISOString() } }, p0, at(300)));
+  // the Results tally
+  const card = (id, final, pxx) => ({ id, kickoff: '2026-10-25T23:00:00Z', home: 'H', away: 'A', hAbbr: 'H', aAbbr: 'A', final, grade: { line: 6.5 }, v2: { w: 55, o: 50 }, px: pxx });
+  const days = { 'nhl:day:2026-10-25': { date: '2026-10-25', cards: [card('1', { h: 3, a: 1, total: 4, last: 'REG' }, px), card('2', { h: 1, a: 4, total: 5, last: 'REG' }, px)] } };
+  const env = { HUB: { list: async () => ({ keys: Object.keys(days).map(name => ({ name })) }), get: async k => days[k] || null } };
+  const T = await nhlTally(env);
+  ok('hockey Results: winner followed the moneyline move once in two, totals went against the Over move twice', T.moves.ml.n === 2 && T.moves.ml.follow === 1 && T.moves.ou.n === 2 && T.moves.ou.follow === 0, JSON.stringify(T.moves));
 }
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);

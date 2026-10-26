@@ -103,6 +103,15 @@ h4{margin:20px 18px 6px;font-size:14px}
 .sp .nums{display:flex;justify-content:space-between;font-size:12px;color:var(--faint);margin-bottom:4px}.sp .nums b{font-size:15px;color:var(--ink);font-weight:700}.sp .nums .dim b{color:var(--faint);font-weight:600}
 .sp .bar{display:flex;gap:3px;height:8px}.sp .bar i{display:block;border-radius:99px;background:var(--c);opacity:.38}.sp .bar i.fav{opacity:1;box-shadow:0 0 10px color-mix(in srgb,var(--c) 55%,transparent)}
 .ag{display:inline-flex;align-items:center;gap:6px;margin:10px 0 8px;font-size:11.5px;font-weight:650;padding:4px 9px;border-radius:99px;background:rgba(240,195,90,.12);color:var(--amber)}
+.ag.mv{background:rgba(201,168,255,.14);color:#d9c4ff}
+.pxl{font-size:11.5px;color:var(--mut);margin-top:6px;line-height:1.45}.pxl b{color:var(--ink);font-weight:650}
+.mvg{background:var(--s);border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin:10px 18px 0;font-size:12px;color:var(--mut)}
+.mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
+.mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--mut)}.cs.due{background:rgba(240,195,90,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
+.mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
+table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mvx th,.mvx td{padding:4px;font-size:12px;text-align:right;border-bottom:0;border-top:1px solid var(--line)}.mvx th{font-size:10.5px;color:var(--faint);font-weight:650;border-top:0}
+.mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}.mvx tr.won td.n{color:var(--good);font-weight:650}
+.mvseg{display:flex;gap:6px;margin:12px 18px 0;flex-wrap:wrap}.mvseg button{font-size:12px;padding:6px 11px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}.mvseg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}.mvseg i{font-style:normal;opacity:.7;margin-left:4px}
 .ag.y{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.ag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .ml{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .mt{background:var(--chip);border-radius:10px;padding:7px 8px 8px;min-width:0}
@@ -266,6 +275,38 @@ function goalsSide(c) {
   return vals.every(Boolean) ? 'Over' : vals.every(x => !x) ? 'Under' : null;
 }
 function goalsPill(c) { const g = goalsSide(c); return g ? `<div class="ag gl">All say ${g} ${lineOf(c)}</div>` : ''; }
+// ---------- prices: opening -> now / close (same rule as src/moves.js hockeyMove; test/moves.mjs keeps them in step) ----------
+const BIG_MOVE = 5;
+function devigP(...ms) {
+  if (!ms.every(Number.isFinite)) return null;
+  const q = ms.map(m => 1 / (m > 0 ? 1 + m / 100 : 1 + 100 / -m)); let lo = 0.5, hi = 2, k = 1;
+  for (let i = 0; i < 50; i++) { k = (lo + hi) / 2; const s = q.reduce((a, x) => a + Math.pow(x, k), 0); if (s > 1) lo = k; else hi = k; }
+  const p = q.map(x => Math.pow(x, k)), s = p.reduce((a, b) => a + b, 0); return p.map(x => x / s);
+}
+function hockeyMove(px) {
+  if (!px) return null;
+  const r1 = x => Math.round(10 * x) / 10;
+  const open = px.op || px.f, from = px.op ? 'open' : 'first', a = open && devigP(open.h, open.a), b = devigP(px.h, px.a);
+  const ml = a && b ? { p0: r1(100 * a[0]), p1: r1(100 * b[0]), d: r1(100 * (b[0] - a[0])) } : null;
+  const ot = px.opt || (px.f && px.f.tl != null ? px.f : null);
+  let ou = null;
+  if (ot && px.tl != null && ot.tl === px.tl) { const x = devigP(ot.to, ot.tu), y = devigP(px.to, px.tu); if (x && y) ou = { line: px.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
+  if (!ml && !ou) return null;
+  const top = !ou || (ml && Math.abs(ml.d) >= Math.abs(ou.d)) ? 'ml' : 'ou', size = Math.abs((top === 'ml' ? ml : ou).d);
+  return { from, ml, ou, top, size, big: size >= BIG_MOVE };
+}
+const fmtOdds = m => (m > 0 ? '+' : '') + m, sgn = x => (x > 0 ? '+' : '') + x;
+const tmCT = iso => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+const pxLocked = c => c.final || new Date(c.kickoff).getTime() - Date.now() <= 20 * 60000;
+// What moved most, in words: "NYR +6" (home / away on the moneyline) or "Over 6.5 +5".
+const mvWord = (c, hm) => hm.top === 'ml' ? (hm.ml.d > 0 ? `${c.hAbbr} ${sgn(Math.round(hm.ml.d))}` : `${c.aAbbr} ${sgn(Math.round(-hm.ml.d))}`) : `${hm.ou.d > 0 ? 'Over' : 'Under'} ${hm.ou.line} ${sgn(Math.round(Math.abs(hm.ou.d)))}`;
+function pxLine(c) {
+  const px = c.px, hm = hockeyMove(px); if (!px) return '';
+  const op = px.op || px.f || {}, ot = px.opt || px.f || {}, now = pxLocked(c) ? 'close' : 'now';
+  const ml = px.h != null ? `Moneyline (${hm && hm.from === 'first' ? 'first seen' : 'opening'} → ${now}): ${esc(c.aAbbr)} ${op.a != null ? fmtOdds(op.a) + ' → ' : ''}<b>${fmtOdds(px.a)}</b> · ${esc(c.hAbbr)} ${op.h != null ? fmtOdds(op.h) + ' → ' : ''}<b>${fmtOdds(px.h)}</b>${hm && hm.ml ? ` · ${esc(c.hAbbr)} ${Math.round(hm.ml.p0)}→${Math.round(hm.ml.p1)}%${Math.abs(hm.ml.d) >= 1 ? ` (${sgn(Math.round(hm.ml.d))})` : ''}` : ''}` : '';
+  const ou = px.tl != null ? `Over/Under ${px.tl}: Over ${ot.tl === px.tl && ot.to != null ? fmtOdds(ot.to) + ' → ' : ''}<b>${fmtOdds(px.to)}</b> · Under ${ot.tl === px.tl && ot.tu != null ? fmtOdds(ot.tu) + ' → ' : ''}<b>${fmtOdds(px.tu)}</b>${hm && hm.ou ? ` · Over ${Math.round(hm.ou.p0)}→${Math.round(hm.ou.p1)}%${Math.abs(hm.ou.d) >= 1 ? ` (${sgn(Math.round(hm.ou.d))})` : ''}` : ''}` : '';
+  return `<div class="pxl">${[ml, ou].filter(Boolean).join('<br>')}</div>`;
+}
 function card(c) {
   const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
   const hp = m0 ? m0.w : null, ap = hp == null ? null : 100 - hp;
@@ -279,7 +320,7 @@ function card(c) {
   const lnc = `<span class="lnc${c.ln ? '' : ' none'}">O/U ${ln}${c.ln ? ' · ' + esc(c.ln.src || 'sportsbook') : ' · no line yet'}</span>`;
   const lnrow = pre && S.ln === c.id ? `<div class="lnrow"><label>Total line</label><input type="number" inputmode="decimal" step="0.5" min="3.5" max="9.5" id="ln-${esc(c.id)}" value="${ln}"><button type="button" class="btn sm" data-saveln="${esc(c.id)}">Save</button>${c.ln && c.ln.how === 'manual' ? `<button type="button" class="btn sm ghost" data-clrln="${esc(c.id)}">Use ESPN</button>` : ''}<button type="button" class="btn sm ghost" data-setln="">Cancel</button></div>` : '';
   return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
-  ${split}${goalsPill(c)}
+  ${split}${(hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${goalsPill(c)}${pxLine(c)}
   <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>
   <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Winner pick, Over/Under ${ln}${c.ln ? '' : ' (the default until a line is known)'}, then the single likeliest final score (score shown away–home; Forebet: its predicted score). Blue marks a confident pick.`}</div></div>`;
 }
@@ -338,6 +379,34 @@ function tileOf(c, on) {
   const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}</span>${ou ? `<span${gs ? ' class="gd"' : ''}><b${gs ? ' class="gd"' : ''}>${ou.side}</b> ${ou.p}%</span>` : ''}`;
   return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}${hp == null || f ? '' : `<div class="pb"><i class="a" style="flex:${100 - hp}"></i><i class="h" style="flex:${hp}"></i></div>`}<div class="ou">${foot}</div></button>`;
 }
+// ---------- Movement: every priced game of the day, opening -> close ----------
+function closeState(c) {
+  const ko = new Date(c.kickoff).getTime(), px = c.px || {};
+  if (pxLocked(c)) return px.cl ? { k: 'ok', t: `Closing ✓ ${tmCT(px.cl)}` } : { k: 'miss', t: 'No pre-game read · last price is the close' };
+  if (ko - Date.now() <= 30 * 60000) return { k: 'due', t: 'Pre-game read due now' };
+  return { k: 'pend', t: `Pending · closing read ~${tmCT(new Date(ko - 30 * 60000).toISOString())}` };
+}
+function movesView() {
+  const rows = day.cards.filter(c => hockeyMove(c.px)).sort((a, b) => a.kickoff.localeCompare(b.kickoff)).map(c => ({ c, hm: hockeyMove(c.px), st: closeState(c) }));
+  const none = day.cards.length - rows.length, f = S.mvf || 'all';
+  const inF = (r, k) => k === 'big' ? r.hm.big : k === 'pend' ? r.st.k === 'pend' || r.st.k === 'due' : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
+  const seg = `<div class="mvseg">${[['all', 'All'], ['big', 'Big moves'], ['pend', 'Pending'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-mvf="${k}">${l}<i>${rows.filter(r => inF(r, k)).length}</i></button>`).join('')}</div>`;
+  const head = `<div class="nt">DraftKings prices from ESPN, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before puck drop, after the morning skate and starting goalies, then locked. A move of ${BIG_MOVE}+ points is a big move: news reaching the price, not a bet.${none ? ` ${none} game${none === 1 ? '' : 's'} on this day ha${none === 1 ? 's' : 've'} no price yet.` : ''}</div>`;
+  const card1 = ({ c, hm, st }) => {
+    const px = c.px, op = px.op || px.f || {}, ot = px.opt || px.f || {}, fin = c.final, hw = fin ? fin.h > fin.a : null, over = fin && px.tl != null ? fin.total > px.tl : null;
+    const row = (label, a, b, p0, p1, d, won) => `<tr${won ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${p0 == null ? '–' : Math.round(p0) + '→' + Math.round(p1) + '%'}</td><td class="${d != null && Math.abs(d) >= BIG_MOVE ? 'bg' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
+    const ml = hm.ml, ou = hm.ou;
+    const rowsHtml = (px.h != null ? row(`${esc(c.aAbbr)} win`, op.a, px.a, ml ? 100 - ml.p0 : null, ml ? 100 - ml.p1 : null, ml ? -ml.d : null, hw === false) + row(`${esc(c.hAbbr)} win`, op.h, px.h, ml ? ml.p0 : null, ml ? ml.p1 : null, ml ? ml.d : null, hw === true) : '')
+      + (px.tl != null ? row(`Over ${px.tl}`, ot.tl === px.tl ? ot.to : null, px.to, ou ? ou.p0 : null, ou ? ou.p1 : null, ou ? ou.d : null, over === true) + row(`Under ${px.tl}`, ot.tl === px.tl ? ot.tu : null, px.tu, ou ? 100 - ou.p0 : null, ou ? 100 - ou.p1 : null, ou ? -ou.d : null, over === false && fin.total !== px.tl) : '');
+    const follow = fin && ml ? (Math.abs(ml.d) < 2 ? 'moneyline barely moved' : (ml.d > 0) === hw ? 'winner went the way of the move' : 'winner went against the move') : '';
+    return `<div class="mvg"><div class="mvt"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b><span class="cs ${st.k}">${st.t}</span></div>
+      <small>${esc(c.away)} at ${esc(c.home)} · ${esc(c.ko || '')}${fin ? ` · final ${fin.a}–${fin.h}${fin.last !== 'REG' ? ' ' + esc(fin.last) : ''}${follow ? ' · ' + follow : ''}` : ''}${hm.big ? ` · <span class="mvf">big move: ${esc(mvWord(c, hm))}</span>` : ''}</small>
+      <table class="mvx"><tr><th></th><th>${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
+      ${px.ts ? `<small class="mvn">Price last changed ${tmCT(px.ts)}</small>` : ''}</div>`;
+  };
+  const shown = rows.filter(r => inF(r, f));
+  return seg + head + (shown.length ? shown.map(card1).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices come from ESPN as the schedule is checked.'}</div>`);
+}
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
@@ -376,6 +445,7 @@ function results() {
   <tr><td>Always pick home</td><td colspan="3" class="hm">${B.home && B.home.n ? `${Math.round(B.home.hit / B.home.n * 100)}% <small>${B.home.hit}/${B.home.n} · ±${Math.round(196 * Math.sqrt((B.home.hit / B.home.n) * (1 - B.home.hit / B.home.n) / B.home.n))}</small>` : '–'}</td></tr>
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
   <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. ± is the 95% margin: the true rate probably sits within that many points, and it shrinks as games pile up. Over/Under is graded only at the game's DraftKings line: ${tally.lined || 0} of ${tally.graded} graded games had one, and the ${tally.graded - (tally.lined || 0)} without a line are left out of the Over/Under row. \"Always pick home\" is the baseline a winner pick has to beat. A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
+  ${(Mv => Mv && (Mv.ml.n || Mv.ou.n) ? `<div class="nt">Price moves (opening → close): the winner went the way of the moneyline move in ${Mv.ml.n ? Math.round(100 * Mv.ml.follow / Mv.ml.n) + '% of ' + Mv.ml.n : '–'} games${Mv.ml.big ? ` (big moves ${Math.round(100 * Mv.ml.bigFollow / Mv.ml.big)}% of ${Mv.ml.big})` : ''}; the total went the way of its move in ${Mv.ou.n ? Math.round(100 * Mv.ou.follow / Mv.ou.n) + '% of ' + Mv.ou.n : '–'}${Mv.ou.big ? ` (big moves ${Math.round(100 * Mv.ou.bigFollow / Mv.ou.big)}% of ${Mv.ou.big})` : ''}. See the Movement tab for each game.</div>` : '')(tally.moves)}
   ${calView()}
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
     const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${r.ln ? `${m.o >= 50 ? 'Over' : 'Under'} ${r.ln.v}${mark(g && g.ou)}` : '<small>no line</small>'}` : '–';
@@ -518,12 +588,12 @@ function renderDays() {
   { const d = new Date(S.date + 'T12:00:00Z'); $('#title').innerHTML = `<span class="wd">NHL · ${d.toLocaleDateString('en-US',{weekday:'long',timeZone:'UTC'})}</span><span class="dt2">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}</span>`; }
   const t = fmt(new Date()), list = [[addDays(t, -1), 'Yesterday'], [t, 'Today'], [addDays(t, 1), 'Tomorrow']];
   $('#days').innerHTML = list.map(([d, l]) => `<button type="button" class="day${d === S.date ? ' on' : ''}" data-d="${d}">${l}<b>${+d.slice(8)}</b></button>`).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['top', 'Top'], ['results', 'Results'], ['mbets', 'Model bets'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
+  $('#tabs').innerHTML = [['board', 'Board'], ['top', 'Top'], ['results', 'Results'], ['moves', 'Movement'], ['mbets', 'Model bets'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
 }
 function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
   document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'bgrid') updDots(); }, true);
-function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : statusView(); updDots(); }
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
   render();
@@ -531,7 +601,8 @@ async function load() {
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel]'); if (!t) return;
+  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel],[data-mvf]'); if (!t) return;
+  if (t.dataset.mvf) { S.mvf = t.dataset.mvf; return render(); }
   if (t.dataset.push) return pushAct(t.dataset.push);
   if (t.dataset.sel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
     const sc = document.getElementById('bgrid'), x = sc ? sc.scrollLeft : 0, closing = S.sel === t.dataset.sel;
