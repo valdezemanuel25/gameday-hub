@@ -1,6 +1,70 @@
 {
-  "updated": "2026-10-26T10:09:44Z",
+  "updated": "2026-10-26T20:41:21Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-10-26",
+      "title": "No bars, just Mars",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "26,169",
+          "change": 0.82
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,677",
+          "change": 0.7
+        },
+        {
+          "label": "Dow",
+          "value": "52,362",
+          "change": 0.28
+        },
+        {
+          "label": "10-yr",
+          "value": "4.986%",
+          "change": 0,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$101.45",
+          "change": -1.76
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$79,790",
+          "change": -0.74
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Anthropic IPO",
+          "t": "Filed a 318-page prospectus showing $16.3B in H1 revenue vs $1.2B a year earlier; Q3 growth slowed to 45% from 140%, and Wall Street cut its valuation target to $1.5T from $2T."
+        },
+        {
+          "h": "Verizon",
+          "t": "Added 406,000 postpaid phones (nearly double estimates) and raised its outlook, but a slight revenue miss sent shares down 3.38%."
+        },
+        {
+          "h": "SpaceX wireless",
+          "t": "Reports of a push for 80,000+ US cell sites weigh on carriers; TD Cowen pegs a national network at $80B+, and SpaceX closed a $40B Apollo financing."
+        },
+        {
+          "h": "M&A",
+          "t": "EQT agreed to buy Range Resources for ~$12.8B (RRC +17.68%); Surgery Partners jumped 47.62% on a reported ~$6B Bon Secours Mercy bid."
+        },
+        {
+          "h": "Microsoft",
+          "t": "Plans buyouts for roughly 60,000 employees, about 27% of its workforce; shares rose 1.54%."
+        },
+        {
+          "h": "Big movers",
+          "t": "Tesla +5.21% on a Barclays upgrade; Fair Isaac -13.15% and JetBlue -9.71%; Petrobras -13.99% and Nu -16.95% after Lula's election win."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-10-26",
