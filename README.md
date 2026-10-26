@@ -34,7 +34,7 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 
 ## Tests
 
-- `npm test` runs all of these (plus `test/market.mjs`, model vs market scoring, `test/strats.mjs`, the v4 tracked-bet rules, and `test/v5.mjs`, the v5 challenger):
+- `npm test` runs all of these (plus `test/market.mjs`, model vs market scoring, `test/strats.mjs`, the v4 tracked-bet rules, `test/v5.mjs`, the v5 challenger, and `test/v6.mjs`, the score card):
   - `test/verify.mjs`: the v2 math against your Arsenal–Lille card from Oct 13.
   - `test/parity.mjs`: the v2 model against **120 real cards from the old Hub** (expected goals, win/draw/loss, over/under, BTTS, top two scores). All 120 match.
   - `test/v4.mjs`: v4 club names line up with ESPN's, numbers match the research run, ratings cache and refresh.
@@ -53,6 +53,10 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 - **Cup games** (Champions League, Nations League) use each club's domestic form. A club outside the supported leagues is skipped with a note on the card.
 - **Not carried over from the Hub:** NHL, the Model vs SportsMole tab, scorer picks, and the old per-match result links. Old history rows have no kickoff times or leagues, so they show as a plain list.
 - **Mobile looks like the Hub but isn't pixel-tested.** Open it on your phone after deploy and tell me what looks off.
+
+## Score card (v6)
+
+* Every card has a Score card panel: winner, Over/Under 2.5, both-score, the likeliest scores and fair odds, all read off one score grid. With a sportsbook price the grid is fitted to that price, margin removed (`src/v6core.js`, tracked as v6 on the Results tab); without one it shows v4's numbers. See `docs/v6-score-card.md`.
 
 ## v5 test (challenger)
 

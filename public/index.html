@@ -239,6 +239,11 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .xag.gl{background:rgba(127,166,217,.15);color:#b6cdf0}
 .xc.win{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--grass),0 0 14px rgba(var(--acc-rgb),.65)}
 .xp .n b.cg{color:var(--grass)}
+.scd{margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--line);font-size:12px;color:var(--dim)}
+.scd .sh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px}.scd .sh b{color:var(--ink);font-size:12.5px;font-weight:650}.scd .sh small{color:var(--faint);font-size:10.5px;text-align:right}
+.scd .sr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:4px}.scd .sr span{background:rgba(255,255,255,.03);border-radius:7px;padding:4px 6px;min-width:0}
+.scd .sr span b{display:block;color:var(--ink);font-size:13.5px;font-weight:650}.scd .sr span i{font-style:normal;font-size:10.5px;color:var(--faint)}.scd .sr.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.scd em{font-style:normal}.scd .ss{margin-top:5px;font-size:11.5px}.scd .ss b{color:var(--ink);font-weight:600}
 .xq.sm b{color:var(--sm)}.xq.v5 .l{color:#c9a8ff}.xq.none{opacity:.5}.xq.none b{font-size:11.5px;font-weight:500;color:var(--faint)}
 .xq .ck{font-size:11px;margin-left:3px}
 .xb{display:flex;justify-content:space-between;align-items:center;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(240,181,74,.1);border:1px solid rgba(240,181,74,.35);font-size:12.5px}.xb b{color:var(--amber);font-weight:650}
@@ -834,6 +839,20 @@ function scoreHtml(m) { // one short line on the card; the exact top three are i
   const xg = m.lam ? `<small class="sc xg">xG ${(+m.lam[0]).toFixed(1)} - ${(+m.lam[1]).toFixed(1)}</small>` : '';
   return xg + `<small class="sc">Score ${esc(a ? a.s : top[0])} · ${a ? a.p : top[1]}%</small>`;
 }
+// Score card: winner, Over/Under 2.5, both-score and the likeliest scores, all read off one score grid, with fair odds (100 / chance).
+// v6 when the card has a sportsbook price (the grid that matches that price, margin removed), otherwise v4's own numbers.
+const fairOdds = p => { const q = Math.min(0.99, Math.max(0.01, p / 100)); return q >= 0.5 ? `${Math.round(-100 * q / (1 - q))}` : `+${Math.round(100 * (1 - q) / q)}`; };
+function scoreCard(c) {
+  const m = c.v6 && c.v6.p ? c.v6 : c.v4 && c.v4.p ? c.v4 : null; if (!m) return '';
+  const fromPrice = m === c.v6, g = c.grade && c.grade[fromPrice ? 'v6' : 'v4'], f = c.final;
+  const cell = (label, p, hit) => `<span><i>${label}</i><b>${p}%${hit == null ? '' : ` <em class="ck ${hit ? 'ok' : 'no'}">${hit ? '✓' : '✗'}</em>`}</b><i>fair ${fairOdds(p)}</i></span>`;
+  const out = f ? (f.h > f.a ? 0 : f.h === f.a ? 1 : 2) : null, ov = f ? f.h + f.a >= 3 : null, bt = f ? f.h > 0 && f.a > 0 : null;
+  const sc = (m.scores || []).slice(0, 3).map(s => `<b>${esc(s[0])}</b> ${s[1]}%`).join(' · ');
+  return `<div class="scd"><div class="sh"><b>Score card</b><small>${fromPrice ? 'from the sportsbook price, margin removed (v6)' : 'v4 · no sportsbook price yet'}</small></div>
+    <div class="sr">${cell(esc(strip(c.home)), m.p[0], out == null ? null : out === 0)}${cell('Draw', m.p[1], out == null ? null : out === 1)}${cell(esc(strip(c.away)), m.p[2], out == null ? null : out === 2)}</div>
+    <div class="sr two">${m.over >= 50 ? cell('Over 2.5', m.over, ov == null ? null : ov) : cell('Under 2.5', 100 - m.over, ov == null ? null : !ov)}${m.btts >= 50 ? cell('Both score', m.btts, bt == null ? null : bt) : cell('Not both score', 100 - m.btts, bt == null ? null : !bt)}</div>
+    <div class="ss">Likeliest scores: ${sc}${m.lam ? ` · xG ${(+m.lam[0]).toFixed(1)}–${(+m.lam[1]).toFixed(1)}` : ''}</div></div>`;
+}
 function chips(c) {
   const v = c.v2, g = c.grade || {}, out = [], picks = [];
   const gl = (o, b) => `<div class="g"><span>O2.5 ${o == null ? '<b>–</b>' : `<b class="${o >= 55 ? 'hi' : ''}">${o}%</b>`}</span><span>BTTS ${b == null ? '<b>–</b>' : `<b class="${b >= 55 ? 'hi' : ''}">${b}%</b>`}</span></div>`;
@@ -873,7 +892,7 @@ function game(c) {
     <div class="xt"><div class="xk">${xcrest(c.home, cons.strong && cons.side === 'H', c.hId)}<div><b>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away, cons.strong && cons.side === 'A', c.aId)}<div><b>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
     <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'H' ? 'cg' : ''}">${h}%</b></span><span class="mid"><b>Draw ${d}%</b></span><span class="${fav === 'a' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'A' ? 'cg' : ''}">${a}%</b></span></div>
       <div class="b"><i class="h ${fav === 'h' ? 'f' : ''}" style="flex:${h}"></i><i class="d ${fav === 'd' ? 'f' : ''}" style="flex:${d}"></i><i class="a ${fav === 'a' ? 'f' : ''}" style="flex:${a}"></i></div></div>
-    ${S.top ? topBox(c) : headline(c)}${chips(c)}</button>${open ? expanded(c) : ''}</div>`;
+    ${S.top ? topBox(c) : headline(c)}${chips(c)}${scoreCard(c)}</button>${open ? expanded(c) : ''}</div>`;
 }
 
 /* ---------- alerts ---------- */
@@ -1050,6 +1069,17 @@ function leagueScorecards(t) {
   const rows = L.map(l => { const bs = LM.map(k => l[k] && l[k].n >= 5 ? l[k].brier : null), mn = Math.min(...bs.filter(x => x != null)); return `<tr><td class="n">${esc(l.name)}<small>${l.n} games</small></td>${LM.map((k, i) => cell(l[k], bs[i] != null && bs[i] === mn && bs.filter(x => x != null).length > 1)).join('')}</tr>`; }).join('');
   return `<div class="sec" style="padding-top:20px">Each league, model by model<small>Winner hit rate on top, then Brier score (lower is better) and games. Green is the best Brier in that league once a model has 5+ games.</small></div>
   <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>v4</th><th>v5 test</th><th>Forebet</th></tr>${rows}</table></div>`;
+}
+// v6 score card (src/v6core.js): against v4 on the same games, on the winner and on the goals markets.
+function v6View(t) {
+  const T = t.v6test; if (!T || !T.v6.n) return '';
+  const f = x => x == null ? '–' : x.toFixed(3), pc = (k, n) => n ? `${Math.round(100 * k / n)}%` : '–';
+  const row = (label, key, low, fmt, base) => { const a = T.v4[key], b = T.v6[key], best = a == null || b == null ? null : low ? (b < a ? 1 : a < b ? 0 : null) : (b > a ? 1 : a > b ? 0 : null);
+    return `<tr><td class="n">${label}</td><td class="${best === 0 ? 'bst' : ''}"><b>${fmt(T.v4, key)}</b></td><td class="${best === 1 ? 'bst' : ''}"><b>${fmt(T.v6, key)}</b></td><td><b>${base ?? '–'}</b></td></tr>`; };
+  const hit = (x, k) => pc(x[k], x.n), num = (x, k) => f(x[k]);
+  return `<div class="sec" style="padding-top:20px">Score card (v6)<small>v6 reads every number off one score grid fitted to the sportsbook price (margin removed). Lower log loss and RPS are better; green is the better of the two. "Base" is always saying how often it happened in these same games, which is a little flattering.</small></div>
+  <div class="pair" style="padding-top:6px"><div class="lab"><b style="font-weight:600">Every game with both</b><span>${T.v6.n} games</span></div>
+  <table class="lgt"><tr><th></th><th>v4</th><th>v6</th><th>Base</th></tr>${row('Winner hit', 'outcome', false, hit)}${row('Winner RPS', 'rps', true, num)}${row('Winner log loss', 'll', true, num)}${row('Over/under hit', 'ou', false, hit)}${row('Over 2.5 log loss', 'llO', true, num, f(T.base.llO))}${row('Both score hit', 'btts', false, hit)}${row('Both score log loss', 'llB', true, num, f(T.base.llB))}</table></div>`;
 }
 // v5 shadow test (src/v5core.js): v5 against v4 on the same games, and against Forebet where Forebet has the game too.
 function v5View(t) {
@@ -1346,7 +1376,7 @@ function results() {
   const old = t.earlier.map(r => `<div class="li"><div class="a"><span>${esc(r.match)}</span><span>${esc(r.actual)}</span></div>
     <div class="b"><span>Winner <b class="${r.outcomeHit ? 'ok' : 'no'}">${r.outcomeHit ? '✓' : '✗'}</b></span><span>O/U <b class="${r.ouHit ? 'ok' : 'no'}">${r.ouHit ? '✓' : '✗'}</b></span><span>Both <b class="${r.bttsHit ? 'ok' : 'no'}">${r.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
-    boardBlock(t) + v5View(t) + leagueScorecards(t) + marketView(t) + calibrationView(t) + goalsCalibration(t) +
+    boardBlock(t) + v6View(t) + v5View(t) + leagueScorecards(t) + marketView(t) + calibrationView(t) + goalsCalibration(t) +
     (t.promo && t.promo.v4 && t.promo.v4.n ? `<details class="old"><summary>v4 on newly promoted clubs (${t.promo.v4.n} games, own line)</summary><div class="small" style="margin:6px 4px">v4 starts these clubs from a weaker-than-average rating that fades as they play. These games are kept out of every v4 total above.</div>` +
       resultsBlock('v4, starting rating', t.promo.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` : '') +
     (t.v2 && t.v2.n ? `<details class="old"><summary>Retired v2 record (official model until Oct 25, 2026)</summary><div class="small" style="margin:6px 4px">v2 was retired on Oct 26, 2026: on the tracked games it scored worse than always guessing the base rates. It still stands in on a game v4 has no numbers for.</div>` +
