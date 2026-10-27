@@ -212,6 +212,24 @@ export function gradeCard(c) {
   if (!c.lean) { const l = hockeyPick(c); if (l) { const h = hockeyHit(l.key, f, l.line); l.hit = h; c.lean = l; } }
 }
 
+// ---- lineup read (every cron run) ---------------------------------------------------------------
+// The full NHL step only gets spare cron slots (at most every 20 minutes), which can miss the 10-minute window from LINEUP_READ to
+// PRICE_LOCK minutes before puck drop. This runs on every 5-minute run instead: KV reads only, unless a game sits in that window
+// without its lineup read, and then one ESPN scoreboard read and one write for that day.
+export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
+  const t = localDate(now.toISOString()), out = [];
+  for (const date of [addDays(t, -1), t, addDays(t, 1)]) {
+    const day = await env.HUB.get(`nhl:day:${date}`, 'json'); if (!day) continue;
+    const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && m > PRICE_LOCK && m <= LINEUP_READ && !(c.px && c.px.cl); });
+    if (!due.length) continue;
+    const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
+    let dirty = false;
+    for (const c of due) { const e = evs.find(x => x.id === c.id); if (e && !e.done && setPrice(c, e.px, now)) { dirty = true; out.push(c.id); } }
+    if (dirty) await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day));
+  }
+  return out.length ? { job: 'nhl-lineup', read: out } : null;
+}
+
 // ---- cron / on-demand step ---------------------------------------------------------------------
 export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = false } = {}) {
   const debug = [], t = localDate(now.toISOString());
