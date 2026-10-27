@@ -182,4 +182,15 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   ok('hockey: a real lineup read is never overwritten', espnClose(r, done) === false && r.px.h === 1);
   ok('hockey: no ESPN odds on the finished game, nothing changes', espnClose({ kickoff: 'k', px: { h: 1, a: 2 } }, null) === false);
 }
+
+// Hockey raw odds page: ESPN's odds block per game with what the Hub reads and what the card holds.
+{
+  const { nhlOddsRaw } = await import('../src/nhl.js');
+  const odds = [{ moneyline: { home: { close: { odds: '+125' } }, away: { close: { odds: '-148' } } } }];
+  const f = async () => ({ ok: true, json: async () => ({ events: [{ id: '9', shortName: 'TOR @ CGY', competitions: [{ status: { type: { shortDetail: 'Final' } }, odds }] }] }) });
+  const env = { HUB: { get: async () => ({ cards: [{ id: '9', px: { h: 114, a: -135 } }] }) } };
+  const r = await nhlOddsRaw(env, '2026-10-26', f);
+  ok('hockey raw odds: raw block, the Hub read and the card', r.games[0].read.h === 125 && r.games[0].card.h === 114 && r.games[0].raw === odds && r.games[0].status === 'Final', JSON.stringify(r));
+  ok('hockey raw odds: bad date refused', !!(await nhlOddsRaw(env, 'x', f)).error);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);

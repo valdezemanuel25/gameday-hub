@@ -201,6 +201,19 @@ async function scoreboard(date, fetchFn, debug) {
   } catch (e) { debug.push(`scoreboard ${date}: ${e.message}`); return null; }
 }
 
+// What ESPN sends for each game's odds on one day (finished games too): the raw odds block, what the Hub reads from it, and what
+// the card holds. For checking a price by hand; reads nothing into a card.
+export async function nhlOddsRaw(env, date, fetchFn = fetch) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Pass ?date=YYYY-MM-DD' };
+  const res = await fetchFn(`${ESPN}?dates=${date.replace(/-/g, '')}&limit=100`, { headers: { 'user-agent': 'gameday-hub/1.0' } });
+  if (!res.ok) return { error: `ESPN ${res.status}` };
+  const j = await res.json(), day = await env.HUB.get(`nhl:day:${date}`, 'json');
+  return { date, games: (j.events || []).map(ev => {
+    const comp = ev.competitions?.[0] || {}, card = (day?.cards || []).find(c => c.id === String(ev.id));
+    return { id: String(ev.id), name: ev.shortName || ev.name, status: comp.status?.type?.shortDetail || null, read: parseHockeyOdds(comp.odds), card: card ? card.px || null : null, raw: comp.odds || null };
+  }) };
+}
+
 // ---- grading -----------------------------------------------------------------------------------
 // Forebet's Over/Under 5.5 is read from its predicted score: a predicted total above the line is Over.
 export function fbOu(fb, f, line = LINE) {
