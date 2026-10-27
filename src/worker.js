@@ -320,6 +320,7 @@ export async function addBtts(env, cards, slug, now = new Date(), f = fetch) {
 export function analystShop(env, slug, f = fetch) {
   if (!env.ODDS_API_KEY) return null;
   const books = env.BOOKS ? String(env.BOOKS).split(',').map(x => x.trim()).filter(Boolean) : BOOKS;
+  if (books.every(b => b === 'draftkings')) return null; // DraftKings only: the price the rule read is the price, no credit spent
   return async cards => {
     const c = await readCredits(); if (c && c.left != null && c.left <= num(env.BTTS_RESERVE, BTTS_RESERVE)) return null;
     const r = await fetchBest(env.ODDS_API_KEY, slug, cards, f, books);

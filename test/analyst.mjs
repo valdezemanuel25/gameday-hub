@@ -89,6 +89,7 @@ ok('shopping: asked once, only because a rule fired', calls === 1);
 await analystLook(env2, '2026-10-28', [card()], NOW, analystShop({ ODDS_API_KEY: 'k' }, 'eng.1', fakeApi));
 ok('shopping: no call when nothing new fires', calls === 1);
 ok('shopping: no key, no call', analystShop({}, 'eng.1', fakeApi) === null);
+ok('shopping: BOOKS = draftkings turns it off', analystShop({ ODDS_API_KEY: 'k', BOOKS: 'draftkings' }, 'eng.1', fakeApi) === null);
 settle(hb, card({ odds: { ...card().odds, h: -105 }, final: { h: 1, a: 0 } }), new Date('2026-10-29T01:00:00Z'));
 ok('shopping: units at the best price and at DraftKings, CLV with and without the gain', hb.units === 1.2 && hb.udk === 1.1 && hb.clv > hb.clvDk && hb.clvDk > 0, JSON.stringify(hb));
 const ss = summary([hb]).all.shop;

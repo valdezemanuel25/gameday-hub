@@ -21,3 +21,4 @@ crons = ["*/5 * * * *"]
 [vars]
 GAME_HOURS = "2"          # assumed length of a game
 GRADE_DELAY_HOURS = "3"   # wait this long after a league's games finish before grading it
+BOOKS = "draftkings"      # books the Analyst may take a price from (src/btts.js BOOKS lists the US books); DraftKings only = no shopping
