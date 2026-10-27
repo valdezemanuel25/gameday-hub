@@ -17,7 +17,7 @@ import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
-import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep } from './nhl.js';
+import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
 const json = (data, status = 200) =>
@@ -852,6 +852,7 @@ const hub = {
     if (p === '/api/nhl/tally') return json(await nhlTally(env));
     if (req.method === 'POST' && p === '/api/nhl/line') { try { const b = await req.json(); return json(await nhlSetLine(env, String(b.date || ''), String(b.id || ''), b.line, new Date())); } catch (e) { return json({ error: `Line: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/status') return json(await nhlStatus(env));
+    if (p === '/api/nhl/odds-raw') { try { return json(await nhlOddsRaw(env, String(url.searchParams.get('date') || ''))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (req.method === 'POST' && p === '/api/nhl/run') { try { return json({ ok: true, ...(await nhlStep(env, new Date(), fetch, { force: true })) }); } catch (e) { return json({ error: `NHL: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/days') { // every saved day, for the Export button
       const out = []; let cursor;
