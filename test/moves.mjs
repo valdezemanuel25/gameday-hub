@@ -149,10 +149,10 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   ok('Results: the book both-score move is used ahead of the score card', finishMarket(M).moves.btts.n === 1 && finishMarket(M).moves.btts.follow === 1 && finishMarket(M).moves.btts.book === 1, JSON.stringify(finishMarket(M).moves.btts));
 }
 
-// Hockey lineup read on every cron run: a game inside 30-20 minutes before puck drop gets its closing read even when the NHL job has no slot.
+// Hockey lineup read on every cron run: a game inside 45-20 minutes before puck drop gets its closing read even when the NHL job has no slot.
 {
   const { nhlLineupStep } = await import('../src/nhl.js');
-  const now = new Date('2026-10-26T22:35:00Z'), ko = '2026-10-26T23:00:00Z', later = '2026-10-27T02:30:00Z';
+  const now = new Date('2026-10-26T22:20:00Z'), ko = '2026-10-26T23:00:00Z', later = '2026-10-27T02:30:00Z';
   const days = { 'nhl:day:2026-10-26': { date: '2026-10-26', cards: [
     { id: 'g1', kickoff: ko, final: null, px: { h: -135, a: 114, f: { h: -135, a: 114 }, rd: '2026-10-26T20:00:00Z' } },
     { id: 'g2', kickoff: later, final: null, px: { h: -135, a: 114, f: { h: -135, a: 114 } } } ] } };
@@ -166,7 +166,11 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   ok('hockey: the game in the lineup window gets its closing read', r && r.read.join() === 'g1' && g[0].px.cl === now.toISOString() && g[0].px.h === -150, JSON.stringify(g[0].px));
   ok('hockey: a later game is left for its own window', !g[1].px.cl && g[1].px.h === -135);
   const before = gets; await nhlLineupStep(env, new Date(now.getTime() + 5 * 60000), f);
-  ok('hockey: once read, no more ESPN reads or writes in the window', gets === before && puts === 1, `${gets} ${puts}`);
+  ok('hockey: not read again within 10 minutes', gets === before && puts === 1, `${gets} ${puts}`);
+  await nhlLineupStep(env, new Date(now.getTime() + 10 * 60000), f);
+  ok('hockey: read again 10 minutes later, the close moves to the newer read', gets === before + 1 && days['nhl:day:2026-10-26'].cards[0].px.cl === new Date(now.getTime() + 10 * 60000).toISOString());
+  gets = 0; await nhlLineupStep(env, new Date('2026-10-26T22:42:00Z'), f);
+  ok('hockey: nothing once the price is locked (20 minutes before)', gets === 0);
   gets = 0; await nhlLineupStep(env, new Date('2026-10-26T20:00:00Z'), f);
   ok('hockey: nothing in the window, no ESPN read', gets === 0);
 }

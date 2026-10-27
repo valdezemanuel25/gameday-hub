@@ -81,7 +81,8 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 ### Hockey prices (Oct 26, 2026)
 
 * **What is captured:** each NHL card keeps DraftKings' moneyline and total with its Over / Under prices from ESPN (`c.px`). That includes the opening line (`px.op` / `px.opt`, else the first price seen, `px.f`) and the current or closing one.
-* **Read schedule:** same as soccer. A price counts every 6 hours, every hour in the last 3 hours, and once 30–20 minutes before puck drop (after the morning skate and starting goalies; noted in `px.cl`). From 20 minutes before it is locked.
+* **Read schedule:** a price counts every 6 hours and every hour in the last 3 hours. From 45 to 20 minutes before puck drop (after the morning skate and starting goalies) it is read every 10 minutes, and the last of those reads is the close (`px.cl`). From 20 minutes before it is locked. (Until Oct 27, 2026 it was one read 30–20 minutes before, which could be missed.)
+  * Each background run does the closing reads first (hockey, then soccer prices), before the rotating job, so a run cut short by the free plan's CPU limit no longer drops them.
   * A finished game that still has no lineup read takes the closing line from ESPN's odds for the finished game instead (`espnClose`, marked `px.cls = 'espn'`; the Movement tab says "ESPN close"). Checked for yesterday's, today's and tomorrow's games.
   * The lineup read is checked on every 5-minute cron run (`nhlLineupStep` in `src/nhl.js`), not only in the NHL job's spare slots, which could miss the 10-minute window. It only reads ESPN when a game is in the window without its read.
 * **Storage writes:** a card is only written when its price changed (`setPrice` in `src/nhl.js`).

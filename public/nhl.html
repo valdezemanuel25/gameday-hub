@@ -398,15 +398,15 @@ function tileOf(c, on) {
 function closeState(c) {
   const ko = new Date(c.kickoff).getTime(), px = c.px || {};
   if (pxLocked(c)) return px.cl ? { k: 'ok', t: px.cls === 'espn' ? 'Closing ✓ ESPN close (no pre-game read)' : `Closing ✓ ${tmCT(px.cl)}` } : { k: 'miss', t: 'No pre-game read · last price is the close' };
-  if (ko - Date.now() <= 30 * 60000) return { k: 'due', t: 'Pre-game read due now' };
-  return { k: 'pend', t: `Pending · closing read ~${tmCT(new Date(ko - 30 * 60000).toISOString())}` };
+  if (ko - Date.now() <= 45 * 60000) return { k: 'due', t: px.cl ? `Closing read ${tmCT(px.cl)} · updates until 20 min before` : 'Pre-game read due now' };
+  return { k: 'pend', t: `Pending · closing read from ~${tmCT(new Date(ko - 45 * 60000).toISOString())}` };
 }
 function movesView() {
   const rows = day.cards.filter(c => hockeyMove(c.px)).sort((a, b) => a.kickoff.localeCompare(b.kickoff)).map(c => ({ c, hm: hockeyMove(c.px), st: closeState(c) }));
   const none = day.cards.length - rows.length, f = S.mvf || 'all';
   const inF = (r, k) => k === 'big' ? r.hm.big : k === 'pend' ? r.st.k === 'pend' || r.st.k === 'due' : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
   const seg = `<div class="mvseg">${[['all', 'All'], ['big', 'Big moves'], ['pend', 'Pending'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-mvf="${k}">${l}<i>${rows.filter(r => inF(r, k)).length}</i></button>`).join('')}</div>`;
-  const head = `<div class="nt">DraftKings prices from ESPN, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before puck drop, after the morning skate and starting goalies, then locked. A move of ${BIG_MOVE}+ points is a big move: news reaching the price, not a bet.${none ? ` ${none} game${none === 1 ? '' : 's'} on this day ha${none === 1 ? 's' : 've'} no price yet.` : ''}</div>`;
+  const head = `<div class="nt">DraftKings prices from ESPN, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read from 45 minutes before puck drop (after the morning skate and starting goalies), every 10 minutes, and locked 20 minutes before. A move of ${BIG_MOVE}+ points is a big move: news reaching the price, not a bet.${none ? ` ${none} game${none === 1 ? '' : 's'} on this day ha${none === 1 ? 's' : 've'} no price yet.` : ''}</div>`;
   const card1 = ({ c, hm, st }) => {
     const px = c.px, op = px.op || px.f || {}, ot = px.opt || px.f || {}, fin = c.final, hw = fin ? fin.h > fin.a : null, over = fin && px.tl != null ? fin.total > px.tl : null;
     const row = (label, a, b, p0, p1, d, won) => `<tr${won ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${p0 == null ? '–' : Math.round(p0) + '→' + Math.round(p1) + '%'}</td><td class="${hot(d) ? 'neon' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;

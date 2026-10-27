@@ -968,10 +968,12 @@ const hub = {
   async scheduled(event, env0, ctx) {
     const c = counted(env0);
     ctx.waitUntil((async () => {
+      // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit
+      // (a heavy soccer job) used to drop them. The rotating job runs after.
+      try { await nhlLineupStep(c.env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }
+      try { await oddsStep(c.env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
       try { await runSlot(c.env); }
       finally {
-        try { await oddsStep(c.env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
-        try { await nhlLineupStep(c.env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }
         // Alerts for games about to start. Never allowed to break the background job.
         try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(c.env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
         await c.flush();

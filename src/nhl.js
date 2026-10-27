@@ -15,10 +15,12 @@ export const LINE = 5.5;
 export const GOALIE_W = 0; // season goalie ratings did not help in the 3-season backtest, so they are stored but not used
 const HOME = 1.05, N0 = 25, HOUR = 3600000;
 // Prices (c.px): DraftKings moneyline and total with its Over / Under prices from ESPN, opening and current, for the Movement tab.
-// Same schedule as soccer: a price counts every 6 hours, every hour in the last 3 hours before puck drop, and once 30-20 minutes
+// A price counts every 6 hours, every hour in the last 3 hours before puck drop, and every 10 minutes from 45 to 20 minutes
 // before it (after the morning skate and the starting goalies: the closing price, noted in px.cl). From 20 minutes before, locked.
 // A card is only written when its price changed (or the lineup read is noted), so this costs few writes. Display and tracking only.
-export const LINEUP_READ = 30, PRICE_LOCK = 20;
+// The window was 30-20 minutes until Oct 27, 2026: two 5-minute cron runs, and a run cut short (free-plan CPU limit) could miss both.
+// Now 45-20, re-read every LINEUP_EVERY minutes inside it, so the close is the last read before the lock (about 25 minutes out).
+export const LINEUP_READ = 45, PRICE_LOCK = 20, LINEUP_EVERY = 10;
 // A regulation tie is likelier than two independent Poisson scores say: with 1.55x on the tied scores about 23% of games go past
 // regulation, the NHL's rate in the 3-on-3 overtime era (plain Poisson gave 16%; the Hub's first 75 games had 27%).
 export const TIE = 1.55;
@@ -161,10 +163,12 @@ export function parseHockeyOdds(list) {
 const canon = v => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canon(v[k])])) : v);
 // Fold a fresh ESPN price into a card on schedule. f = the first price seen; ts = when it last changed; rd = when it was last taken;
 // cl = when the lineup read was taken. Returns true when the card changed (and so must be saved).
+// Inside the window a game is read again once its last lineup read is LINEUP_EVERY minutes old.
+const lineupDue = (px, now) => !(px && px.cl) || now.getTime() - new Date(px.cl).getTime() >= LINEUP_EVERY * 60000;
 export function setPrice(c, fresh, now = new Date()) {
   const mins = (new Date(c.kickoff).getTime() - now.getTime()) / 60000, old = c.px;
   if (!fresh || mins <= PRICE_LOCK) return false;
-  const lineup = mins <= LINEUP_READ && !(old && old.cl), due = !old || !old.rd || now.getTime() - new Date(old.rd).getTime() >= (mins <= 180 ? 1 : 6) * HOUR;
+  const lineup = mins <= LINEUP_READ && lineupDue(old, now), due = !old || !old.rd || now.getTime() - new Date(old.rd).getTime() >= (mins <= 180 ? 1 : 6) * HOUR;
   if (!due && !lineup) return false;
   const snap = x => ({ ...(x.h != null ? { h: x.h, a: x.a } : {}), ...(x.tl != null ? { tl: x.tl, to: x.to, tu: x.tu } : {}) });
   const n = { ...fresh, f: old && old.f ? old.f : snap(fresh), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.rd ? { rd: old.rd } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
@@ -235,14 +239,14 @@ export function gradeCard(c) {
 }
 
 // ---- lineup read (every cron run) ---------------------------------------------------------------
-// The full NHL step only gets spare cron slots (at most every 20 minutes), which can miss the 10-minute window from LINEUP_READ to
+// The full NHL step only gets spare cron slots (at most every 20 minutes), which can miss the window from LINEUP_READ to
 // PRICE_LOCK minutes before puck drop. This runs on every 5-minute run instead: KV reads only, unless a game sits in that window
 // without its lineup read, and then one ESPN scoreboard read and one write for that day.
 export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
   const t = localDate(now.toISOString()), out = [];
   for (const date of [addDays(t, -1), t, addDays(t, 1)]) {
     const day = await env.HUB.get(`nhl:day:${date}`, 'json'); if (!day) continue;
-    const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && m > PRICE_LOCK && m <= LINEUP_READ && !(c.px && c.px.cl); });
+    const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
     if (!due.length) continue;
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
     let dirty = false;
