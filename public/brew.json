@@ -1,6 +1,70 @@
 {
-  "updated": "2026-10-27T10:08:35Z",
+  "updated": "2026-10-27T20:41:12Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-10-27",
+      "title": "Stakes on a plane",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "26,478",
+          "change": 1.18
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,723",
+          "change": 0.6
+        },
+        {
+          "label": "Dow",
+          "value": "52,378",
+          "change": 0.03
+        },
+        {
+          "label": "10-yr",
+          "value": "4.993%",
+          "change": 1.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$99.83",
+          "change": -1.9
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$80,685",
+          "change": 1.21
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "Chip and AI hardware enthusiasm lifted the Nasdaq 1.18% and S&P 500 0.60%, while oil slid 1.90% to $99.83 on Middle East de-escalation hopes."
+        },
+        {
+          "h": "Boeing",
+          "t": "Shares fell over 10% as the 737 Max rate of 47 a month slips to early 2027 (about 42 now); commercial unit lost $697M and Q3 deliveries dropped to 161 from 171."
+        },
+        {
+          "h": "Boeing cash",
+          "t": "Free cash flow was $464M versus roughly $325M expected, keeping the $1B-$3B full-year target in reach despite $45.9B of debt."
+        },
+        {
+          "h": "Coca-Cola",
+          "t": "Q3 sales rose 7% to $13.4B and adjusted EPS rose 11% to 91 cents; volume grew 5% and the full-year outlook was raised, with shares flat."
+        },
+        {
+          "h": "Movers",
+          "t": "JetBlue jumped 18.99% on an upbeat outlook, SoFi gained 13.42% and Pentair 12.74%, while Xylem sank 14.26% and Innodata fell 25.32% after about 550 layoffs."
+        },
+        {
+          "h": "MBA apps",
+          "t": "Full-time MBA applications fell 27% for the class of 2028; Harvard's endowment still grew over $11B on a roughly 27% return."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-10-27",
