@@ -1,9 +1,9 @@
 // The card's headline pick, as data. This is the same rule the page uses for the line a card leads with (public/index.html headline()),
 // kept here so the server can lock the pick when a game is graded and the Model bets record can score it. test/pick.mjs checks both agree.
 //   Every model gives one vote on the result, on Over/Under 2.5 and on both-score (SportsMole's vote comes from its score).
-//   A pick only leads when most of the models that were asked back it. No odds are used anywhere.
-//   The card leads with v4's winner pick (v4 has been the better winner model on tracked games). The other models still vote,
-//   and the kind says how many back it. A card with no v4 falls back to the old rule (consensusPick: what most models back).
+//   The card leads with the market's strongest call (the v6 score card, from the sportsbook price) once the game has a price, and
+//   with v4's before that. The models vote agree / disagree on that call and the kind says how many back it; they never change it.
+//   A card with no v4 falls back to the old rule (consensusPick: what most models back).
 //   kind: 'best' (all models back v4's winner and v4 gives it at least 60%), 'lean' (a majority backs it), 'split' (no majority: v4's pick anyway),
 //         'solo' (only one model had numbers: v4 on its own, or v2 on a card with no v4, its own strongest pick).
 //   v2 was retired on Oct 26, 2026: it no longer votes when the card has v4.
@@ -41,19 +41,28 @@ export function consensusPick(c) {
   return { k: all && best.p != null && best.p >= 60 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n) };
 }
 
-// The card's headline: v4's single strongest call (result, Over/Under 2.5 or both-score, whichever v4 rates highest), with the
-// other models counted as agree / disagree on that same market. A card with no v4 falls back to consensusPick.
+// The card's headline: the market's single strongest call (the v6 score card, built from the sportsbook price: result, Over/Under 2.5
+// or both-score, whichever it rates highest), with the models counted as agree / disagree on that same market. From Oct 27, 2026:
+// the price beat every model and a v4 + market mix was best at 0% v4 (docs/model-review-2026-10-25.md), so the models do not move
+// the pick. A card with no price yet leads with v4's strongest call the same way; a card with no v4 falls back to consensusPick.
 export function leanPick(c) {
   const base = consensusPick(c); if (!base) return null;
-  const q = c.v4; if (!q || !q.p) return base;
+  const mk = c.v6 && c.v6.p ? c.v6 : null, q = mk || c.v4; if (!q || !q.p) return base;
+  const src = mk ? 'market' : 'v4';
   const opts = [[q.p[0], 'H'], [q.p[1], 'D'], [q.p[2], 'A'], [q.over, 'O'], [typeof q.over === 'number' ? 100 - q.over : null, 'U'], [q.btts, 'B'], [typeof q.btts === 'number' ? 100 - q.btts : null, 'N']].filter(x => typeof x[0] === 'number');
   if (!opts.length) return base;
   const top = opts.reduce((m, x) => (x[0] > m[0] ? x : m)), key = top[1], p = Math.round(top[0]);
   const r = rowsOf(c).find(x => x.key === key); if (!r) return base;
-  if (r.a.length < 2) return { k: 'solo', key, p, y: 1, a: 1, by: ['v4'], no: [], src: 'v4' }; // no other model has numbers yet
+  // The market leads: the models (v4, Forebet, SportsMole) are only counted as agree / disagree. It is never changed by them.
+  if (mk) {
+    if (!r.a.length) return { k: 'solo', key, p, y: 0, a: 0, by: [], no: [], src };
+    const maj = r.yes.length * 2 > r.a.length, all = r.no.length === 0;
+    return { k: !maj ? 'split' : all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src };
+  }
+  if (r.a.length < 2) return { k: 'solo', key, p, y: 1, a: 1, by: ['v4'], no: [], src }; // no other model has numbers yet
   const maj = r.yes.length * 2 > r.a.length, all = r.no.length === 0;
-  if (!maj) return { k: 'split', key, p, y: r.yes.length, a: r.a.length, by: ['v4'], no: [], src: 'v4' };
-  return { k: all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src: 'v4' };
+  if (!maj) return { k: 'split', key, p, y: r.yes.length, a: r.a.length, by: ['v4'], no: [], src };
+  return { k: all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src };
 }
 // Did the pick land on this final score? Over/Under use 2.5 goals.
 export function leanHit(key, f) {

@@ -39,6 +39,14 @@ ok('both score needs a goal each; not-both is the opposite', leanHit('B', F(1, 1
 const cases = [mk({}), mk({ sm: null }), mk({ v4: null, fb: null, sm: null }), mk({ v2: { pick: 'H', p: [40, 30, 30], over: 50, btts: 50 }, v4: { pick: 'A', p: [30, 30, 40], over: 50, btts: 50 }, fb: null, sm: null }),
   mk({ v2: { pick: 'A', p: [20, 17, 63], over: 82, btts: 75 }, v4: { pick: 'H', p: [65, 17, 19], over: 81, btts: 73 }, fb: { p: [58, 20, 22], over: 75, btts: 54 }, sm: { h: 2, a: 1 } }),
   mk({ v2: { pick: 'H', p: [70, 20, 10], over: 35, btts: 30 }, v4: { pick: 'H', p: [68, 20, 12], over: 40, btts: 33 }, fb: { p: [66, 20, 14], over: 38, btts: 36 }, sm: { h: 1, a: 0 } })];
+// the market (v6 score card from the price) leads once the game has a price; the models are only agree / disagree
+{ const l = leanPick(mk({ v6: { p: [66, 20, 14], over: 48, btts: 55 } }));
+  ok('market leads: its strongest call (home 66%) is the pick, models only tagged', l.src === 'market' && l.key === 'H' && l.p === 66 && l.y === 3 && l.a === 3 && l.k === 'best', JSON.stringify(l)); }
+{ const l = leanPick(mk({ v6: { p: [30, 25, 45], over: 40, btts: 50 } }));
+  ok('market says Under 2.5 at 60% while every model says Over: the pick stays Under, a Split with all three disagreeing', l.src === 'market' && l.key === 'U' && l.p === 60 && l.k === 'split' && l.y === 0 && l.no.length === 3, JSON.stringify(l)); }
+{ const l = leanPick(mk({ v6: { p: [55, 25, 20], over: 50, btts: 50 }, fb: null, sm: null }));
+  ok('market with only v4 voting: v4 agrees, a Lean (under 60%)', l.k === 'lean' && l.y === 1 && l.a === 1 && l.by.join() === 'v4', JSON.stringify(l)); }
+cases.push(mk({ v6: { p: [66, 20, 14], over: 48, btts: 55 } }), mk({ v6: { p: [30, 25, 45], over: 40, btts: 50 } }), mk({ v6: { p: [55, 25, 20], over: 50, btts: 50 }, fb: null, sm: null }));
 for (const [i, c] of cases.entries()) {
   const a = leanPick(c), b = page.leanPick(c), h = page.headline(c), word = { H: 'Club Brugge to win', D: 'Draw', A: 'Lens to win', O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[a.key], kind = { best: 'Best pick', lean: 'Lean', split: 'Split', solo: null }[a.k];
   ok(`case ${i + 1}: page and server give the same pick`, JSON.stringify(a) === JSON.stringify(b), JSON.stringify([a, b]));

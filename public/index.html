@@ -794,8 +794,14 @@ function splitText(c) {
 // The one line a card leads with: what most of the models back. Every model gets one vote on the result, Over/Under 2.5 and
 // both-score (SportsMole's vote comes from its score). A pick only leads when a majority backs it; with no majority the card says Split.
 function headline(c) {
-  const L = c.v4 && c.v4.p && typeof leanPick === 'function' ? leanPick(c) : null;
-  if (L && L.src === 'v4') { // v4 leads: its single strongest call, with the other models counted as agree / disagree on that same market
+  const L = ((c.v6 && c.v6.p) || (c.v4 && c.v4.p)) && typeof leanPick === 'function' ? leanPick(c) : null;
+  if (L && L.src === 'market') { // the market leads (the score card from the price); the models are agree / disagree tags only
+    const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key];
+    const tags = [...L.by.map(n => `<span class="ag all">${esc(n)} agrees</span>`), ...L.no.map(n => `<span class="ag">${esc(n)} disagrees</span>`)].join(' ');
+    const ag = `<span class="ag">Market pick (price, margin removed)${L.a ? '' : ' · no model has numbers yet'}</span>${tags ? ' ' + tags : ''}`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}</div>`;
+  }
+  if (L && L.src === 'v4') { // no price yet: v4 leads with its single strongest call, the other models counted as agree / disagree
     const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key], names = r => r.join(', ');
     const ag = L.k === 'solo' ? `<span class="ag">v4's pick · no other model has numbers yet</span>` : L.k === 'split' ? `<span class="ag">v4's pick · no majority across the models</span>` : L.no.length === 0 ? `<span class="ag all">v4's pick · all ${L.a} models agree</span>` : `<span class="ag">v4's pick · ${L.y} of ${L.a} back it (${names(L.by)}) · ${names(L.no)} disagree${L.no.length === 1 ? 's' : ''}</span>`;
     return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}</div>`;
@@ -1020,7 +1026,7 @@ function tileBet(c) {
     if (m != null) pr = `<span class="tp">${fmtOdds(m)}</span>`; // the price only: Value / Fair / Not worth it tags were removed on Oct 26, 2026 (docs/odds-history-2026-10-26.md)
     else pr = '<span class="tp none">no price</span>';
   }
-  return `<div class="lb"><div class="lt"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span><b>${esc(leanName(c, L.key))}</b><em>${L.p != null ? L.p + '%' : ''}</em></div>${pr ? `<div class="lt2"><span>${L.y === L.a ? 'all ' + L.a + ' agree' : L.k === 'solo' ? 'one model' : L.y + ' of ' + L.a + ' agree'}</span>${pr}</div>` : ''}</div>`;
+  return `<div class="lb"><div class="lt"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span><b>${esc(leanName(c, L.key))}</b><em>${L.p != null ? L.p + '%' : ''}</em></div>${pr ? `<div class="lt2"><span>${L.src === 'market' ? 'market · ' + (L.a ? (L.y === L.a ? 'all ' + L.a + ' models agree' : L.y + ' of ' + L.a + ' models agree') : 'no model yet') : L.y === L.a ? 'all ' + L.a + ' agree' : L.k === 'solo' ? 'one model' : L.y + ' of ' + L.a + ' agree'}</span>${pr}</div>` : ''}</div>`;
 }
 function tileOf(c, on) {
   const v = vm(c), [h, d, a] = v.p, f = c.final, ko = new Date(c.kickoff).getTime(), now = Date.now(), g = vg(c);
@@ -1272,19 +1278,28 @@ function consensusPick(c) {
   if (!maj) { const mx = Math.max(...v.p), wi = v.p.indexOf(mx); return { k: 'split', key: 'HDA'[wi], p: mx, y: best.yes.length, a: best.a.length, by: ['v2'], no: [] }; }
   return { k: all && best.p != null && best.p >= 60 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n) };
 }
-// The card's headline: v4's single strongest call (result, Over/Under 2.5 or both-score, whichever v4 rates highest), with the
-// other models counted as agree / disagree on that same market. A card with no v4 falls back to consensusPick.
+// The card's headline: the market's single strongest call (the v6 score card, built from the sportsbook price: result, Over/Under 2.5
+// or both-score, whichever it rates highest), with the models counted as agree / disagree on that same market. From Oct 27, 2026:
+// the price beat every model and a v4 + market mix was best at 0% v4 (docs/model-review-2026-10-25.md), so the models do not move
+// the pick. A card with no price yet leads with v4's strongest call the same way; a card with no v4 falls back to consensusPick.
 function leanPick(c) {
   const base = consensusPick(c); if (!base) return null;
-  const q = c.v4; if (!q || !q.p) return base;
+  const mk = c.v6 && c.v6.p ? c.v6 : null, q = mk || c.v4; if (!q || !q.p) return base;
+  const src = mk ? 'market' : 'v4';
   const opts = [[q.p[0], 'H'], [q.p[1], 'D'], [q.p[2], 'A'], [q.over, 'O'], [typeof q.over === 'number' ? 100 - q.over : null, 'U'], [q.btts, 'B'], [typeof q.btts === 'number' ? 100 - q.btts : null, 'N']].filter(x => typeof x[0] === 'number');
   if (!opts.length) return base;
   const top = opts.reduce((m, x) => (x[0] > m[0] ? x : m)), key = top[1], p = Math.round(top[0]);
   const r = rowsOf(c).find(x => x.key === key); if (!r) return base;
-  if (r.a.length < 2) return { k: 'solo', key, p, y: 1, a: 1, by: ['v4'], no: [], src: 'v4' }; // no other model has numbers yet
+  // The market leads: the models (v4, Forebet, SportsMole) are only counted as agree / disagree. It is never changed by them.
+  if (mk) {
+    if (!r.a.length) return { k: 'solo', key, p, y: 0, a: 0, by: [], no: [], src };
+    const maj = r.yes.length * 2 > r.a.length, all = r.no.length === 0;
+    return { k: !maj ? 'split' : all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src };
+  }
+  if (r.a.length < 2) return { k: 'solo', key, p, y: 1, a: 1, by: ['v4'], no: [], src }; // no other model has numbers yet
   const maj = r.yes.length * 2 > r.a.length, all = r.no.length === 0;
-  if (!maj) return { k: 'split', key, p, y: r.yes.length, a: r.a.length, by: ['v4'], no: [], src: 'v4' };
-  return { k: all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src: 'v4' };
+  if (!maj) return { k: 'split', key, p, y: r.yes.length, a: r.a.length, by: ['v4'], no: [], src };
+  return { k: all && p >= 60 ? 'best' : 'lean', key, p, y: r.yes.length, a: r.a.length, by: r.yes.map(m => m.n), no: r.no.map(m => m.n), src };
 }
 // Did the pick land on this final score? Over/Under use 2.5 goals.
 function leanHit(key, f) {
@@ -1363,7 +1378,7 @@ function mbetsToday() {
     if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><small>This game was already over when the Hub first saw it.</small></div>`;
     const st = c.lean ? (L.hit ? '<span class="mbs hit">Hit ✓</span>' : '<span class="mbs miss">Missed ✗</span>') : `<span class="mbs">${c.kickoff && new Date(c.kickoff) <= Date.now() ? 'In play' : 'Pending'}</span>`;
     return `<div class="mbg"><div class="mbt"><b>${esc(leanName(c, L.key))}</b>${st}</div><small>${esc(c.home)} vs ${esc(c.away)} · ${esc(c.ko || '')}${c.final ? ' · ' + c.final.h + '–' + c.final.a : ''}</small>
-      ${priceLine(c, L)}<small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.k === 'split' ? `no majority, ${esc((L.by || ['v2']).join(', '))}\'s own pick` : L.k === 'solo' ? `only ${esc((L.by || ['v2'])[0])} had numbers` : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
+      ${priceLine(c, L)}<small><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${L.src === 'market' ? `market pick · ${L.a ? `${L.y} of ${L.a} models agree${L.by.length ? ` (${esc(L.by.join(', '))})` : ''}` : 'no model has numbers yet'}` : L.k === 'split' ? `no majority, ${esc((L.by || ['v2']).join(', '))}\'s own pick` : L.k === 'solo' ? `only ${esc((L.by || ['v2'])[0])} had numbers` : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`}</small></div>`;
   }).join('');
 }
 function profitView(T) {

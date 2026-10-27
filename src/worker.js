@@ -552,7 +552,7 @@ async function tally(env) {
       if (c.mine && c.final) { mineT.n++; mineT.model += c.grade.v2.outcomeHit ? 1 : 0; mineT.mine += c.mine === (c.final.h > c.final.a ? 'H' : c.final.h === c.final.a ? 'D' : 'A') ? 1 : 0; }
       if (c.lean && c.final) {
         const L = c.lean; LB.n++; LB.hits += L.hit ? 1 : 0; lbAdd(LB.byKind, L.k, L.hit, L.key); lbAdd(LB.byKey, L.key, L.hit);
-        if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.y} of ${L.a}`, L.hit, L.key);
+        if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.src === 'market' ? 'market, models ' : ''}${L.y} of ${L.a}`, L.hit, L.key);
         LB.base.home += c.final.h > c.final.a ? 1 : 0; LB.base.draw += c.final.h === c.final.a ? 1 : 0; LB.base.away += c.final.h < c.final.a ? 1 : 0; LB.base.over += c.final.h + c.final.a >= 3 ? 1 : 0; LB.base.btts += c.final.h > 0 && c.final.a > 0 ? 1 : 0;
         if (L.price != null) { const P = LB.pl || (LB.pl = { n: 0, won: 0, byKind: {}, byVerdict: {}, byCombo: {}, byBand: {} }), u = unitsWon(L.price, L.hit), add = (o, k) => { const x = o[k] || (o[k] = { n: 0, hits: 0, won: 0 }); x.n++; x.hits += L.hit ? 1 : 0; x.won += u; }; P.n++; P.won += u; add(P.byKind, L.k); add(P.byBand, bandOf(L.price)); if (L.vd) { add(P.byVerdict, L.vd); add(P.byCombo, `${L.k}|${L.vd}`); } }
         LB.recent.push({ date: day.date, kickoff: c.kickoff, home: c.home, away: c.away, leagueName: c.leagueName, final: c.final, k: L.k, key: L.key, p: L.p, y: L.y, a: L.a, hit: !!L.hit });
