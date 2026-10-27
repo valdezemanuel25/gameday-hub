@@ -382,7 +382,7 @@ function tileOf(c, on) {
 // ---------- Movement: every priced game of the day, opening -> close ----------
 function closeState(c) {
   const ko = new Date(c.kickoff).getTime(), px = c.px || {};
-  if (pxLocked(c)) return px.cl ? { k: 'ok', t: `Closing ✓ ${tmCT(px.cl)}` } : { k: 'miss', t: 'No pre-game read · last price is the close' };
+  if (pxLocked(c)) return px.cl ? { k: 'ok', t: px.cls === 'espn' ? 'Closing ✓ ESPN close (no pre-game read)' : `Closing ✓ ${tmCT(px.cl)}` } : { k: 'miss', t: 'No pre-game read · last price is the close' };
   if (ko - Date.now() <= 30 * 60000) return { k: 'due', t: 'Pre-game read due now' };
   return { k: 'pend', t: `Pending · closing read ~${tmCT(new Date(ko - 30 * 60000).toISOString())}` };
 }
@@ -631,7 +631,7 @@ document.addEventListener('click', async e => {
   else if (t.id === 'run') {
     t.disabled = true; $('#st').textContent = 'Updating…';
     try { const r = await (await fetch('/api/nhl/run', { method: 'POST' })).json();
-      $('#st').textContent = r.error ? r.error : `${r.created || 0} new, ${r.graded || 0} graded${r.forebet ? ', Forebet ' + (r.forebet.error || r.forebet.note || r.forebet.saved + ' saved') : ''}`;
+      $('#st').textContent = r.error ? r.error : `${r.created || 0} new, ${r.graded || 0} graded${r.closed ? `, ${r.closed} closing price${r.closed === 1 ? '' : 's'} from ESPN` : ''}${r.forebet ? ', Forebet ' + (r.forebet.error || r.forebet.note || r.forebet.saved + ' saved') : ''}`;
       await load(); } catch (err) { $('#st').textContent = err.message; }
     t.disabled = false;
   }
