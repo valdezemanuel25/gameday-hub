@@ -13,6 +13,7 @@ import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { addStrats } from './strats.js';
+import { analystLook, listAnalyst } from './analyst.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
@@ -331,7 +332,8 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
   }
   changed += await addBtts(env, open, slug, now, f);
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
-  return { games: open.length, priced, changed };
+  const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now); // the Analyst reads the same prices (src/analyst.js)
+  return { games: open.length, priced, changed, analyst: an };
 }
 // Background: look at ONE first-division league per run (each at most every 6 hours, remembered in the free edge cache so it costs no
 // KV writes). Display only; no model reads a price.
@@ -406,7 +408,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   // block the others: the cron rotates by least-recently-tried.
   // Saved only when something was graded: a league still waiting on ESPN used to cost a KV write on every
   // try. The cron now rotates through due leagues by the clock instead (see slot 1), so nothing is stored.
-  if (graded) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  if (graded) { await env.HUB.put(`day:${date}`, JSON.stringify(day)); await analystLook(env, date, day.cards.filter(c => c.league === slug), now); }
   return { graded, pending };
 }
 
@@ -836,6 +838,7 @@ const hub = {
       } catch (e) { return json({ error: `Bets: ${e && e.message ? e.message : e}` }, 500); }
       return json({ error: 'Not found' }, 404);
     }
+    if (p === '/api/analyst') { try { return json(await listAnalyst(env)); } catch (e) { return json({ error: `Analyst: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/day') { const date = q('date') || today(); return json((await env.HUB.get(`nhl:day:${date}`, 'json')) || { date, cards: [] }); }
     if (p === '/api/nhl/days') { // every saved hockey day, for the Export button
       const out = []; let cursor;

@@ -1,0 +1,169 @@
+// The Analyst: a paper bettor that watches every soccer price read and places its own bets from the price movement and v4.
+// Pure functions here; storage and the hooks into the price reads are at the bottom.
+//
+//   It looks at a card each time its price is read (every 6 hours, hourly in the last 3, and the lineup read 30-20 minutes before
+//   kickoff) until the price locks, and bets the first time one of its rules fires, at the price of that read. One bet per rule per
+//   game. Every bet is 1 unit, so the record reads straight off as units won and ROI.
+//   Each bet is scored two ways:
+//     * profit at the price taken (what counts, but it needs hundreds of bets to mean anything),
+//     * closing-line value: the price taken against the closing price (the lineup read). Beating the close is the quickest honest
+//       sign of an edge, and it is known as soon as the game kicks off.
+//   A rule that is losing on both after BENCH.n bets is benched (no new bets) until a later look says otherwise; it is never deleted.
+//   Backtest (tools/backtest-analyst.mjs, walk-forward v4 against Bet365's opening and closing prices, 1,929 league games): at the
+//   closing price none of these rules made money; see the numbers in the comments on RULES. The live test is whether betting at
+//   earlier reads, before a move has finished, does better than the close.
+import { devig } from './v6core.js';
+import { leanHit } from './pick.js';
+
+export const SINCE = '2026-10-27';
+export const BENCH = { n: 40, clv: 0, roi: 0 }; // benched when, after n settled bets, average closing-line value and ROI are both <= these
+const K = 'HDA', r1 = x => Math.round(10 * x) / 10;
+const dec = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
+const hdaOf = o => (o ? devig(o.h, o.d, o.a) : null);
+const ouOf = o => (o && o.tl === 2.5 && Number.isFinite(o.to) && Number.isFinite(o.tu) ? devig(o.to, o.tu) : null);
+const openOf = odds => odds && (odds.op || odds.f);
+const openTotal = odds => odds && (odds.opt || (odds.f && odds.f.tl != null ? odds.f : null));
+
+// What the Analyst sees on one card: the move since the opening price and v4 against the price now, for home / draw / away and Over 2.5.
+// v4: { p: [h, d, a] %, over % }; open / now: American prices { h, d, a, tl, to, tu }.
+export function view({ v4, open, now, openT }) {
+  const a = hdaOf(open), b = hdaOf(now);
+  if (!a || !b || !v4 || !Array.isArray(v4.p)) return null;
+  const p0 = a.map(x => 100 * x), p1 = b.map(x => 100 * x);
+  const out = { p0, p1, d: p1.map((x, i) => x - p0[i]), e: v4.p.map((x, i) => x - p1[i]), e0: v4.p.map((x, i) => x - p0[i]), px: [now.h, now.d, now.a], ou: null };
+  const x = ouOf(openT || open), y = ouOf(now);
+  if (x && y && typeof v4.over === 'number') out.ou = { p0: 100 * x[0], p1: 100 * y[0], d: 100 * (y[0] - x[0]), e: v4.over - 100 * y[0], px: [now.to, now.tu] };
+  return out;
+}
+const pickIdx = (vals, ok) => { let j = -1; vals.forEach((v, i) => { if (ok(i) && (j < 0 || v > vals[j])) j = i; }); return j; };
+const why1 = (V, i, s) => `${['Home', 'Draw', 'Away'][i]} ${r1(V.p0[i])}%→${r1(V.p1[i])}% (${V.d[i] >= 0 ? '+' : ''}${r1(V.d[i])}), v4 ${r1(V.p1[i] + V.e[i])}%: ${s}`;
+// The rules. pick(V) -> { key, price, why } | null. Backtest at the closing price (1 unit a bet, first half / second half of the window):
+export const RULES = [
+  { id: 'follow', name: 'Follow the move, v4 agrees', rule: 'A result\'s chance rose 3+ points since the opening price and v4 rated it above the opening price too',
+    // close: 249 bets, -24% / +2% (-10% overall)
+    pick: V => { const i = pickIdx(V.d, i => V.d[i] >= 3 && V.e0[i] > 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the money moved the way v4 already leaned') }; } },
+  { id: 'value', name: 'v4 value, price not against it', rule: 'v4 rates a home or away win 5+ points above the price now, and that price has not drifted 1+ points away from it',
+    // close: 439 bets, -19% / -1% (-10% overall)
+    pick: V => { const i = pickIdx(V.e, i => i !== 1 && V.e[i] >= 5 && V.d[i] > -1); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'v4 sees value and the money is not fighting it') }; } },
+  { id: 'fade', name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
+    // close: 218 bets, -3% / -14% (-9% overall)
+    pick: V => { const i = pickIdx(V.d.map(x => -x), i => V.d[i] <= -4 && V.e[i] >= 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the price drifted but v4 says it went too far') }; } },
+  { id: 'totals', name: 'Goals move, v4 agrees', rule: 'Over 2.5 moved 3+ points since the opening price (either way) and v4 is on the same side of the price now',
+    // close: 146 bets, +3% / -12% (-5% overall)
+    pick: V => { const o = V.ou; if (!o) return null; const k = o.d >= 3 && o.e >= 0 ? 'O' : o.d <= -3 && o.e <= 0 ? 'U' : null; if (!k) return null;
+      return { key: k, price: o.px[k === 'O' ? 0 : 1], why: `Over 2.5 ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v4 ${r1(o.p1 + o.e)}%: goals money agrees with v4` }; } },
+];
+
+// ---- one look at a set of cards: the new bets, if any ----
+const MKT = k => (k === 'O' || k === 'U' ? 'ou' : '1x2');
+export const LABEL = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5' };
+// The Analyst only bets a card with a v4 number that is not the rough promoted-club stand-in, and with a price to read.
+export function lookCard(c) {
+  if (!c || c.final || !c.odds || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null;
+  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds) });
+}
+// One position per game per market (1X2, Over/Under): the first rule to fire takes it, in RULES order, and later reads never add to it
+// or bet the other side. A benched rule places nothing.
+export function decide(items, cards, date, now = new Date(), benched = new Set()) {
+  const held = new Set(items.map(b => `${b.date}|${b.league}|${b.gid}|${MKT(b.key)}`)), out = [];
+  for (const c of cards) {
+    const V = lookCard(c); if (!V) continue;
+    for (const r of RULES) {
+      if (benched.has(r.id)) continue;
+      const b = r.pick(V); if (!b || !Number.isFinite(b.price)) continue;
+      const k = `${date}|${c.league}|${c.id}|${MKT(b.key)}`; if (held.has(k)) continue;
+      held.add(k);
+      const i = 'HDA'.indexOf(b.key), mp = i >= 0 ? V.p1[i] : b.key === 'O' ? V.ou.p1 : 100 - V.ou.p1, v4p = i >= 0 ? c.v4.p[i] : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
+      out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), date, league: c.league, gid: c.id,
+        home: c.home, away: c.away, leagueName: c.leagueName || c.league, kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
+        rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: r1(v4p), why: b.why, close: null, clv: null, res: null, units: null });
+    }
+  }
+  return out;
+}
+
+// ---- settling: the closing price once the game has kicked off, the result once it is graded ----
+const closeOf = (odds, key) => { const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null })[key]; return Number.isFinite(m) ? m : null; };
+const VOID_AFTER = 4 * 86400000; // a game with no result 4 days after kickoff (postponed, abandoned) is voided: the stake comes back
+export function settle(b, c, now = new Date()) {
+  if (b.res) return false;
+  let ch = false; const ko = new Date(b.kickoff).getTime();
+  if (b.close == null && c && c.odds && now.getTime() >= ko) {
+    const m = closeOf(c.odds, b.key);
+    if (m != null) { b.close = m; b.clv = r1(100 * (dec(b.price) / dec(m) - 1)); ch = true; }
+  }
+  if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
+  else if (now.getTime() - ko > VOID_AFTER) { b.res = 'void'; b.units = 0; ch = true; }
+  return ch;
+}
+
+// ---- the record ----
+const blank = () => ({ n: 0, open: 0, settled: 0, wins: 0, units: 0, clvN: 0, clvSum: 0, beat: 0 });
+function add(t, b) {
+  t.n++;
+  if (b.clv != null) { t.clvN++; t.clvSum += b.clv; t.beat += b.clv > 0 ? 1 : 0; }
+  if (!b.res) { t.open++; return; }
+  if (b.res === 'void') return;
+  t.settled++; t.wins += b.res === 'win' ? 1 : 0; t.units += b.units;
+}
+const done = t => ({ n: t.n, open: t.open, settled: t.settled, wins: t.wins, hit: t.settled ? r1(100 * t.wins / t.settled) : null, units: +t.units.toFixed(2),
+  roi: t.settled ? r1(100 * t.units / t.settled) : null, clv: t.clvN ? +(t.clvSum / t.clvN).toFixed(2) : null, clvN: t.clvN, beat: t.clvN ? r1(100 * t.beat / t.clvN) : null });
+export const isBenched = s => s.settled >= BENCH.n && s.clv != null && s.clv <= BENCH.clv && s.roi <= BENCH.roi;
+// When the bet was placed: the early reads are where an edge over the close could come from.
+const WHEN = [['early', '3+ hours before kickoff', m => m >= 180], ['late', 'last 3 hours (incl. the lineup read)', m => m < 180]];
+export function summary(items0, old = []) {
+  const items = [...items0, ...old.map(unpack)];
+  const all = blank(), per = Object.fromEntries(RULES.map(r => [r.id, blank()])), when = Object.fromEntries(WHEN.map(w => [w[0], blank()])), mk = { '1x2': blank(), ou: blank() };
+  const curve = []; let cum = 0;
+  for (const b of [...items].sort((x, y) => (x.kickoff < y.kickoff ? -1 : 1))) {
+    add(all, b); if (per[b.rule]) add(per[b.rule], b); add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
+    if (b.res === 'win' || b.res === 'loss') { cum += b.units; curve.push([b.kickoff.slice(0, 10), +cum.toFixed(2)]); }
+  }
+  const rules = RULES.map(r => { const s = done(per[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benched: isBenched(s) }; });
+  return { since: SINCE, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou) }, curve, verdict: verdict(done(all)) };
+}
+// The Analyst's own read of its record, in one line. CLV first: it settles in tens of bets, profit needs hundreds.
+export function verdict(s) {
+  if (!s.n) return 'No bets yet. The Analyst bets as prices are read for games with a v4 number.';
+  if (s.clvN < 30) return `Too early to say: ${s.clvN} bet${s.clvN === 1 ? '' : 's'} with a closing price so far (30+ needed for the first read on closing-line value).`;
+  const edge = s.clv > 0 ? `beating the closing price by ${s.clv}% a bet on average` : `losing ${-s.clv}% a bet to the closing price on average`;
+  if (s.settled < 200) return `${s.clv > 0 ? 'Promising' : 'No edge yet'}: ${edge} (${s.beat}% of bets beat the close). Profit (${s.units >= 0 ? '+' : ''}${s.units}u over ${s.settled}) needs 200+ settled bets before it means much.`;
+  return s.clv > 0 && s.roi > 0 ? `Edge holding: ${edge}, ${s.roi}% ROI over ${s.settled} bets.` : `No proven edge: ${edge}, ${s.roi}% ROI over ${s.settled} bets. Do not stake real money on these rules.`;
+}
+
+// ---- storage: one document ('analyst'), written only when a bet is placed or settles ----
+const KEEP = 600, LOCK_MIN = 20; // LOCK_MIN: the price locks 20 minutes before kickoff (PRICE_LOCK in src/worker.js)
+export async function getAnalyst(env) { return (await env.HUB.get('analyst', 'json')) || { v: 1, items: [] }; }
+// Past KEEP bets, settled ones are kept only as a short row for the record (the page lists the latest 300 in full).
+const pack = b => [b.kickoff, b.rule, b.key, b.mins, b.res, b.units, b.clv], unpack = ([kickoff, rule, key, mins, res, units, clv]) => ({ kickoff, rule, key, mins, res, units, clv });
+const save = (env, doc) => {
+  const extra = doc.items.slice(KEEP); doc.items = doc.items.slice(0, KEEP).concat(extra.filter(b => !b.res));
+  if (extra.length) doc.old = (doc.old || []).concat(extra.filter(b => b.res).map(pack));
+  return env.HUB.put('analyst', JSON.stringify(doc));
+};
+const cardKey = (date, league, id) => `${date}|${league}|${id}`;
+// Called after a league's price read and after it is graded (src/worker.js refreshOdds, gradeLeague) with that day's cards for the
+// league: bets on games whose price is still open, and settles that day's bets whose games have started or finished. Never throws: the price read must not depend on it.
+export async function analystLook(env, date, cards, now = new Date()) {
+  try {
+    const doc = await getAnalyst(env), byKey = new Map(cards.map(c => [cardKey(date, c.league, c.id), c]));
+    let dirty = false;
+    for (const b of doc.items) if (!b.res) { const c = byKey.get(cardKey(b.date, b.league, b.gid)); if (c && settle(b, c, now)) dirty = true; }
+    const s = summary(doc.items, doc.old), benched = new Set(s.rules.filter(r => r.benched).map(r => r.id));
+    const fresh = decide(doc.items, cards.filter(c => new Date(c.kickoff).getTime() - now.getTime() > LOCK_MIN * 60000), date, now, benched);
+    if (fresh.length) { doc.items.unshift(...fresh); dirty = true; }
+    if (dirty) await save(env, doc);
+    return { placed: fresh.length };
+  } catch (e) { return { error: String(e && e.message || e).slice(0, 120) }; }
+}
+// The Analyst tab: settle anything finished (one read per day it has open bets on), save only if something changed.
+export async function listAnalyst(env, now = new Date()) {
+  const doc = await getAnalyst(env), open = doc.items.filter(b => !b.res);
+  if (open.length) {
+    const days = [...new Set(open.map(b => b.date))], got = await Promise.all(days.map(d => env.HUB.get(`day:${d}`, 'json'))), m = new Map();
+    days.forEach((d, i) => { for (const c of got[i]?.cards || []) m.set(cardKey(d, c.league, c.id), c); });
+    let dirty = false; for (const b of open) if (settle(b, m.get(cardKey(b.date, b.league, b.gid)), now)) dirty = true;
+    if (dirty) await save(env, doc);
+  }
+  return { items: doc.items.slice(0, 300), summary: summary(doc.items, doc.old), rules: RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })) };
+}
