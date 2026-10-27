@@ -112,6 +112,8 @@ h4{margin:20px 18px 6px;font-size:14px}
 table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mvx th,.mvx td{padding:4px;font-size:12px;text-align:right;border-bottom:0;border-top:1px solid var(--line)}.mvx th{font-size:10.5px;color:var(--faint);font-weight:650;border-top:0}
 .mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}
 .hotl{font-size:11px;margin-top:6px;text-align:left}
+.mvb{margin:12px 18px 0;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,45,85,.35);background:rgba(255,45,85,.05);font-size:12px;color:var(--dim)}.mvb summary{cursor:pointer;color:var(--ink);font-weight:650;font-size:12.5px}
+.mvb .mr{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line)}.mvb .mr:first-of-type{border-top:0}.mvb .mr b{color:var(--ink);font-weight:600}.mvb .mr small{color:var(--faint)}.mvb .mr em{font-style:normal;text-align:right;white-space:nowrap}
 .neon,.mvx td.neon b{color:#ff2d55;font-weight:750;text-shadow:0 0 6px rgba(255,45,85,.75),0 0 14px rgba(255,45,85,.45)}.mvx tr.won td.n{color:var(--good);font-weight:650}
 .mvseg{display:flex;gap:6px;margin:12px 18px 0;flex-wrap:wrap}.mvseg button{font-size:12px;padding:6px 11px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}.mvseg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}.mvseg i{font-style:normal;opacity:.7;margin-left:4px}
 .ag.y{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.ag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
@@ -420,12 +422,31 @@ function movesView() {
   const shown = rows.filter(r => inF(r, f));
   return seg + head + (shown.length ? shown.map(card1).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices come from ESPN as the schedule is checked.'}</div>`);
 }
+// Board recap of the day's price moves of HOT_MOVE+ points (moneyline: the side whose chance rose; total: Over or Under), biggest first.
+// The model note says whether v4 (else v2) already rated the moneyline mover above its opening chance. Display only, not a bet.
+function movesBox(list) {
+  const rows = [];
+  for (const c of list) {
+    const hm = hockeyMove(c.px); if (!hm) continue;
+    const parts = [];
+    if (hm.ml && hot(hm.ml.d)) { const up = hm.ml.d > 0, m = c.v4 && c.v4.w != null ? ['v4', c.v4.w] : c.v2 && c.v2.w != null ? ['v2', c.v2.w] : null;
+      parts.push({ size: Math.abs(hm.ml.d), txt: `${esc(up ? c.hAbbr : c.aAbbr)} ${sgn(Math.round(Math.abs(hm.ml.d)))}`, sub: `${Math.round(up ? hm.ml.p0 : 100 - hm.ml.p0)}→${Math.round(up ? hm.ml.p1 : 100 - hm.ml.p1)}%`,
+        note: m ? ((m[1] - hm.ml.p0 > 0) === up ? `${m[0]} already leaned this way` : `against ${m[0]}`) : '' }); }
+    if (hm.ou && hot(hm.ou.d)) parts.push({ size: Math.abs(hm.ou.d), txt: `${hm.ou.d > 0 ? 'Over' : 'Under'} ${hm.ou.line} ${sgn(Math.round(Math.abs(hm.ou.d)))}`, sub: `Over ${Math.round(hm.ou.p0)}→${Math.round(hm.ou.p1)}%`, note: '' });
+    if (parts.length) rows.push({ c, parts, size: Math.max(...parts.map(x => x.size)) });
+  }
+  if (!rows.length) return '';
+  rows.sort((a, b) => b.size - a.size);
+  return `<details class="mvb" open><summary>Big price moves today · ${rows.length}</summary><div class="small" style="margin:4px 0 6px">${HOT_MOVE}+ points on the moneyline or the total since the opening price. Usually starting goalies, injuries or informed money. Not a bet.</div>${rows.map(({ c, parts }) => {
+    const f = c.final, notes = parts.map(x => x.note).filter(Boolean);
+    return `<div class="mr"><span><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b><br><small>${esc(c.ko || '')}${f ? ` · final ${f.a}–${f.h}${f.last && f.last !== 'REG' ? ' ' + esc(f.last) : ''}` : ''}${notes.length ? ' · ' + esc(notes.join(' · ')) : ''}</small></span><em>${parts.map(x => `<b class="neon">${x.txt}</b><br><small>${x.sub}</small>`).join('<br>')}</em></div>`; }).join('')}</details>`;
+}
 function board() {
   const list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
   if (S.sel && !list.find(c => c.id === S.sel)) S.sel = null;
   const cols = Math.ceil(list.length / 4);
-  return `<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}`;
+  return `${movesBox(list)}<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}`;
 }
 function cell(m, key, other) {
   const v = pct(m.hit, m.n);
