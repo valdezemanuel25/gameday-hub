@@ -174,6 +174,15 @@ export function setPrice(c, fresh, now = new Date()) {
   if (!changed && !lineup) return false;
   c.px = n; return true;
 }
+// A finished game that missed its lineup read: take the book's closing line from ESPN's odds block for the finished game (its "close"
+// prices) as the close, noted cl = puck drop and cls = 'espn'. Only once (a card that has cl is left alone). True when the card changed.
+export function espnClose(c, done) {
+  const old = c.px; if (!old || old.cl || !done) return false;
+  const n = { ...old, ...(done.h != null ? { h: done.h, a: done.a } : {}), ...(done.tl != null ? { tl: done.tl, to: done.to, tu: done.tu } : {}) };
+  if (n.h == null && n.tl == null) return false;
+  n.cl = c.kickoff; n.cls = 'espn';
+  c.px = n; return true;
+}
 async function scoreboard(date, fetchFn, debug) {
   try {
     const res = await fetchFn(`${ESPN}?dates=${date.replace(/-/g, '')}&limit=100`, { headers: { 'user-agent': 'gameday-hub/1.0' } });
@@ -186,7 +195,7 @@ async function scoreboard(date, fetchFn, debug) {
       const det = String(t.shortDetail || t.detail || ''), last = /SO/.test(det) ? 'SO' : /OT/.test(det) ? 'OT' : 'REG';
       // Only the Over/Under total is taken from the odds block (the sportsbook line); spreads and moneylines are ignored.
       const od = (comp.odds || []).find(o => Number.isFinite(Number(o.overUnder)) && Number(o.overUnder) >= 3.5 && Number(o.overUnder) <= 9.5), line = od ? Number(od.overUnder) : null;
-      out.push({ id: String(ev.id), date: ev.date, done, last, line, px: done ? null : parseHockeyOdds(comp.odds), lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
+      out.push({ id: String(ev.id), date: ev.date, done, last, line, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
     }
     return out;
   } catch (e) { debug.push(`scoreboard ${date}: ${e.message}`); return null; }
@@ -256,6 +265,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         } else if (!c && ld > S.through && !S.applied.includes(e.id)) { // finished game we never predicted: still teaches the ratings
           if (applyGame(S, e.hc, e.ac, e.hs, e.as, e.last)) { S.applied.push(e.id); stateDirty = true; }
         }
+        if (c && espnClose(c, e.pxDone)) { dirty = true; out.closed = (out.closed || 0) + 1; } // missed the lineup read: ESPN's close
         continue;
       }
       const manual = c && c.ln && c.ln.how === 'manual', lineNow = manual ? c.ln.v : e.line ?? (c && c.ln ? c.ln.v : null);

@@ -170,4 +170,16 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   gets = 0; await nhlLineupStep(env, new Date('2026-10-26T20:00:00Z'), f);
   ok('hockey: nothing in the window, no ESPN read', gets === 0);
 }
+
+// Hockey: a finished game that missed its lineup read takes ESPN's closing line as the close, once.
+{
+  const { espnClose } = await import('../src/nhl.js');
+  const c = { kickoff: '2026-10-27T00:30:00Z', final: { h: 2, a: 4 }, px: { h: 114, a: -135, tl: 6.5, to: -120, tu: 100, f: { h: 114, a: -135 }, ts: 'x' } };
+  const done = parseHockeyOdds([{ moneyline: { home: { open: { odds: '+114' }, close: { odds: '+125' } }, away: { open: { odds: '-135' }, close: { odds: '-148' } } }, total: { over: { open: { line: 'o6.5', odds: '-112' }, close: { line: 'o6.5', odds: '-125' } }, under: { open: { line: 'u6.5', odds: '-108' }, close: { line: 'u6.5', odds: '+105' } } } }]);
+  ok('hockey: ESPN close fills a missed lineup read', espnClose(c, done) && c.px.h === 125 && c.px.a === -148 && c.px.cls === 'espn' && c.px.cl === c.kickoff && c.px.f.h === 114, JSON.stringify(c.px));
+  ok('hockey: only once', espnClose(c, done) === false);
+  const r = { kickoff: 'k', px: { h: 1, a: 2, cl: 'read' } };
+  ok('hockey: a real lineup read is never overwritten', espnClose(r, done) === false && r.px.h === 1);
+  ok('hockey: no ESPN odds on the finished game, nothing changes', espnClose({ kickoff: 'k', px: { h: 1, a: 2 } }, null) === false);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
