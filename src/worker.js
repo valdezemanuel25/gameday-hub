@@ -17,7 +17,7 @@ import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
-import { nhlStep, nhlTally, nhlStatus, nhlSetLine } from './nhl.js';
+import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
 const json = (data, status = 200) =>
@@ -924,6 +924,7 @@ const hub = {
       try { await runSlot(c.env); }
       finally {
         try { await oddsStep(c.env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
+        try { await nhlLineupStep(c.env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }
         // Alerts for games about to start. Never allowed to break the background job.
         try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(c.env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
         await c.flush();

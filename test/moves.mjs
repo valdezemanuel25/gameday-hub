@@ -148,4 +148,26 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   addMarket(M, { odds: { h: -150, d: 280, a: 400, bf: { by: -120, bn: 100 }, by: -150, bn: 120 }, final: { h: 1, a: 1 }, v6o: { btts: 60 }, v6: { btts: 55 } });
   ok('Results: the book both-score move is used ahead of the score card', finishMarket(M).moves.btts.n === 1 && finishMarket(M).moves.btts.follow === 1 && finishMarket(M).moves.btts.book === 1, JSON.stringify(finishMarket(M).moves.btts));
 }
+
+// Hockey lineup read on every cron run: a game inside 30-20 minutes before puck drop gets its closing read even when the NHL job has no slot.
+{
+  const { nhlLineupStep } = await import('../src/nhl.js');
+  const now = new Date('2026-10-26T22:35:00Z'), ko = '2026-10-26T23:00:00Z', later = '2026-10-27T02:30:00Z';
+  const days = { 'nhl:day:2026-10-26': { date: '2026-10-26', cards: [
+    { id: 'g1', kickoff: ko, final: null, px: { h: -135, a: 114, f: { h: -135, a: 114 }, rd: '2026-10-26T20:00:00Z' } },
+    { id: 'g2', kickoff: later, final: null, px: { h: -135, a: 114, f: { h: -135, a: 114 } } } ] } };
+  let puts = 0, gets = 0;
+  const env = { HUB: { get: async k => days[k] ? JSON.parse(JSON.stringify(days[k])) : null, put: async (k, v) => { puts++; days[k] = JSON.parse(v); } } };
+  const comp = id => ({ id, date: id === 'g1' ? ko : later, competitions: [{ status: { type: { completed: false } }, competitors: [{ homeAway: 'home', team: { displayName: 'New York Rangers', abbreviation: 'NYR' } }, { homeAway: 'away', team: { displayName: 'Los Angeles Kings', abbreviation: 'LA' } }],
+    odds: [{ moneyline: { home: { open: { odds: '-135' }, close: { odds: '-150' } }, away: { open: { odds: '+114' }, close: { odds: '+125' } } } }] }] });
+  const f = async () => { gets++; return { ok: true, json: async () => ({ events: [comp('g1'), comp('g2')] }) }; };
+  const r = await nhlLineupStep(env, now, f);
+  const g = days['nhl:day:2026-10-26'].cards;
+  ok('hockey: the game in the lineup window gets its closing read', r && r.read.join() === 'g1' && g[0].px.cl === now.toISOString() && g[0].px.h === -150, JSON.stringify(g[0].px));
+  ok('hockey: a later game is left for its own window', !g[1].px.cl && g[1].px.h === -135);
+  const before = gets; await nhlLineupStep(env, new Date(now.getTime() + 5 * 60000), f);
+  ok('hockey: once read, no more ESPN reads or writes in the window', gets === before && puts === 1, `${gets} ${puts}`);
+  gets = 0; await nhlLineupStep(env, new Date('2026-10-26T20:00:00Z'), f);
+  ok('hockey: nothing in the window, no ESPN read', gets === 0);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
