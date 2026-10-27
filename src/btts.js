@@ -45,3 +45,36 @@ export async function fetchBtts(key, slug, cards, f = fetch, keep = () => true) 
   }
   return { prices: out, left, used, skipped };
 }
+
+// ---- best price across books (the Analyst's price shopping, src/analyst.js) ----
+// The US-regulated books the Analyst may take a price from. A Worker variable BOOKS (comma-separated Odds API keys) replaces the list,
+// e.g. to keep only the books you have accounts with. Offshore books are left out on purpose.
+export const BOOKS = ['draftkings', 'fanduel', 'betmgm', 'williamhill_us', 'betrivers', 'espnbet', 'fanatics', 'ballybet', 'hardrockbet'];
+const decOf = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
+// One event's best home / draw / away and Over / Under 2.5 prices among the allowed books: { H: { m, bk }, ... } (American odds).
+export function bestPrices(ev, books = BOOKS) {
+  const out = {}, ok = new Set(books), put = (k, m, bk) => { if (Number.isFinite(m) && (!out[k] || decOf(m) > decOf(out[k].m))) out[k] = { m: Math.round(m), bk }; };
+  for (const b of (ev && ev.bookmakers) || []) {
+    if (!ok.has(b.key)) continue;
+    for (const mk of b.markets || []) {
+      for (const o of mk.outcomes || []) {
+        if (mk.key === 'h2h') put(o.name === ev.home_team ? 'H' : o.name === ev.away_team ? 'A' : /^draw$/i.test(o.name) ? 'D' : null, o.price, b.key);
+        else if (mk.key === 'totals' && o.point === 2.5) put(/^over$/i.test(o.name) ? 'O' : /^under$/i.test(o.name) ? 'U' : null, o.price, b.key);
+      }
+    }
+  }
+  delete out.null;
+  return out;
+}
+// Every book's 1X2 and totals for ONE league in one call. Costs 2 credits (two markets, one region) whatever the number of games.
+// Returns Map(cardId -> bestPrices) for the cards that match an event, and the credits left.
+export async function fetchBest(key, slug, cards, f = fetch, books = BOOKS) {
+  const sport = SPORT[slug]; if (!sport) return { error: 'No price source for this league' };
+  if (!key) return { error: 'ODDS_API_KEY is not set' };
+  const r = await f(`${BASE}/${sport}/odds?apiKey=${encodeURIComponent(key)}&regions=us&markets=h2h,totals&oddsFormat=american&dateFormat=iso`);
+  const x = r.headers && r.headers.get && r.headers.get('x-requests-remaining'), left = x != null ? Number(x) : null;
+  if (!r.ok) return { error: `Odds API ${r.status}`, left };
+  const events = await r.json(), out = new Map();
+  for (const c of cards) { const e = matchEvent(c, events); if (e) out.set(c.id, bestPrices(e, books)); }
+  return { prices: out, left };
+}

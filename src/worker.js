@@ -15,7 +15,7 @@ import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeB
 import { addStrats } from './strats.js';
 import { analystLook, listAnalyst } from './analyst.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
-import { fetchBtts } from './btts.js';
+import { fetchBtts, fetchBest, BOOKS } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw } from './nhl.js';
@@ -314,6 +314,19 @@ export async function addBtts(env, cards, slug, now = new Date(), f = fetch) {
   }
   return changed;
 }
+// The Analyst's price shopping: the best price across the US books for the games it is about to bet, one Odds API call (2 credits)
+// for the whole league. Skipped without the key, and once the month's credits are at BTTS_RESERVE or below, so the both-score closing
+// reads keep their credits. A Worker variable BOOKS (comma-separated) limits the books to the ones you can bet at.
+export function analystShop(env, slug, f = fetch) {
+  if (!env.ODDS_API_KEY) return null;
+  const books = env.BOOKS ? String(env.BOOKS).split(',').map(x => x.trim()).filter(Boolean) : BOOKS;
+  return async cards => {
+    const c = await readCredits(); if (c && c.left != null && c.left <= num(env.BTTS_RESERVE, BTTS_RESERVE)) return null;
+    const r = await fetchBest(env.ODDS_API_KEY, slug, cards, f, books);
+    if (r.left != null) await noteCredits(r.left);
+    return r.error ? null : r.prices;
+  };
+}
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
@@ -332,7 +345,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
   }
   changed += await addBtts(env, open, slug, now, f);
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
-  const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now); // the Analyst reads the same prices (src/analyst.js)
+  const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f)); // the Analyst reads the same prices (src/analyst.js)
   return { games: open.length, priced, changed, analyst: an };
 }
 // Background: look at ONE first-division league per run (each at most every 6 hours, remembered in the free edge cache so it costs no
