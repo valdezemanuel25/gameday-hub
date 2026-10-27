@@ -110,7 +110,9 @@ h4{margin:20px 18px 6px;font-size:14px}
 .mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--mut)}.cs.due{background:rgba(240,195,90,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
 .mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
 table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mvx th,.mvx td{padding:4px;font-size:12px;text-align:right;border-bottom:0;border-top:1px solid var(--line)}.mvx th{font-size:10.5px;color:var(--faint);font-weight:650;border-top:0}
-.mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}.mvx tr.won td.n{color:var(--good);font-weight:650}
+.mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}
+.hotl{font-size:11px;margin-top:6px;text-align:left}
+.neon,.mvx td.neon b{color:#ff2d55;font-weight:750;text-shadow:0 0 6px rgba(255,45,85,.75),0 0 14px rgba(255,45,85,.45)}.mvx tr.won td.n{color:var(--good);font-weight:650}
 .mvseg{display:flex;gap:6px;margin:12px 18px 0;flex-wrap:wrap}.mvseg button{font-size:12px;padding:6px 11px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}.mvseg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}.mvseg i{font-style:normal;opacity:.7;margin-left:4px}
 .ag.y{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.ag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .ml{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
@@ -277,6 +279,9 @@ function goalsSide(c) {
 function goalsPill(c) { const g = goalsSide(c); return g ? `<div class="ag gl">All say ${g} ${lineOf(c)}</div>` : ''; }
 // ---------- prices: opening -> now / close (same rule as src/moves.js hockeyMove; test/moves.mjs keeps them in step) ----------
 const BIG_MOVE = 5;
+const HOT_MOVE = 3; // moves of 3+ points (as shown, rounded) are lit neon red on the cards and the Movement tab
+const hot = d => d != null && Math.round(Math.abs(d)) >= HOT_MOVE;
+const mvTag = d => `(<span class="${hot(d) ? 'neon' : ''}">${sgn(Math.round(d))}</span>)`;
 function devigP(...ms) {
   if (!ms.every(Number.isFinite)) return null;
   const q = ms.map(m => 1 / (m > 0 ? 1 + m / 100 : 1 + 100 / -m)); let lo = 0.5, hi = 2, k = 1;
@@ -303,8 +308,8 @@ const mvWord = (c, hm) => hm.top === 'ml' ? (hm.ml.d > 0 ? `${c.hAbbr} ${sgn(Mat
 function pxLine(c) {
   const px = c.px, hm = hockeyMove(px); if (!px) return '';
   const op = px.op || px.f || {}, ot = px.opt || px.f || {}, now = pxLocked(c) ? 'close' : 'now';
-  const ml = px.h != null ? `Moneyline (${hm && hm.from === 'first' ? 'first seen' : 'opening'} → ${now}): ${esc(c.aAbbr)} ${op.a != null ? fmtOdds(op.a) + ' → ' : ''}<b>${fmtOdds(px.a)}</b> · ${esc(c.hAbbr)} ${op.h != null ? fmtOdds(op.h) + ' → ' : ''}<b>${fmtOdds(px.h)}</b>${hm && hm.ml ? ` · ${esc(c.hAbbr)} ${Math.round(hm.ml.p0)}→${Math.round(hm.ml.p1)}%${Math.abs(hm.ml.d) >= 1 ? ` (${sgn(Math.round(hm.ml.d))})` : ''}` : ''}` : '';
-  const ou = px.tl != null ? `Over/Under ${px.tl}: Over ${ot.tl === px.tl && ot.to != null ? fmtOdds(ot.to) + ' → ' : ''}<b>${fmtOdds(px.to)}</b> · Under ${ot.tl === px.tl && ot.tu != null ? fmtOdds(ot.tu) + ' → ' : ''}<b>${fmtOdds(px.tu)}</b>${hm && hm.ou ? ` · Over ${Math.round(hm.ou.p0)}→${Math.round(hm.ou.p1)}%${Math.abs(hm.ou.d) >= 1 ? ` (${sgn(Math.round(hm.ou.d))})` : ''}` : ''}` : '';
+  const ml = px.h != null ? `Moneyline (${hm && hm.from === 'first' ? 'first seen' : 'opening'} → ${now}): ${esc(c.aAbbr)} ${op.a != null ? fmtOdds(op.a) + ' → ' : ''}<b>${fmtOdds(px.a)}</b> · ${esc(c.hAbbr)} ${op.h != null ? fmtOdds(op.h) + ' → ' : ''}<b>${fmtOdds(px.h)}</b>${hm && hm.ml ? ` · ${esc(c.hAbbr)} ${Math.round(hm.ml.p0)}→${Math.round(hm.ml.p1)}%${Math.abs(hm.ml.d) >= 1 ? ` ${mvTag(hm.ml.d)}` : ''}` : ''}` : '';
+  const ou = px.tl != null ? `Over/Under ${px.tl}: Over ${ot.tl === px.tl && ot.to != null ? fmtOdds(ot.to) + ' → ' : ''}<b>${fmtOdds(px.to)}</b> · Under ${ot.tl === px.tl && ot.tu != null ? fmtOdds(ot.tu) + ' → ' : ''}<b>${fmtOdds(px.tu)}</b>${hm && hm.ou ? ` · Over ${Math.round(hm.ou.p0)}→${Math.round(hm.ou.p1)}%${Math.abs(hm.ou.d) >= 1 ? ` ${mvTag(hm.ou.d)}` : ''}` : ''}` : '';
   return `<div class="pxl">${[ml, ou].filter(Boolean).join('<br>')}</div>`;
 }
 function card(c) {
@@ -369,6 +374,14 @@ function topView() {
   return seg + (showW ? wh + (wrows || none('No game today or tomorrow has all three models on the same team.')) : '') + (showO ? oh + (orows || none('No game has all three on the same side of its line.')) : '') +
     `<div class="tpn">Only games that have not started. A game appears on both lists when the models agree on both. The score is v2's single likeliest final score; it is a guide, not a pick.</div>`;
 }
+// The board tile's move line: each price that moved 3+ points since the opening (moneyline: the side whose chance rose).
+function hotLine(c) {
+  const hm = hockeyMove(c.px); if (!hm) return '';
+  const out = [];
+  if (hm.ml && hot(hm.ml.d)) out.push(`${esc(hm.ml.d > 0 ? c.hAbbr : c.aAbbr)} ${sgn(Math.round(Math.abs(hm.ml.d)))}`);
+  if (hm.ou && hot(hm.ou.d)) out.push(`${hm.ou.d > 0 ? 'Over' : 'Under'} ${hm.ou.line} ${sgn(Math.round(Math.abs(hm.ou.d)))}`);
+  return out.length ? `<div class="hotl neon">Moved: ${out.join(' · ')}</div>` : '';
+}
 function tileOf(c, on) {
   const f = c.final, g = c.grade || {}, m0 = c.v2 || c.v4, hp = m0 ? m0.w : null, hf = hp != null && hp >= 50, cs = consensus(c);
   const tag = f ? `<i class="fin">${f.last !== 'REG' ? esc(f.last) : 'Final'}</i>` : cs.same ? '<i>All agree</i>' : cs.split ? '<i class="sp">Split</i>' : '';
@@ -377,7 +390,7 @@ function tileOf(c, on) {
     return `<div class="r${fav ? ' fv' : ''}">${crest(ab)}<b>${esc(ab)}</b><span${fav && gw ? ' class="gd"' : ''}>${v}</span></div>`; };
   const ln = lineOf(c), ou = c.v2 ? pickOu(c.v2) : null;
   const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}</span>${ou ? `<span${gs ? ' class="gd"' : ''}><b${gs ? ' class="gd"' : ''}>${ou.side}</b> ${ou.p}%</span>` : ''}`;
-  return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}${hp == null || f ? '' : `<div class="pb"><i class="a" style="flex:${100 - hp}"></i><i class="h" style="flex:${hp}"></i></div>`}<div class="ou">${foot}</div></button>`;
+  return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}${hp == null || f ? '' : `<div class="pb"><i class="a" style="flex:${100 - hp}"></i><i class="h" style="flex:${hp}"></i></div>`}${hotLine(c)}<div class="ou">${foot}</div></button>`;
 }
 // ---------- Movement: every priced game of the day, opening -> close ----------
 function closeState(c) {
@@ -394,7 +407,7 @@ function movesView() {
   const head = `<div class="nt">DraftKings prices from ESPN, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before puck drop, after the morning skate and starting goalies, then locked. A move of ${BIG_MOVE}+ points is a big move: news reaching the price, not a bet.${none ? ` ${none} game${none === 1 ? '' : 's'} on this day ha${none === 1 ? 's' : 've'} no price yet.` : ''}</div>`;
   const card1 = ({ c, hm, st }) => {
     const px = c.px, op = px.op || px.f || {}, ot = px.opt || px.f || {}, fin = c.final, hw = fin ? fin.h > fin.a : null, over = fin && px.tl != null ? fin.total > px.tl : null;
-    const row = (label, a, b, p0, p1, d, won) => `<tr${won ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${p0 == null ? '–' : Math.round(p0) + '→' + Math.round(p1) + '%'}</td><td class="${d != null && Math.abs(d) >= BIG_MOVE ? 'bg' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
+    const row = (label, a, b, p0, p1, d, won) => `<tr${won ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${p0 == null ? '–' : Math.round(p0) + '→' + Math.round(p1) + '%'}</td><td class="${hot(d) ? 'neon' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
     const ml = hm.ml, ou = hm.ou;
     const rowsHtml = (px.h != null ? row(`${esc(c.aAbbr)} win`, op.a, px.a, ml ? 100 - ml.p0 : null, ml ? 100 - ml.p1 : null, ml ? -ml.d : null, hw === false) + row(`${esc(c.hAbbr)} win`, op.h, px.h, ml ? ml.p0 : null, ml ? ml.p1 : null, ml ? ml.d : null, hw === true) : '')
       + (px.tl != null ? row(`Over ${px.tl}`, ot.tl === px.tl ? ot.to : null, px.to, ou ? ou.p0 : null, ou ? ou.p1 : null, ou ? ou.d : null, over === true) + row(`Under ${px.tl}`, ot.tl === px.tl ? ot.tu : null, px.tu, ou ? 100 - ou.p0 : null, ou ? 100 - ou.p1 : null, ou ? -ou.d : null, over === false && fin.total !== px.tl) : '');
