@@ -1,8 +1,8 @@
 // The Analyst (src/analyst.js): its rules, one position per game and market, settling at the close and the result, the record,
 // benching, and storage through the price read in src/worker.js.
 import { view, RULES, decide, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst } from '../src/analyst.js';
-import { refreshOdds, analystShop } from '../src/worker.js';
-import { bestPrices, fetchBest } from '../src/btts.js';
+import { refreshOdds, analystShop, analystSharp, readSharpNote } from '../src/worker.js';
+import { bestPrices, fetchBest, sharpOf, fetchSharp } from '../src/btts.js';
 let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) bad++; };
 const rule = id => RULES.find(r => r.id === id);
 const KO = '2026-10-28T19:00:00Z', NOW = new Date('2026-10-28T12:00:00Z');
@@ -94,5 +94,41 @@ settle(hb, card({ odds: { ...card().odds, h: -105 }, final: { h: 1, a: 0 } }), n
 ok('shopping: units at the best price and at DraftKings, CLV with and without the gain', hb.units === 1.2 && hb.udk === 1.1 && hb.clv > hb.clvDk && hb.clvDk > 0, JSON.stringify(hb));
 const ss = summary([hb]).all.shop;
 ok('shopping: the record shows the gain and the DraftKings-only units', ss.n === 1 && ss.better === 1 && ss.gain > 0 && ss.unitsDk === 1.1 && ss.clvDk === hb.clvDk, JSON.stringify(ss));
+
+// --- stale price: DraftKings against a sharp book ---
+const sev = (dkH, pin) => ({ id: 'e2', home_team: 'Arsenal', away_team: 'Brighton and Hove Albion', commence_time: KO, bookmakers: [
+  { key: 'draftkings', markets: [{ key: 'h2h', outcomes: [{ name: 'Arsenal', price: dkH }, { name: 'Draw', price: 240 }, { name: 'Brighton and Hove Albion', price: 240 }] }, { key: 'totals', outcomes: [{ name: 'Over', price: -120, point: 2.5 }, { name: 'Under', price: 100, point: 2.5 }] }] },
+  ...(pin ? [{ key: pin, markets: [{ key: 'h2h', outcomes: [{ name: 'Arsenal', price: -110 }, { name: 'Draw', price: 270 }, { name: 'Brighton and Hove Albion', price: 300 }] }, { key: 'totals', outcomes: [{ name: 'Over', price: -115, point: 2.5 }, { name: 'Under', price: 105, point: 2.5 }] }] }] : [])] });
+const sp = sharpOf(sev(120, 'pinnacle'));
+ok('sharpOf: Pinnacle fair chances with the margin removed, next to DraftKings', sp.book === 'pinnacle' && Math.abs(sp.fair.H + sp.fair.D + sp.fair.A - 1) < 1e-9 && sp.fair.H > 0.5 && sp.dk.H === 120 && sp.fair.O > 0.5);
+ok('sharpOf: an exchange stands in when Pinnacle is missing', sharpOf(sev(120, 'betfair_ex_eu')).book === 'betfair_ex_eu');
+ok('sharpOf: no sharp book, nothing', sharpOf(sev(120, null)) === null);
+const stale = rule('stale'), hit = stale.pick(null, sp);
+ok('stale: DraftKings +120 against a fair ~51% home win is a bet', hit && hit.key === 'H' && hit.price === 120 && hit.sharp.ev >= 2 && /Pinnacle/.test(hit.why), JSON.stringify(hit));
+ok('stale: no bet when DraftKings is in line with the sharp price', stale.pick(null, sharpOf(sev(-115, 'pinnacle'))) === null);
+ok('stale: nothing longer than +400', stale.pick(null, { book: 'pinnacle', fair: { H: 0.3, D: 0.3, A: 0.4 }, dk: { A: 600 } }) === null);
+const smap = new Map([['g1', sp]]);
+const sd = decide([], [card({ v4: null })], '2026-10-28', NOW, new Set(), smap);
+ok('decide: the stale rule bets a card with no v4, and goes first', sd.length === 1 && sd[0].rule === 'stale' && sd[0].sharp.book === 'pinnacle' && sd[0].v4 === null && sd[0].mp > 50, JSON.stringify(sd));
+const sd2 = decide([], [card()], '2026-10-28', NOW, new Set(), smap);
+ok('decide: with v4 too, stale takes the 1X2 position and the goals rule the Over/Under', sd2.find(b => b.key === 'H').rule === 'stale' && sd2.find(b => b.key === 'O').rule === 'totals');
+const fakeSharp = async () => ({ ok: true, headers: { get: () => '300' }, json: async () => [sev(120, 'pinnacle')] });
+const fs1 = await fetchSharp('k', 'eng.1', [card()], fakeSharp);
+ok('fetchSharp: one call, matched, books seen', fs1.prices.get('g1').book === 'pinnacle' && fs1.books.includes('pinnacle') && fs1.left === 300);
+// throttling, with a stand-in for the edge cache
+const store = new Map(); globalThis.caches = { default: { match: async k => { const v = store.get(String(k.url || k)); return v ? new Response(v) : undefined; }, put: async (k, r) => { store.set(String(k.url || k), await r.text()); }, delete: async k => store.delete(String(k.url || k)) } };
+let sc = 0; const countSharp = async u => { sc++; return fakeSharp(u); };
+const shf = analystSharp({ ODDS_API_KEY: 'k' }, 'eng.1', countSharp, NOW);
+ok('analystSharp: looks once', (await shf([card()])).get('g1').book === 'pinnacle' && sc === 1);
+ok('analystSharp: not again for the same league within the gap', (await shf([card()])) === null && sc === 1);
+ok('analystSharp: notes the last look for the tab', (await readSharpNote()).sharp.includes('pinnacle') && (await readSharpNote()).matched === 1);
+const cap = analystSharp({ ODDS_API_KEY: 'k', SHARP_PER_DAY: '1' }, 'ger.1', countSharp, NOW);
+ok('analystSharp: stops at the daily limit', (await cap([card()])) === null && sc === 1);
+ok('analystSharp: no key, no look', analystSharp({}, 'eng.1', countSharp) === null);
+const kv3 = new Map(), env3 = { HUB: { get: async (k, t) => { const x = kv3.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { kv3.set(k, x); } } };
+await analystLook(env3, '2026-10-28', [card({ v4: null })], NOW, null, async () => smap);
+const st = (await getAnalyst(env3)).items;
+ok('analystLook: places the stale bet from the sharp look', st.length === 1 && st[0].rule === 'stale' && st[0].price === 120 && st[0].dk === 120);
+delete globalThis.caches;
 console.log(bad ? `\n${bad} FAILED` : '\nAll Analyst checks passed');
 process.exit(bad ? 1 : 0);

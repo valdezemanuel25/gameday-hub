@@ -1453,6 +1453,17 @@ function anBet(b) {
   const bk = b.bk && b.bk !== 'draftkings' ? ` <small class="fnt">${esc(BOOK[b.bk] || b.bk)} (DK ${fmtOdds(b.dk)})</small>` : b.bk ? ' <small class="fnt">DK</small>' : '';
   return `<div class="mbg"><div class="mbt"><b>${esc(AN_KEY[b.key] || b.key)} ${fmtOdds(b.price)}${bk}</b>${st}</div><small>${esc(b.home)} vs ${esc(b.away)} · ${esc(b.leagueName)}${b.score ? ` · ${esc(b.score)}` : ''}</small><small>${esc(rule ? rule.name : b.rule)} · bet ${when}${cl}</small><small>${esc(b.why || '')}</small></div>`;
 }
+const SHARPN = { pinnacle: 'Pinnacle', betfair_ex_eu: 'Betfair exchange (EU)', betfair_ex_uk: 'Betfair exchange (UK)', matchbook: 'Matchbook' };
+function anSharp() {
+  const n = AN.sharpNote, btn = `<button type="button" data-sharpchk="1" style="margin-top:8px;padding:6px 12px;border-radius:99px;border:1px solid var(--line);font-size:12px;font-weight:650;color:var(--ink)">Check which sharp books my plan has (2 credits)</button>`;
+  let t;
+  if (!AN.sharpKey) t = 'Needs the ODDS_API_KEY Worker secret. Without it this rule never bets.';
+  else if (!n) t = 'No look yet. The first one happens at the next price read of a league with games coming up.';
+  else if (n.error) t = `Last look ${esc(ago(n.at))} failed: ${esc(n.error)}.`;
+  else if (!n.sharp.length) t = `<b>No sharp book in your plan's prices</b> (last look ${esc(ago(n.at))}, books seen: ${esc(n.books.join(', ') || 'none')}). This rule cannot bet until one of Pinnacle, Betfair exchange or Matchbook comes back.`;
+  else t = `Sharp book: <b>${esc(n.sharp.map(b => SHARPN[b] || b).join(', '))}</b> ✓ · last look ${esc(ago(n.at))}${n.check ? ' (check)' : `, ${n.matched} of ${n.games} games matched`}${n.left != null ? ` · ${n.left} credits left` : ''}.`;
+  return `<div class="small" style="margin:6px 18px 0">${t}<br>${btn}</div>`;
+}
 function analystView() {
   if (!AN) return `<div class="empty">Loading…</div>`;
   if (AN.error) return `<div class="empty">${esc(AN.error)}</div>`;
@@ -1460,7 +1471,8 @@ function analystView() {
   const tiles = `<div class="tiles"><div class="tile"><div class="l">Units</div><div class="v ${A.units >= 0 ? 'up' : 'dn'}">${A.settled ? u2(A.units) : '–'}</div><div class="f">${A.settled} settled</div></div><div class="tile"><div class="l">ROI</div><div class="v">${A.roi != null ? sgn(A.roi) + '%' : '–'}</div><div class="f">${A.hit != null ? A.hit + '% won' : 'no results yet'}</div></div><div class="tile"><div class="l">vs closing price</div><div class="v">${A.clv != null ? sgn(A.clv) + '%' : '–'}</div><div class="f">${A.clvN ? `beat it ${A.beat}%` : 'none yet'}</div></div></div>`;
   return `<div class="small" style="margin:8px 4px 0">The Analyst is a paper bettor. Every time a soccer price is read it looks at the move since the opening price and at v4, and bets 1 unit at that price when one of its rules fires (one bet per game per market, never both sides). It is scored on profit and on the closing price: beating the close is the first honest sign of an edge. Each bet takes the best price among the US sportsbooks. A rule losing on both after ${S2.bench.n} bets is benched. Started ${esc(S2.since)}. No real money.</div>
     <div class="zsum">${esc(S2.verdict)}</div>${tiles}${anCurve(S2.curve)}
-    <div class="sec">Rules<small>Backtest at the closing price (1,929 league games, walk-forward v4): every rule lost 5-10%, so any profit has to come from betting before the move finishes.</small></div>
+    <div class="sec">Stale price check<small>DraftKings against a sharp book at the same moment. Looks at a league at most every 3 hours, 15 looks a day, 2 credits each.</small></div>${anSharp()}
+    <div class="sec">Rules<small>The move and v4 rules lost 5-10% at the closing price in the backtest (1,929 league games), so any profit there has to come from betting before the move finishes. The stale-price rule reads no model.</small></div>
     <div class="mbx">${S2.rules.map(r => anRow(esc(r.name), esc(r.rule), r, r.benched ? ' <span class="pv no">benched</span>' : '')).join('')}</div>
     <div class="sec">Price shopping<small>When a rule fires the bet takes the best price among the US books if one beats DraftKings.</small></div>${anShop(A.shop)}
     <div class="sec">When it bet</div><div class="mbx">${S2.when.map(w => anRow(esc(w.name[0].toUpperCase() + w.name.slice(1)), '', w)).join('')}</div>
@@ -1842,7 +1854,8 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],.hd'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],.hd'); if (!t) return;
+  if (t.dataset.sharpchk) { t.disabled = true; t.textContent = 'Checking…'; try { const r = await post('/api/analyst/sharp-check'); if (r.error) say(r.error); } catch (er) { say(er.message); } await loadAnalyst(); return render(); }
   if (t.dataset.bg !== undefined) { const [d, id] = t.dataset.bg.split('|'); BS.game = BS.games.find(x => x.date === d && x.c.id === id) || null; if (BS.game && BS.game.c.sport === 'nhl' && !['win','ou'].includes(BS.market)) BS.market = 'win'; BS.sel = null; BS.cur = null; BS.msg = ''; return render(); }
   if (t.dataset.push) return pushAct(t.dataset.push);
   if (t.dataset.bsp) { BS.sport = t.dataset.bsp; BS.lg = BS.sport === 'nhl' ? 'nhl' : null; return render(); }

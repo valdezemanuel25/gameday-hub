@@ -98,6 +98,11 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
   * **Fade the drift:** a result lost 4+ points but v4 still rates it at or above the price now.
   * **Goals move:** Over 2.5 moved 3+ points and v4 is on the same side.
   * It takes one position per game per market and never bets both sides. Promoted-club stand-in ratings are skipped.
+* **Stale price rule (Oct 27, 2026), the main test:** DraftKings against a sharp book at the same moment (Pinnacle, else the Betfair or Matchbook exchange; `fetchSharp` in `src/btts.js`).
+  * **When it bets:** DraftKings pays 2%+ more than the sharp book's fair chance (margin removed) on a result or Over/Under 2.5, at +400 or shorter. It bets DraftKings. No model is read, so it can bet games v4 doesn't cover. It is first in the rule order.
+  * **Cost:** one Odds API call per look at a league (2 credits). It looks at a league at most every 3 hours and 15 times a day in all (about 30 credits a day on busy days), and stops at the credit reserve. Change these with the Worker variables `SHARP_GAP_H` and `SHARP_PER_DAY`.
+  * **Which sharp book you get:** depends on the Odds API plan. The Analyst tab shows which book came back on the last look, and its "Check which sharp books my plan has" button makes one call (2 credits) to find out now. With no sharp book in the plan, this rule never bets.
+  * **Backtest stand-in** (Bet365 against Pinnacle at the same moment, 8,389 games): +9% on 447 opening-price bets at 0%+, −5% at 2%+, negative at the close. DraftKings may lag more than Bet365; the live closing-line value decides.
 * **Price shopping (Oct 27, 2026):** when a rule fires, the bet takes the best home / draw / away or Over / Under 2.5 price among the US-regulated books (DraftKings, FanDuel, BetMGM, Caesars, BetRivers, ESPN BET, Fanatics, Bally Bet, Hard Rock) if one beats DraftKings (`fetchBest` in `src/btts.js`).
   * **Which price the rules read:** always DraftKings. A better price only changes what the bet pays.
   * **Cost:** one Odds API call for the whole league (2 credits), and only when a rule has fired. It uses the `ODDS_API_KEY` secret and stops when credits reach the reserve (`BTTS_RESERVE`), so the both-score closing reads keep theirs. Without the key it bets at DraftKings.

@@ -14,6 +14,10 @@
 //   rule's skill on its own, without the shopping gain (clv includes it). Without the API key, or with few credits left, it
 //   bets at DraftKings. The rule never reads the other books: a better price only changes what the bet pays.
 //   A rule that is losing on both after BENCH.n bets is benched (no new bets) until a later look says otherwise; it is never deleted.
+//   Stale price (rule 'stale', first in RULES): DraftKings' price against a sharp book's price at the same moment (Pinnacle, else the
+//   Betfair or Matchbook exchange, src/btts.js fetchSharp), margin removed. When DraftKings pays STALE.ev or more above the sharp book's
+//   fair chance, DraftKings has not caught up with the market: bet DraftKings. No model is read. It needs the ODDS_API_KEY secret and
+//   costs 2 credits per look at a league, so src/worker.js analystSharp limits how often it looks.
 //   Backtest (tools/backtest-analyst.mjs, walk-forward v4 against Bet365's opening and closing prices, 1,929 league games): at the
 //   closing price none of these rules made money; see the numbers in the comments on RULES. The live test is whether betting at
 //   earlier reads, before a move has finished, does better than the close.
@@ -21,6 +25,7 @@ import { devig } from './v6core.js';
 import { leanHit } from './pick.js';
 
 export const SINCE = '2026-10-27';
+export const STALE = { ev: 0.02, maxPrice: 400 }; // stale price: DraftKings pays 2%+ over the sharp fair price; nothing longer than +400
 export const BENCH = { n: 40, clv: 0, roi: 0 }; // benched when, after n settled bets, average closing-line value and ROI are both <= these
 const K = 'HDA', r1 = x => Math.round(10 * x) / 10;
 const dec = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
@@ -42,8 +47,18 @@ export function view({ v4, open, now, openT }) {
 }
 const pickIdx = (vals, ok) => { let j = -1; vals.forEach((v, i) => { if (ok(i) && (j < 0 || v > vals[j])) j = i; }); return j; };
 const why1 = (V, i, s) => `${['Home', 'Draw', 'Away'][i]} ${r1(V.p0[i])}%→${r1(V.p1[i])}% (${V.d[i] >= 0 ? '+' : ''}${r1(V.d[i])}), v4 ${r1(V.p1[i] + V.e[i])}%: ${s}`;
-// The rules. pick(V) -> { key, price, why } | null. Backtest at the closing price (1 unit a bet, first half / second half of the window):
+// The rules. pick(V, S) -> { key, price, why } | null: V is the move and v4 (view), S the sharp price (sharpOf in src/btts.js); a rule
+// is only asked when it has what it needs (sharp: true rules need S, the others V). Backtest at the closing price (1 unit a bet, first
+// half / second half of the window):
 export const RULES = [
+  { id: 'stale', sharp: true, name: 'Stale price: DraftKings behind the sharp book', rule: 'DraftKings pays 2%+ more than the sharp book\'s fair chance (Pinnacle or a betting exchange, margin removed) on a result or Over/Under 2.5, at +400 or shorter',
+    // Bet365 against Pinnacle at the same moment (data/football-data, 8,389 games): opening prices +9% on 447 bets at 0%+, -5% at 2%+;
+    // closing prices -3% / -4%. Bet365 is not DraftKings: the live test is whether DraftKings lags more.
+    pick: (V, S) => { let best = null;
+      for (const k of ['H', 'D', 'A', 'O', 'U']) { const m = S.dk[k], q = S.fair[k]; if (!Number.isFinite(m) || q == null || m > STALE.maxPrice) continue;
+        const ev = q * dec(m) - 1; if (ev >= STALE.ev && (!best || ev > best.ev)) best = { key: k, price: m, ev, q }; }
+      return best && { key: best.key, price: best.price, sharp: { book: S.book, fair: r1(100 * best.q), ev: r1(100 * best.ev) },
+        why: `${LABEL[best.key]} DraftKings ${best.price > 0 ? '+' : ''}${best.price} pays ${r1(100 * best.ev)}% over ${BOOKN[S.book] || S.book}'s fair ${r1(100 * best.q)}%: DraftKings has not caught up` }; } },
   { id: 'follow', name: 'Follow the move, v4 agrees', rule: 'A result\'s chance rose 3+ points since the opening price and v4 rated it above the opening price too',
     // close: 249 bets, -24% / +2% (-10% overall)
     pick: V => { const i = pickIdx(V.d, i => V.d[i] >= 3 && V.e0[i] > 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the money moved the way v4 already leaned') }; } },
@@ -62,26 +77,30 @@ export const RULES = [
 // ---- one look at a set of cards: the new bets, if any ----
 const MKT = k => (k === 'O' || k === 'U' ? 'ou' : '1x2');
 export const LABEL = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5' };
+const BOOKN = { pinnacle: 'Pinnacle', betfair_ex_eu: 'Betfair', betfair_ex_uk: 'Betfair', matchbook: 'Matchbook' };
 // The Analyst only bets a card with a v4 number that is not the rough promoted-club stand-in, and with a price to read.
 export function lookCard(c) {
   if (!c || c.final || !c.odds || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null;
   return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds) });
 }
 // One position per game per market (1X2, Over/Under): the first rule to fire takes it, in RULES order, and later reads never add to it
-// or bet the other side. A benched rule places nothing.
-export function decide(items, cards, date, now = new Date(), benched = new Set()) {
+// or bet the other side. A benched rule places nothing. sharp: Map(cardId -> sharpOf) for the stale-price rule, or null.
+export function decide(items, cards, date, now = new Date(), benched = new Set(), sharp = null) {
   const held = new Set(items.map(b => `${b.date}|${b.league}|${b.gid}|${MKT(b.key)}`)), out = [];
   for (const c of cards) {
-    const V = lookCard(c); if (!V) continue;
+    if (!c || c.final || !c.odds) continue;
+    const V = lookCard(c), S = sharp && sharp.get(c.id); if (!V && !S) continue;
     for (const r of RULES) {
-      if (benched.has(r.id)) continue;
-      const b = r.pick(V); if (!b || !Number.isFinite(b.price)) continue;
+      if (benched.has(r.id) || (r.sharp ? !S : !V)) continue;
+      const b = r.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
       const k = `${date}|${c.league}|${c.id}|${MKT(b.key)}`; if (held.has(k)) continue;
       held.add(k);
-      const i = 'HDA'.indexOf(b.key), mp = i >= 0 ? V.p1[i] : b.key === 'O' ? V.ou.p1 : 100 - V.ou.p1, v4p = i >= 0 ? c.v4.p[i] : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
+      const i = 'HDA'.indexOf(b.key), v4ok = c.v4 && Array.isArray(c.v4.p);
+      const mp = b.sharp ? b.sharp.fair : i >= 0 ? V.p1[i] : b.key === 'O' ? V.ou.p1 : 100 - V.ou.p1;
+      const v4p = !v4ok ? null : i >= 0 ? c.v4.p[i] : typeof c.v4.over !== 'number' ? null : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
       out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), date, league: c.league, gid: c.id,
         home: c.home, away: c.away, leagueName: c.leagueName || c.league, kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
-        rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: r1(v4p), why: b.why, close: null, clv: null, res: null, units: null });
+        rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: v4p == null ? null : r1(v4p), why: b.why, ...(b.sharp ? { sharp: b.sharp } : {}), close: null, clv: null, res: null, units: null });
     }
   }
   return out;
@@ -156,14 +175,19 @@ const cardKey = (date, league, id) => `${date}|${league}|${id}`;
 // Called after a league's price read and after it is graded (src/worker.js refreshOdds, gradeLeague) with that day's cards for the
 // league: bets on games whose price is still open, and settles that day's bets whose games have started or finished.
 // shop(cards) -> Map(cardId -> { H: { m, bk }, ... }) | null gives the best prices across books (src/worker.js analystShop); it is
-// only asked when a rule has fired. Never throws: the price read must not depend on it.
-export async function analystLook(env, date, cards, now = new Date(), shop = null) {
+// only asked when a rule has fired. sharp(cards) -> Map(cardId -> sharpOf) | null gives DraftKings against a sharp book for the
+// stale-price rule (src/worker.js analystSharp); asked before the rules, only when a game's price is still open.
+// Never throws: the price read must not depend on it.
+export async function analystLook(env, date, cards, now = new Date(), shop = null, sharp = null) {
   try {
     const doc = await getAnalyst(env), byKey = new Map(cards.map(c => [cardKey(date, c.league, c.id), c]));
     let dirty = false;
     for (const b of doc.items) if (!b.res) { const c = byKey.get(cardKey(b.date, b.league, b.gid)); if (c && settle(b, c, now)) dirty = true; }
     const s = summary(doc.items, doc.old), benched = new Set(s.rules.filter(r => r.benched).map(r => r.id));
-    const fresh = decide(doc.items, cards.filter(c => new Date(c.kickoff).getTime() - now.getTime() > LOCK_MIN * 60000), date, now, benched);
+    const live = cards.filter(c => c.odds && !c.final && new Date(c.kickoff).getTime() - now.getTime() > LOCK_MIN * 60000);
+    let sp = null;
+    if (sharp && live.length && !benched.has('stale')) { try { sp = await sharp(live); } catch (e) { sp = null; } }
+    const fresh = decide(doc.items, live, date, now, benched, sp);
     if (fresh.length) {
       let best = null;
       if (shop) { try { best = await shop(cards.filter(c => fresh.some(b => b.gid === c.id))); } catch (e) { best = null; } }

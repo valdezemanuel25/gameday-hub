@@ -78,3 +78,45 @@ export async function fetchBest(key, slug, cards, f = fetch, books = BOOKS) {
   for (const c of cards) { const e = matchEvent(c, events); if (e) out.set(c.id, bestPrices(e, books)); }
   return { prices: out, left };
 }
+
+// ---- the sharp price: DraftKings against a sharp book at the same moment (the Analyst's "stale price" rule, src/analyst.js) ----
+// Sharp books in order of preference: Pinnacle, then the Betfair and Matchbook exchanges. Whichever the plan returns first is used.
+export const SHARP = ['pinnacle', 'betfair_ex_eu', 'betfair_ex_uk', 'matchbook'];
+const fair = (...ms) => { const q = ms.map(m => 1 / decOf(m)); let lo = 0.5, hi = 2, k = 1;
+  for (let i = 0; i < 50; i++) { k = (lo + hi) / 2; const s = q.reduce((a, x) => a + Math.pow(x, k), 0); if (s > 1) lo = k; else hi = k; }
+  const p = q.map(x => Math.pow(x, k)), s = p.reduce((a, b) => a + b, 0); return p.map(x => x / s); }; // power method, as src/v6core.js devig
+const pricesOf = (ev, b) => {
+  const out = {};
+  for (const mk of b.markets || []) for (const o of mk.outcomes || []) {
+    if (!Number.isFinite(o.price)) continue;
+    if (mk.key === 'h2h') { const k = o.name === ev.home_team ? 'H' : o.name === ev.away_team ? 'A' : /^draw$/i.test(o.name) ? 'D' : null; if (k) out[k] = o.price; }
+    else if (mk.key === 'totals' && o.point === 2.5) { const k = /^over$/i.test(o.name) ? 'O' : /^under$/i.test(o.name) ? 'U' : null; if (k) out[k] = o.price; }
+  }
+  return out;
+};
+// One event: { book, fair: { H, D, A, O?, U? } (chances 0-1, margin removed), dk: { H, D, A, O?, U? } (American) } or null without both.
+export function sharpOf(ev) {
+  const books = (ev && ev.bookmakers) || [], dkB = books.find(b => b.key === 'draftkings'); if (!dkB) return null;
+  const dk = pricesOf(ev, dkB);
+  for (const key of SHARP) {
+    const b = books.find(x => x.key === key); if (!b) continue;
+    const p = pricesOf(ev, b); if (![p.H, p.D, p.A].every(Number.isFinite)) continue;
+    const f = fair(p.H, p.D, p.A), out = { book: key, fair: { H: f[0], D: f[1], A: f[2] }, dk };
+    if (Number.isFinite(p.O) && Number.isFinite(p.U)) { const g = fair(p.O, p.U); out.fair.O = g[0]; out.fair.U = g[1]; }
+    return out;
+  }
+  return null;
+}
+// DraftKings and the sharp books for ONE league in one call: 2 credits (two markets; up to 10 named books count as one region).
+// Returns Map(cardId -> sharpOf) for the cards matched to an event, the books seen at all, and the credits left.
+export async function fetchSharp(key, slug, cards, f = fetch) {
+  const sport = SPORT[slug]; if (!sport) return { error: 'No price source for this league' };
+  if (!key) return { error: 'ODDS_API_KEY is not set' };
+  const r = await f(`${BASE}/${sport}/odds?apiKey=${encodeURIComponent(key)}&bookmakers=${['draftkings', ...SHARP].join(',')}&markets=h2h,totals&oddsFormat=american&dateFormat=iso`);
+  const x = r.headers && r.headers.get && r.headers.get('x-requests-remaining'), left = x != null ? Number(x) : null;
+  if (!r.ok) return { error: `Odds API ${r.status}`, left };
+  const events = await r.json(), out = new Map(), seen = new Set();
+  for (const e of events) for (const b of e.bookmakers || []) seen.add(b.key);
+  for (const c of cards) { const e = matchEvent(c, events), s = e && sharpOf(e); if (s) out.set(c.id, s); }
+  return { prices: out, books: [...seen], left };
+}

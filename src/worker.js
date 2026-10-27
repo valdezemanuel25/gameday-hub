@@ -15,7 +15,7 @@ import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeB
 import { addStrats } from './strats.js';
 import { analystLook, listAnalyst } from './analyst.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
-import { fetchBtts, fetchBest, BOOKS } from './btts.js';
+import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw } from './nhl.js';
@@ -328,6 +328,29 @@ export function analystShop(env, slug, f = fetch) {
     return r.error ? null : r.prices;
   };
 }
+// The Analyst's stale-price rule: DraftKings against a sharp book for the open games of ONE league (2 credits a look). Looks at a
+// league at most every SHARP_GAP_H hours and at most SHARP_PER_DAY times a day in all (Worker variables, defaults below; both kept
+// in the free edge cache), and never once the month's credits are at BTTS_RESERVE or below. The last look is noted for the Analyst tab.
+export const SHARP_GAP_H = 3, SHARP_PER_DAY = 15;
+const SHARP_NOTE = 'https://hub.local/sharp-last';
+async function cacheGet(k) { try { const r = typeof caches !== 'undefined' ? await caches.default.match(k) : null; return r ? await r.json() : null; } catch (e) { return null; } }
+async function cachePut(k, v, secs) { try { if (typeof caches !== 'undefined') await caches.default.put(k, new Response(JSON.stringify(v), { headers: { 'cache-control': `max-age=${secs}` } })); } catch (e) { /* ignore */ } }
+export const readSharpNote = () => cacheGet(SHARP_NOTE);
+export function analystSharp(env, slug, f = fetch, now = new Date()) {
+  if (!env.ODDS_API_KEY) return null;
+  return async cards => {
+    const day = now.toISOString().slice(0, 10), gapK = `https://hub.local/sharp/${slug}`, dayK = `https://hub.local/sharp-day/${day}`;
+    if (await cacheGet(gapK)) return null;
+    const used = (await cacheGet(dayK)) || 0; if (used >= num(env.SHARP_PER_DAY, SHARP_PER_DAY)) return null;
+    const c = await readCredits(); if (c && c.left != null && c.left <= num(env.BTTS_RESERVE, BTTS_RESERVE)) return null;
+    await cachePut(gapK, 1, Math.round(num(env.SHARP_GAP_H, SHARP_GAP_H) * 3600)); await cachePut(dayK, used + 1, 90000);
+    const r = await fetchSharp(env.ODDS_API_KEY, slug, cards, f);
+    if (r.left != null) await noteCredits(r.left);
+    const found = r.prices ? [...r.prices.values()] : [];
+    await cachePut(SHARP_NOTE, { at: now.toISOString(), league: slug, error: r.error || null, books: r.books || [], sharp: (r.books || []).filter(b => SHARP.includes(b)), games: cards.length, matched: found.length, used: found.map(x => x.book), left: r.left ?? null, today: used + 1 }, 2592000);
+    return r.error ? null : r.prices;
+  };
+}
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
@@ -346,7 +369,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
   }
   changed += await addBtts(env, open, slug, now, f);
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
-  const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f)); // the Analyst reads the same prices (src/analyst.js)
+  const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f), analystSharp(env, slug, f, now)); // the Analyst reads the same prices (src/analyst.js)
   return { games: open.length, priced, changed, analyst: an };
 }
 // Background: look at ONE first-division league per run (each at most every 6 hours, remembered in the free edge cache so it costs no
@@ -852,7 +875,13 @@ const hub = {
       } catch (e) { return json({ error: `Bets: ${e && e.message ? e.message : e}` }, 500); }
       return json({ error: 'Not found' }, 404);
     }
-    if (p === '/api/analyst') { try { return json(await listAnalyst(env)); } catch (e) { return json({ error: `Analyst: ${e && e.message ? e.message : e}` }, 500); } }
+    if (req.method === 'POST' && p === '/api/analyst/sharp-check') { // which sharp books the Odds API plan returns: one call, 2 credits, no bets
+      try { const lg = leagueBySlug(q('league') || 'eng.1'); if (!lg) return json({ error: 'Unknown league' }, 400); if (!env.ODDS_API_KEY) return json({ error: 'ODDS_API_KEY is not set' });
+        const r = await fetchSharp(env.ODDS_API_KEY, lg.slug, []); if (r.left != null) await noteCredits(r.left);
+        const out = { at: new Date().toISOString(), league: lg.slug, error: r.error || null, books: r.books || [], sharp: (r.books || []).filter(b => SHARP.includes(b)), games: 0, matched: 0, used: [], left: r.left ?? null, check: true };
+        await cachePut(SHARP_NOTE, out, 2592000); return json(out);
+      } catch (e) { return json({ error: `Sharp check: ${e && e.message ? e.message : e}` }, 500); } }
+    if (p === '/api/analyst') { try { return json({ ...(await listAnalyst(env)), sharpNote: await readSharpNote(), sharpKey: !!env.ODDS_API_KEY }); } catch (e) { return json({ error: `Analyst: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/day') { const date = q('date') || today(); return json((await env.HUB.get(`nhl:day:${date}`, 'json')) || { date, cards: [] }); }
     if (p === '/api/nhl/days') { // every saved hockey day, for the Export button
       const out = []; let cursor;
