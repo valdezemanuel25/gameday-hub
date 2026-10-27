@@ -8,6 +8,11 @@
 //     * profit at the price taken (what counts, but it needs hundreds of bets to mean anything),
 //     * closing-line value: the price taken against the closing price (the lineup read). Beating the close is the quickest honest
 //       sign of an edge, and it is known as soon as the game kicks off.
+//   Price shopping: when a rule fires, the bet takes the best price among the US books (src/btts.js fetchBest, through The Odds API)
+//   if one beats DraftKings, which is the price the rule was read on. The DraftKings price is kept on the bet (dk) so the record shows
+//   both: units at the best price and units had every bet gone on at DraftKings. clvDk is DraftKings' own price against its close: the
+//   rule's skill on its own, without the shopping gain (clv includes it). Without the API key, or with few credits left, it
+//   bets at DraftKings. The rule never reads the other books: a better price only changes what the bet pays.
 //   A rule that is losing on both after BENCH.n bets is benched (no new bets) until a later look says otherwise; it is never deleted.
 //   Backtest (tools/backtest-analyst.mjs, walk-forward v4 against Bet365's opening and closing prices, 1,929 league games): at the
 //   closing price none of these rules made money; see the numbers in the comments on RULES. The live test is whether betting at
@@ -90,24 +95,29 @@ export function settle(b, c, now = new Date()) {
   let ch = false; const ko = new Date(b.kickoff).getTime();
   if (b.close == null && c && c.odds && now.getTime() >= ko) {
     const m = closeOf(c.odds, b.key);
-    if (m != null) { b.close = m; b.clv = r1(100 * (dec(b.price) / dec(m) - 1)); ch = true; }
+    if (m != null) { b.close = m; b.clv = r1(100 * (dec(b.price) / dec(m) - 1)); if (b.dk != null) b.clvDk = r1(100 * (dec(b.dk) / dec(m) - 1)); ch = true; }
   }
-  if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
+  if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); if (b.dk != null) b.udk = +(hit ? dec(b.dk) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
   else if (now.getTime() - ko > VOID_AFTER) { b.res = 'void'; b.units = 0; ch = true; }
   return ch;
 }
 
 // ---- the record ----
-const blank = () => ({ n: 0, open: 0, settled: 0, wins: 0, units: 0, clvN: 0, clvSum: 0, beat: 0 });
+const blank = () => ({ n: 0, open: 0, settled: 0, wins: 0, units: 0, clvN: 0, clvSum: 0, beat: 0, shopN: 0, better: 0, gain: 0, dkN: 0, udk: 0, cdN: 0, cd: 0 });
 function add(t, b) {
   t.n++;
   if (b.clv != null) { t.clvN++; t.clvSum += b.clv; t.beat += b.clv > 0 ? 1 : 0; }
+  if (b.dk != null) { t.shopN++; const g = dec(b.price) / dec(b.dk) - 1; t.gain += g; t.better += g > 0 ? 1 : 0; }
+  if (b.udk != null) { t.dkN++; t.udk += b.udk; }
+  if (b.clvDk != null) { t.cdN++; t.cd += b.clvDk; }
   if (!b.res) { t.open++; return; }
   if (b.res === 'void') return;
   t.settled++; t.wins += b.res === 'win' ? 1 : 0; t.units += b.units;
 }
 const done = t => ({ n: t.n, open: t.open, settled: t.settled, wins: t.wins, hit: t.settled ? r1(100 * t.wins / t.settled) : null, units: +t.units.toFixed(2),
-  roi: t.settled ? r1(100 * t.units / t.settled) : null, clv: t.clvN ? +(t.clvSum / t.clvN).toFixed(2) : null, clvN: t.clvN, beat: t.clvN ? r1(100 * t.beat / t.clvN) : null });
+  roi: t.settled ? r1(100 * t.units / t.settled) : null, clv: t.clvN ? +(t.clvSum / t.clvN).toFixed(2) : null, clvN: t.clvN, beat: t.clvN ? r1(100 * t.beat / t.clvN) : null,
+  // price shopping: how many bets found a better price than DraftKings, the average gain in payout, and units had they all gone on at DraftKings
+  shop: t.shopN ? { n: t.shopN, better: t.better, gain: +(100 * t.gain / t.shopN).toFixed(2), dkN: t.dkN, unitsDk: +t.udk.toFixed(2), clvDk: t.cdN ? +(t.cd / t.cdN).toFixed(2) : null } : null });
 export const isBenched = s => s.settled >= BENCH.n && s.clv != null && s.clv <= BENCH.clv && s.roi <= BENCH.roi;
 // When the bet was placed: the early reads are where an edge over the close could come from.
 const WHEN = [['early', '3+ hours before kickoff', m => m >= 180], ['late', 'last 3 hours (incl. the lineup read)', m => m < 180]];
@@ -135,7 +145,8 @@ export function verdict(s) {
 const KEEP = 600, LOCK_MIN = 20; // LOCK_MIN: the price locks 20 minutes before kickoff (PRICE_LOCK in src/worker.js)
 export async function getAnalyst(env) { return (await env.HUB.get('analyst', 'json')) || { v: 1, items: [] }; }
 // Past KEEP bets, settled ones are kept only as a short row for the record (the page lists the latest 300 in full).
-const pack = b => [b.kickoff, b.rule, b.key, b.mins, b.res, b.units, b.clv], unpack = ([kickoff, rule, key, mins, res, units, clv]) => ({ kickoff, rule, key, mins, res, units, clv });
+const pack = b => [b.kickoff, b.rule, b.key, b.mins, b.res, b.units, b.clv, b.price, b.dk, b.udk],
+  unpack = ([kickoff, rule, key, mins, res, units, clv, price, dk, udk]) => ({ kickoff, rule, key, mins, res, units, clv, ...(dk != null ? { price, dk, udk } : {}) });
 const save = (env, doc) => {
   const extra = doc.items.slice(KEEP); doc.items = doc.items.slice(0, KEEP).concat(extra.filter(b => !b.res));
   if (extra.length) doc.old = (doc.old || []).concat(extra.filter(b => b.res).map(pack));
@@ -143,15 +154,26 @@ const save = (env, doc) => {
 };
 const cardKey = (date, league, id) => `${date}|${league}|${id}`;
 // Called after a league's price read and after it is graded (src/worker.js refreshOdds, gradeLeague) with that day's cards for the
-// league: bets on games whose price is still open, and settles that day's bets whose games have started or finished. Never throws: the price read must not depend on it.
-export async function analystLook(env, date, cards, now = new Date()) {
+// league: bets on games whose price is still open, and settles that day's bets whose games have started or finished.
+// shop(cards) -> Map(cardId -> { H: { m, bk }, ... }) | null gives the best prices across books (src/worker.js analystShop); it is
+// only asked when a rule has fired. Never throws: the price read must not depend on it.
+export async function analystLook(env, date, cards, now = new Date(), shop = null) {
   try {
     const doc = await getAnalyst(env), byKey = new Map(cards.map(c => [cardKey(date, c.league, c.id), c]));
     let dirty = false;
     for (const b of doc.items) if (!b.res) { const c = byKey.get(cardKey(b.date, b.league, b.gid)); if (c && settle(b, c, now)) dirty = true; }
     const s = summary(doc.items, doc.old), benched = new Set(s.rules.filter(r => r.benched).map(r => r.id));
     const fresh = decide(doc.items, cards.filter(c => new Date(c.kickoff).getTime() - now.getTime() > LOCK_MIN * 60000), date, now, benched);
-    if (fresh.length) { doc.items.unshift(...fresh); dirty = true; }
+    if (fresh.length) {
+      let best = null;
+      if (shop) { try { best = await shop(cards.filter(c => fresh.some(b => b.gid === c.id))); } catch (e) { best = null; } }
+      for (const b of fresh) {
+        b.dk = b.price; b.bk = 'draftkings';
+        const x = best && best.get(b.gid) && best.get(b.gid)[b.key];
+        if (x && dec(x.m) > dec(b.price)) { b.price = x.m; b.bk = x.bk; }
+      }
+      doc.items.unshift(...fresh); dirty = true;
+    }
     if (dirty) await save(env, doc);
     return { placed: fresh.length };
   } catch (e) { return { error: String(e && e.message || e).slice(0, 120) }; }

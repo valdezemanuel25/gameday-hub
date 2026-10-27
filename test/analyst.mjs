@@ -1,7 +1,8 @@
 // The Analyst (src/analyst.js): its rules, one position per game and market, settling at the close and the result, the record,
 // benching, and storage through the price read in src/worker.js.
 import { view, RULES, decide, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst } from '../src/analyst.js';
-import { refreshOdds } from '../src/worker.js';
+import { refreshOdds, analystShop } from '../src/worker.js';
+import { bestPrices, fetchBest } from '../src/btts.js';
 let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) bad++; };
 const rule = id => RULES.find(r => r.id === id);
 const KO = '2026-10-28T19:00:00Z', NOW = new Date('2026-10-28T12:00:00Z');
@@ -66,5 +67,31 @@ globalThis.fetch = async () => new Response(JSON.stringify({ events: [] }));
 kv.set('day:2026-10-30', JSON.stringify({ date: '2026-10-30', cards: [card({ v2: { p: [50, 25, 25] }, kickoff: '2026-10-30T19:00:00Z' })] }));
 const ro = await refreshOdds(env, '2026-10-30', 'eng.1', new Date('2026-10-30T12:00:00Z'));
 ok('refreshOdds: the Analyst looks at the league after its price read', ro.games === 1 && ro.analyst && ro.analyst.placed === 2 && (await getAnalyst(env)).items.filter(x => x.date === '2026-10-30').length === 2, JSON.stringify(ro));
+
+// --- price shopping ---
+const ev = { id: 'e1', home_team: 'Arsenal', away_team: 'Brighton and Hove Albion', commence_time: KO, bookmakers: [
+  { key: 'draftkings', markets: [{ key: 'h2h', outcomes: [{ name: 'Arsenal', price: 110 }, { name: 'Draw', price: 240 }, { name: 'Brighton and Hove Albion', price: 240 }] }, { key: 'totals', outcomes: [{ name: 'Over', price: -120, point: 2.5 }, { name: 'Under', price: 100, point: 2.5 }] }] },
+  { key: 'fanduel', markets: [{ key: 'h2h', outcomes: [{ name: 'Arsenal', price: 120 }, { name: 'Draw', price: 230 }, { name: 'Brighton and Hove Albion', price: 250 }] }, { key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 2.5 }, { name: 'Over', price: 150, point: 3.5 }] }] },
+  { key: 'bovada', markets: [{ key: 'h2h', outcomes: [{ name: 'Arsenal', price: 200 }] }] }] };
+const bp = bestPrices(ev);
+ok('bestPrices: best home, away and Over among the US books', bp.H.m === 120 && bp.H.bk === 'fanduel' && bp.A.m === 250 && bp.O.m === -110 && bp.D.m === 240 && bp.D.bk === 'draftkings', JSON.stringify(bp));
+ok('bestPrices: offshore books and other goal lines are ignored', bp.H.bk !== 'bovada' && bp.O.m !== 150);
+ok('bestPrices: a BOOKS list limits the books', bestPrices(ev, ['draftkings']).H.m === 110);
+let calls = 0; const fakeApi = async u => { calls++; return { ok: true, headers: { get: () => '400' }, json: async () => [ev] }; };
+const fb = await fetchBest('k', 'eng.1', [card()], fakeApi);
+ok('fetchBest: one call for the league, matched to the card', calls === 1 && fb.prices.get('g1').H.m === 120 && fb.left === 400);
+const kv2 = new Map(), env2 = { HUB: { get: async (k, t) => { const x = kv2.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { kv2.set(k, x); } } };
+calls = 0;
+await analystLook(env2, '2026-10-28', [card()], NOW, analystShop({ ODDS_API_KEY: 'k' }, 'eng.1', fakeApi));
+const sh = (await getAnalyst(env2)).items, hb = sh.find(x => x.key === 'H'), ob = sh.find(x => x.key === 'O');
+ok('shopping: the bet takes the better price and keeps DraftKings', hb.price === 120 && hb.bk === 'fanduel' && hb.dk === 110 && ob.price === -110 && ob.dk === -120, JSON.stringify(sh.map(x => [x.key, x.price, x.bk, x.dk])));
+ok('shopping: asked once, only because a rule fired', calls === 1);
+await analystLook(env2, '2026-10-28', [card()], NOW, analystShop({ ODDS_API_KEY: 'k' }, 'eng.1', fakeApi));
+ok('shopping: no call when nothing new fires', calls === 1);
+ok('shopping: no key, no call', analystShop({}, 'eng.1', fakeApi) === null);
+settle(hb, card({ odds: { ...card().odds, h: -105 }, final: { h: 1, a: 0 } }), new Date('2026-10-29T01:00:00Z'));
+ok('shopping: units at the best price and at DraftKings, CLV with and without the gain', hb.units === 1.2 && hb.udk === 1.1 && hb.clv > hb.clvDk && hb.clvDk > 0, JSON.stringify(hb));
+const ss = summary([hb]).all.shop;
+ok('shopping: the record shows the gain and the DraftKings-only units', ss.n === 1 && ss.better === 1 && ss.gain > 0 && ss.unitsDk === 1.1 && ss.clvDk === hb.clvDk, JSON.stringify(ss));
 console.log(bad ? `\n${bad} FAILED` : '\nAll Analyst checks passed');
 process.exit(bad ? 1 : 0);
