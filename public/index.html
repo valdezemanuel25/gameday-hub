@@ -1423,6 +1423,41 @@ function edgesView() {
   const none = `<div class="ed-none">${S.edLong ? 'Nothing clears 5 points today.' : `v4 found nothing it rates ${FLOOR}% or higher that the price undervalues today.`}</div>`;
   return `<div class="ed-wrap">` + sum + tog + `<div class="ed-sec">${S.edLong ? 'Edges of 5+ points' : `v4 at ${FLOOR}%+ and 5+ points over the price`}<span style="text-transform:none;letter-spacing:0"> · biggest first</span></div>` + (shown.length ? shown.map(row).join('') : none) + `</div>`;
 }
+/* ---------- Analyst: a paper bettor that bets its own rules off price moves and v4 (src/analyst.js) ---------- */
+let AN = null;
+async function loadAnalyst() { try { AN = await api('/api/analyst'); } catch (e) { AN = { error: e.message }; } }
+const AN_KEY = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5' };
+const u2 = x => (x > 0 ? '+' : '') + Number(x).toFixed(2) + 'u';
+function anRow(name, sub, x, extra = '') {
+  const v = x.settled ? `<b class="${x.units >= 0 ? 'up' : 'dn'}">${u2(x.units)}</b><small>${x.wins} of ${x.settled} won · ROI ${sgn(x.roi)}%${x.open ? ` · ${x.open} open` : ''}</small>` : `<small>${x.n ? `${x.n} open` : 'no bets yet'}</small>`;
+  const c = x.clvN ? `<small>vs close ${sgn(x.clv)}% · beat it ${x.beat}% (${x.clvN})</small>` : '';
+  return `<div class="mbr"><div class="mbl">${name}${extra}${sub ? `<small>${sub}</small>` : ''}</div><div class="mbv">${v}${c}</div></div>`;
+}
+function anCurve(pts) {
+  if (pts.length < 2) return '';
+  const W = 320, H = 70, ys = pts.map(p => p[1]), lo = Math.min(0, ...ys), hi = Math.max(0, ...ys), sp = hi - lo || 1, X = i => (i / (pts.length - 1)) * W, Y = v => H - 4 - ((v - lo) / sp) * (H - 8);
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(''), last = ys[ys.length - 1];
+  return `<div class="mbx"><svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" role="img" aria-label="Units won over time"><line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)" stroke-dasharray="3 3"/><path d="${d}" fill="none" stroke="${last >= 0 ? 'var(--grass)' : 'var(--miss)'}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg><div class="small" style="display:flex;justify-content:space-between"><span>${esc(pts[0][0])}</span><span>${esc(pts[pts.length - 1][0])}</span></div></div>`;
+}
+function anBet(b) {
+  const st = !b.res ? `<span class="mbs">${new Date(b.kickoff).getTime() > Date.now() ? 'Open' : 'In play'}</span>` : b.res === 'void' ? '<span class="mbs">Void</span>' : `<span class="mbs ${b.res === 'win' ? 'hit' : 'miss'}">${b.res === 'win' ? 'Won' : 'Lost'} ${u2(b.units)}</span>`;
+  const when = b.mins >= 120 ? `${Math.round(b.mins / 60)}h before` : `${b.mins}m before`, rule = (AN.rules || []).find(r => r.id === b.rule);
+  const cl = b.close != null ? ` · close ${fmtOdds(b.close)} <span class="${b.clv > 0 ? 'up' : b.clv < 0 ? 'dn' : ''}">(${sgn(b.clv)}%)</span>` : '';
+  return `<div class="mbg"><div class="mbt"><b>${esc(AN_KEY[b.key] || b.key)} ${fmtOdds(b.price)}</b>${st}</div><small>${esc(b.home)} vs ${esc(b.away)} · ${esc(b.leagueName)}${b.score ? ` · ${esc(b.score)}` : ''}</small><small>${esc(rule ? rule.name : b.rule)} · bet ${when}${cl}</small><small>${esc(b.why || '')}</small></div>`;
+}
+function analystView() {
+  if (!AN) return `<div class="empty">Loading…</div>`;
+  if (AN.error) return `<div class="empty">${esc(AN.error)}</div>`;
+  const S2 = AN.summary, A = S2.all, items = AN.items || [], open = items.filter(b => !b.res), done = items.filter(b => b.res);
+  const tiles = `<div class="tiles"><div class="tile"><div class="l">Units</div><div class="v ${A.units >= 0 ? 'up' : 'dn'}">${A.settled ? u2(A.units) : '–'}</div><div class="f">${A.settled} settled</div></div><div class="tile"><div class="l">ROI</div><div class="v">${A.roi != null ? sgn(A.roi) + '%' : '–'}</div><div class="f">${A.hit != null ? A.hit + '% won' : 'no results yet'}</div></div><div class="tile"><div class="l">vs closing price</div><div class="v">${A.clv != null ? sgn(A.clv) + '%' : '–'}</div><div class="f">${A.clvN ? `beat it ${A.beat}%` : 'none yet'}</div></div></div>`;
+  return `<div class="small" style="margin:8px 4px 0">The Analyst is a paper bettor. Every time a soccer price is read it looks at the move since the opening price and at v4, and bets 1 unit at that price when one of its rules fires (one bet per game per market, never both sides). It is scored on profit and on the closing price: beating the close is the first honest sign of an edge. A rule losing on both after ${S2.bench.n} bets is benched. Started ${esc(S2.since)}. No real money.</div>
+    <div class="zsum">${esc(S2.verdict)}</div>${tiles}${anCurve(S2.curve)}
+    <div class="sec">Rules<small>Backtest at the closing price (1,929 league games, walk-forward v4): every rule lost 5-10%, so any profit has to come from betting before the move finishes.</small></div>
+    <div class="mbx">${S2.rules.map(r => anRow(esc(r.name), esc(r.rule), r, r.benched ? ' <span class="pv no">benched</span>' : '')).join('')}</div>
+    <div class="sec">When it bet</div><div class="mbx">${S2.when.map(w => anRow(esc(w.name[0].toUpperCase() + w.name.slice(1)), '', w)).join('')}</div>
+    <div class="sec">Open bets<small>${open.length ? 'Closing price fills in at kickoff, the result after grading.' : 'None right now.'}</small></div><div class="mbl2">${open.map(anBet).join('')}</div>
+    ${done.length ? `<div class="sec">Settled</div><div class="mbl2">${done.slice(0, 60).map(anBet).join('')}</div>` : ''}`;
+}
 function mbetsView() {
   if (!tally) return `<div class="empty">Loading…</div>`;
   const T = tally.leans || { n: 0, hits: 0, byKind: {}, byKey: {}, byBack: {}, base: {}, recent: [] }, pct = (h, n) => n ? Math.round(100 * h / n) : null;
@@ -1644,7 +1679,7 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['moves', 'Movement'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['moves', 'Movement'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets'], ['analyst', 'Analyst']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function updSDots() { const g = document.getElementById('sgrid'), ds = document.querySelectorAll('.sdots i'); if (!g || !ds.length) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2);
@@ -1653,7 +1688,7 @@ document.addEventListener('scroll', e => { if (e.target && e.target.id === 'sgri
 function render() {
   keepFilter();
   renderHeader();
-  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : S.tab === 'moves' ? movesView() : board();
+  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : S.tab === 'moves' ? movesView() : S.tab === 'analyst' ? analystView() : board();
   updSDots();
 }
 async function loadCounts() {
@@ -1838,7 +1873,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
-    if (S.tab === 'status') { pushCheck(); stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
+    if (S.tab === 'status') { pushCheck(); stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab === 'analyst') { render(); await loadAnalyst(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
   if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
   if (t.classList.contains('hd') && t.closest('#sdt')) { // tapping the opened game's header closes it and returns to the grid

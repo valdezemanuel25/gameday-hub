@@ -89,6 +89,19 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * **Hockey Movement tab:** every priced game with its closing-price status, the same as soccer.
 * **Hockey Results:** how often the winner and the total went the way of the move.
 
+## Analyst (paper bettor, Oct 27, 2026)
+
+* **What it is:** an automated tester that places its own bets with no real money (`src/analyst.js`, **Analyst** tab). Every time a soccer price is read (the same reads as the Movement tab: every 6 hours, hourly in the last 3, and the lineup read), it looks at the move since the opening price and at v4. When one of its rules fires, it bets 1 unit at that read's price and saves a one-line reason.
+* **Rules:**
+  * **Follow the move:** a result gained 3+ points and v4 already rated it above the opening price.
+  * **v4 value:** v4 rates a home or away win 5+ points above the price now, and the price hasn't drifted against it.
+  * **Fade the drift:** a result lost 4+ points but v4 still rates it at or above the price now.
+  * **Goals move:** Over 2.5 moved 3+ points and v4 is on the same side.
+  * It takes one position per game per market and never bets both sides. Promoted-club stand-in ratings are skipped.
+* **Scoring:** units won and ROI at the price taken, plus closing-line value against the lineup-read price. The closing-line number is known at kickoff and settles in tens of bets; profit needs hundreds. Bets are split by when they were placed (3+ hours before kickoff vs the last 3 hours). A rule that is behind on both after 40 settled bets is benched (`BENCH`).
+* **Backtest** (`node tools/backtest-analyst.mjs`: walk-forward v4 against Bet365 opening and closing prices, 1,929 league games): at the closing price every rule lost money (−5% to −10%; backing every closing favourite lost −3.9%). So the live question is whether betting at earlier reads, before a move finishes, beats the close. Until the tab shows a positive closing-line value over a few hundred bets, treat the rules as unproven.
+* **Storage and cost:** one KV document (`analyst`), written only when a bet is placed or settles. Settling happens when a league is graded and when the tab is opened.
+
 ## Score card (v6)
 
 * Every card has a Score card panel: winner, Over/Under 2.5, both-score, the likeliest scores and fair odds, all read off one score grid. With a sportsbook price the grid is fitted to that price, margin removed (`src/v6core.js`, tracked as v6 on the Results tab); without one it shows v4's numbers. See `docs/v6-score-card.md`.
