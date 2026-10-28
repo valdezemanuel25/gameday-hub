@@ -22,7 +22,8 @@
 //   closing price none of these rules made money; see the numbers in the comments on RULES. The live test is whether betting at
 //   earlier reads, before a move has finished, does better than the close.
 import { devig } from './v6core.js';
-import { leanHit } from './pick.js';
+import { leanHit, hockeyHit } from './pick.js';
+import { hockeyMove } from './moves.js';
 
 export const SINCE = '2026-10-27';
 export const STALE = { ev: 0.02, maxPrice: 400 }; // stale price: DraftKings pays 2%+ over the sharp fair price; nothing longer than +400
@@ -106,11 +107,52 @@ export function decide(items, cards, date, now = new Date(), benched = new Set()
   return out;
 }
 
+// ---- hockey (since Oct 28, 2026): the same idea on the NHL cards (src/nhl.js), DraftKings moneyline and total from ESPN ----
+// Hockey's official model is v2 (v4 there is a shadow), so the rules read v2: w = home win % (overtime and shootout count),
+// o = Over % at the card's line. A total counts only when the book's line is the line the model was rated at. No hockey backtest:
+// there is no price history for hockey, so these rules are a live test only, kept apart from the soccer record.
+export const NHL_SINCE = '2026-10-28';
+const hk = (c, k) => (k === 'H' ? c.hAbbr || c.home : c.aAbbr || c.away);
+const hwhy = (c, hm, k, s) => { const up = k === 'H', a = up ? hm.ml.p0 : 100 - hm.ml.p0, b = up ? hm.ml.p1 : 100 - hm.ml.p1, w = up ? c.v2.w : 100 - c.v2.w;
+  return `${hk(c, k)} ${r1(a)}%→${r1(b)}% (${b - a >= 0 ? '+' : ''}${r1(b - a)}), v2 ${r1(w)}%: ${s}`; };
+export const NHL_RULES = [
+  { id: 'hfollow', name: 'Follow the move, v2 agrees', rule: 'A team\'s moneyline chance rose 3+ points since the opening price and v2 rated it above the opening price too',
+    pick: (c, hm) => { const m = hm.ml; if (!m) return null; const k = m.d >= 3 && c.v2.w > m.p0 ? 'H' : m.d <= -3 && c.v2.w < m.p0 ? 'A' : null;
+      return k && { key: k, price: k === 'H' ? c.px.h : c.px.a, why: hwhy(c, hm, k, 'the money moved the way v2 already leaned') }; } },
+  { id: 'hfade', name: 'Fade the drift, v2 disagrees with it', rule: 'A team\'s moneyline chance fell 4+ points since the opening price but v2 still rates it at or above the price now',
+    pick: (c, hm) => { const m = hm.ml; if (!m) return null; const k = m.d <= -4 && c.v2.w >= m.p1 ? 'H' : m.d >= 4 && c.v2.w <= m.p1 ? 'A' : null;
+      return k && { key: k, price: k === 'H' ? c.px.h : c.px.a, why: hwhy(c, hm, k, 'the price drifted but v2 says it went too far') }; } },
+  { id: 'htotals', name: 'Goals move, v2 agrees', rule: 'The Over moved 3+ points since the opening price (either way) and v2, rated at the same line, is on the same side of the price now',
+    pick: (c, hm) => { const o = hm.ou; if (!o || !c.ln || c.ln.v !== o.line || typeof c.v2.o !== 'number') return null;
+      const k = o.d >= 3 && c.v2.o >= o.p1 ? 'O' : o.d <= -3 && c.v2.o <= o.p1 ? 'U' : null; if (!k) return null;
+      return { key: k, price: k === 'O' ? c.px.to : c.px.tu, line: o.line, why: `Over ${o.line} ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v2 ${r1(c.v2.o)}%: goals money agrees with v2` }; } },
+];
+export function decideNhl(items, cards, date, now = new Date(), benched = new Set()) {
+  const held = new Set(items.map(b => `${b.date}|${b.league}|${b.gid}|${MKT(b.key)}`)), out = [];
+  for (const c of cards) {
+    if (!c || c.final || c.skipped || !c.px || !c.v2 || c.v2.w == null) continue;
+    const hm = hockeyMove(c.px); if (!hm) continue;
+    for (const r of NHL_RULES) {
+      if (benched.has(r.id)) continue;
+      const b = r.pick(c, hm); if (!b || !Number.isFinite(b.price)) continue;
+      const k = `${date}|nhl|${c.id}|${MKT(b.key)}`; if (held.has(k)) continue;
+      held.add(k);
+      const mp = b.key === 'H' ? hm.ml.p1 : b.key === 'A' ? 100 - hm.ml.p1 : b.key === 'O' ? hm.ou.p1 : 100 - hm.ou.p1, v2p = b.key === 'H' ? c.v2.w : b.key === 'A' ? 100 - c.v2.w : b.key === 'O' ? c.v2.o : 100 - c.v2.o;
+      out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), sport: 'nhl', date, league: 'nhl', gid: c.id,
+        home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, leagueName: 'NHL', kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
+        rule: r.id, key: b.key, ...(b.line != null ? { line: b.line } : {}), price: b.price, dk: b.price, bk: 'draftkings', mp: r1(mp), v2: r1(v2p), why: b.why, close: null, clv: null, res: null, units: null });
+    }
+  }
+  return out;
+}
+
 // ---- settling: the closing price once the game has kicked off, the result once it is graded ----
 const closeOf = (odds, key) => { const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null })[key]; return Number.isFinite(m) ? m : null; };
 const VOID_AFTER = 4 * 86400000; // a game with no result 4 days after kickoff (postponed, abandoned) is voided: the stake comes back
+const closeNhl = (px, b) => { const m = px && ({ H: px.h, A: px.a, O: px.tl === b.line ? px.to : null, U: px.tl === b.line ? px.tu : null })[b.key]; return Number.isFinite(m) ? m : null; };
 export function settle(b, c, now = new Date()) {
   if (b.res) return false;
+  if (b.sport === 'nhl') return settleNhl(b, c, now);
   let ch = false; const ko = new Date(b.kickoff).getTime();
   if (b.close == null && c && c.odds && now.getTime() >= ko) {
     const m = closeOf(c.odds, b.key);
@@ -118,6 +160,23 @@ export function settle(b, c, now = new Date()) {
   }
   if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); if (b.dk != null) b.udk = +(hit ? dec(b.dk) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
   else if (now.getTime() - ko > VOID_AFTER) { b.res = 'void'; b.units = 0; ch = true; }
+  return ch;
+}
+
+// Hockey: the close is the card's locked price (the lineup read, or ESPN's close for a game that missed it); a total exactly on a
+// whole-number line is a push (void, stake back).
+function settleNhl(b, c, now) {
+  let ch = false; const ko = new Date(b.kickoff).getTime();
+  if (b.close == null && c && c.px && (now.getTime() >= ko || c.final)) {
+    const m = closeNhl(c.px, b);
+    if (m != null) { b.close = m; b.clv = r1(100 * (dec(b.price) / dec(m) - 1)); b.clvDk = b.clv; ch = true; }
+  }
+  if (c && c.final) {
+    const hit = hockeyHit(b.key, c.final, b.line);
+    if (hit == null) { b.res = 'void'; b.units = 0; }
+    else { b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); b.udk = b.units; }
+    b.score = `${c.final.a}-${c.final.h}${c.final.last && c.final.last !== 'REG' ? ' ' + c.final.last : ''}`; ch = true;
+  } else if (now.getTime() - ko > VOID_AFTER) { b.res = 'void'; b.units = 0; ch = true; }
   return ch;
 }
 
@@ -140,20 +199,20 @@ const done = t => ({ n: t.n, open: t.open, settled: t.settled, wins: t.wins, hit
 export const isBenched = s => s.settled >= BENCH.n && s.clv != null && s.clv <= BENCH.clv && s.roi <= BENCH.roi;
 // When the bet was placed: the early reads are where an edge over the close could come from.
 const WHEN = [['early', '3+ hours before kickoff', m => m >= 180], ['late', 'last 3 hours (incl. the lineup read)', m => m < 180]];
-export function summary(items0, old = []) {
+export function summary(items0, old = [], rules0 = RULES, since = SINCE) {
   const items = [...items0, ...old.map(unpack)];
-  const all = blank(), per = Object.fromEntries(RULES.map(r => [r.id, blank()])), when = Object.fromEntries(WHEN.map(w => [w[0], blank()])), mk = { '1x2': blank(), ou: blank() };
+  const all = blank(), per = Object.fromEntries(rules0.map(r => [r.id, blank()])), when = Object.fromEntries(WHEN.map(w => [w[0], blank()])), mk = { '1x2': blank(), ou: blank() };
   const curve = []; let cum = 0;
   for (const b of [...items].sort((x, y) => (x.kickoff < y.kickoff ? -1 : 1))) {
     add(all, b); if (per[b.rule]) add(per[b.rule], b); add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
     if (b.res === 'win' || b.res === 'loss') { cum += b.units; curve.push([b.kickoff.slice(0, 10), +cum.toFixed(2)]); }
   }
-  const rules = RULES.map(r => { const s = done(per[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benched: isBenched(s) }; });
-  return { since: SINCE, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou) }, curve, verdict: verdict(done(all)) };
+  const rules = rules0.map(r => { const s = done(per[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benched: isBenched(s) }; });
+  return { since, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou) }, curve, verdict: verdict(done(all)) };
 }
 // The Analyst's own read of its record, in one line. CLV first: it settles in tens of bets, profit needs hundreds.
 export function verdict(s) {
-  if (!s.n) return 'No bets yet. The Analyst bets as prices are read for games with a v4 number.';
+  if (!s.n) return 'No bets yet. The Analyst bets as prices are read, when one of its rules fires.';
   if (s.clvN < 30) return `Too early to say: ${s.clvN} bet${s.clvN === 1 ? '' : 's'} with a closing price so far (30+ needed for the first read on closing-line value).`;
   const edge = s.clv > 0 ? `beating the closing price by ${s.clv}% a bet on average` : `losing ${-s.clv}% a bet to the closing price on average`;
   if (s.settled < 200) return `${s.clv > 0 ? 'Promising' : 'No edge yet'}: ${edge} (${s.beat}% of bets beat the close). Profit (${s.units >= 0 ? '+' : ''}${s.units}u over ${s.settled}) needs 200+ settled bets before it means much.`;
@@ -164,8 +223,8 @@ export function verdict(s) {
 const KEEP = 600, LOCK_MIN = 20; // LOCK_MIN: the price locks 20 minutes before kickoff (PRICE_LOCK in src/worker.js)
 export async function getAnalyst(env) { return (await env.HUB.get('analyst', 'json')) || { v: 1, items: [] }; }
 // Past KEEP bets, settled ones are kept only as a short row for the record (the page lists the latest 300 in full).
-const pack = b => [b.kickoff, b.rule, b.key, b.mins, b.res, b.units, b.clv, b.price, b.dk, b.udk],
-  unpack = ([kickoff, rule, key, mins, res, units, clv, price, dk, udk]) => ({ kickoff, rule, key, mins, res, units, clv, ...(dk != null ? { price, dk, udk } : {}) });
+const pack = b => [b.kickoff, b.rule, b.key, b.mins, b.res, b.units, b.clv, b.price, b.dk, b.udk, b.sport || null],
+  unpack = ([kickoff, rule, key, mins, res, units, clv, price, dk, udk, sport]) => ({ kickoff, rule, key, mins, res, units, clv, ...(dk != null ? { price, dk, udk } : {}), ...(sport ? { sport } : {}) });
 const save = (env, doc) => {
   const extra = doc.items.slice(KEEP); doc.items = doc.items.slice(0, KEEP).concat(extra.filter(b => !b.res));
   if (extra.length) doc.old = (doc.old || []).concat(extra.filter(b => b.res).map(pack));
@@ -182,8 +241,8 @@ export async function analystLook(env, date, cards, now = new Date(), shop = nul
   try {
     const doc = await getAnalyst(env), byKey = new Map(cards.map(c => [cardKey(date, c.league, c.id), c]));
     let dirty = false;
-    for (const b of doc.items) if (!b.res) { const c = byKey.get(cardKey(b.date, b.league, b.gid)); if (c && settle(b, c, now)) dirty = true; }
-    const s = summary(doc.items, doc.old), benched = new Set(s.rules.filter(r => r.benched).map(r => r.id));
+    for (const b of doc.items) if (!b.res && b.sport !== 'nhl') { const c = byKey.get(cardKey(b.date, b.league, b.gid)); if (c && settle(b, c, now)) dirty = true; }
+    const s = summary(soc(doc.items), soc(doc.old || [], true)), benched = new Set(s.rules.filter(r => r.benched).map(r => r.id));
     const live = cards.filter(c => c.odds && !c.final && new Date(c.kickoff).getTime() - now.getTime() > LOCK_MIN * 60000);
     let sp = null;
     if (sharp && live.length && !benched.has('stale')) { try { sp = await sharp(live); } catch (e) { sp = null; } }
@@ -202,14 +261,31 @@ export async function analystLook(env, date, cards, now = new Date(), shop = nul
     return { placed: fresh.length };
   } catch (e) { return { error: String(e && e.message || e).slice(0, 120) }; }
 }
+const isNhl = (x, packed) => (packed ? x[10] : x.sport) === 'nhl', soc = (xs, packed) => xs.filter(x => !isNhl(x, packed)), nhl = (xs, packed) => xs.filter(x => isNhl(x, packed));
+// Hockey: called after a hockey day is saved (src/nhl.js nhlStep, nhlLineupStep) with that day's cards. Bets games whose price is
+// still open and settles that day's hockey bets. Never throws: the hockey job must not depend on it.
+export async function analystNhl(env, date, cards, now = new Date()) {
+  try {
+    const doc = await getAnalyst(env), byId = new Map(cards.map(c => [c.id, c]));
+    let dirty = false;
+    for (const b of doc.items) if (!b.res && b.sport === 'nhl' && b.date === date) { const c = byId.get(b.gid); if (c && settle(b, c, now)) dirty = true; }
+    const s = summary(nhl(doc.items), nhl(doc.old || [], true), NHL_RULES, NHL_SINCE), benched = new Set(s.rules.filter(r => r.benched).map(r => r.id));
+    const fresh = decideNhl(doc.items, cards.filter(c => new Date(c.kickoff).getTime() - now.getTime() > LOCK_MIN * 60000), date, now, benched);
+    if (fresh.length) { doc.items.unshift(...fresh); dirty = true; }
+    if (dirty) await save(env, doc);
+    return { placed: fresh.length };
+  } catch (e) { return { error: String(e && e.message || e).slice(0, 120) }; }
+}
 // The Analyst tab: settle anything finished (one read per day it has open bets on), save only if something changed.
 export async function listAnalyst(env, now = new Date()) {
   const doc = await getAnalyst(env), open = doc.items.filter(b => !b.res);
   if (open.length) {
-    const days = [...new Set(open.map(b => b.date))], got = await Promise.all(days.map(d => env.HUB.get(`day:${d}`, 'json'))), m = new Map();
-    days.forEach((d, i) => { for (const c of got[i]?.cards || []) m.set(cardKey(d, c.league, c.id), c); });
+    const days = [...new Set(open.map(b => `${b.sport === 'nhl' ? 'nhl:day:' : 'day:'}${b.date}`))], got = await Promise.all(days.map(d => env.HUB.get(d, 'json'))), m = new Map();
+    days.forEach((d, i) => { const h = d.startsWith('nhl:'), dt = d.slice(h ? 8 : 4); for (const c of got[i]?.cards || []) m.set(cardKey(dt, h ? 'nhl' : c.league, c.id), c); });
     let dirty = false; for (const b of open) if (settle(b, m.get(cardKey(b.date, b.league, b.gid)), now)) dirty = true;
     if (dirty) await save(env, doc);
   }
-  return { items: doc.items.slice(0, 300), summary: summary(doc.items, doc.old), rules: RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })) };
+  const old = doc.old || [];
+  return { items: soc(doc.items).slice(0, 300), summary: summary(soc(doc.items), soc(old, true)), rules: RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })),
+    nhl: { items: nhl(doc.items).slice(0, 300), summary: summary(nhl(doc.items), nhl(old, true), NHL_RULES, NHL_SINCE), rules: NHL_RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })) } };
 }

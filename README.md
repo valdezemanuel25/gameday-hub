@@ -109,6 +109,14 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
   * **Cost:** one Odds API call for the whole league (2 credits), and only when a rule has fired. It uses the `ODDS_API_KEY` secret and stops when credits reach the reserve (`BTTS_RESERVE`), so the both-score closing reads keep theirs. Without the key it bets at DraftKings.
   * **Currently off:** `BOOKS = "draftkings"` in `wrangler.toml` `[vars]` (Oct 27, 2026), so every bet is at DraftKings and no credit is spent. To shop, list the books you have accounts with, e.g. `BOOKS = "draftkings,fanduel"`, or remove the line for all of them.
   * **On the tab:** how often a better price was found and the average extra payout, the units had every bet gone on at DraftKings, and the rules' closing-line value at DraftKings alone (their skill without the shopping gain).
+* **Hockey (Oct 28, 2026):** the Analyst also bets the NHL cards, with its own record (Soccer / Hockey switch on the Analyst tab).
+  * **When it looks:** whenever a hockey price is read (the NHL job and the 45–20 minute closing reads). It bets DraftKings' moneyline or total at that read, with at most one moneyline and one total bet per game.
+  * **Rules** (on v2, hockey's official model):
+    * **Follow the move:** a team's chance rose 3+ points and v2 rated it above the opening price.
+    * **Fade the drift:** a team's chance fell 4+ points but v2 still rates it at or above the price now.
+    * **Goals move:** the Over moved 3+ points and v2, rated at the same line, is on the same side.
+  * **Settling:** overtime and shootout count for the winner, the shootout goal doesn't count toward the total, and a total exactly on a whole-number line is a push.
+  * **No backtest:** there is no hockey price history. Betting splits and sharp prices from oddsterminal.org (NHL only) are the planned next test.
 * **Scoring:** units won and ROI at the price taken, plus closing-line value against the lineup-read price. The closing-line number is known at kickoff and settles in tens of bets; profit needs hundreds. Bets are split by when they were placed (3+ hours before kickoff vs the last 3 hours). A rule that is behind on both after 40 settled bets is benched (`BENCH`).
 * **Backtest** (`node tools/backtest-analyst.mjs`: walk-forward v4 against Bet365 opening and closing prices, 1,929 league games): at the closing price every rule lost money (−5% to −10%; backing every closing favourite lost −3.9%). So the live question is whether betting at earlier reads, before a move finishes, beats the close. Until the tab shows a positive closing-line value over a few hundred bets, treat the rules as unproven.
 * **Storage and cost:** one KV document (`analyst`), written only when a bet is placed or settles. Settling happens when a league is graded and when the tab is opened.

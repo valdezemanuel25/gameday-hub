@@ -9,6 +9,7 @@ import SEED from './nhlseed.js';
 import { hockeyPick, hockeyHit } from './pick.js';
 import { fbHeaders, FB_HV } from './forebetpage.js';
 import { hockeyMove } from './moves.js';
+import { analystNhl } from './analyst.js';
 
 const TZ = 'America/Chicago';
 export const LINE = 5.5;
@@ -251,7 +252,7 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
     let dirty = false;
     for (const c of due) { const e = evs.find(x => x.id === c.id); if (e && !e.done && setPrice(c, e.px, now)) { dirty = true; out.push(c.id); } }
-    if (dirty) await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day));
+    if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); }
   }
   return out.length ? { job: 'nhl-lineup', read: out } : null;
 }
@@ -302,7 +303,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         }
       }
     }
-    if (dirty) await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day));
+    if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); } // the Analyst reads the same prices and finals
   }
   if (S.applied.length > 400) S.applied = S.applied.slice(-400);
   if (stateDirty) await env.HUB.put('nhl:state', JSON.stringify(S));

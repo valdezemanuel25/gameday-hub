@@ -1,6 +1,6 @@
 // The Analyst (src/analyst.js): its rules, one position per game and market, settling at the close and the result, the record,
 // benching, and storage through the price read in src/worker.js.
-import { view, RULES, decide, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst } from '../src/analyst.js';
+import { view, RULES, decide, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst, decideNhl, analystNhl, NHL_RULES } from '../src/analyst.js';
 import { refreshOdds, analystShop, analystSharp, readSharpNote } from '../src/worker.js';
 import { bestPrices, fetchBest, sharpOf, fetchSharp } from '../src/btts.js';
 let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) bad++; };
@@ -130,5 +130,28 @@ await analystLook(env3, '2026-10-28', [card({ v4: null })], NOW, null, async () 
 const st = (await getAnalyst(env3)).items;
 ok('analystLook: places the stale bet from the sharp look', st.length === 1 && st[0].rule === 'stale' && st[0].price === 120 && st[0].dk === 120);
 delete globalThis.caches;
+
+// --- hockey ---
+const hc = (o = {}) => ({ id: 'n1', home: 'Edmonton Oilers', away: 'Detroit Red Wings', hAbbr: 'EDM', aAbbr: 'DET', kickoff: KO, final: null, ln: { v: 6.5 },
+  v2: { w: 66, o: 56 }, px: { op: { h: -185, a: 154 }, opt: { tl: 6.5, to: -112, tu: -108 }, h: -230, a: 190, tl: 6.5, to: -125, tu: 105 }, ...o });
+const nb = decideNhl([], [hc()], '2026-10-28', NOW);
+ok('hockey: follow the move on EDM (63% -> 68%, v2 66%) and the Over (51% -> 54%, v2 56%)', nb.length === 2 && nb.find(b => b.key === 'H').rule === 'hfollow' && nb.find(b => b.key === 'O').rule === 'htotals' && nb.find(b => b.key === 'O').line === 6.5 && nb[0].sport === 'nhl', JSON.stringify(nb.map(b => [b.rule, b.key, b.price])));
+ok('hockey: no follow when v2 rated the mover below its opening chance', !decideNhl([], [hc({ v2: { w: 60, o: 50 } })], '2026-10-28', NOW).some(b => b.rule === 'hfollow'));
+ok('hockey: fade a drifted side v2 still rates at or above the price', (() => { const x = decideNhl([], [hc({ v2: { w: 40, o: 50 } })], '2026-10-28', NOW); return x.length && x[0].rule === 'hfade' && x[0].key === 'A'; })());
+ok('hockey: no total bet when the book line is not the line v2 was rated at', !decideNhl([], [hc({ ln: { v: 5.5 } })], '2026-10-28', NOW).some(b => b.key === 'O' || b.key === 'U'));
+ok('hockey: no bet on a card with no rating', decideNhl([], [hc({ skipped: 'x' })], '2026-10-28', NOW).length === 0);
+const hw = { ...nb.find(b => b.key === 'H') }, ho = { ...nb.find(b => b.key === 'O') };
+const fin = hc({ px: { ...hc().px, h: -250 }, final: { h: 3, a: 3 + 0, total: 6, last: 'SO' } });
+fin.final = { h: 4, a: 3, total: 6, last: 'SO' };
+settle(hw, fin, new Date('2026-10-29T04:00:00Z')); settle(ho, fin, new Date('2026-10-29T04:00:00Z'));
+ok('hockey: a shootout win counts for the winner, close and CLV from the locked price', hw.res === 'win' && hw.close === -250 && hw.clv > 0 && /SO/.test(hw.score), JSON.stringify(hw));
+ok('hockey: the shootout goal does not count toward the total (6 < 6.5: Over loses)', ho.res === 'loss' && ho.units === -1);
+const push = { ...nb.find(b => b.key === 'O'), line: 6 }; settle(push, hc({ final: { h: 3, a: 3, total: 6, last: 'OT' } }), new Date('2026-10-29T04:00:00Z'));
+ok('hockey: a total exactly on a whole-number line is a push', push.res === 'void' && push.units === 0);
+const kv4 = new Map(), env4 = { HUB: { get: async (k, t) => { const x = kv4.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { kv4.set(k, x); } } };
+await analystNhl(env4, '2026-10-28', [hc()], NOW);
+kv4.set('nhl:day:2026-10-28', JSON.stringify({ date: '2026-10-28', cards: [{ ...hc(), final: { h: 2, a: 1, total: 3, last: 'REG' } }] }));
+const LN = await listAnalyst(env4, new Date('2026-10-29T04:00:00Z'));
+ok('hockey: kept apart from soccer, settled from the hockey day when the tab opens', LN.items.length === 0 && LN.nhl.items.length === 2 && LN.nhl.summary.all.settled === 2 && LN.nhl.summary.rules.length === NHL_RULES.length, JSON.stringify(LN.nhl.summary.all));
 console.log(bad ? `\n${bad} FAILED` : '\nAll Analyst checks passed');
 process.exit(bad ? 1 : 0);
