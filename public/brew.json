@@ -1,6 +1,71 @@
 {
-  "updated": "2026-10-27T20:41:12Z",
+  "updated": "2026-10-28T10:10:28Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-10-28",
+      "title": "Rev up the Buick",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "26,478",
+          "change": 1.18
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,723",
+          "change": 0.6
+        },
+        {
+          "label": "Dow",
+          "value": "52,378",
+          "change": 0.03
+        },
+        {
+          "label": "10-yr",
+          "value": "4.993%",
+          "change": 1.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$80,653",
+          "change": 1.17
+        },
+        {
+          "label": "Boeing",
+          "value": "$168.16",
+          "change": -10.7
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "Tech rallied and oil eased, lifting the Nasdaq 1.18% and S&P 500 0.60%, while Boeing sank 10.70% to $168.16 after delaying its 737 Max production increase to the second half of 2027."
+        },
+        {
+          "h": "GM to Nasdaq",
+          "t": "General Motors will move its listing from the NYSE to Nasdaq on Nov. 17, keeping its ticker; the roughly $64B company would be eligible for the Nasdaq-100, and the stock closed up 5.5%."
+        },
+        {
+          "h": "Coca-Cola",
+          "t": "Global case volume grew 5% in Q3 and the company raised its outlook, but North American volume stayed flat; Coke Zero sales rose 16% and Diet Coke 6%."
+        },
+        {
+          "h": "Coke vs Pepsi",
+          "t": "Coca-Cola shares are up 30% this year versus a 7% drop for PepsiCo, with Coke also winning the KFC contract."
+        },
+        {
+          "h": "Instacart",
+          "t": "Shares jumped 19% this week on a WSJ report that DoorDash is in talks to buy it at a $17B valuation, up from a $13B market cap."
+        },
+        {
+          "h": "General Mills",
+          "t": "Fiscal Q1 sales fell 3% but beat estimates, with the stock down 28% in 2026, as Cheerios adds a resealable Ziploc bag."
+        }
+      ],
+      "note": "Market numbers are the Tuesday close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-10-27",
@@ -64,71 +129,6 @@
           "t": "Full-time MBA applications fell 27% for the class of 2028; Harvard's endowment still grew over $11B on a roughly 27% return."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-10-27",
-      "title": "ANT on the march",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "26,169",
-          "change": 0.82
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,677",
-          "change": 0.7
-        },
-        {
-          "label": "Dow",
-          "value": "52,362",
-          "change": 0.28
-        },
-        {
-          "label": "10-yr",
-          "value": "4.986%",
-          "change": 0,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$79,995",
-          "change": -0.2
-        },
-        {
-          "label": "JetBlue",
-          "value": "$2.37",
-          "change": -9.71
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Anthropic IPO",
-          "t": "Filing targets a Nasdaq listing under ticker ANT; H1 2026 revenue hit $16.3B (14x a year earlier) with no profit yet and $417B of vendor commitments."
-        },
-        {
-          "h": "Raise size",
-          "t": "Analysts think Anthropic could raise up to $100B, topping SpaceX's record IPO, and the filing lifted AI stocks after last week's sell-off."
-        },
-        {
-          "h": "Microsoft",
-          "t": "Offering voluntary buyouts to up to 60,000 staff, about 27% of its 223,000 workforce, across the US, UK, Canada and India."
-        },
-        {
-          "h": "Brazil",
-          "t": "Lula's surprise election win sent the benchmark stock index down almost 14% and the currency down about 9% against the dollar."
-        },
-        {
-          "h": "JetBlue",
-          "t": "Stock fell 9.71% on fuel-cost worries, then rebounded after hours as Q3 results showed a loss but strong demand and better margins."
-        },
-        {
-          "h": "NBA",
-          "t": "Partnering with Polymarket and Kalshi on integrity rules, including a ban on single-play bets, while the Supreme Court weighs state bans on prediction markets."
-        }
-      ],
-      "note": "Market numbers are the Monday close."
     },
     {
       "source": "Brew Markets",
