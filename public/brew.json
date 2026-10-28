@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-28T10:10:28Z",
+  "updated": "2026-10-28T21:02:23Z",
   "issues": [
     {
       "source": "Morning Brew",
@@ -65,6 +65,70 @@
         }
       ],
       "note": "Market numbers are the Tuesday close."
+    },
+    {
+      "source": "Brew Markets",
+      "date": "2026-10-28",
+      "title": "Hotline beef",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "26,550",
+          "change": 0.27
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,744",
+          "change": 0.28
+        },
+        {
+          "label": "Dow",
+          "value": "52,475",
+          "change": 0.19
+        },
+        {
+          "label": "10-yr",
+          "value": "5.045%",
+          "change": 5,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$101.29",
+          "change": 1.39
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$81,359",
+          "change": 0.85
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "Stocks edged up as the Fed held rates, with the S&P 500 up 0.28% and Nasdaq up 0.27%, while the 10-year yield rose 5 bps to 5.045% and oil gained 1.39% to $101.29."
+        },
+        {
+          "h": "Fed holds",
+          "t": "The Fed kept rates at 3.75%-4.00% with two of 12 members dissenting for a hike over 3.7% inflation; odds of a December hike are around 85%."
+        },
+        {
+          "h": "Robinhood",
+          "t": "Prediction markets brought in $173M last quarter, more than six times a year ago, helping record revenue of $1.42B (+12%), but EPS missed and shares fell 3.30%."
+        },
+        {
+          "h": "Prediction boom",
+          "t": "Prediction markets traded over $14B in notional volume last weekend, a record two-day stretch, with Kalshi alone above $10B and $1.4B already traded on midterm markets."
+        },
+        {
+          "h": "Movers",
+          "t": "Vertiv jumped 16.40% and Wendy’s 15.15% on a $1.4B Trian offer, while F5 fell 20.43%, Enphase 16.03% and Boston Scientific 5.84% after a guidance cut."
+        },
+        {
+          "h": "Deals",
+          "t": "DoorDash is nearing a roughly $17B deal for Instacart, and the Energy Department is backing Constellation with $5B to upgrade nuclear plants."
+        }
+      ]
     },
     {
       "source": "Brew Markets",
