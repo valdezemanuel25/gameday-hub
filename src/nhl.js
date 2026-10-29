@@ -69,6 +69,30 @@ export function gkRestOf(prior, team, name) {
   return 4;
 }
 export const gkRest = (prior, c, gk) => { const r = { h: gk && gk.h ? gkRestOf(prior, c.hAbbr, gk.h.n) : null, a: gk && gk.a ? gkRestOf(prior, c.aAbbr, gk.a.n) : null }; return r.h == null && r.a == null ? null : r; };
+// When the saved cards cannot tell (a day before the Hub saved starters, Oct 28, 2026, or a card with no goalie named), the goalie's
+// own ESPN game log is read: days from his last game before tonight (same scale, 4 = three or more). null when it cannot be read.
+const GAMELOG = id => `https://site.web.api.espn.com/apis/common/v3/sports/hockey/nhl/athletes/${encodeURIComponent(id)}/gamelog`;
+export async function gamelogRest(fetchFn, id, date) {
+  try {
+    const r = await fetchFn(GAMELOG(id), { headers: { 'user-agent': 'gameday-hub/1.0' } }); if (!r.ok) return null;
+    const ds = [], walk = v => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (k === 'gameDate' && typeof x === 'string') ds.push(localDate(x)); else walk(x); } };
+    walk(await r.json()); if (!ds.length) return null;
+    const before = ds.filter(d => d < date).sort(); if (!before.length) return 4;
+    const days = Math.round((new Date(`${date}T12:00:00Z`) - new Date(`${before[before.length - 1]}T12:00:00Z`)) / 86400000);
+    return Math.max(1, Math.min(4, days));
+  } catch (e) { return null; }
+}
+// Rest for both starters: the saved cards first; a side they cannot tell keeps what this card already worked out for the same goalie,
+// else reads his game log (budget.n reads at most per run, so a full slate cannot use up the run's requests).
+export async function restFor(c, gk, prior, date, fetchFn, budget = { n: 8 }) {
+  const r = gkRest(prior, c, gk) || { h: null, a: null };
+  for (const s of ['h', 'a']) {
+    const g = gk && gk[s]; if (r[s] != null || !g) continue;
+    if (c.gr && c.gr[s] != null && c.gk && c.gk[s] && gkKey(c.gk[s].n) === gkKey(g.n)) { r[s] = c.gr[s]; continue; }
+    if (g.id && budget.n > 0) { budget.n--; r[s] = await gamelogRest(fetchFn, g.id, date); }
+  }
+  return r.h == null && r.a == null ? null : r;
+}
 // The state keeps start counts from the seed (tools/make-nhl-gk.py); a state saved before v5 gets them the first time it is loaded.
 export const withGk = S => { if (S && !S.gk) { S.gk = JSON.parse(JSON.stringify(GK.counts)); S.gkThrough = GK.through; return true; } return false; };
 // What a card knows about tonight: b2b = [home, away] on the second night of a back-to-back, bk = [home, away] backup in net. true / false / null (unknown).
@@ -266,7 +290,7 @@ async function scoreboard(date, fetchFn, debug) {
       // Only the Over/Under total is taken from the odds block (the sportsbook line); spreads and moneylines are ignored.
       const od = (comp.odds || []).find(o => Number.isFinite(Number(o.overUnder)) && Number(o.overUnder) >= 3.5 && Number(o.overUnder) <= 9.5), line = od ? Number(od.overUnder) : null;
       // Probable starting goalie per side ("expected", or "confirmed" once the team names him). Display and the v5 shadow only.
-      const gkOf = t => { const p = (t.probables || []).find(x => /starting goalie/i.test(x.displayName || x.name || '') || x.abbreviation === 'SG'), a = p && p.athlete; return a && a.displayName ? { n: String(a.displayName).slice(0, 40), st: /confirm/i.test(p.status?.type || p.status?.name || '') ? 'c' : 'e' } : null; };
+      const gkOf = t => { const p = (t.probables || []).find(x => /starting goalie/i.test(x.displayName || x.name || '') || x.abbreviation === 'SG'), a = p && p.athlete; return a && a.displayName ? { n: String(a.displayName).slice(0, 40), ...(a.id ? { id: String(a.id) } : {}), st: /confirm/i.test(p.status?.type || p.status?.name || '') ? 'c' : 'e' } : null; };
       const gkh = done ? null : gkOf(h), gka = done ? null : gkOf(a);
       out.push({ id: String(ev.id), date: ev.date, done, last, line, gk: gkh || gka ? { h: gkh, a: gka } : null, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
     }
@@ -318,7 +342,7 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
     const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
     if (!due.length) continue;
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
-    let dirty = false, S5 = null; const cache = {};
+    let dirty = false, S5 = null; const cache = {}, budget = { n: 8 };
     for (const c of due) {
       const e = evs.find(x => x.id === c.id); if (!e || e.done) continue;
       if (setPrice(c, e.px, now)) { dirty = true; out.push(c.id); }
@@ -327,7 +351,7 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
         S5 = S5 || (await env.HUB.get('nhl:state', 'json')) || freshState(); withGk(S5);
         const pr = predict(S5, c.hAbbr, c.aAbbr, c.ln ? c.ln.v : LINE, ctxFor(S5, c.hAbbr, c.aAbbr, e.gk, c.rs));
         c.gk = e.gk; if (pr && pr.v5) c.v5 = pr.v5; dirty = true; if (!out.includes(c.id)) out.push(c.id);
-        const gr = gkRest(await priorStarts(env, date, new Set(), cache), c, e.gk); if (gr) c.gr = gr; else delete c.gr;
+        const gr = await restFor(c, e.gk, await priorStarts(env, date, new Set(), cache), date, fetchFn, budget); if (gr) c.gr = gr; else delete c.gr;
       }
     }
     if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); }
@@ -347,7 +371,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
   dates.forEach((d, i) => { if (boards[i]) played[d] = new Set(boards[i].flatMap(e => [e.hc, e.ac])); });
   for (const d of [addDays(t, -2), addDays(t, -3), addDays(t, -4)]) { const sd = await env.HUB.get(`nhl:day:${d}`, 'json'); if (sd) played[d] = new Set((sd.cards || []).flatMap(c => [c.hAbbr, c.aAbbr])); }
   const restOf = (team, date) => { for (let k = 1; k <= 3; k++) { const set = played[addDays(date, -k)]; if (!set) return null; if (set.has(team)) return k; } return 4; }; // 1 = played yesterday, 4 = three or more days
-  const knownDays = new Set(dates.filter((d, i) => boards[i])), gkCache = {}, prior = {};
+  const knownDays = new Set(dates.filter((d, i) => boards[i])), gkCache = {}, prior = {}, glBudget = { n: 8 };
   const priorFor = async d => prior[d] || (prior[d] = await priorStarts(env, d, knownDays, gkCache));
   const out = { graded: 0, created: 0, refreshed: 0 }, seen = new Set();
   for (let i = 0; i < dates.length; i++) {
@@ -381,7 +405,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         if (e.line) c.ln = { v: e.line, src: e.lineSrc };
         if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; if (pr.v5) c.v5 = pr.v5; } else c.skipped = 'Team not in the NHL ratings yet';
         if (gkN) c.gk = gkN; if (rsN) c.rs = rsN;
-        if (gkN) { const gr = gkRest(await priorFor(date), c, gkN); if (gr) c.gr = gr; }
+        if (gkN) { const gr = await restFor(c, gkN, await priorFor(date), date, fetchFn, glBudget); if (gr) c.gr = gr; }
         setPrice(c, e.px, now, force);
         day.cards.push(c); dirty = true; out.created++;
       } else if (!c.final && new Date(c.kickoff).getTime() > now.getTime() && setPrice(c, e.px, now, force)) { dirty = true; if (force) out.priced = (out.priced || 0) + 1; }
@@ -392,7 +416,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         const ctxMoved = !!(gkN && JSON.stringify(gkN) !== JSON.stringify(c.gk || null)) || !!(rsN && JSON.stringify(rsN) !== JSON.stringify(c.rs || null));
         if (ctxMoved && gkN && JSON.stringify(gkN) !== JSON.stringify(c.gk || null)) out.goalies = (out.goalies || 0) + 1;
         if (ctxMoved) { if (gkN) c.gk = gkN; if (rsN) c.rs = rsN; }
-        if (c.gk) { const gr = gkRest(await priorFor(date), c, c.gk); if (JSON.stringify(gr) !== JSON.stringify(c.gr || null)) { if (gr) c.gr = gr; else delete c.gr; dirty = true; } }
+        if (c.gk) { const gr = await restFor(c, c.gk, await priorFor(date), date, fetchFn, glBudget); if (JSON.stringify(gr) !== JSON.stringify(c.gr || null)) { if (gr) c.gr = gr; else delete c.gr; dirty = true; } }
         if (c.ver !== S.ver || moved || ctxMoved || (pr.v5 && !c.v5)) { // ratings moved since this card was made, or the line did
           c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; if (pr.v5) c.v5 = pr.v5; dirty = true; out.refreshed++;
         }

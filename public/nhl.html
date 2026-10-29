@@ -446,13 +446,13 @@ function movesView() {
   return seg + head + (shown.length ? shown.map(card1).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices come from ESPN as the schedule is checked.'}</div>`);
 }
 // Under the closing-read badge: each side's starting goalie (ESPN: Confirmed once the team names him, else Expected), with a back-to-back
-// (he started yesterday, red) or 3+ days since his last start (green). c.gr is worked out by the server from the starters saved on
-// the three days before; with no rest known the tag just names the goalie.
+// (he played yesterday, red), 1 or 2 days of rest, or 3+ days (green). c.gr is worked out by the server from the starters saved on
+// the three days before, else from his ESPN game log; "rest unknown" when neither could tell.
 function gkRestTags(c) {
   const t = [];
   for (const [s, ab] of [['a', c.aAbbr], ['h', c.hAbbr]]) {
     const r = c.gr && c.gr[s], g = c.gk && c.gk[s]; if (!g) continue;
-    const rest = r === 1 ? ': back-to-back' : r >= 4 ? ': 3+ days rest' : '';
+    const rest = r === 1 ? ': back-to-back' : r >= 4 ? ': 3+ days rest' : r === 2 ? ': 1 day rest' : r === 3 ? ': 2 days rest' : ' · rest unknown';
     t.push(`<span class="gc${r === 1 ? ' b' : r >= 4 ? ' c' : ''}">${esc(ab)} · ${esc(g.n)} · ${g.st === 'c' ? 'Confirmed' : 'Expected'}${rest}</span>`);
   }
   return t.length ? `<div class="mvgk">${t.join('')}</div>` : '';
