@@ -28,7 +28,7 @@ Why: the Hub's 94 graded NHL games (Oct 15–28) showed v4 (57 of 94) no better 
 ## Cautions
 - The books price back-to-backs and confirmed goalies too, mostly by game time. A better model is not the same as an edge against DraftKings. The Results tab compares v4 and v5 on the same games; prices are not used.
 - "Backup" and "back-to-back" overlap (backups mostly start the second night). Both are estimated together, and both stay significant.
-- Rest counts the days in the saved cards; if a day was never saved the rest is left unknown, never guessed. The probable goalie on ESPN is not always the starter until it says confirmed.
+- Rest counts the days in the saved cards; if a day was never saved the rest is left unknown, never guessed. The probable goalie on ESPN is not always the starter until it says confirmed. ESPN and MoneyPuck sometimes spell a name differently (Vancouver's "Merilainen" vs "Merilinen"), so inside one team a name within two letters of a known goalie counts as him; without that he would have been flagged a backup.
 - Early-season ratings are noisy, and the goalie rating itself is nearly noise (0.15 year to year). That is why v5 uses who is in net, not how good he was.
 
 ## What to watch

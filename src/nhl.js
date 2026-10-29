@@ -38,12 +38,16 @@ export const B2B_OWN = 0.15, B2B_OPP = 0.05, BACKUP_OPP = 0.16;
 export const B2B_LOGIT = 0.24, BACKUP_LOGIT = 0.11;
 // Goalie names are matched without accents, spaces or punctuation (ESPN "Ukko-Pekka Luukkonen" = MoneyPuck "Ukko-Pekka Luukkonen").
 export const gkKey = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+// The two feeds can spell a name a little differently (ESPN "Merilainen", MoneyPuck "Merilinen"): inside one team's goalies, a name
+// within two letters of a known one is that goalie. Returns the key to use in the team's counts (the known one, or the name as given).
+const lev = (a, b) => { const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]); for (let j = 1; j <= b.length; j++) d[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; };
+export const gkResolve = (C, k) => { if (!C || C[k] != null || k.length < 8) return k; const hit = Object.keys(C).find(x => x.length >= 8 && lev(x, k) <= 2); return hit || k; };
 // Is this goalie a backup for his team? true = he has started fewer games than the team's most-used goalie, false = he is that goalie (or tied
 // with him), null = not known (no start counts yet, fewer than 6 games, or no name).
 export function isBackup(S, team, name) {
   const C = S && S.gk && S.gk[team], k = gkKey(name); if (!C || !k) return null;
   const v = Object.values(C), n = v.reduce((a, b) => a + b, 0); if (n < 6) return null;
-  return (C[k] || 0) < Math.max(...v);
+  return (C[gkResolve(C, k)] || 0) < Math.max(...v);
 }
 // The state keeps start counts from the seed (tools/make-nhl-gk.py); a state saved before v5 gets them the first time it is loaded.
 export const withGk = S => { if (S && !S.gk) { S.gk = JSON.parse(JSON.stringify(GK.counts)); S.gkThrough = GK.through; return true; } return false; };
@@ -336,7 +340,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
           const r = !S.applied.includes(e.id) && ld > S.through ? applyGame(S, e.hc, e.ac, e.hs, e.as, e.last) : null;
           if (r) { c.final.total = r.th + r.ta; S.applied.push(e.id); stateDirty = true; }
           else c.final.total = e.hs + e.as - (e.last === 'SO' ? 1 : 0);
-          if (c.gk && ld > S.gkThrough) for (const [side, team] of [['h', e.hc], ['a', e.ac]]) { const k = c.gk[side] && gkKey(c.gk[side].n); if (k) { const C = S.gk[team] || (S.gk[team] = {}); C[k] = (C[k] || 0) + 1; stateDirty = true; } } // who started, for telling a backup from the usual starter
+          if (c.gk && ld > S.gkThrough) for (const [side, team] of [['h', e.hc], ['a', e.ac]]) { const k0 = c.gk[side] && gkKey(c.gk[side].n); if (k0) { const C = S.gk[team] || (S.gk[team] = {}), k = gkResolve(C, k0); C[k] = (C[k] || 0) + 1; stateDirty = true; } } // who started, for telling a backup from the usual starter
           gradeCard(c); dirty = true; out.graded++;
         } else if (!c && ld > S.through && !S.applied.includes(e.id)) { // finished game we never predicted: still teaches the ratings
           if (applyGame(S, e.hc, e.ac, e.hs, e.as, e.last)) { S.applied.push(e.id); stateDirty = true; }

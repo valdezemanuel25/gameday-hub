@@ -190,7 +190,7 @@ import { topScore } from '../src/nhl.js';
 }
 
 // ---- v5 shadow: rest and backup-goalie adjustments (comparison only) ----
-import { ctxFor, isBackup, gkKey, withGk, adj5, B2B_OWN, B2B_OPP, BACKUP_OPP, B2B_LOGIT, BACKUP_LOGIT } from '../src/nhl.js';
+import { ctxFor, isBackup, gkKey, gkResolve, withGk, adj5, B2B_OWN, B2B_OPP, BACKUP_OPP, B2B_LOGIT, BACKUP_LOGIT } from '../src/nhl.js';
 {
   const S5 = freshState();
   const base = predict(S5, 'EDM', 'UTA'), none = predict(S5, 'EDM', 'UTA', 5.5, { b2b: [null, null], bk: [null, null] });
@@ -206,6 +206,9 @@ import { ctxFor, isBackup, gkKey, withGk, adj5, B2B_OWN, B2B_OPP, BACKUP_OPP, B2
   ok('backup: the usual starter is not one, a goalie with fewer starts is, a goalie never seen is', isBackup(G, 'AAA', 'Starter') === false && isBackup(G, 'AAA', 'Backup') === true && isBackup(G, 'AAA', 'Callup Guy') === true);
   ok('backup: tied top goalies are not backups; too few team games, no name, or no counts means unknown', isBackup(G, 'TIE', 'One') === false && isBackup(G, 'TIE', 'Two') === false && isBackup(G, 'NEW', 'X') === null && isBackup(G, 'AAA', '') === null && isBackup(freshState(), 'AAA', 'Starter') === null);
   ok('goalie names match across accents and punctuation', gkKey('Ukko-Pekka Luukkonen') === gkKey('UkkoPekka Luukkonen') && gkKey('Jesper Wallstedt') === 'jesperwallstedt' && gkKey('Joonás Korpisalo') === gkKey('Joonas Korpisalo'));
+  const V = { gk: { VAN: { leevimerilinen: 7, kevinlankinen: 6 }, OTT: { linusullmark: 8, samuelersson: 3, jonasjohansson: 1 } } };
+  ok('backup: a name spelled a little differently by ESPN is still that goalie (Merilainen vs Merilinen: the starter, not a backup)', isBackup(V, 'VAN', 'Leevi Merilainen') === false && gkResolve(V.gk.VAN, gkKey('Leevi Merilainen')) === 'leevimerilinen');
+  ok('backup: different goalies are not merged, and a short or new name stays itself', isBackup(V, 'OTT', 'Samuel Ersson') === true && gkResolve(V.gk.OTT, gkKey('Jonas Johansen')) === 'jonasjohansson' && gkResolve(V.gk.OTT, gkKey('Linus Ullmark')) === 'linusullmark' && gkResolve(V.gk.OTT, 'abc') === 'abc' && gkResolve(V.gk.OTT, gkKey('Anton Forsberg')) === 'antonforsberg');
   const W = freshState(); ok('a state saved before v5 gets the goalie start counts once', withGk(W) === true && withGk(W) === false && Object.keys(W.gk).length === 32 && /^\d{4}-\d{2}-\d{2}$/.test(W.gkThrough));
   const cx = ctxFor(G, 'AAA', 'BBB', { h: { n: 'Backup', st: 'e' }, a: null }, { h: 1, a: 3 });
   ok('ctx: rest 1 is a back-to-back, 2 or more is not, a missing goalie is unknown', cx.b2b[0] === true && cx.b2b[1] === false && cx.bk[0] === true && cx.bk[1] === null && ctxFor(G, 'AAA', 'BBB', null, null).b2b.join() === ',');
