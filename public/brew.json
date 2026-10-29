@@ -1,6 +1,70 @@
 {
-  "updated": "2026-10-29T10:11:06Z",
+  "updated": "2026-10-29T22:02:33Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-10-29",
+      "title": "The Hunger Gains",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "26,185",
+          "change": -1.38
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,720",
+          "change": -0.3
+        },
+        {
+          "label": "Dow",
+          "value": "52,343",
+          "change": -0.25
+        },
+        {
+          "label": "10-yr",
+          "value": "4.989%",
+          "change": -6,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$102.71",
+          "change": -0.07
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$80,042",
+          "change": -1.5
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "Alphabet-led tech selling pushed the Nasdaq down 1.38% and the S&P 500 down 0.30%, while the 10-year yield slipped 6 bps to 4.989% after a solid GDP print."
+        },
+        {
+          "h": "Alphabet",
+          "t": "The stock fell 12.29%, its worst day ever and about $500B in lost value, as free cash flow hit negative $9.1B versus a negative $3.5B estimate and search revenue of $63B missed the roughly $65B forecast."
+        },
+        {
+          "h": "Big Pharma",
+          "t": "Eli Lilly rose 6.63% on $24.4B in revenue (+39%) with Mounjaro at $10.7B, and Merck gained 3.83% on $18.1B with Keytruda at $8.6B ahead of 2028 patent expirations."
+        },
+        {
+          "h": "Deals",
+          "t": "DoorDash rose 5.61% on a $17B deal for Instacart, while Marvell fell 13.24% on reports of advanced talks to buy Lumentum."
+        },
+        {
+          "h": "Big movers",
+          "t": "ServiceNow dropped 26.64% on weak subscription guidance and Fortinet fell 20.09% on a service revenue cut, while Crocs jumped 25.54% and Carvana gained 15.59%."
+        },
+        {
+          "h": "Restaurants",
+          "t": "With GDP up 3.4% and consumer spending up 3.8%, Chili's same-store sales rose 10.1% and Cheesecake Factory 15.2%, while Wingstop fell 5.4% and Popeyes 2.2%."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-10-29",
@@ -24,7 +88,7 @@
         {
           "label": "10-yr",
           "value": "5.045%",
-          "change": 5.0,
+          "change": 5,
           "unit": "bps"
         },
         {
@@ -153,7 +217,7 @@
         {
           "label": "10-yr",
           "value": "4.993%",
-          "change": 1.0,
+          "change": 1,
           "unit": "bps"
         },
         {
