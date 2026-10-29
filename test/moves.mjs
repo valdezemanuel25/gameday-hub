@@ -223,6 +223,22 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const fn = html.match(/function gkRestTags\(c\) \{[\s\S]*?\n\}\n/)[0];
   const tags = new Function(`const esc = s => String(s); ${fn}; return gkRestTags;`)();
   const t = tags({ aAbbr: 'WPG', hAbbr: 'TBL', gk: { a: { n: 'Connor Hellebuyck' }, h: { n: 'Andrei Vasilevskiy' } }, gr: { a: 4, h: 1 } });
-  ok('Movement card: back-to-back and 3+ days rest tags, nothing for 2-3 days', t.includes('TBL · Andrei Vasilevskiy: back-to-back') && t.includes('WPG · Connor Hellebuyck: 3+ days rest') && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x' } }, gr: { a: 2 } }) === '', t);
+  ok('Movement card: back-to-back and 3+ days rest tags, a plain name tag for 2-3 days', t.includes('TBL · Andrei Vasilevskiy · Expected: back-to-back') && t.includes('WPG · Connor Hellebuyck · Expected: 3+ days rest') && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } }, gr: { a: 2 } }) === '<div class="mvgk"><span class="gc">A · x · Confirmed</span></div>', t);
+  ok('Movement card: no goalie listed, no tag', tags({ aAbbr: 'A', hAbbr: 'B' }) === '');
+}
+
+// Update NHL now: a manual read takes the price off-schedule up to puck drop, and in the last 45 minutes it is the close.
+{
+  const now = new Date('2026-10-29T23:20:00Z');
+  const mk = ko => ({ kickoff: ko, px: { h: -180, a: 150, f: { h: -180, a: 150 }, rd: '2026-10-29T23:00:00Z' } });
+  const fresh = { h: -162, a: 136 };
+  const a = mk('2026-10-29T23:30:00Z'); // 10 minutes out: past the lock
+  ok('manual: past the 20-minute lock the button still takes the final price as the close', setPrice(a, fresh, now, true) && a.px.h === -162 && a.px.cl === now.toISOString() && a.px.cby === 'you', JSON.stringify(a.px));
+  const b = mk('2026-10-29T23:30:00Z');
+  ok('schedule: past the lock nothing changes', setPrice(b, fresh, now) === false && b.px.h === -180);
+  const c = mk('2026-10-30T02:00:00Z'); // hours out, read 20 minutes ago
+  ok('manual: hours out the price is taken off-schedule but is not the close', setPrice(c, fresh, now, true) && c.px.h === -162 && !c.px.cl);
+  const d = mk('2026-10-29T23:10:00Z');
+  ok('manual: after puck drop nothing changes', setPrice(d, fresh, now, true) === false);
 }
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
