@@ -197,4 +197,32 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   ok('hockey raw odds: raw block, the Hub read and the card', r.games[0].read.h === 125 && r.games[0].card.h === 114 && r.games[0].raw === odds && r.games[0].status === 'Final', JSON.stringify(r));
   ok('hockey raw odds: bad date refused', !!(await nhlOddsRaw(env, 'x', f)).error);
 }
+
+// Hockey goalie rest: days since tonight's starter last started, from the starters saved on the three days before.
+{
+  const { priorStarts, gkRestOf, gkRest } = await import('../src/nhl.js');
+  const card = (h, a, gh, ga) => ({ hAbbr: h, aAbbr: a, gk: { h: gh ? { n: gh, st: 'c' } : null, a: ga ? { n: ga, st: 'c' } : null } });
+  const days = { 'nhl:day:2026-10-28': { cards: [card('TBL', 'BOS', 'Andrei Vasilevskiy', 'Jeremy Swayman')] },
+                 'nhl:day:2026-10-27': { cards: [card('WPG', 'MIN', 'Eric Comrie', 'Filip Gustavsson')] },
+                 'nhl:day:2026-10-26': { cards: [card('WPG', 'CHI', 'Connor Hellebuyck', null)] } };
+  const env = { HUB: { get: async k => days[k] || null } };
+  const P = await priorStarts(env, '2026-10-29');
+  ok('goalie rest: started yesterday is a back-to-back', gkRestOf(P, 'TBL', 'Andrei Vasilevskiy') === 1);
+  ok('goalie rest: the team played yesterday with another goalie, so tonight\'s backup is rested longer', gkRestOf(P, 'TBL', 'Jonas Johansson') === 4);
+  ok('goalie rest: last start three days ago (backup played in between)', gkRestOf(P, 'WPG', 'Connor Hellebuyck') === 3);
+  ok('goalie rest: no start in three known days is 3+ days', gkRestOf(P, 'EDM', 'Stuart Skinner') === 4);
+  ok('goalie rest: ESPN spelling a little different still matches', gkRestOf(P, 'BOS', 'Jeremy Swaymann') === 1);
+  ok('goalie rest: a team card with no starter named is unknown', gkRestOf(P, 'CHI', 'Spencer Knight') === null);
+  const P2 = await priorStarts({ HUB: { get: async () => null } }, '2026-10-29');
+  ok('goalie rest: unknown days give null, never a guess', gkRestOf(P2, 'TBL', 'Andrei Vasilevskiy') === null);
+  const P3 = await priorStarts({ HUB: { get: async () => null } }, '2026-10-29', new Set(['2026-10-28', '2026-10-27', '2026-10-26']));
+  ok('goalie rest: days known to have had no games count as rest', gkRestOf(P3, 'TBL', 'Andrei Vasilevskiy') === 4);
+  const r = gkRest(P, { hAbbr: 'TBL', aAbbr: 'WPG' }, { h: { n: 'Andrei Vasilevskiy' }, a: { n: 'Connor Hellebuyck' } });
+  ok('goalie rest: both sides on the card', r.h === 1 && r.a === 3, JSON.stringify(r));
+  const html = fs.readFileSync(new URL('../public/nhl.html', import.meta.url), 'utf8');
+  const fn = html.match(/function gkRestTags\(c\) \{[\s\S]*?\n\}\n/)[0];
+  const tags = new Function(`const esc = s => String(s); ${fn}; return gkRestTags;`)();
+  const t = tags({ aAbbr: 'WPG', hAbbr: 'TBL', gk: { a: { n: 'Connor Hellebuyck' }, h: { n: 'Andrei Vasilevskiy' } }, gr: { a: 4, h: 1 } });
+  ok('Movement card: back-to-back and 3+ days rest tags, nothing for 2-3 days', t.includes('TBL · Andrei Vasilevskiy: back-to-back') && t.includes('WPG · Connor Hellebuyck: 3+ days rest') && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x' } }, gr: { a: 2 } }) === '', t);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
