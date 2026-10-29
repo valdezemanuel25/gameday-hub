@@ -420,8 +420,8 @@ function tileOf(c, on) {
 // ---------- Movement: every priced game of the day, opening -> close ----------
 function closeState(c) {
   const ko = new Date(c.kickoff).getTime(), px = c.px || {};
-  if (pxLocked(c)) return px.cl ? { k: 'ok', t: px.cls === 'espn' ? 'Closing ✓ ESPN close (no pre-game read)' : `Closing ✓ ${tmCT(px.cl)}` } : { k: 'miss', t: 'No pre-game read · last price is the close' };
-  if (ko - Date.now() <= 45 * 60000) return { k: 'due', t: px.cl ? `Closing read ${tmCT(px.cl)} · updates until 20 min before` : 'Pre-game read due now' };
+  if (pxLocked(c)) return px.cl ? { k: 'ok', t: px.cls === 'espn' ? 'Closing ✓ ESPN close (no pre-game read)' : `Closing ✓ ${tmCT(px.cl)}${px.cby === 'you' ? ' (your update)' : ''}` } : { k: 'miss', t: 'No pre-game read · last price is the close' };
+  if (ko - Date.now() <= 45 * 60000) return { k: 'due', t: px.cl ? `Closing read ${tmCT(px.cl)}${px.cby === 'you' ? ' (your update)' : ''} · Update NHL now re-reads it until puck drop` : 'Pre-game read due now · tap Update NHL now' };
   return { k: 'pend', t: `Pending · closing read from ~${tmCT(new Date(ko - 45 * 60000).toISOString())}` };
 }
 function movesView() {
@@ -429,7 +429,7 @@ function movesView() {
   const none = day.cards.length - rows.length, f = S.mvf || 'all';
   const inF = (r, k) => k === 'big' ? r.hm.big : k === 'pend' ? r.st.k === 'pend' || r.st.k === 'due' : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
   const seg = `<div class="mvseg">${[['all', 'All'], ['big', 'Big moves'], ['pend', 'Pending'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-mvf="${k}">${l}<i>${rows.filter(r => inF(r, k)).length}</i></button>`).join('')}</div>`;
-  const head = `<div class="nt">DraftKings prices from ESPN, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read from 45 minutes before puck drop (after the morning skate and starting goalies), every 10 minutes, and locked 20 minutes before. A move of ${BIG_MOVE}+ points is a big move: news reaching the price, not a bet.${none ? ` ${none} game${none === 1 ? '' : 's'} on this day ha${none === 1 ? 's' : 've'} no price yet.` : ''}</div>`;
+  const head = `<div class="nt">DraftKings prices from ESPN, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read from 45 minutes before puck drop (after the morning skate and starting goalies), every 10 minutes, and locked 20 minutes before (Update NHL now re-reads the price and the starting goalies up to puck drop). A move of ${BIG_MOVE}+ points is a big move: news reaching the price, not a bet.${none ? ` ${none} game${none === 1 ? '' : 's'} on this day ha${none === 1 ? 's' : 've'} no price yet.` : ''}</div>`;
   const card1 = ({ c, hm, st }) => {
     const px = c.px, op = px.op || px.f || {}, ot = px.opt || px.f || {}, fin = c.final, hw = fin ? fin.h > fin.a : null, over = fin && px.tl != null ? fin.total > px.tl : null;
     const row = (label, a, b, p0, p1, d, won) => `<tr${won ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${p0 == null ? '–' : Math.round(p0) + '→' + Math.round(p1) + '%'}</td><td class="${hot(d) ? 'neon' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
@@ -445,14 +445,15 @@ function movesView() {
   const shown = rows.filter(r => inF(r, f));
   return seg + head + (shown.length ? shown.map(card1).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices come from ESPN as the schedule is checked.'}</div>`);
 }
-// Under the closing-read badge: a starting goalie on a back-to-back (he started yesterday) or with 3+ days since his last start.
-// c.gr is worked out by the server from the starters saved on the three days before; nothing shows when it is not known.
+// Under the closing-read badge: each side's starting goalie (ESPN: Confirmed once the team names him, else Expected), with a back-to-back
+// (he started yesterday, red) or 3+ days since his last start (green). c.gr is worked out by the server from the starters saved on
+// the three days before; with no rest known the tag just names the goalie.
 function gkRestTags(c) {
   const t = [];
   for (const [s, ab] of [['a', c.aAbbr], ['h', c.hAbbr]]) {
-    const r = c.gr && c.gr[s], g = c.gk && c.gk[s]; if (!g || r == null) continue;
-    if (r === 1) t.push(`<span class="gc b">${esc(ab)} · ${esc(g.n)}: back-to-back</span>`);
-    else if (r >= 4) t.push(`<span class="gc c">${esc(ab)} · ${esc(g.n)}: 3+ days rest</span>`);
+    const r = c.gr && c.gr[s], g = c.gk && c.gk[s]; if (!g) continue;
+    const rest = r === 1 ? ': back-to-back' : r >= 4 ? ': 3+ days rest' : '';
+    t.push(`<span class="gc${r === 1 ? ' b' : r >= 4 ? ' c' : ''}">${esc(ab)} · ${esc(g.n)} · ${g.st === 'c' ? 'Confirmed' : 'Expected'}${rest}</span>`);
   }
   return t.length ? `<div class="mvgk">${t.join('')}</div>` : '';
 }
@@ -714,7 +715,7 @@ document.addEventListener('click', async e => {
   else if (t.id === 'run') {
     t.disabled = true; $('#st').textContent = 'Updating…';
     try { const r = await (await fetch('/api/nhl/run', { method: 'POST' })).json();
-      $('#st').textContent = r.error ? r.error : `${r.created || 0} new, ${r.graded || 0} graded${r.closed ? `, ${r.closed} closing price${r.closed === 1 ? '' : 's'} from ESPN` : ''}${r.forebet ? ', Forebet ' + (r.forebet.error || r.forebet.note || r.forebet.saved + ' saved') : ''}`;
+      $('#st').textContent = r.error ? r.error : `${r.created || 0} new, ${r.graded || 0} graded${r.priced ? `, ${r.priced} price${r.priced === 1 ? '' : 's'} read` : ''}${r.goalies ? `, ${r.goalies} goalie update${r.goalies === 1 ? '' : 's'}` : ''}${r.closed ? `, ${r.closed} closing price${r.closed === 1 ? '' : 's'} from ESPN` : ''}${r.forebet ? ', Forebet ' + (r.forebet.error || r.forebet.note || r.forebet.saved + ' saved') : ''}`;
       await load(); } catch (err) { $('#st').textContent = err.message; }
     t.disabled = false;
   }

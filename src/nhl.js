@@ -229,16 +229,18 @@ const canon = v => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object'
 // cl = when the lineup read was taken. Returns true when the card changed (and so must be saved).
 // Inside the window a game is read again once its last lineup read is LINEUP_EVERY minutes old.
 const lineupDue = (px, now) => !(px && px.cl) || now.getTime() - new Date(px.cl).getTime() >= LINEUP_EVERY * 60000;
-export function setPrice(c, fresh, now = new Date()) {
+// manual: the "Update NHL now" button. It takes the price whatever the schedule, up to puck drop (past the PRICE_LOCK), and inside
+// the last LINEUP_READ minutes it is the closing read (noted cby = 'you').
+export function setPrice(c, fresh, now = new Date(), manual = false) {
   const mins = (new Date(c.kickoff).getTime() - now.getTime()) / 60000, old = c.px;
-  if (!fresh || mins <= PRICE_LOCK) return false;
-  const lineup = mins <= LINEUP_READ && lineupDue(old, now), due = !old || !old.rd || now.getTime() - new Date(old.rd).getTime() >= (mins <= 180 ? 1 : 6) * HOUR;
+  if (!fresh || mins <= (manual ? 0 : PRICE_LOCK)) return false;
+  const lineup = mins <= LINEUP_READ && (manual || lineupDue(old, now)), due = manual || !old || !old.rd || now.getTime() - new Date(old.rd).getTime() >= (mins <= 180 ? 1 : 6) * HOUR;
   if (!due && !lineup) return false;
   const snap = x => ({ ...(x.h != null ? { h: x.h, a: x.a } : {}), ...(x.tl != null ? { tl: x.tl, to: x.to, tu: x.tu } : {}) });
   const n = { ...fresh, f: old && old.f ? old.f : snap(fresh), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.rd ? { rd: old.rd } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
   const changed = JSON.stringify(canon(n)) !== JSON.stringify(canon(old || null));
   if (changed) { n.ts = now.toISOString(); n.rd = now.toISOString(); }
-  if (lineup) n.cl = now.toISOString();
+  if (lineup) { n.cl = now.toISOString(); if (manual) n.cby = 'you'; else delete n.cby; }
   if (!changed && !lineup) return false;
   c.px = n; return true;
 }
@@ -380,14 +382,15 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; if (pr.v5) c.v5 = pr.v5; } else c.skipped = 'Team not in the NHL ratings yet';
         if (gkN) c.gk = gkN; if (rsN) c.rs = rsN;
         if (gkN) { const gr = gkRest(await priorFor(date), c, gkN); if (gr) c.gr = gr; }
-        setPrice(c, e.px, now);
+        setPrice(c, e.px, now, force);
         day.cards.push(c); dirty = true; out.created++;
-      } else if (!c.final && new Date(c.kickoff).getTime() > now.getTime() && setPrice(c, e.px, now)) dirty = true;
+      } else if (!c.final && new Date(c.kickoff).getTime() > now.getTime() && setPrice(c, e.px, now, force)) { dirty = true; if (force) out.priced = (out.priced || 0) + 1; }
       if (c && !c.final && new Date(c.kickoff).getTime() > now.getTime() && pr) {
         const moved = !manual && e.line && (!c.ln || c.ln.v !== e.line); // the sportsbook moved the total
         if (moved) c.ln = { v: e.line, src: e.lineSrc };
         // The goalie (or his status) or the rest changed, or the card has no v5 yet: v5 is re-made (v2 and v4 do not read either).
         const ctxMoved = !!(gkN && JSON.stringify(gkN) !== JSON.stringify(c.gk || null)) || !!(rsN && JSON.stringify(rsN) !== JSON.stringify(c.rs || null));
+        if (ctxMoved && gkN && JSON.stringify(gkN) !== JSON.stringify(c.gk || null)) out.goalies = (out.goalies || 0) + 1;
         if (ctxMoved) { if (gkN) c.gk = gkN; if (rsN) c.rs = rsN; }
         if (c.gk) { const gr = gkRest(await priorFor(date), c, c.gk); if (JSON.stringify(gr) !== JSON.stringify(c.gr || null)) { if (gr) c.gr = gr; else delete c.gr; dirty = true; } }
         if (c.ver !== S.ver || moved || ctxMoved || (pr.v5 && !c.v5)) { // ratings moved since this card was made, or the line did
