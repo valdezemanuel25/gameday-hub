@@ -223,7 +223,7 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const fn = html.match(/function gkRestTags\(c\) \{[\s\S]*?\n\}\n/)[0];
   const tags = new Function(`const esc = s => String(s); ${fn}; return gkRestTags;`)();
   const t = tags({ aAbbr: 'WPG', hAbbr: 'TBL', gk: { a: { n: 'Connor Hellebuyck' }, h: { n: 'Andrei Vasilevskiy' } }, gr: { a: 4, h: 1 } });
-  ok('Movement card: back-to-back and 3+ days rest tags, a plain name tag for 2-3 days', t.includes('TBL · Andrei Vasilevskiy · Expected: back-to-back') && t.includes('WPG · Connor Hellebuyck · Expected: 3+ days rest') && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } }, gr: { a: 2 } }) === '<div class="mvgk"><span class="gc">A · x · Confirmed</span></div>', t);
+  ok('Movement card: back-to-back and 3+ days rest tags, a plain name tag for 2-3 days', t.includes('TBL · Andrei Vasilevskiy · Expected: back-to-back') && t.includes('WPG · Connor Hellebuyck · Expected: 3+ days rest') && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } }, gr: { a: 2 } }) === '<div class="mvgk"><span class="gc">A · x · Confirmed: 1 day rest</span></div>' && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } } }).includes('x · Confirmed · rest unknown'), t);
   ok('Movement card: no goalie listed, no tag', tags({ aAbbr: 'A', hAbbr: 'B' }) === '');
 }
 
@@ -240,5 +240,23 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   ok('manual: hours out the price is taken off-schedule but is not the close', setPrice(c, fresh, now, true) && c.px.h === -162 && !c.px.cl);
   const d = mk('2026-10-29T23:10:00Z');
   ok('manual: after puck drop nothing changes', setPrice(d, fresh, now, true) === false);
+}
+
+// Goalie rest from his ESPN game log when the saved cards cannot tell (days before starters were saved).
+{
+  const { gamelogRest, restFor } = await import('../src/nhl.js');
+  const log = { events: { a: { gameDate: '2026-10-26T23:00Z' }, b: { gameDate: '2026-10-24T23:00Z' } }, seasonTypes: [{ categories: [{ events: [{ eventId: 'a' }] }] }] };
+  let calls = 0; const f = async u => { calls++; return { ok: true, json: async () => (u.includes('/999/') ? {} : log) }; };
+  ok('game log: last game 3 days before is 3', await gamelogRest(f, '1', '2026-10-29') === 3);
+  ok('game log: played yesterday is a back-to-back', await gamelogRest(f, '1', '2026-10-27') === 1);
+  ok('game log: nothing readable is unknown', await gamelogRest(f, '999', '2026-10-29') === null);
+  const P = [new Map([['DET', null]]), new Map(), new Map()]; // DET played yesterday with no goalie saved
+  const c = { hAbbr: 'DET', aAbbr: 'CHI' }, gk = { h: { n: 'John Gibson', id: '1', st: 'c' }, a: { n: 'Spencer Knight', st: 'c' } };
+  calls = 0; const r = await restFor(c, gk, P, '2026-10-29', f, { n: 8 });
+  ok('rest: the unknown side is read from the game log; a side with no ESPN id stays as the cards say', r.h === 3 && r.a === 4 && calls === 1, JSON.stringify(r));
+  c.gk = gk; c.gr = r; calls = 0; const r2 = await restFor(c, gk, P, '2026-10-29', f, { n: 8 });
+  ok('rest: the same goalie keeps his worked-out rest, no second read', r2.h === 3 && calls === 0);
+  calls = 0; await restFor({ hAbbr: 'DET', aAbbr: 'CHI' }, gk, P, '2026-10-29', f, { n: 0 });
+  ok('rest: no read budget left, no read', calls === 0);
 }
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
