@@ -87,6 +87,7 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
   * The lineup read is checked on every 5-minute cron run (`nhlLineupStep` in `src/nhl.js`), not only in the NHL job's spare slots, which could miss the 10-minute window. It only reads ESPN when a game is in the window without its read.
 * **Storage writes:** a card is only written when its price changed (`setPrice` in `src/nhl.js`).
 * **On the hockey card:** a moneyline line and an Over/Under line (opening → now / close, with the chance and the move), plus a "Big price move" flag at 5+ points.
+* **Goalie rest on the hockey Movement tab:** under the closing-read badge, a tag when a starting goalie is on a back-to-back (he started yesterday) or has 3+ days since his last start (`c.gr`, from `gkRest` in `src/nhl.js`). It is read from the starters saved on the cards of the three days before (ESPN's expected or confirmed starter), so a day the Hub has no card for leaves it unknown and no tag shows.
 * **Hockey Movement tab:** every priced game with its closing-price status, the same as soccer.
 * **Hockey Results:** how often the winner and the total went the way of the move.
 
