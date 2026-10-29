@@ -118,6 +118,12 @@ table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mv
 .mvseg{display:flex;gap:6px;margin:12px 18px 0;flex-wrap:wrap}.mvseg button{font-size:12px;padding:6px 11px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}.mvseg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}.mvseg i{font-style:normal;opacity:.7;margin-left:4px}
 .ag.y{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.ag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .ml{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.gl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}.gl>div{min-width:0}.gl>div:last-child{text-align:right}
+.gl small{display:block;font-size:10.5px;color:var(--faint);font-weight:650;letter-spacing:.02em}.gl b{display:block;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gc{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;border:1px solid var(--line);margin:3px 3px 0 0;color:var(--mut)}.gl>div:last-child .gc{margin:3px 0 0 3px}
+.gc.c{color:var(--good);border-color:rgba(94,224,143,.45)}.gc.e{color:var(--amber);border-color:rgba(240,195,90,.5)}.gc.b{color:var(--bad);border-color:rgba(255,123,107,.5)}
+.v5r{margin-top:9px;border:1px dashed rgba(240,195,90,.55);border-radius:10px;padding:7px 9px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:12px;color:var(--mut)}
+.v5r .lb{font-size:10.5px;font-weight:700;color:var(--amber);letter-spacing:.02em}.v5r b{font-size:14px;color:var(--ink);font-weight:700}.v5r .df{margin-left:auto;font-size:11px;color:var(--faint)}
 .mt{background:var(--chip);border-radius:10px;padding:7px 8px 8px;min-width:0}
 .mt .lb{font-size:10.5px;color:var(--faint);font-weight:650;margin-bottom:5px;letter-spacing:.02em}
 .mt .w{font-size:12px;color:var(--mut);white-space:nowrap}.mt .w b{font-size:15px;color:var(--ink);font-weight:750}
@@ -314,6 +320,22 @@ function pxLine(c) {
   const ou = px.tl != null ? `Over/Under ${px.tl}: Over ${ot.tl === px.tl && ot.to != null ? fmtOdds(ot.to) + ' → ' : ''}<b>${fmtOdds(px.to)}</b> · Under ${ot.tl === px.tl && ot.tu != null ? fmtOdds(ot.tu) + ' → ' : ''}<b>${fmtOdds(px.tu)}</b>${hm && hm.ou ? ` · Over ${Math.round(hm.ou.p0)}→${Math.round(hm.ou.p1)}%${Math.abs(hm.ou.d) >= 1 ? ` ${mvTag(hm.ou.d)}` : ''}` : ''}` : '';
   return `<div class="pxl">${[ml, ou].filter(Boolean).join('<br>')}</div>`;
 }
+// Tonight's starting goalie (ESPN: expected, then confirmed) and rest, for both teams, away on the left like the matchup.
+function gkStrip(c) {
+  if (!c.gk && !c.rs) return '';
+  const side = (s, ab, i) => {
+    const g = c.gk && c.gk[s], r = c.rs && c.rs[s], v = c.v5 && c.v5.in, bk = v && v.bk && v.bk[i] === 1;
+    const rest = r == null ? '' : r === 1 ? '<span class="gc b">Back-to-back</span>' : `<span class="gc">${r >= 4 ? '3+ days rest' : r + ' days rest'}</span>`;
+    return `<div><small>${esc(ab)} goalie</small><b>${g ? esc(g.n) : 'Not listed yet'}</b>${g ? `<span class="gc ${g.st === 'c' ? 'c' : 'e'}">${g.st === 'c' ? 'Confirmed' : 'Expected'}</span>` : ''}${bk ? '<span class="gc b">Backup</span>' : ''}${rest}</div>`;
+  };
+  return `<div class="gl">${side('a', c.aAbbr, 1)}${side('h', c.hAbbr, 0)}</div>`;
+}
+// v5 shadow: v4 with rest and backup-goalie adjustments. Tracked next to v2 and v4 from the first card made with it; it never feeds them.
+function v5Row(c, g) {
+  const m = c.v5; if (!m) return '';
+  const w = pickWin(m, c), o = pickOu(m), d = c.v4 ? m.w - c.v4.w : 0, i = m.in || {}, on = [...(i.b2b || []), ...(i.bk || [])].some(x => x === 1);
+  return `<div class="v5r"><span class="lb">v5 shadow</span><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}<span>${o.side} ${lineOf(c)} ${o.p}%${mark(g && g.ou)}</span>${m.sc ? `<span>${m.sc.a}–${m.sc.h} likeliest${mark(g && g.sc)}</span>` : ''}<span class="df">${on ? `${d === 0 ? 'same winner chance as v4' : (d > 0 ? '+' : '') + d + ' pts home vs v4'}` : 'nothing to adjust: same as v4'}</span></div>`;
+}
 function card(c) {
   const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
   const hp = m0 ? m0.w : null, ap = hp == null ? null : 100 - hp;
@@ -328,7 +350,7 @@ function card(c) {
   const lnrow = pre && S.ln === c.id ? `<div class="lnrow"><label>Total line</label><input type="number" inputmode="decimal" step="0.5" min="3.5" max="9.5" id="ln-${esc(c.id)}" value="${ln}"><button type="button" class="btn sm" data-saveln="${esc(c.id)}">Save</button>${c.ln && c.ln.how === 'manual' ? `<button type="button" class="btn sm ghost" data-clrln="${esc(c.id)}">Use ESPN</button>` : ''}<button type="button" class="btn sm ghost" data-setln="">Cancel</button></div>` : '';
   return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
   ${split}${(hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${goalsPill(c)}${pxLine(c)}
-  <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>
+  <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>${gkStrip(c)}${v5Row(c, g.v5)}
   <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Winner pick, Over/Under ${ln}${c.ln ? '' : ' (the default until a line is known)'}, then the single likeliest final score (score shown away–home; Forebet: its predicted score). Blue marks a confident pick.`}</div></div>`;
 }
 // Top: only games where every model agrees. Winner: v2, v4 and Forebet all take the same side. Over/Under: v2, v4 and
@@ -459,6 +481,21 @@ function bestOf(models, key) {
 }
 function nbAge() { try { const t = localStorage.getItem('hubBackupNhl'); return t ? Math.floor((Date.now() - new Date(t).getTime()) / 86400000) : null; } catch (e) { return null; } }
 function nbLine() { const b = nbAge(); return b == null ? 'No hockey export made from this device yet.' : b === 0 ? 'Last hockey export from this device: today.' : `Last hockey export from this device: ${b} day${b === 1 ? '' : 's'} ago.`; }
+// v5 shadow on its own games (each model on the same games), and whether rest or a backup goalie was what moved it.
+function v5View() {
+  const V = tally.v5;
+  if (!V) return `<h4>v5 shadow (rest and backup goalies)</h4><div class="nt">v5 is tracked from the first game it was made for. Nothing graded yet; it appears here once those games finish.</div>`;
+  const cl = (m, o) => { const v = pct(m.hit, m.n); return v == null ? '<td>–</td>' : `<td${o}>${v}%<small>${m.hit}/${m.n}</small></td>`; };
+  const best = (g, ks) => { const v = ks.map(k => g[k].n ? g[k].hit / g[k].n : -1), mx = Math.max(...v); return v.map(x => (x === mx && mx >= 0 && v.filter(y => y === mx).length < v.length ? ' class="best"' : '')); };
+  const bw = best(V.win, ['v2', 'v4', 'v5']), bo = best(V.ou, ['v2', 'v4', 'v5']), sit = (x, lab) => `<tr><td>${lab}</td><td>${x.n}</td>${x.n ? `<td>${Math.round(100 * x.v4 / x.n)}%<small>${x.v4}/${x.n}</small></td><td>${Math.round(100 * x.v5 / x.n)}%<small>${x.v5}/${x.n}</small></td>` : '<td>–</td><td>–</td>'}</tr>`;
+  return `<h4>v5 shadow (rest and backup goalies)</h4><table><tr><th>${V.n} game${V.n === 1 ? '' : 's'}</th><th>v2</th><th>v4</th><th>v5</th></tr>
+  <tr><td>Winner</td>${['v2', 'v4', 'v5'].map((k, i) => cl(V.win[k], bw[i])).join('')}</tr>
+  <tr><td>Over/Under</td>${['v2', 'v4', 'v5'].map((k, i) => cl(V.ou[k], bo[i])).join('')}</tr>
+  <tr><td>Always home</td><td colspan="3" class="hm">${V.win.home.n ? Math.round(100 * V.win.home.hit / V.win.home.n) + '% <small>' + V.win.home.hit + '/' + V.win.home.n + '</small>' : '–'}</td></tr>
+  <tr><td>Brier (winner)</td><td>${V.brier.v2 ?? '–'}</td><td>${V.brier.v4 ?? '–'}</td><td>${V.brier.v5 ?? '–'}</td></tr></table>
+  <table class="cal"><tr><th>Winner, v4 vs v5</th><th>Games</th><th>v4</th><th>v5</th></tr>${sit(V.sit.adj, 'Rest or a backup moved v5')}${sit(V.sit.plain, 'Nothing to adjust')}</table>
+  <div class="nt">v5 is v4 with the measured effect of a back-to-back (about 6 points on the winner chance) and a backup goalie in net (2 to 3 points, and about 0.16 more goals against), from 14,347 games. It starts at zero and only counts games it was made for before puck drop. It never feeds v2, v4, a pick or a bet. The bottom table is the real test: v5 can only beat v4 in the first row.</div>`;
+}
 function calView() {
   const C = tally.cal; if (!C) return '';
   const row = (m, name) => C[m].filter(b => b.n).map(b => `<tr><td>${name} sure ${esc(b.label)}</td><td>${b.avg}%<small>said</small></td><td${Math.abs(100 * b.hits / b.n - b.avg) > 15 ? ' class="off"' : ''}>${Math.round(100 * b.hits / b.n)}%<small>${b.hits}/${b.n} won</small></td></tr>`).join('');
@@ -480,7 +517,7 @@ function results() {
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
   <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. ± is the 95% margin: the true rate probably sits within that many points, and it shrinks as games pile up. Over/Under is graded only at the game's DraftKings line: ${tally.lined || 0} of ${tally.graded} graded games had one, and the ${tally.graded - (tally.lined || 0)} without a line are left out of the Over/Under row. \"Always pick home\" is the baseline a winner pick has to beat. A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
   ${(Mv => Mv && (Mv.ml.n || Mv.ou.n) ? `<div class="nt">Price moves (opening → close): the winner went the way of the moneyline move in ${Mv.ml.n ? Math.round(100 * Mv.ml.follow / Mv.ml.n) + '% of ' + Mv.ml.n : '–'} games${Mv.ml.big ? ` (big moves ${Math.round(100 * Mv.ml.bigFollow / Mv.ml.big)}% of ${Mv.ml.big})` : ''}; the total went the way of its move in ${Mv.ou.n ? Math.round(100 * Mv.ou.follow / Mv.ou.n) + '% of ' + Mv.ou.n : '–'}${Mv.ou.big ? ` (big moves ${Math.round(100 * Mv.ou.bigFollow / Mv.ou.big)}% of ${Mv.ou.big})` : ''}. See the Movement tab for each game.</div>` : '')(tally.moves)}
-  ${calView()}
+  ${v5View()}${calView()}
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
     const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${r.ln ? `${m.o >= 50 ? 'Over' : 'Under'} ${r.ln.v}${mark(g && g.ou)}` : '<small>no line</small>'}` : '–';
     const c = { h: r.hAbbr, a: r.aAbbr };

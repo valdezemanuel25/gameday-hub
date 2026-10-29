@@ -188,5 +188,63 @@ import { topScore } from '../src/nhl.js';
   ok('frozen xG rates fade once a team has played past them: the xG pull on v4 shrinks', early.v4.o - early.v2.o > 4 && late.v4.o - late.v2.o < (early.v4.o - early.v2.o) / 2, `early ${early.v4.o}-${early.v2.o}, late ${late.v4.o}-${late.v2.o}`);
   ok('at the seed date xG covers every game, so v4 starts unfaded', freshState().teams.EDM.nx === freshState().teams.EDM.n);
 }
+
+// ---- v5 shadow: rest and backup-goalie adjustments (comparison only) ----
+import { ctxFor, isBackup, gkKey, withGk, adj5, B2B_OWN, B2B_OPP, BACKUP_OPP, B2B_LOGIT, BACKUP_LOGIT } from '../src/nhl.js';
+{
+  const S5 = freshState();
+  const base = predict(S5, 'EDM', 'UTA'), none = predict(S5, 'EDM', 'UTA', 5.5, { b2b: [null, null], bk: [null, null] });
+  ok('v5: with no ctx there is no v5 and v2 / v4 are untouched by asking for it', !base.v5 && JSON.stringify(base.v2) === JSON.stringify(none.v2) && JSON.stringify(base.v4) === JSON.stringify(none.v4) && JSON.stringify(base.lam) === JSON.stringify(none.lam));
+  ok('v5: nothing known means v5 equals v4', none.v5.w === none.v4.w && none.v5.o === none.v4.o && none.v5.sc.h === none.v4.sc.h && none.v5.in.b2b.join() === ',' && none.v5.in.bk.join() === ',');
+  const aB = predict(S5, 'EDM', 'UTA', 5.5, { b2b: [false, true], bk: [null, null] }).v5, hB = predict(S5, 'EDM', 'UTA', 5.5, { b2b: [true, false], bk: [null, null] }).v5;
+  ok('v5: the visitor on a back-to-back lifts the home win chance by a few points, the home team on one lowers it', aB.w - none.v4.w >= 4 && aB.w - none.v4.w <= 8 && none.v4.w - hB.w >= 4 && none.v4.w - hB.w <= 8, `${none.v4.w} ${aB.w} ${hB.w}`);
+  const bA = predict(S5, 'EDM', 'UTA', 5.5, { b2b: [null, null], bk: [false, true] }).v5, bH = predict(S5, 'EDM', 'UTA', 5.5, { b2b: [null, null], bk: [true, false] }).v5;
+  ok('v5: a backup in the visitor net helps the home side, one in the home net hurts it, and either lifts the Over', bA.w - none.v4.w >= 2 && bA.w - none.v4.w <= 4 && none.v4.w - bH.w >= 2 && none.v4.w - bH.w <= 4 && bA.o > none.v4.o && bH.o > none.v4.o, `${none.v4.w} ${bA.w} ${bH.w} ${none.v4.o} ${bA.o} ${bH.o}`);
+  ok('v5: the goal adjustments are the measured ones', adj5({ b2b: [true, false], bk: [false, false] }).h === -B2B_OWN && adj5({ b2b: [true, false], bk: [false, false] }).a === B2B_OPP && adj5({ b2b: [false, false], bk: [false, true] }).h === BACKUP_OPP && adj5({ b2b: [false, false], bk: [true, false] }).a === BACKUP_OPP && adj5({ b2b: [false, true], bk: [false, false] }).L === B2B_LOGIT && adj5({ b2b: [false, false], bk: [true, false] }).L === -BACKUP_LOGIT && adj5({ b2b: [true, true], bk: [false, false] }).L === 0);
+  // backup detection
+  const G = { gk: { AAA: { starter: 10, backup: 3 }, TIE: { one: 6, two: 6 }, NEW: { x: 2, y: 1 } } };
+  ok('backup: the usual starter is not one, a goalie with fewer starts is, a goalie never seen is', isBackup(G, 'AAA', 'Starter') === false && isBackup(G, 'AAA', 'Backup') === true && isBackup(G, 'AAA', 'Callup Guy') === true);
+  ok('backup: tied top goalies are not backups; too few team games, no name, or no counts means unknown', isBackup(G, 'TIE', 'One') === false && isBackup(G, 'TIE', 'Two') === false && isBackup(G, 'NEW', 'X') === null && isBackup(G, 'AAA', '') === null && isBackup(freshState(), 'AAA', 'Starter') === null);
+  ok('goalie names match across accents and punctuation', gkKey('Ukko-Pekka Luukkonen') === gkKey('UkkoPekka Luukkonen') && gkKey('Jesper Wallstedt') === 'jesperwallstedt' && gkKey('Joonás Korpisalo') === gkKey('Joonas Korpisalo'));
+  const W = freshState(); ok('a state saved before v5 gets the goalie start counts once', withGk(W) === true && withGk(W) === false && Object.keys(W.gk).length === 32 && /^\d{4}-\d{2}-\d{2}$/.test(W.gkThrough));
+  const cx = ctxFor(G, 'AAA', 'BBB', { h: { n: 'Backup', st: 'e' }, a: null }, { h: 1, a: 3 });
+  ok('ctx: rest 1 is a back-to-back, 2 or more is not, a missing goalie is unknown', cx.b2b[0] === true && cx.b2b[1] === false && cx.bk[0] === true && cx.bk[1] === null && ctxFor(G, 'AAA', 'BBB', null, null).b2b.join() === ',');
+}
+{
+  // end to end on an isolated store: rest from yesterday's board, goalies from ESPN's probables, v5 on the card, goalie starts counted at the final
+  const kv2 = new Map(), env2 = { HUB: { get: async (k, t) => { const v = kv2.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv2.set(k, v); }, list: async ({ prefix }) => ({ keys: [...kv2.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })) }) } };
+  const st0 = freshState(); withGk(st0); st0.gkThrough = '2000-01-01'; kv2.set('nhl:state', JSON.stringify(st0));
+  const gkp = (name, st) => [{ name: 'probableStartingGoalie', displayName: 'Probable Starting Goalie', abbreviation: 'SG', athlete: { displayName: name }, status: { type: st } }];
+  const evG = (id, h, hn, ha, an, aa, done, hs, as, hg, ag) => ({ id, date: iso(h), competitions: [{ status: { type: { completed: done, shortDetail: done ? 'Final' : '7:00 PM' } }, competitors: [{ homeAway: 'home', score: String(hs ?? 0), team: { displayName: hn, abbreviation: ha }, probables: hg || [] }, { homeAway: 'away', score: String(as ?? 0), team: { displayName: an, abbreviation: aa }, probables: ag || [] }] }] });
+  const f2 = {}, T0 = dayStr(0), Y0 = dayStr(-24);
+  const fx = async url => { const d = /dates=(\d{8})/.exec(url)[1]; return { ok: true, json: async () => ({ events: f2[d] || [] }) }; };
+  f2[Y0.replace(/-/g, '')] = [evG('8000', -24, 'Seattle Kraken', 'SEA', 'Vegas Golden Knights', 'VGK', true, 2, 3)];
+  f2[T0.replace(/-/g, '')] = [evG('8001', 5, 'Vegas Golden Knights', 'VGK', 'Calgary Flames', 'CGY', false, 0, 0, gkp('Adin Hill', 'confirmed'), gkp('Dustin Wolf', 'expected'))];
+  const GKS = (await import('../src/nhlgk.js')).default.counts.CGY;
+  const wolfBackup = (GKS.dustinwolf || 0) < Math.max(...Object.values(GKS)) && Object.values(GKS).reduce((a, b) => a + b, 0) >= 6;
+  await nhlStep(env2, new Date(), fx);
+  const d1 = JSON.parse(kv2.get('nhl:day:' + T0)), c1 = d1.cards.find(c => c.id === '8001');
+  ok('v5 card: goalies, rest and v5 are saved on the card', c1 && c1.gk.h.n === 'Adin Hill' && c1.gk.h.st === 'c' && c1.gk.a.st === 'e' && c1.rs.h === 1 && c1.v5 && c1.v5.in.b2b[0] === 1, JSON.stringify(c1));
+  ok('v5 card: a visitor goalie with fewer starts than his team leader is flagged as the backup', !wolfBackup || c1.v5.in.bk[1] === 1, JSON.stringify(c1.v5.in));
+  ok('v5 card: v2 and v4 are what they were without goalies or rest', JSON.stringify({ v2: c1.v2, v4: c1.v4 }) === JSON.stringify({ v2: predict(JSON.parse(kv2.get('nhl:state')), 'VGK', 'CGY').v2, v4: predict(JSON.parse(kv2.get('nhl:state')), 'VGK', 'CGY').v4 }));
+  // the visitor's goalie changes before puck drop: v5 is re-made, v4 is not
+  f2[T0.replace(/-/g, '')] = [evG('8001', 5, 'Vegas Golden Knights', 'VGK', 'Calgary Flames', 'CGY', false, 0, 0, gkp('Adin Hill', 'confirmed'), gkp('Devin Cooley', 'confirmed'))];
+  await nhlStep(env2, new Date(), fx);
+  const c2 = JSON.parse(kv2.get('nhl:day:' + T0)).cards.find(c => c.id === '8001');
+  ok('v5 card: a goalie change before puck drop updates the goalie and re-makes v5 only', c2.gk.a.n === 'Devin Cooley' && c2.gk.a.st === 'c' && JSON.stringify(c2.v4) === JSON.stringify(c1.v4) && (!wolfBackup || c2.v5.w !== c1.v5.w), JSON.stringify([c1.v5, c2.v5]));
+  // finished: graded for v5, and the two starters are counted
+  const before = JSON.parse(kv2.get('nhl:state')).gk;
+  f2[T0.replace(/-/g, '')] = [evG('8001', 5, 'Vegas Golden Knights', 'VGK', 'Calgary Flames', 'CGY', true, 4, 2)];
+  await nhlStep(env2, new Date(), fx);
+  const c3 = JSON.parse(kv2.get('nhl:day:' + T0)).cards.find(c => c.id === '8001'), after = JSON.parse(kv2.get('nhl:state')).gk;
+  ok('v5 card: graded like v2 and v4, and keeps its goalies', c3.final && c3.grade.v5 && c3.grade.v5.win === 1 && c3.grade.v5.brier >= 0 && c3.gk.h.n === 'Adin Hill');
+  ok('goalie starts: both starters are counted once when the game finishes', (after.VGK.adinhill || 0) === (before.VGK.adinhill || 0) + 1 && (after.CGY.devincooley || 0) === (before.CGY.devincooley || 0) + 1);
+  await nhlStep(env2, new Date(), fx);
+  ok('goalie starts: a second pass over the finished game counts nothing again', (JSON.parse(kv2.get('nhl:state')).gk.VGK.adinhill || 0) === (after.VGK.adinhill || 0));
+  const tv = (await nhlTally(env2)).v5;
+  ok('Results: the v5 block counts the graded game with each model on the same game and splits by situation', tv && tv.n === 1 && tv.win.v5.n === 1 && tv.win.v4.n === 1 && tv.win.home.hit === 1 && tv.sit.adj.n === 1 && tv.sit.plain.n === 0, JSON.stringify(tv));
+  ok('Results: with no v5 cards graded there is no v5 block', (await nhlTally({ HUB: { list: async () => ({ keys: [] }), get: async () => null } })).v5 === null);
+}
+
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);

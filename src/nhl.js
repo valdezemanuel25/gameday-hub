@@ -6,6 +6,7 @@
 //   what the model expects. Until a line is known a game uses 5.5.
 // Storage: nhl:state (ratings, one write per batch of finished games), nhl:day:<date> (cards), nhl:fbmeta.
 import SEED from './nhlseed.js';
+import GK from './nhlgk.js';
 import { hockeyPick, hockeyHit } from './pick.js';
 import { fbHeaders, FB_HV } from './forebetpage.js';
 import { hockeyMove } from './moves.js';
@@ -28,6 +29,35 @@ export const TIE = 1.55;
 // Share of games past regulation that overtime settles (the rest go to a shootout). The overtime goal counts in the graded total;
 // the shootout goal does not (see refresh: totals leave it out), so a tied game ends one goal higher with this chance.
 export const OT_GOAL = 0.65;
+// v5 shadow: v4's expected goals adjusted for rest and for a backup goalie in net. Comparison only: it never feeds v2, v4, a pick or a bet.
+// Sizes measured on 14,347 regular-season games (2012 to 2026, MoneyPuck game logs), net of team strength (docs/hockey-rest-goalie-2026-10-28.md):
+// a team on the second night of a back-to-back scores B2B_OWN fewer goals and allows B2B_OPP more; a backup in net lets in BACKUP_OPP more.
+export const B2B_OWN = 0.15, B2B_OPP = 0.05, BACKUP_OPP = 0.16;
+// The winner chance moves by the measured effect on who wins (a logit shift, about 6 points for a back-to-back and 2 to 3 for a backup near 50%),
+// not by what the goal adjustments alone would give: v4's Elo part cannot see rest or goalies and would dilute it.
+export const B2B_LOGIT = 0.24, BACKUP_LOGIT = 0.11;
+// Goalie names are matched without accents, spaces or punctuation (ESPN "Ukko-Pekka Luukkonen" = MoneyPuck "Ukko-Pekka Luukkonen").
+export const gkKey = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+// Is this goalie a backup for his team? true = he has started fewer games than the team's most-used goalie, false = he is that goalie (or tied
+// with him), null = not known (no start counts yet, fewer than 6 games, or no name).
+export function isBackup(S, team, name) {
+  const C = S && S.gk && S.gk[team], k = gkKey(name); if (!C || !k) return null;
+  const v = Object.values(C), n = v.reduce((a, b) => a + b, 0); if (n < 6) return null;
+  return (C[k] || 0) < Math.max(...v);
+}
+// The state keeps start counts from the seed (tools/make-nhl-gk.py); a state saved before v5 gets them the first time it is loaded.
+export const withGk = S => { if (S && !S.gk) { S.gk = JSON.parse(JSON.stringify(GK.counts)); S.gkThrough = GK.through; return true; } return false; };
+// What a card knows about tonight: b2b = [home, away] on the second night of a back-to-back, bk = [home, away] backup in net. true / false / null (unknown).
+export function ctxFor(S, hc, ac, gk, rs) {
+  const b = x => (x == null ? null : x === 1), k = (side, t) => (gk && gk[side] ? isBackup(S, t, gk[side].n) : null);
+  return { b2b: [rs ? b(rs.h) : null, rs ? b(rs.a) : null], bk: [k('h', hc), k('a', ac)] };
+}
+// Goals added to the home and away expected goals (h, a), and the logit shift on the home win chance (L).
+export const adj5 = c => ({
+  h: (c.b2b[0] ? -B2B_OWN : 0) + (c.b2b[1] ? B2B_OPP : 0) + (c.bk[1] ? BACKUP_OPP : 0),
+  a: (c.b2b[1] ? -B2B_OWN : 0) + (c.b2b[0] ? B2B_OPP : 0) + (c.bk[0] ? BACKUP_OPP : 0),
+  L: (c.b2b[1] ? B2B_LOGIT : 0) - (c.b2b[0] ? B2B_LOGIT : 0) + (c.bk[1] ? BACKUP_LOGIT : 0) - (c.bk[0] ? BACKUP_LOGIT : 0),
+});
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard';
 const FB_URL = 'https://www.forebet.com/en/hockey/usa/nhl';
 
@@ -71,7 +101,7 @@ export const freshState = () => JSON.parse(JSON.stringify({
   plg: SEED.plg, plgx: SEED.plgx,
   teams: Object.fromEntries(Object.entries(SEED.teams).map(([t, s]) => [t, { ...s, nx: s.n }])),
 }));
-export function predict(S, hc, ac, line = LINE) {
+export function predict(S, hc, ac, line = LINE, ctx = null) {
   const H = S.teams[hc], A = S.teams[ac];
   if (!H || !A) return null;
   const L = S.lg.n > 20 ? S.lg.g / S.lg.n / 2 : S.plg;
@@ -91,7 +121,16 @@ export function predict(S, hc, ac, line = LINE) {
   const cov = t => Math.min(1, (t.nx ?? t.n) / Math.max(1, t.n)), c = (cov(H) + cov(A)) / 2, ax = 0.5 * c;
   const w4 = 0.4 * pe + 0.3 * c * px.home + (0.6 - 0.3 * c) * p2.home;
   const lh4 = (1 - ax) * lh + ax * xlh, la4 = (1 - ax) * la + ax * xla, p4 = probs(lh4, la4, line);
-  return { v2: { w: round(p2.home), o: round(ovr(p2)), sc: topScore(lh, la), ...(p2.push > 0.0005 ? { push: round(p2.push) } : {}) }, v4: { w: round(w4), o: round(ovr(p4)), sc: topScore(lh4, la4), ...(p4.push > 0.0005 ? { push: round(p4.push) } : {}) }, lam: [+lh.toFixed(2), +la.toFixed(2)] };
+  // v5 shadow: v4's winner chance shifted by the measured rest / backup effect, and v4's expected goals (goals and xG rates) with the goal adjustments added, for Over/Under and the likeliest score.
+  let v5 = null;
+  if (ctx) {
+    const d = adj5(ctx), mx = x => Math.max(0.5, x), lh5 = mx(lh + d.h), la5 = mx(la + d.a), xlh5 = mx(xlh + d.h), xla5 = mx(xla + d.a);
+    const w5 = 1 / (1 + Math.exp(-(Math.log(w4 / (1 - w4)) + d.L)));
+    const lh45 = (1 - ax) * lh5 + ax * xlh5, la45 = (1 - ax) * la5 + ax * xla5, p45 = probs(lh45, la45, line);
+    const f = x => (x == null ? null : x ? 1 : 0);
+    v5 = { w: round(w5), o: round(ovr(p45)), sc: topScore(lh45, la45), ...(p45.push > 0.0005 ? { push: round(p45.push) } : {}), in: { b2b: ctx.b2b.map(f), bk: ctx.bk.map(f) } };
+  }
+  return { v2: { w: round(p2.home), o: round(ovr(p2)), sc: topScore(lh, la), ...(p2.push > 0.0005 ? { push: round(p2.push) } : {}) }, v4: { w: round(w4), o: round(ovr(p4)), sc: topScore(lh4, la4), ...(p4.push > 0.0005 ? { push: round(p4.push) } : {}) }, ...(v5 ? { v5 } : {}), lam: [+lh.toFixed(2), +la.toFixed(2)] };
 }
 // A finished game moves the ratings (goals and Elo). xG is not in ESPN's feed, so xG rates stay as seeded.
 export function applyGame(S, hc, ac, h, a, last) {
@@ -200,7 +239,10 @@ async function scoreboard(date, fetchFn, debug) {
       const det = String(t.shortDetail || t.detail || ''), last = /SO/.test(det) ? 'SO' : /OT/.test(det) ? 'OT' : 'REG';
       // Only the Over/Under total is taken from the odds block (the sportsbook line); spreads and moneylines are ignored.
       const od = (comp.odds || []).find(o => Number.isFinite(Number(o.overUnder)) && Number(o.overUnder) >= 3.5 && Number(o.overUnder) <= 9.5), line = od ? Number(od.overUnder) : null;
-      out.push({ id: String(ev.id), date: ev.date, done, last, line, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
+      // Probable starting goalie per side ("expected", or "confirmed" once the team names him). Display and the v5 shadow only.
+      const gkOf = t => { const p = (t.probables || []).find(x => /starting goalie/i.test(x.displayName || x.name || '') || x.abbreviation === 'SG'), a = p && p.athlete; return a && a.displayName ? { n: String(a.displayName).slice(0, 40), st: /confirm/i.test(p.status?.type || p.status?.name || '') ? 'c' : 'e' } : null; };
+      const gkh = done ? null : gkOf(h), gka = done ? null : gkOf(a);
+      out.push({ id: String(ev.id), date: ev.date, done, last, line, gk: gkh || gka ? { h: gkh, a: gka } : null, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
     }
     return out;
   } catch (e) { debug.push(`scoreboard ${date}: ${e.message}`); return null; }
@@ -231,8 +273,8 @@ export function gradeCard(c) {
   const f = c.final; if (!f) return;
   const line = c.ln ? c.ln.v : LINE, win = f.h > f.a ? 'H' : 'A', over = f.total > line, push = f.total === line;
   const g = { line };
-  for (const k of ['v2', 'v4']) if (c[k]) g[k] = { win: (c[k].w >= 50 ? 'H' : 'A') === win ? 1 : 0, ou: push ? null : (c[k].o >= 50) === over ? 1 : 0, brier: +((c[k].w / 100 - (win === 'H' ? 1 : 0)) ** 2).toFixed(4) };
-  for (const k of ['v2', 'v4']) if (g[k] && c[k].sc) g[k].sc = c[k].sc.h === f.h && c[k].sc.a === f.a ? 1 : 0;
+  for (const k of ['v2', 'v4', 'v5']) if (c[k]) g[k] = { win: (c[k].w >= 50 ? 'H' : 'A') === win ? 1 : 0, ou: push ? null : (c[k].o >= 50) === over ? 1 : 0, brier: +((c[k].w / 100 - (win === 'H' ? 1 : 0)) ** 2).toFixed(4) };
+  for (const k of ['v2', 'v4', 'v5']) if (g[k] && c[k].sc) g[k].sc = c[k].sc.h === f.h && c[k].sc.a === f.a ? 1 : 0;
   if (c.fb) g.fb = { win: c.fb.pick ? (c.fb.pick === win ? 1 : 0) : null, ou: fbOu(c.fb, f, line) };
   c.grade = g;
   // The card's headline pick is locked here (from what the card held when it finished) and scored on the final. Model bets reads it.
@@ -250,8 +292,17 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
     const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
     if (!due.length) continue;
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
-    let dirty = false;
-    for (const c of due) { const e = evs.find(x => x.id === c.id); if (e && !e.done && setPrice(c, e.px, now)) { dirty = true; out.push(c.id); } }
+    let dirty = false, S5 = null;
+    for (const c of due) {
+      const e = evs.find(x => x.id === c.id); if (!e || e.done) continue;
+      if (setPrice(c, e.px, now)) { dirty = true; out.push(c.id); }
+      // The starting goalie, as the team names him: v5 is re-made from it (v2 and v4 do not read it).
+      if (e.gk && (e.gk.h || e.gk.a) && JSON.stringify(e.gk) !== JSON.stringify(c.gk || null)) {
+        S5 = S5 || (await env.HUB.get('nhl:state', 'json')) || freshState(); withGk(S5);
+        const pr = predict(S5, c.hAbbr, c.aAbbr, c.ln ? c.ln.v : LINE, ctxFor(S5, c.hAbbr, c.aAbbr, e.gk, c.rs));
+        c.gk = e.gk; if (pr && pr.v5) c.v5 = pr.v5; dirty = true; if (!out.includes(c.id)) out.push(c.id);
+      }
+    }
     if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); }
   }
   return out.length ? { job: 'nhl-lineup', read: out } : null;
@@ -260,9 +311,15 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
 // ---- cron / on-demand step ---------------------------------------------------------------------
 export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = false } = {}) {
   const debug = [], t = localDate(now.toISOString());
-  let S = (await env.HUB.get('nhl:state', 'json')) || freshState(), stateDirty = false;
+  let S = (await env.HUB.get('nhl:state', 'json')) || freshState(), stateDirty = withGk(S);
   const dates = [addDays(t, -1), t, addDays(t, 1)];
   const boards = await Promise.all(dates.map(d => scoreboard(d, fetchFn, debug)));
+  // Rest: which teams played on which days. The three boards just read, plus the saved days before them. A day that is not known
+  // makes the rest of a team that did not play on a known day before it unknown (null), never a guess.
+  const played = {};
+  dates.forEach((d, i) => { if (boards[i]) played[d] = new Set(boards[i].flatMap(e => [e.hc, e.ac])); });
+  for (const d of [addDays(t, -2), addDays(t, -3), addDays(t, -4)]) { const sd = await env.HUB.get(`nhl:day:${d}`, 'json'); if (sd) played[d] = new Set((sd.cards || []).flatMap(c => [c.hAbbr, c.aAbbr])); }
+  const restOf = (team, date) => { for (let k = 1; k <= 3; k++) { const set = played[addDays(date, -k)]; if (!set) return null; if (set.has(team)) return k; } return 4; }; // 1 = played yesterday, 4 = three or more days
   const out = { graded: 0, created: 0, refreshed: 0 }, seen = new Set();
   for (let i = 0; i < dates.length; i++) {
     const evs = boards[i]; if (!evs) continue;
@@ -279,6 +336,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
           const r = !S.applied.includes(e.id) && ld > S.through ? applyGame(S, e.hc, e.ac, e.hs, e.as, e.last) : null;
           if (r) { c.final.total = r.th + r.ta; S.applied.push(e.id); stateDirty = true; }
           else c.final.total = e.hs + e.as - (e.last === 'SO' ? 1 : 0);
+          if (c.gk && ld > S.gkThrough) for (const [side, team] of [['h', e.hc], ['a', e.ac]]) { const k = c.gk[side] && gkKey(c.gk[side].n); if (k) { const C = S.gk[team] || (S.gk[team] = {}); C[k] = (C[k] || 0) + 1; stateDirty = true; } } // who started, for telling a backup from the usual starter
           gradeCard(c); dirty = true; out.graded++;
         } else if (!c && ld > S.through && !S.applied.includes(e.id)) { // finished game we never predicted: still teaches the ratings
           if (applyGame(S, e.hc, e.ac, e.hs, e.as, e.last)) { S.applied.push(e.id); stateDirty = true; }
@@ -287,19 +345,24 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         continue;
       }
       const manual = c && c.ln && c.ln.how === 'manual', lineNow = manual ? c.ln.v : e.line ?? (c && c.ln ? c.ln.v : null);
-      const pr = predict(S, e.hc, e.ac, lineNow ?? LINE);
+      const rs = { h: restOf(e.hc, date), a: restOf(e.ac, date) }, rsN = rs.h == null && rs.a == null ? null : rs, gkN = e.gk && (e.gk.h || e.gk.a) ? e.gk : null;
+      const pr = predict(S, e.hc, e.ac, lineNow ?? LINE, ctxFor(S, e.hc, e.ac, gkN || (c && c.gk), rsN || (c && c.rs)));
       if (!c) {
         c = { id: e.id, kickoff: e.date, ko: localTime(e.date), home: e.hName, away: e.aName, hAbbr: e.hc, aAbbr: e.ac, final: null, ver: S.ver };
         if (e.line) c.ln = { v: e.line, src: e.lineSrc };
-        if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; } else c.skipped = 'Team not in the NHL ratings yet';
+        if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; if (pr.v5) c.v5 = pr.v5; } else c.skipped = 'Team not in the NHL ratings yet';
+        if (gkN) c.gk = gkN; if (rsN) c.rs = rsN;
         setPrice(c, e.px, now);
         day.cards.push(c); dirty = true; out.created++;
       } else if (!c.final && new Date(c.kickoff).getTime() > now.getTime() && setPrice(c, e.px, now)) dirty = true;
       if (c && !c.final && new Date(c.kickoff).getTime() > now.getTime() && pr) {
         const moved = !manual && e.line && (!c.ln || c.ln.v !== e.line); // the sportsbook moved the total
         if (moved) c.ln = { v: e.line, src: e.lineSrc };
-        if (c.ver !== S.ver || moved) { // ratings moved since this card was made, or the line did
-          c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; dirty = true; out.refreshed++;
+        // The goalie (or his status) or the rest changed, or the card has no v5 yet: v5 is re-made (v2 and v4 do not read either).
+        const ctxMoved = !!(gkN && JSON.stringify(gkN) !== JSON.stringify(c.gk || null)) || !!(rsN && JSON.stringify(rsN) !== JSON.stringify(c.rs || null));
+        if (ctxMoved) { if (gkN) c.gk = gkN; if (rsN) c.rs = rsN; }
+        if (c.ver !== S.ver || moved || ctxMoved || (pr.v5 && !c.v5)) { // ratings moved since this card was made, or the line did
+          c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; if (pr.v5) c.v5 = pr.v5; dirty = true; out.refreshed++;
         }
       }
     }
@@ -353,9 +416,10 @@ export async function nhlSetLine(env, date, id, line, now = new Date()) {
   if (c.final || new Date(c.kickoff).getTime() <= now.getTime()) return { error: 'That game has already started, so its line is locked.' };
   const v = line == null || line === '' ? null : Number(line);
   if (v != null && !(Number.isFinite(v) && v >= 3.5 && v <= 9.5 && Math.round(v * 2) === v * 2)) return { error: 'Enter a line between 3.5 and 9.5 in half-goal steps, for example 6.5.' };
-  const S = (await env.HUB.get('nhl:state', 'json')) || freshState(), pr = predict(S, c.hAbbr, c.aAbbr, v ?? LINE);
+  const S = (await env.HUB.get('nhl:state', 'json')) || freshState(); withGk(S);
+  const pr = predict(S, c.hAbbr, c.aAbbr, v ?? LINE, c.v5 ? ctxFor(S, c.hAbbr, c.aAbbr, c.gk, c.rs) : null);
   if (v == null) delete c.ln; else c.ln = { v, src: 'entered by you', how: 'manual' };
-  if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; }
+  if (pr) { c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; if (pr.v5) c.v5 = pr.v5; }
   await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day));
   return { saved: true, ln: c.ln || null, v2: c.v2, v4: c.v4 };
 }
@@ -367,6 +431,9 @@ export async function nhlTally(env) {
   const days = await Promise.all(list.keys.map(k => env.HUB.get(k.name, 'json')));
   const M = ['v2', 'v4', 'fb'], mkB = () => ({ win: Object.fromEntries(M.map(m => [m, mk()])), ou: Object.fromEntries(M.map(m => [m, mk()])), brier: { n: 0, v2: 0, v4: 0 }, home: mk() });
   const all = mkB(), same = mkB(), recent = [];
+  // v5 shadow: only games that carry a v5 (made before puck drop, from approval onward), each model on those same games. adj = games where
+  // rest or a backup goalie moved v5 off v4 (any flag set), plain = games where nothing did.
+  const V5 = { n: 0, win: { v2: mk(), v4: mk(), v5: mk(), fb: mk(), home: mk() }, ou: { v2: mk(), v4: mk(), v5: mk() }, brier: { v2: 0, v4: 0, v5: 0 }, sit: { adj: { n: 0, v4: 0, v5: 0 }, plain: { n: 0, v4: 0, v5: 0 } }, b2b: { n: 0, home: 0 } };
   // Calibration: winner picks grouped by how sure the model was, against how often they won.
   const BANDS = [['50 to 54%', 50, 55], ['55 to 59%', 55, 60], ['60 to 64%', 60, 65], ['65% and up', 65, 101]], cal = { v2: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })), v4: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })) };
   let graded = 0, lined = 0;
@@ -398,6 +465,14 @@ export async function nhlTally(env) {
           if (LB.recent.length < 40) LB.recent.push({ date: d.date, kickoff: c.kickoff, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, k: L.k, key: L.key, line: L.line ?? null, p: L.p, y: L.y, a: L.a, hit: !!L.hit });
         }
       }
+      if (g.v5 && c.v5) {
+        V5.n++;
+        for (const m of ['v2', 'v4', 'v5']) { if (g[m]?.win != null) { V5.win[m].n++; V5.win[m].hit += g[m].win; V5.brier[m] += g[m].brier; } if (real && g[m]?.ou != null) { V5.ou[m].n++; V5.ou[m].hit += g[m].ou; } }
+        if (g.fb && g.fb.win != null) { V5.win.fb.n++; V5.win.fb.hit += g.fb.win; }
+        V5.win.home.n++; V5.win.home.hit += c.final.h > c.final.a ? 1 : 0;
+        const I = c.v5.in || {}, on = [...(I.b2b || []), ...(I.bk || [])].some(x => x === 1), sit = V5.sit[on ? 'adj' : 'plain'];
+        if (g.v4 && g.v5) { sit.n++; sit.v4 += g.v4.win; sit.v5 += g.v5.win; }
+      }
       for (const m of ['v2', 'v4']) if (g[m] && c[m] && g[m].win != null) { const t = Math.max(c[m].w, 100 - c[m].w), b = cal[m].find(x => t >= x.lo && t < x.hi); if (b) { b.n++; b.hits += g[m].win; b.sum += t; } }
       for (const m of ['v2', 'v4']) if (g[m]) { all.brier.n += m === 'v2' ? 1 : 0; all.brier[m] += g[m].brier; }
       if (g.v2 && g.v4 && g.fb && g.fb.win != null) {
@@ -409,7 +484,8 @@ export async function nhlTally(env) {
   }
   const fix = b => ({ ...b, brier: { n: b.brier.n, v2: b.brier.n ? +(b.brier.v2 / b.brier.n).toFixed(3) : null, v4: b.brier.n ? +(b.brier.v4 / b.brier.n).toFixed(3) : null } });
   const calOut = Object.fromEntries(Object.entries(cal).map(([m, bs]) => [m, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]));
-  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent, leans: LB, moves: MV };
+  const v5 = V5.n ? { ...V5, brier: Object.fromEntries(['v2', 'v4', 'v5'].map(m => [m, V5.win[m].n ? +(V5.brier[m] / V5.win[m].n).toFixed(3) : null])) } : null;
+  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent, leans: LB, moves: MV, v5 };
 }
 export async function nhlStatus(env) {
   const [S, fb] = await Promise.all([env.HUB.get('nhl:state', 'json'), env.HUB.get('nhl:fbmeta', 'json')]);
