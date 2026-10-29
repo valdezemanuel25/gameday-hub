@@ -1,70 +1,70 @@
 {
-  "updated": "2026-10-28T21:02:23Z",
+  "updated": "2026-10-29T10:11:06Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-10-28",
-      "title": "Rev up the Buick",
+      "date": "2026-10-29",
+      "title": "Holding on",
       "markets": [
         {
           "label": "Nasdaq",
-          "value": "26,478",
-          "change": 1.18
+          "value": "26,550",
+          "change": 0.27
         },
         {
           "label": "S&P 500",
-          "value": "7,723",
-          "change": 0.6
+          "value": "7,744",
+          "change": 0.28
         },
         {
           "label": "Dow",
-          "value": "52,378",
-          "change": 0.03
+          "value": "52,475",
+          "change": 0.19
         },
         {
           "label": "10-yr",
-          "value": "4.993%",
-          "change": 1.0,
+          "value": "5.045%",
+          "change": 5.0,
           "unit": "bps"
         },
         {
           "label": "Bitcoin",
-          "value": "$80,653",
-          "change": 1.17
+          "value": "$81,336",
+          "change": 0.69
         },
         {
-          "label": "Boeing",
-          "value": "$168.16",
-          "change": -10.7
+          "label": "Wendy's",
+          "value": "$7.07",
+          "change": 15.15
         }
       ],
       "takeaways": [
         {
-          "h": "Markets",
-          "t": "Tech rallied and oil eased, lifting the Nasdaq 1.18% and S&P 500 0.60%, while Boeing sank 10.70% to $168.16 after delaying its 737 Max production increase to the second half of 2027."
+          "h": "Fed holds",
+          "t": "The FOMC kept rates at 3.75%-4.00% with two dissenters wanting a hike, and Chair Warsh said 2027 will have only seven of eight meetings set rates, shifting to 6 of 8 in 2028."
         },
         {
-          "h": "GM to Nasdaq",
-          "t": "General Motors will move its listing from the NYSE to Nasdaq on Nov. 17, keeping its ticker; the roughly $64B company would be eligible for the Nasdaq-100, and the stock closed up 5.5%."
+          "h": "Rate odds",
+          "t": "FedWatch puts a December hike at about 85%, with two more quarter-point increases likely in the first half of 2027; the 10-year yield rose 5 bps to 5.045%."
         },
         {
-          "h": "Coca-Cola",
-          "t": "Global case volume grew 5% in Q3 and the company raised its outlook, but North American volume stayed flat; Coke Zero sales rose 16% and Diet Coke 6%."
+          "h": "Alphabet",
+          "t": "Search growth fell short of expectations and free cash flow was negative $9.1B, though cloud beat; Microsoft stayed free-cash-flow positive and rose after hours."
         },
         {
-          "h": "Coke vs Pepsi",
-          "t": "Coca-Cola shares are up 30% this year versus a 7% drop for PepsiCo, with Coke also winning the KFC contract."
+          "h": "Wendy's",
+          "t": "Shares jumped 15.15% to $7.07 after Nelson Peltz's fund offered to buy the burger chain for $1.4B."
         },
         {
-          "h": "Instacart",
-          "t": "Shares jumped 19% this week on a WSJ report that DoorDash is in talks to buy it at a $17B valuation, up from a $13B market cap."
+          "h": "Cheesecake Factory",
+          "t": "Q3 profit roughly doubled to $61.3M from $31.9M, with namesake restaurant comparable sales up 15.2% year over year."
         },
         {
-          "h": "General Mills",
-          "t": "Fiscal Q1 sales fell 3% but beat estimates, with the stock down 28% in 2026, as Cheerios adds a resealable Ziploc bag."
+          "h": "Apple",
+          "t": "Apple unveiled its first touchscreen MacBook Pro, starting at $2,899 with an OLED display, on sale Nov. 6."
         }
       ],
-      "note": "Market numbers are the Tuesday close."
+      "note": "Market numbers are the Wednesday close."
     },
     {
       "source": "Brew Markets",
