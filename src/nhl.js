@@ -369,6 +369,36 @@ export function gradeCard(c) {
 // The full NHL step only gets spare cron slots (at most every 20 minutes), which can miss the window from LINEUP_READ to
 // PRICE_LOCK minutes before puck drop. This runs on every 5-minute run instead: KV reads only, unless a game sits in that window
 // without its lineup read, and then one ESPN scoreboard read and one write for that day.
+// The starting goalies as ESPN lists them now: when they changed, v5 is re-made from them and each starter's rest worked out again
+// (v2 and v4 do not read them). st = { S5, cache, budget } is shared by the games of one day. True when the card changed.
+async function updateStarters(env, c, e, date, fetchFn, st) {
+  if (!(e.gk && (e.gk.h || e.gk.a) && JSON.stringify(e.gk) !== JSON.stringify(c.gk || null))) return false;
+  st.S5 = st.S5 || (await env.HUB.get('nhl:state', 'json')) || freshState(); withGk(st.S5);
+  const pr = predict(st.S5, c.hAbbr, c.aAbbr, c.ln ? c.ln.v : LINE, ctxFor(st.S5, c.hAbbr, c.aAbbr, e.gk, c.rs));
+  c.gk = e.gk; if (pr && pr.v5) c.v5 = pr.v5;
+  const gr = await restFor(c, e.gk, await priorStarts(env, date, new Set(), st.cache), date, fetchFn, st.budget); if (gr) c.gr = gr; else delete c.gr;
+  return true;
+}
+// "Get the final price" on one hockey card (the Movement tab's No pre-game read badge). Before puck drop: ESPN's price now (inside the last
+// 45 minutes it is the closing read, marked cby = 'you'; the lock does not apply) and the starting goalies. After the final: ESPN's closing
+// line on the finished game when the card has no read of its own. In between ESPN's price may be an in-play one, so it is not taken.
+export async function nhlCardClose(env, date, id, now = new Date(), fetchFn = fetch) {
+  const day = await env.HUB.get(`nhl:day:${date}`, 'json'); const c = (day?.cards || []).find(x => x.id === id);
+  if (!c) return { error: 'That game is not saved for this day' };
+  if (!c.px) return { error: 'This game has no saved price to update' };
+  const evs = await scoreboard(date, fetchFn, []); if (!evs) return { error: "ESPN's scoreboard would not load" };
+  const e = evs.find(x => x.id === id); if (!e) return { error: 'ESPN no longer lists this game' };
+  if (new Date(c.kickoff).getTime() > now.getTime()) {
+    if (e.done) return { error: 'ESPN lists this game as finished' };
+    if (!e.px) return { error: 'ESPN has no price for this game right now' };
+    setPrice(c, e.px, now, true); await updateStarters(env, c, e, date, fetchFn, { S5: null, cache: {}, budget: { n: 8 } });
+  } else if (e.done) {
+    if (c.px.cl) return { error: 'This game already has its closing price' };
+    if (!e.pxDone || !espnClose(c, e.pxDone)) return { error: "ESPN no longer lists a closing line for this finished game, so the last price stands as the close" };
+  } else return { error: "The game has started: ESPN's price may be an in-play one, so the Hub will not take it as the close. Try again after the final." };
+  await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now);
+  return { ok: true, closed: !!c.px.cl, source: e.done ? 'espn-close' : 'now' };
+}
 export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
   const t = localDate(now.toISOString()), out = [];
   for (const date of [addDays(t, -1), t, addDays(t, 1)]) {
@@ -376,17 +406,12 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
     const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
     if (!due.length) continue;
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
-    let dirty = false, S5 = null; const cache = {}, budget = { n: 8 };
+    let dirty = false; const st = { S5: null, cache: {}, budget: { n: 8 } };
     for (const c of due) {
       const e = evs.find(x => x.id === c.id); if (!e || e.done) continue;
       if (setPrice(c, e.px, now)) { dirty = true; out.push(c.id); }
       // The starting goalie, as the team names him: v5 is re-made from it (v2 and v4 do not read it).
-      if (e.gk && (e.gk.h || e.gk.a) && JSON.stringify(e.gk) !== JSON.stringify(c.gk || null)) {
-        S5 = S5 || (await env.HUB.get('nhl:state', 'json')) || freshState(); withGk(S5);
-        const pr = predict(S5, c.hAbbr, c.aAbbr, c.ln ? c.ln.v : LINE, ctxFor(S5, c.hAbbr, c.aAbbr, e.gk, c.rs));
-        c.gk = e.gk; if (pr && pr.v5) c.v5 = pr.v5; dirty = true; if (!out.includes(c.id)) out.push(c.id);
-        const gr = await restFor(c, e.gk, await priorStarts(env, date, new Set(), cache), date, fetchFn, budget); if (gr) c.gr = gr; else delete c.gr;
-      }
+      if (await updateStarters(env, c, e, date, fetchFn, st)) { dirty = true; if (!out.includes(c.id)) out.push(c.id); }
     }
     if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); }
   }

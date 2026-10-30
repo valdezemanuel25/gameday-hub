@@ -21,7 +21,7 @@ import { goalSeq, maxLead, earlyPaid } from './early.js';
 import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn } from './pinn.js';
 import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
-import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck } from './nhl.js';
+import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
 const json = (data, status = 200) =>
@@ -1012,6 +1012,7 @@ const hub = {
     if (p === '/api/nhl/status') return json(await nhlStatus(env));
     if (p === '/api/nhl/gk-check') { try { return json(await gkCheck(env, String(url.searchParams.get('date') || today()))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (p === '/api/nhl/odds-raw') { try { return json(await nhlOddsRaw(env, String(url.searchParams.get('date') || ''))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
+    if (req.method === 'POST' && p === '/api/nhl/close') { try { const b = await req.json(); return json(await nhlCardClose(env, String(b.date || ''), String(b.id || ''), new Date())); } catch (e) { return json({ error: `Final price: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/nhl/run') { try { return json({ ok: true, ...(await nhlStep(env, new Date(), fetch, { force: true })) }); } catch (e) { return json({ error: `NHL: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/days') { // every saved day, for the Export button
       const out = []; let cursor;
