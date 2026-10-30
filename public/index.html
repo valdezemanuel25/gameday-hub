@@ -243,7 +243,7 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .mvg.lv-r{border-color:rgba(var(--acc-rgb),.6);box-shadow:inset 3px 0 0 rgb(var(--acc-rgb)),0 0 14px rgba(var(--acc-rgb),.16)}.mvg.lv-a{border-color:rgba(var(--acc-rgb),.26);box-shadow:inset 3px 0 0 rgba(var(--acc-rgb),.42)}
 .mvfl{margin:5px 0 1px}.fl{display:inline-block;font-size:10.5px;font-weight:700;margin:2px 10px 0 0;color:var(--dim)}.fl.r{color:rgb(var(--acc-rgb));text-shadow:0 0 8px rgba(var(--acc-rgb),.4)}.fl.a{color:rgba(var(--acc-rgb),.7)}.fl.g{color:var(--ink)}
 .mvx td.m3 b{color:rgba(var(--acc-rgb),.72);font-weight:750}.mvx td.m5 b{color:rgb(var(--acc-rgb));font-weight:750;text-shadow:0 0 6px rgba(var(--acc-rgb),.7),0 0 14px rgba(var(--acc-rgb),.4)}
-.mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
+.mvg button.cs.act{font:inherit;font-size:11px;font-weight:650;border:1px solid currentColor;cursor:pointer}.mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
 .mvx{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}.mvx th{font-size:10.5px;color:var(--faint);font-weight:650;text-align:right;padding:2px 4px}.mvx td{text-align:right;padding:4px;border-top:1px solid var(--line);color:var(--ink)}
 .mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}.mvx tr.won td.n{color:var(--grass);font-weight:650}
 .mvb{margin:8px 18px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(201,168,255,.05);font-size:12px;color:var(--dim)}.mvb summary{cursor:pointer;color:var(--ink);font-weight:650;font-size:12.5px}
@@ -1115,8 +1115,8 @@ function sidebar(leagues) {
 const tmCT = iso => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 function closeState(c) {
   const ko = new Date(c.kickoff).getTime(), o = c.odds || {};
-  if (locked(c)) return o.cl ? { k: 'ok', t: `Closing ✓ ${tmCT(o.cl)}` } : { k: 'miss', t: 'No lineup read · last price is the close' };
-  if (ko - Date.now() <= 30 * 60000) return { k: 'due', t: 'Lineup read due now' };
+  if (locked(c)) return o.cl ? { k: 'ok', t: o.cls === 'espn' ? 'Closing ✓ ESPN close' : `Closing ✓ ${tmCT(o.cl)}${o.cby === 'you' ? ' (your update)' : ''}` } : { k: 'miss', t: 'No lineup read · tap for the final price', act: true };
+  if (ko - Date.now() <= 30 * 60000) return { k: 'due', t: 'Lineup read due now · tap to read', act: true };
   return { k: 'pend', t: `Pending · closing read ~${tmCT(new Date(ko - 30 * 60000).toISOString())}` };
 }
 // Colour code for the Movement cards, in the board's neon green: bright with a glow = check it (a 5+ point move on a result or the total,
@@ -1166,7 +1166,7 @@ function movesView() {
       : btRow ? 'Both score has no price of its own here: its chance is read off the score card at each price.' : '';
     const follow = fin ? (mv.size < 2 ? 'the price barely moved' : mv.d[out] > 0 ? 'the result went the way of the move' : 'the result went against the move') : '';
     const fl = socFlags(c, mv, pinnMove(o), st);
-    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><span class="cs ${st.k}">${st.t}</span></div>${flagLine(fl)}
+    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
       <table class="mvx"><tr><th></th><th>${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
       ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>
@@ -1868,6 +1868,13 @@ async function runAll(kind) {
 document.addEventListener('click', async e => {
   const edl = e.target.closest('[data-edlong]'); if (edl) { S.edLong = !S.edLong; return render(); }
   const mvf = e.target.closest('[data-mvf]'); if (mvf) { S.mvf = mvf.dataset.mvf; return render(); }
+  const gc = e.target.closest('[data-getclose]');
+  if (gc) {
+    if (gc.disabled) return; const t0 = gc.textContent; gc.disabled = true; gc.textContent = 'Reading the price…';
+    try { const r = await post('/api/odds-close', { date: S.date, league: gc.dataset.lg, id: gc.dataset.getclose }); if (r.error) throw new Error(r.error); await loadDay(S.date); render(); }
+    catch (er) { gc.disabled = false; gc.textContent = er.message.length > 70 ? er.message.slice(0, 67) + '…' : er.message; gc.title = er.message; setTimeout(() => { if (gc.isConnected) gc.textContent = t0; }, 6000); }
+    return;
+  }
   const rf = e.target.closest('[data-refetch]'); if (rf) return fbModal(rf.dataset.refetch);
   const fm = e.target.closest('[data-fbm]');
   if (e.target.closest('[data-fball]')) { const J = fbNeeds(); return fbOpen(J, J.length ? `${J.length} league${J.length === 1 ? '' : 's'} with games today or tomorrow still need Forebet: the Hub reads each missing table one after another.` : 'Nothing to fetch.'); }

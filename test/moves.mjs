@@ -352,4 +352,30 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   ok('the next run takes the other two, and the first three keep the time of their read (not read again for the close)', got().length === 5 && r2.also.length === 1 && ['eng.1', 'ger.1', 'ita.1'].every(l => cs.find(c => c.league === l).odds.cl === now.toISOString()) && ['fra.1', 'eng.2'].every(l => cs.find(c => c.league === l).odds.cl === new Date(now.getTime() + 5 * 60000).toISOString()), JSON.stringify(cs.map(c => [c.league, c.odds.cl])));
   globalThis.fetch = real;
 }
+
+// "Get the final price" on one card: before kickoff the price now is the close; after the final, ESPN's closing line; in between, refused.
+{
+  const { refreshCardClose } = await import('../src/worker.js');
+  const date = '2026-10-31', ko = Date.parse('2026-10-31T15:00:00Z'), kv = new Map();
+  const env = { HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => kv.set(k, v) } };
+  let done = false, price = -170, withOdds2 = true; const real = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ events: [{ id: '1', date: new Date(ko).toISOString(), competitions: [{ status: { type: { completed: done } }, competitors: [{ homeAway: 'home', team: { id: 'h', displayName: 'Sheffield United', abbreviation: 'SHU' } }, { homeAway: 'away', team: { id: 'a', displayName: 'Wrexham', abbreviation: 'WRX' } }], ...(withOdds2 ? { odds: [{ provider: { name: 'Draft Kings' }, homeTeamOdds: { moneyLine: price }, awayTeamOdds: { moneyLine: 400 }, drawOdds: { moneyLine: 280 } }] } : {}) }] }] }) });
+  const card = () => ({ id: '1', league: 'eng.2', kickoff: new Date(ko).toISOString(), home: 'Sheffield United', away: 'Wrexham', v4: { p: [50, 25, 25] }, odds: { h: -150, d: 280, a: 400, ts: 'T0' } });
+  const put = c => kv.set('day:' + date, JSON.stringify({ date, cards: [c] })), get = () => JSON.parse(kv.get('day:' + date)).cards[0];
+  put(card()); const at = new Date(ko - 15 * 60000);
+  const r1 = await refreshCardClose(env, date, 'eng.2', '1', at);
+  ok('before kickoff, past the lock: the price now is taken as the close, marked as yours', r1.ok && get().odds.h === -170 && get().odds.cl === at.toISOString() && get().odds.cby === 'you' && get().odds.ts === at.toISOString(), JSON.stringify([r1, get().odds]));
+  put(card()); const r2 = await refreshCardClose(env, date, 'eng.2', '1', new Date(ko + 10 * 60000));
+  ok('started, not final: refused with the reason, nothing changes', !!r2.error && r2.error.includes('started') && get().odds.h === -150 && !get().odds.cl, JSON.stringify([r2, get().odds]));
+  done = true; price = -180; put(card()); const r3 = await refreshCardClose(env, date, 'eng.2', '1', new Date(ko + 3 * 3600e3));
+  ok('after the final: ESPN\'s closing line, noted as ESPN\'s', r3.ok && get().odds.h === -180 && get().odds.cls === 'espn' && get().odds.cl === new Date(ko).toISOString() && !get().odds.cby, JSON.stringify([r3, get().odds]));
+  withOdds2 = false; put(card()); const r4 = await refreshCardClose(env, date, 'eng.2', '1', new Date(ko + 3 * 3600e3));
+  ok('after the final with no closing line from ESPN: the last price stands, said plainly', !!r4.error && r4.error.includes('last price stands') && !get().odds.cl, JSON.stringify(r4));
+  done = false; put(card()); const r5 = await refreshCardClose(env, date, 'eng.2', '1', at);
+  ok('before kickoff but ESPN has no price: an error, nothing changes', !!r5.error && !get().odds.cl);
+  ok('a game that is not saved, or a league that is not priced, is an error', !!(await refreshCardClose(env, date, 'eng.2', '9', at)).error && !!(await refreshCardClose(env, date, 'esp.2', '1', at)).error);
+  globalThis.fetch = real;
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  ok('the Movement badge is a button when there is no lineup read or one is due, a plain label otherwise', html.includes('data-getclose=') && html.includes("act: true }") && html.includes("o.cby === 'you' ? ' (your update)'"));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);

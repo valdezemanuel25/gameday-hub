@@ -265,7 +265,7 @@ function keepOdds(card, old, f, slug, now) {
 // ts (when the price last changed) and cl (when the lineup read was taken: the closing price) carry over from the old price.
 export function withOdds(old, fresh) {
   const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
-  for (const k of ['bf', 'bk', 'bcl', 'bfk', 'pn', 'pf', 'pcl', 'pat']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
+  for (const k of ['bf', 'bk', 'bcl', 'bfk', 'pn', 'pf', 'pcl', 'pat', 'cby', 'cls']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
   const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
@@ -405,6 +405,30 @@ export async function addPinn(env, cards, now = new Date(), f = fetch) {
     if (JSON.stringify([o.pn, o.pf, o.pcl, o.pat]) !== was) changed++;
   }
   return changed;
+}
+// "Get the final price" on one card (the Movement tab's No lineup read badge): the price read the lineup window should have taken, asked for by
+// hand. Before kickoff: ESPN's price now, noted as the close (cby = 'you'), with Pinnacle and the both-score price asked for as well.
+// After the final: ESPN's closing line on the finished game when it still lists one (cls = 'espn'). In between, ESPN's price may be an
+// in-play one, so it is not taken. One KV write.
+export async function refreshCardClose(env, date, slug, id, now = new Date(), f = fetch) {
+  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
+  const day = await env.HUB.get(`day:${date}`, 'json'); const c = (day?.cards || []).find(x => x.id === id && x.league === slug);
+  if (!c) return { error: 'That game is not saved for this day' };
+  if (!c.odds) return { error: 'This game has no saved price to update' };
+  const fx = (await fixturesForLeague(lg, date, [])).find(x => x.id === id); if (!fx) return { error: "ESPN no longer lists this game, so there is no price to take" };
+  const started = new Date(c.kickoff).getTime() <= now.getTime();
+  if (!started) {
+    if (!fx.odds) return { error: 'ESPN has no price for this game right now' };
+    const n = withOdds(c.odds, fx.odds); if (sameJson(n, c.odds) === false) n.ts = now.toISOString();
+    n.cl = now.toISOString(); n.cby = 'you'; delete n.cls; c.odds = n;
+    await addPinn(env, [c], now, f); await addBtts(env, [c], slug, now, f);
+    setV6(c, c, now);
+  } else if (fx.done && fx.oddsDone) {
+    const n = withOdds(c.odds, fx.oddsDone); if (sameJson(n, c.odds) === false) n.ts = now.toISOString();
+    n.cl = c.kickoff; n.cls = 'espn'; delete n.cby; c.odds = n;
+  } else return { error: fx.done ? "ESPN no longer lists a closing line for this finished game, so the last price stands as the close" : "The game has started: ESPN's price may be an in-play one, so the Hub will not take it as the close. Try again after the final." };
+  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  return { ok: true, price: { h: c.odds.h, d: c.odds.d, a: c.odds.a, tl: c.odds.tl ?? null, to: c.odds.to ?? null, tu: c.odds.tu ?? null }, source: started ? 'espn-close' : 'now' };
 }
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
@@ -949,6 +973,7 @@ const hub = {
     if (p === '/api/pinn-check') { try { return json(await pinnCheck(env, String(url.searchParams.get('league') || ''))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (p === '/api/odds-raw') { try { const lg = leagueBySlug(String(url.searchParams.get('league') || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ league: lg.slug, games: await rawOdds(lg.slug, String(url.searchParams.get('date') || '')) }); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (req.method === 'POST' && p === '/api/btts') { try { const b = await req.json(); return json(await refreshBtts(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Both score prices: ${e && e.message || e}` }, 500); } }
+    if (req.method === 'POST' && p === '/api/odds-close') { try { const b = await req.json(); return json(await refreshCardClose(env, String(b.date || ''), String(b.league || ''), String(b.id || ''), new Date())); } catch (e) { return json({ error: `Final price: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/odds') { try { const b = await req.json(); return json(await refreshOdds(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Prices: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/assign') { try { const b = await req.json(); const lg = leagueBySlug(String(b.league || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ ok: true, ...(await assignCandidate(String(b.date || ''), lg.slug, String(b.id || ''), String(b.key || ''), env, new Date(), { dismiss: !!b.dismiss })) }); } catch (e) { return json({ error: `Assign: ${e && e.message ? e.message : e}` }, 500); } }
     if (p.startsWith('/api/bets')) { // bet analyzer and tracker
