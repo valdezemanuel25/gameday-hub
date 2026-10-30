@@ -10,13 +10,16 @@ const BASE = 'https://pinnodds.com';
 export const PN_LIST_TTL = 600; // seconds a trimmed fixture list is reused
 const HOUR = 3600e3;
 const SKIP = /\(women\)|\bwomen\b|\bU-?\d{2}\b|\breserves?\b|\bII\b/i; // women's, youth and reserve sides share names with the senior clubs
+// Pinnacle lists the same teams again in side markets ("England - Championship Bookings", corners, cards...): their money line is on
+// something else, so they must never be taken for the match result.
+const SIDE = /\b(bookings?|corners?|cards?|shots?|offsides?|fouls?|throw-?ins?|goal kicks?|specials?|props?|fantasy|e-?soccer|esports?|simulated|sim)\b/i;
 
 // The fixtures JSON trimmed to what the Hub needs: [{ id, lg, home, away, t (ms), h, d, a (American), tl, to, tu (the 2.5 total only) }].
 // Events with no complete home / draw / away price, special rows and women's / youth / reserve sides are left out.
 export function reduceEvents(j) {
   const out = [];
   for (const e of (j && j.events) || []) {
-    if (!e || e.special || SKIP.test(`${e.home} ${e.away} ${e.league_name}`)) continue;
+    if (!e || e.special || SKIP.test(`${e.home} ${e.away} ${e.league_name}`) || SIDE.test(String(e.league_name || ''))) continue;
     const p = e.periods && e.periods.num_0, ml = p && p.money_line; if (!ml) continue;
     const h = americanOf(ml.home), d = americanOf(ml.draw), a = americanOf(ml.away); if (h == null || d == null || a == null) continue;
     const t = new Date(e.starts).getTime(); if (!Number.isFinite(t)) continue;

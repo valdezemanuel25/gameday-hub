@@ -20,6 +20,7 @@ import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick
 import { goalSeq, maxLead, earlyPaid } from './early.js';
 import { fetchAfBtts, checkAf, AF_LEAGUE } from './apifootball.js';
 import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn } from './pinn.js';
+import { same as sameName } from './apifootball.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
@@ -443,7 +444,11 @@ export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
   for (const d of [t, addDays(t, 1)]) for (const c of ((await env.HUB.get(`day:${d}`, 'json'))?.cards || [])) if (!slug || c.league === slug) cards.push(c);
   const lgs = {}; for (const e of r.events) lgs[e.lg] = (lgs[e.lg] || 0) + 1;
   return { requests: 1, fixtures: r.events.length, bytes: r.bytes, dataAgeMs: r.age, dataStatus: r.status, leagueNames: Object.entries(lgs).sort((a, b) => b[1] - a[1]).slice(0, 25),
-    games: cards.filter(c => !c.final).map(c => { const e = matchPinn(c, r.events); return { game: `${c.home} v ${c.away}`, ko: c.kickoff, matched: e ? `${e.lg}: ${e.home} v ${e.away}` : null, pinnacle: e ? pinnPrice(e) : null, draftkings: c.odds ? { h: c.odds.h, d: c.odds.d, a: c.odds.a } : null }; }) };
+    // A game with no match lists the fixtures near its kickoff where either team's name fits, so a spelling that differs, a game that has
+    // already started (Pinnacle moves it off the prematch list) or a duplicate listing can be told apart.
+    games: cards.filter(c => !c.final).map(c => { const e = matchPinn(c, r.events), t = new Date(c.kickoff).getTime();
+      const near = e ? undefined : r.events.filter(x => Math.abs(x.t - t) <= 3 * 3600e3 && (sameName(c.home, x.home) || sameName(c.away, x.away))).slice(0, 4).map(x => `${x.lg}: ${x.home} v ${x.away}`);
+      return { game: `${c.home} v ${c.away}`, ko: c.kickoff, started: t <= now.getTime(), matched: e ? `${e.lg}: ${e.home} v ${e.away}` : null, ...(near ? { nearest: near } : {}), pinnacle: e ? pinnPrice(e) : null, draftkings: c.odds ? { h: c.odds.h, d: c.odds.d, a: c.odds.a } : null }; }) };
 }
 export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
   const t = localDate(now.toISOString());

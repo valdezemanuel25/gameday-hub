@@ -13,9 +13,10 @@ const fixtures = { sport_id: 1, events: [
   ev(3, 'Brazil - Serie A', 'Gremio (Women)', 'Athletico Paranaense (Women)', T1, { home: 2, draw: 3, away: 4 }),
   ev(4, 'Spain - La Liga', 'Real Madrid', 'Girona', T1, { home: 1.4, away: 7 }),                       // 2-way: no draw price
   ev(5, 'Spain - La Liga', 'Elche', 'Getafe', T1, { home: 2.4, draw: 3, away: 3 }, {}, { special: 'Exact Score' }),
-  ev(6, 'Spain - La Liga', 'Elche', 'Getafe', 'not a date', { home: 2.4, draw: 3, away: 3 }) ] };
+  ev(6, 'Spain - La Liga', 'Elche', 'Getafe', 'not a date', { home: 2.4, draw: 3, away: 3 }),
+  ev(7, 'Brazil - Serie A Bookings', 'Gremio', 'Athletico Paranaense', T1, { home: 1.9, draw: 3.5, away: 3.9 }), ev(8, 'Brazil - Serie A (Corners)', 'Santos', 'Fortaleza', T1, { home: 2, draw: 4, away: 3 }) ] };
 const red = reduceEvents(fixtures);
-ok('trimmed: the two good fixtures only (women, no-draw, special and bad-date rows left out)', red.length === 2 && red[0].home === 'Gremio' && red[1].home === 'Santos', JSON.stringify(red.map(e => e.home)));
+ok('trimmed: the two good fixtures only (women, no-draw, special, bad-date and Bookings / Corners rows left out)', red.length === 2 && red[0].home === 'Gremio' && red[1].home === 'Santos', JSON.stringify(red.map(e => e.home)));
 ok('prices are American, and only the 2.5 total is kept', red[0].h === 130 && red[0].d === 240 && red[0].a === 220 && red[0].tl === 2.5 && red[0].to === -105 && red[0].tu === -111 && red[1].tl === undefined, JSON.stringify(red[0]));
 const card = { id: '1', home: 'Grêmio', away: 'Athletico-PR', kickoff: T1 };
 ok('matched by team names (Athletico-PR spelled out) and kickoff', matchPinn(card, red).id === 1 && matchPinn({ ...card, kickoff: '2026-10-31T22:30:00Z' }, red) === null && matchPinn({ ...card, home: 'Other' }, red) === null);
@@ -66,5 +67,8 @@ ok('move: needs both prices', pinnMove({ ...odds, pf: null }) === null && pinnMo
   ok('without an edge cache each look asks again (the cache is a Workers feature)', a.events.length === 2 && b.events.length === 2 && log.length === 2); }
 { const env = { PINNODDS_KEY: 'K', HUB: { get: async k => (k === '2026-10-30' || k.endsWith('2026-10-30') ? { cards: [{ id: '1', league: 'bra.1', home: 'Grêmio', away: 'Athletico-PR', kickoff: T1, odds: { h: 125, d: 240, a: 205 } }] } : null) } };
   const r = await pinnCheck(env, 'bra.1', mk([]), new Date('2026-10-30T15:00:00Z'));
-  ok('check page: request count, size, leagues, and each game matched with both prices', r.requests === 1 && r.fixtures === 2 && r.dataStatus === 'fresh' && r.games[0].matched.includes('Brazil - Serie A') && r.games[0].pinnacle.h === 110 && r.games[0].draftkings.h === 125 && r.leagueNames[0][0] === 'Brazil - Serie A', JSON.stringify(r)); }
+  ok('check page: request count, size, leagues, and each game matched with both prices', r.requests === 1 && r.fixtures === 2 && r.dataStatus === 'fresh' && r.games[0].matched.includes('Brazil - Serie A') && r.games[0].pinnacle.h === 110 && r.games[0].draftkings.h === 125 && r.leagueNames[0][0] === 'Brazil - Serie A', JSON.stringify(r));
+  const env2 = { PINNODDS_KEY: 'K', HUB: { get: async k => (k.endsWith('2026-10-30') ? { cards: [{ id: '5', league: 'bra.1', home: 'Santos', away: 'Gremio', kickoff: T1, odds: { h: 1, d: 2, a: 3 } }] } : null) } };
+  const r2 = await pinnCheck(env2, 'bra.1', mk([]), new Date('2026-10-30T15:00:00Z'));
+  ok('check page: an unmatched game lists the nearest fixtures and whether it has started', r2.games[0].matched === null && r2.games[0].nearest.length === 1 && r2.games[0].nearest[0].includes('Santos v Fortaleza') && r2.games[0].started === false, JSON.stringify(r2.games[0])); }
 console.log(fails ? `\n${fails} FAILED` : '\nAll Pinnacle checks passed'); process.exit(fails ? 1 : 0);
