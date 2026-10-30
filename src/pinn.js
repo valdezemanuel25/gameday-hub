@@ -4,7 +4,7 @@
 //   and totals (decimal prices, period num_0 = the full match). So a whole day's games for every league cost ONE request, and the
 //   trimmed list is kept for 10 minutes in the free edge cache so the leagues read in the same run share it.
 //   The first price the Hub saw (pf) is not Pinnacle's true opening price; the close is the read at the lineup window (pcl).
-import { same, americanOf } from './apifootball.js';
+import { same, americanOf } from './names.js';
 
 const BASE = 'https://pinnodds.com';
 export const PN_LIST_TTL = 600; // seconds a trimmed fixture list is reused
