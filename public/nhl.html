@@ -215,7 +215,14 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 table,.rl{border-radius:24px;background:rgba(255,255,255,.04)}
 .gd{color:var(--gold)!important}.mt .w b.gd,.mt .o b.gd,.mt .o.hi b.gd{text-shadow:none}
 button:focus-visible{outline:2px solid var(--blue)}
-#hub-bar a.home{padding:9px 14px;font-size:15px}</style>
+#hub-bar a.home{padding:9px 14px;font-size:15px}
+/* ===== Readability over the moving dots: brighter grey text, a soft dark outline on text, and a frosted backing on stat panels. The backdrop itself is unchanged. ===== */
+:root{--mut:rgba(244,237,238,.80);--faint:rgba(244,237,238,.62)}
+.wrap{text-shadow:0 0 2px rgba(0,0,0,.95),0 0 9px rgba(0,0,0,.8)}
+#hub-bar a.on,.btn,.day.on,.day.on b,.day.on small,.edg.proven,.mb .mgo,.note .sv,.pv.val,.xag.s,.zgo,.chip.on,.cf.s{text-shadow:none}
+.mbx{background:rgba(4,5,4,.55);-webkit-backdrop-filter:blur(1.2px);backdrop-filter:blur(1.2px);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:2px 14px}
+.mbx>.mbr:first-child{border-top:0}
+</style>
 </head>
 <body>
 <div id="hub-bar"><div class="sw"><a href="/home" class="home" aria-label="Home" title="Home">⌂</a><a href="/">⚽ Soccer</a><a href="/nhl" class="on">🏒 NHL</a><a href="/brew">☕ Brew</a></div></div>
