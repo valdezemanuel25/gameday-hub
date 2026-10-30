@@ -1,6 +1,71 @@
 {
-  "updated": "2026-10-29T22:02:33Z",
+  "updated": "2026-10-30T10:09:59Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-10-30",
+      "title": "Surprising growth spurt",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "26,185",
+          "change": -1.38
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,720",
+          "change": -0.3
+        },
+        {
+          "label": "Dow",
+          "value": "52,343",
+          "change": -0.25
+        },
+        {
+          "label": "10-yr",
+          "value": "4.989%",
+          "change": -6.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$78,986",
+          "change": -2.8
+        },
+        {
+          "label": "Alphabet",
+          "value": "$283.82",
+          "change": -12.64
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Alphabet",
+          "t": "Shares fell 12.64% to $283.82, erasing about $482B in market value in its worst day since its 2004 IPO amid fresh AI jitters."
+        },
+        {
+          "h": "GDP",
+          "t": "Q3 GDP grew at a 3.4% annualized pace, up from 2.5% and 2.2% in prior quarters, with business investment up 12.7% and AI equipment purchases up 20.9%."
+        },
+        {
+          "h": "Inflation",
+          "t": "Price growth accelerated in September on the Fed's preferred gauge, and the savings rate slipped to 3.8%, the lowest since 2022."
+        },
+        {
+          "h": "DoorDash",
+          "t": "DoorDash agreed to buy Instacart for $17B, combining the biggest US restaurant delivery and online grocery platforms."
+        },
+        {
+          "h": "Intel & Amazon",
+          "t": "Intel dropped over 20% after hours on a weak Q4 forecast, while Amazon posted negative free cash flow and missed earnings and revenue estimates."
+        },
+        {
+          "h": "Deals",
+          "t": "Thrive is acquiring ADT for $7.6B, and law firm Weil Gotshal, with 2,000 staff and about $2B in revenue, is winding down after 30+ partner exits."
+        }
+      ],
+      "note": "Market numbers are the Thursday close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-10-29",
@@ -64,71 +129,6 @@
           "t": "With GDP up 3.4% and consumer spending up 3.8%, Chili's same-store sales rose 10.1% and Cheesecake Factory 15.2%, while Wingstop fell 5.4% and Popeyes 2.2%."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-10-29",
-      "title": "Holding on",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "26,550",
-          "change": 0.27
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,744",
-          "change": 0.28
-        },
-        {
-          "label": "Dow",
-          "value": "52,475",
-          "change": 0.19
-        },
-        {
-          "label": "10-yr",
-          "value": "5.045%",
-          "change": 5,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$81,336",
-          "change": 0.69
-        },
-        {
-          "label": "Wendy's",
-          "value": "$7.07",
-          "change": 15.15
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Fed holds",
-          "t": "The FOMC kept rates at 3.75%-4.00% with two dissenters wanting a hike, and Chair Warsh said 2027 will have only seven of eight meetings set rates, shifting to 6 of 8 in 2028."
-        },
-        {
-          "h": "Rate odds",
-          "t": "FedWatch puts a December hike at about 85%, with two more quarter-point increases likely in the first half of 2027; the 10-year yield rose 5 bps to 5.045%."
-        },
-        {
-          "h": "Alphabet",
-          "t": "Search growth fell short of expectations and free cash flow was negative $9.1B, though cloud beat; Microsoft stayed free-cash-flow positive and rose after hours."
-        },
-        {
-          "h": "Wendy's",
-          "t": "Shares jumped 15.15% to $7.07 after Nelson Peltz's fund offered to buy the burger chain for $1.4B."
-        },
-        {
-          "h": "Cheesecake Factory",
-          "t": "Q3 profit roughly doubled to $61.3M from $31.9M, with namesake restaurant comparable sales up 15.2% year over year."
-        },
-        {
-          "h": "Apple",
-          "t": "Apple unveiled its first touchscreen MacBook Pro, starting at $2,899 with an OLED display, on sale Nov. 6."
-        }
-      ],
-      "note": "Market numbers are the Wednesday close."
     },
     {
       "source": "Brew Markets",
