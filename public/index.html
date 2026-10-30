@@ -885,7 +885,16 @@ function bttsMove(odds) {
 const sgn = x => (x > 0 ? '+' : '') + x;
 const sideOf = (c, i) => (i === 1 ? 'Draw' : strip(i === 0 ? c.home : c.away));
 // Did v4 already lean the way the price moved? (its chance for the moved result against the opening price)
-const v4Read = (c, mv) => (c.v4 && c.v4.p ? ((c.v4.p[mv.top] - mv.p0[mv.top] > 0) === (mv.d[mv.top] > 0) ? 'v4 already leaned this way' : 'against v4') : '');
+// v4's chance for the result that moved against the opening price, with the numbers. Within LEAN_MIN points it is "about the same"
+// (a fraction of a point is not a lean); v4's own pick can still be another result, so it is named when it differs.
+const LEAN_MIN = 2;
+const v4Read = (c, mv) => {
+  if (!c.v4 || !c.v4.p) return '';
+  const q = Math.round(c.v4.p[mv.top]), o = Math.round(mv.p0[mv.top]), g = c.v4.p[mv.top] - mv.p0[mv.top], pk = c.v4.p.indexOf(Math.max(...c.v4.p));
+  const own = pk !== mv.top ? `, v4's pick is ${sideOf(c, pk)}` : '';
+  if (Math.abs(g) < LEAN_MIN) return `v4 had it about at the opening (${q}% vs ${o}%)${own}`;
+  return (g > 0) === (mv.d[mv.top] > 0) ? `v4 had it ${g > 0 ? 'higher' : 'lower'} than the opening (${q}% vs ${o}%)${own}` : `against v4 (${q}% vs ${o}% opening)${own}`;
+};
 const locked = c => c.final || new Date(c.kickoff).getTime() - Date.now() <= 20 * 60000;
 function moveLine(c) {
   const mv = moveOf(c.odds); if (!mv) return '';
@@ -897,7 +906,7 @@ function moveLine(c) {
 function movesBox(cs) {
   const rows = cs.map(c => ({ c, mv: moveOf(c.odds) })).filter(x => x.mv && x.mv.big).sort((a, b) => b.mv.size - a.mv.size);
   if (!rows.length) return '';
-  return `<details class="mvb" open><summary>Big price moves today · ${rows.length}</summary><div class="small" style="margin:4px 0 6px">5+ points on one result since the opening price. Usually team news or informed money: check the lineups. Not a bet.</div>${rows.map(({ c, mv }) => `<div class="mr"><span><b>${esc(strip(c.home))} v ${esc(strip(c.away))}</b><br><small>${esc(c.ko || '')} · ${esc(LCODE[c.leagueKey] || c.leagueName || '')}${v4Read(c, mv) ? ' · ' + v4Read(c, mv) : ''}</small></span><em>${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}<br><small>${Math.round(mv.p0[mv.top])}→${Math.round(mv.p1[mv.top])}%</small></em></div>`).join('')}</details>`;
+  return `<details class="mvb" open><summary>Big price moves today · ${rows.length}</summary><div class="small" style="margin:4px 0 6px">5+ points on one result since the opening price. Usually team news or informed money: check the lineups. Not a bet.</div>${rows.map(({ c, mv }) => `<div class="mr"><span><b>${esc(strip(c.home))} v ${esc(strip(c.away))}</b><br><small>${esc(c.ko || '')} · ${esc(LCODE[c.leagueKey] || c.leagueName || '')}${v4Read(c, mv) ? ' · ' + esc(v4Read(c, mv)) : ''}</small></span><em>${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}<br><small>${Math.round(mv.p0[mv.top])}→${Math.round(mv.p1[mv.top])}%</small></em></div>`).join('')}</details>`;
 }
 // Score card: winner, Over/Under 2.5, both-score and the likeliest scores, all read off one score grid, with fair odds (100 / chance).
 // v6 when the card has a sportsbook price (the grid that matches that price, margin removed), otherwise v4's own numbers.
@@ -930,7 +939,7 @@ function chips(c) {
     else out.push(`<div class="xq none"><div class="l">SportsMole</div><b>Not found yet</b></div>`);
   }
   const cs = consensus(c), who = cs.side === 'D' ? 'a draw' : cs.side === 'H' ? c.home : c.away, gc = goalsCons(c), mv = moveOf(c.odds);
-  const mvTag = mv && mv.big ? `<div class="xag mv">Big price move · ${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}${v4Read(c, mv) ? ' · ' + v4Read(c, mv) : ''}</div>` : '';
+  const mvTag = mv && mv.big ? `<div class="xag mv">Big price move · ${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}${v4Read(c, mv) ? ' · ' + esc(v4Read(c, mv)) : ''}</div>` : '';
   const tag = `<div class="xags">${mvTag}${cs.strong ? `<div class="xag s">Consensus · ${esc(who)}</div>` : cs.same ? `<div class="xag y">${cs.n === 2 ? 'Both' : 'All ' + cs.n} pick ${esc(who)}</div>` : cs.n >= 2 ? `<div class="xag">Split: ${splitText(c)}</div>` : ''}${gc.map(t => `<div class="xag gl">${t}</div>`).join('')}</div>`;
   return `${tag}<div class="xl n${out.length}">${out.join('')}</div>`;
 }
@@ -1117,7 +1126,7 @@ function movesView() {
       : btRow ? 'Both score has no price of its own here: its chance is read off the score card at each price.' : '';
     const follow = fin ? (mv.size < 2 ? 'the price barely moved' : mv.d[out] > 0 ? 'the result went the way of the move' : 'the result went against the move') : '';
     return `<div class="mvg"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><span class="cs ${st.k}">${st.t}</span></div>
-      <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}${mv.big ? ` · <span class="mvf">big move: ${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}${v4Read(c, mv) ? ', ' + v4Read(c, mv) : ''}</span>` : ''}</small>
+      <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}${mv.big ? ` · <span class="mvf">big move: ${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}${v4Read(c, mv) ? ', ' + esc(v4Read(c, mv)) : ''}</span>` : ''}</small>
       <table class="mvx"><tr><th></th><th>${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
       ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>
       ${btNote ? `<small class="mvn">${btNote}</small>` : ''}

@@ -59,7 +59,9 @@ export function addMarket(M, c) {
     t.n++; t.follow += fol ? 1 : 0;
     if (mv.big) {
       t.big++; t.bigFollow += fol ? 1 : 0;
-      if (p4) { const with4 = (100 * p4[mv.top] - mv.p0[mv.top] > 0) === (mv.d[mv.top] > 0); if (with4) { t.modelWith++; t.modelWithFollow += fol ? 1 : 0; } else { t.modelAgainst++; t.modelAgainstFollow += fol ? 1 : 0; } }
+      // v4 within 2 points of the opening price on that result counts as neither (a fraction of a point is not a lean).
+      const g4 = p4 ? 100 * p4[mv.top] - mv.p0[mv.top] : 0;
+      if (p4 && Math.abs(g4) >= 2) { const with4 = (g4 > 0) === (mv.d[mv.top] > 0); if (with4) { t.modelWith++; t.modelWithFollow += fol ? 1 : 0; } else { t.modelAgainst++; t.modelAgainstFollow += fol ? 1 : 0; } }
     }
   }
   // Both score: the book's own both-score price, first seen against the close (bttsMove) when it has both, else the score card's chance
