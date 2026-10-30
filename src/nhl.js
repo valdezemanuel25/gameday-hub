@@ -73,15 +73,34 @@ export const gkRest = (prior, c, gk) => { const r = { h: gk && gk.h ? gkRestOf(p
 // When the saved cards cannot tell (a day before the Hub saved starters, Oct 28, 2026, or a card with no goalie named), the goalie's
 // own ESPN game log is read: days from his last game before tonight (same scale, 4 = three or more). null when it cannot be read.
 const GAMELOG = id => `https://site.web.api.espn.com/apis/common/v3/sports/hockey/nhl/athletes/${encodeURIComponent(id)}/gamelog`;
-export async function gamelogRest(fetchFn, id, date) {
+// Reads a goalie's game log and works out his rest. { status, dates (the game dates found), rest, sample (the start of the answer, for
+// the check page) } ; rest is null when the log cannot be read or has no dates.
+export async function gamelogProbe(fetchFn, id, date) {
   try {
-    const r = await fetchFn(GAMELOG(id), { headers: { 'user-agent': 'gameday-hub/1.0' } }); if (!r.ok) return null;
-    const ds = [], walk = v => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (k === 'gameDate' && typeof x === 'string') ds.push(localDate(x)); else walk(x); } };
-    walk(await r.json()); if (!ds.length) return null;
-    const before = ds.filter(d => d < date).sort(); if (!before.length) return 4;
+    const r = await fetchFn(GAMELOG(id), { headers: { 'user-agent': 'gameday-hub/1.0' } }); if (!r.ok) return { status: r.status, dates: [], rest: null, sample: null };
+    const txt = typeof r.text === 'function' ? await r.text() : JSON.stringify(await r.json()), ds = [], walk = v => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (k === 'gameDate' && typeof x === 'string') ds.push(localDate(x)); else walk(x); } };
+    let j; try { j = JSON.parse(txt); } catch (e) { return { status: r.status, dates: [], rest: null, sample: txt.slice(0, 600) }; }
+    walk(j);
+    const sample = txt.slice(0, 600); if (!ds.length) return { status: r.status, dates: [], rest: null, sample, keys: Object.keys(j || {}).slice(0, 15) };
+    const before = ds.filter(d => d < date).sort(); if (!before.length) return { status: r.status, dates: ds.slice(0, 5), rest: 4, sample };
     const days = Math.round((new Date(`${date}T12:00:00Z`) - new Date(`${before[before.length - 1]}T12:00:00Z`)) / 86400000);
-    return Math.max(1, Math.min(4, days));
-  } catch (e) { return null; }
+    return { status: r.status, dates: ds.slice(-5), rest: Math.max(1, Math.min(4, days)), sample };
+  } catch (e) { return { status: null, dates: [], rest: null, sample: null, error: String(e && e.message || e) }; }
+}
+export const gamelogRest = async (fetchFn, id, date) => (await gamelogProbe(fetchFn, id, date)).rest;
+// For checking by hand (/api/nhl/gk-check?date=YYYY-MM-DD): each listed starter of the day's games that have not finished, what the card
+// holds (his ESPN id, his rest) and what his game log gives (at most 4 reads; the first answer's start is shown to see the format).
+export async function gkCheck(env, date, fetchFn = fetch) {
+  const day = await env.HUB.get(`nhl:day:${date}`, 'json'); if (!day) return { error: `No hockey day saved for ${date}` };
+  const out = []; let reads = 0, shown = false;
+  for (const c of day.cards || []) { if (c.final) continue;
+    for (const [side, ab] of [['a', c.aAbbr], ['h', c.hAbbr]]) {
+      const g = c.gk && c.gk[side]; if (!g) continue;
+      const e = { game: `${c.aAbbr} @ ${c.hAbbr}`, team: ab, goalie: g.n, espnId: g.id || null, cardRest: c.gr ? c.gr[side] ?? null : null, teamRest: c.rs ? c.rs[side] ?? null : null };
+      if (g.id && reads < 4) { reads++; const p = await gamelogProbe(fetchFn, g.id, date); e.log = { status: p.status, datesFound: p.dates, rest: p.rest, ...(p.error ? { error: p.error } : {}), ...(p.keys ? { topLevelKeys: p.keys } : {}) }; if (!shown) { shown = true; e.log.sample = p.sample; } }
+      out.push(e);
+    } }
+  return { date, goalies: out };
 }
 // Rest for both starters: the saved cards first; a side they cannot tell keeps what this card already worked out for the same goalie,
 // else reads his game log (budget.n reads at most per run, so a full slate cannot use up the run's requests).
