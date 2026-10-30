@@ -449,11 +449,13 @@ function movesView() {
 // (he played yesterday, red), 1 or 2 days of rest, or 3+ days (green). c.gr is worked out by the server from the starters saved on
 // the three days before, else from his ESPN game log; "rest unknown" when neither could tell.
 function gkRestTags(c) {
-  const t = [];
-  for (const [s, ab] of [['a', c.aAbbr], ['h', c.hAbbr]]) {
-    const r = c.gr && c.gr[s], g = c.gk && c.gk[s]; if (!g) continue;
-    const rest = r === 1 ? ': back-to-back' : r >= 4 ? ': 3+ days rest' : r === 2 ? ': 1 day rest' : r === 3 ? ': 2 days rest' : ' · rest unknown';
-    t.push(`<span class="gc${r === 1 ? ' b' : r >= 4 ? ' c' : ''}">${esc(ab)} · ${esc(g.n)} · ${g.st === 'c' ? 'Confirmed' : 'Expected'}${rest}</span>`);
+  const t = [], word = r => (r === 1 ? 'back-to-back' : r >= 4 ? '3+ days rest' : `${r} days rest`); // the same wording as the Board's goalie strip
+  for (const [s, ab, i] of [['a', c.aAbbr, 1], ['h', c.hAbbr, 0]]) {
+    const r = c.gr && c.gr[s], tr = c.rs && c.rs[s], g = c.gk && c.gk[s]; if (!g) continue;
+    const bk = c.v5 && c.v5.in && c.v5.in.bk && c.v5.in.bk[i] === 1;
+    // his own rest when known; else the team's days since it played (what the Board shows), said as the team's
+    const rest = r != null ? `: ${word(r)}` : tr != null ? `: team ${word(tr)}` : ' · rest unknown';
+    t.push(`<span class="gc${r === 1 ? ' b' : r >= 4 ? ' c' : ''}">${esc(ab)} · ${esc(g.n)} · ${g.st === 'c' ? 'Confirmed' : 'Expected'}${bk ? ' · Backup' : ''}${rest}</span>`);
   }
   return t.length ? `<div class="mvgk">${t.join('')}</div>` : '';
 }

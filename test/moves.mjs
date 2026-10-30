@@ -223,7 +223,9 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const fn = html.match(/function gkRestTags\(c\) \{[\s\S]*?\n\}\n/)[0];
   const tags = new Function(`const esc = s => String(s); ${fn}; return gkRestTags;`)();
   const t = tags({ aAbbr: 'WPG', hAbbr: 'TBL', gk: { a: { n: 'Connor Hellebuyck' }, h: { n: 'Andrei Vasilevskiy' } }, gr: { a: 4, h: 1 } });
-  ok('Movement card: back-to-back and 3+ days rest tags, a plain name tag for 2-3 days', t.includes('TBL · Andrei Vasilevskiy · Expected: back-to-back') && t.includes('WPG · Connor Hellebuyck · Expected: 3+ days rest') && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } }, gr: { a: 2 } }) === '<div class="mvgk"><span class="gc">A · x · Confirmed: 1 day rest</span></div>' && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } } }).includes('x · Confirmed · rest unknown'), t);
+  ok('Movement card: his own rest in the Board\'s wording (back-to-back, 2 days rest, 3+ days rest)', t.includes('TBL · Andrei Vasilevskiy · Expected: back-to-back') && t.includes('WPG · Connor Hellebuyck · Expected: 3+ days rest') && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } }, gr: { a: 2 } }) === '<div class="mvgk"><span class="gc">A · x · Confirmed: 2 days rest</span></div>', t);
+  ok('Movement card: his rest unknown falls back to the team\'s rest, said as the team\'s', tags({ aAbbr: 'NJD', hAbbr: 'VGK', gk: { a: { n: 'Connor Hellebuyck', st: 'e' }, h: { n: 'Carter Hart', st: 'e' } }, rs: { a: 2, h: 3 }, v5: { in: { bk: [0, 1] } } }) === '<div class="mvgk"><span class="gc">NJD · Connor Hellebuyck · Expected · Backup: team 2 days rest</span><span class="gc">VGK · Carter Hart · Expected: team 3 days rest</span></div>');
+  ok('Movement card: nothing known says rest unknown', tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } } }).includes('x · Confirmed · rest unknown'));
   ok('Movement card: no goalie listed, no tag', tags({ aAbbr: 'A', hAbbr: 'B' }) === '');
 }
 
@@ -275,5 +277,20 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   addMarket(M, { odds: { h: 125, d: 240, a: 205, op: { h: 165, d: 240, a: 155 } }, final: { h: 1, a: 1 }, v4: { p: [36.3, 26.9, 36.8] } });
   const mm = finishMarket(M).moves;
   ok('Results: a big move with v4 at the opening price counts as neither with nor against v4', mm.big === 1 && mm.modelWith === 0 && mm.modelAgainst === 0, JSON.stringify(mm));
+}
+
+// The goalie check page: what the card holds and what the game log gives, with the start of the first answer
+{
+  const { gkCheck, gamelogProbe } = await import('../src/nhl.js');
+  const log = { events: { a: { gameDate: '2026-10-28T23:00Z' } }, seasonTypes: [{ categories: [{ events: [{ eventId: 'a' }] }] }] };
+  let reads = 0; const f = async () => { reads++; return { ok: true, status: 200, text: async () => JSON.stringify(log) }; };
+  const p = await gamelogProbe(f, '1', '2026-10-31');
+  ok('probe: status, the dates found, the rest and the start of the answer', p.status === 200 && p.rest === 3 && p.dates.join() === '2026-10-28' && p.sample.startsWith('{'), JSON.stringify(p));
+  const empty = await gamelogProbe(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ athlete: {}, filters: [] }) }), '1', '2026-10-31');
+  ok('probe: an answer with no dates shows its top-level keys and has no rest', empty.rest === null && empty.keys.join() === 'athlete,filters');
+  const env = { HUB: { get: async () => ({ cards: [{ aAbbr: 'NJD', hAbbr: 'VGK', final: null, gk: { a: { n: 'Connor Hellebuyck', id: '3', st: 'e' }, h: { n: 'Carter Hart', st: 'e' } }, rs: { a: 2, h: 3 }, gr: { a: 2 } }, { aAbbr: 'X', hAbbr: 'Y', final: { h: 1, a: 0 }, gk: { a: { n: 'z', id: '9' } } }] }) } };
+  reads = 0; const r = await gkCheck(env, '2026-10-31', f);
+  ok('check page: finished games left out, each starter with his id, rest and team rest; one read for the goalie that has an id', r.goalies.length === 2 && reads === 1 && r.goalies[0].espnId === '3' && r.goalies[0].log.rest === 3 && r.goalies[0].log.sample && r.goalies[0].cardRest === 2 && r.goalies[1].espnId === null && r.goalies[1].teamRest === 3, JSON.stringify(r));
+  ok('check page: no saved day is an error', !!(await gkCheck({ HUB: { get: async () => null } }, '2026-10-31', f)).error);
 }
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
