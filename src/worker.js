@@ -308,8 +308,12 @@ async function readAf() {
 export const AF_RESERVE = 15; // opening reads stop when fewer API-Football requests than this are left today
 export const AF_RETRY_OPEN_H = 3, AF_RETRY_CLOSE_MIN = 15; // a game with no price from API-Football is tried again after this long
 // The second both-score source (src/apifootball.js) takes the games The Odds API did not price (no credits left, no key, no match).
+// Order of sources for a game's both-score price (opening once, the close at the lineup read): 1. Pinnacle, from the read addPinn just
+// made (odds.pn.bty / btn; one request covers every league, no credits), 2. The Odds API, 3. API-Football, 4. the score card's own estimate
+// (no price). A game whose opening came from another book is not given a Pinnacle close (the Movement row would compare two books); it
+// keeps to the later sources so both prices come from the same one. Pinnacle's own first-seen -> now move is always on the Pinnacle line.
 export async function addBtts(env, cards, slug, now = new Date(), f = fetch, date = null) {
-  if (!env.ODDS_API_KEY && !env.APIFOOTBALL_KEY) return 0;
+  if (!env.ODDS_API_KEY && !env.APIFOOTBALL_KEY && !env.PINNODDS_KEY) return 0;
   const inWin = c => new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000;
   const close = c => inWin(c) && !c.odds.bcl, open = c => !c.odds.bf;
   let changed = 0;
@@ -323,11 +327,15 @@ export async function addBtts(env, cards, slug, now = new Date(), f = fetch, dat
     if (JSON.stringify([o.by, o.bn, o.bf, o.bcl]) !== was) changed++;
   };
   let todo = want;
-  if (env.ODDS_API_KEY) {
+  if (env.PINNODDS_KEY) {
+    todo = [];
+    for (const c of want) { const q = c.odds.pn; if (q && q.bty != null && (!c.odds.bf || c.odds.bfk === 'pinnacle')) apply(c, { by: q.bty, bn: q.btn, bk: 'pinnacle' }); else todo.push(c); }
+  }
+  if (env.ODDS_API_KEY && todo.length) {
     const reserve = num(env.BTTS_RESERVE, BTTS_RESERVE);
     try {
-      const r = await fetchBtts(env.ODDS_API_KEY, slug, want, f, (c, left) => close(c) || left == null || left > reserve);
-      if (!r.error) { if (r.left != null) await noteCredits(r.left); for (const c of want) { const p = r.prices.get(c.id); if (p) apply(c, p); } todo = want.filter(c => !r.prices.has(c.id)); }
+      const r = await fetchBtts(env.ODDS_API_KEY, slug, todo, f, (c, left) => close(c) || left == null || left > reserve);
+      if (!r.error) { if (r.left != null) await noteCredits(r.left); for (const c of todo) { const p = r.prices.get(c.id); if (p) apply(c, p); } todo = todo.filter(c => !r.prices.has(c.id)); }
     } catch (e) { /* the second source tries below */ }
   }
   if (env.APIFOOTBALL_KEY && date && todo.length && AF_LEAGUE[slug]) {
@@ -413,8 +421,8 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
     if (c.odds && setV6(c, c, now)) ch = true; // the score card follows the price (and a card priced before v6 existed gets one)
     if (ch) changed++;
   }
+  changed += await addPinn(env, open, now, f); // first: its both-score price is the first choice of addBtts
   changed += await addBtts(env, open, slug, now, f, date);
-  changed += await addPinn(env, open, now, f);
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f), analystSharp(env, slug, f, now)); // the Analyst reads the same prices (src/analyst.js)
   return { games: open.length, priced, changed, analyst: an };
