@@ -37,10 +37,17 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
   background:radial-gradient(120% 90% at 85% 0%,rgba(var(--c),.42) 0,rgba(var(--c),.10) 45%,transparent 70%),linear-gradient(180deg,var(--tint) 0,#0b0b0c 100%);
   box-shadow:inset 0 0 0 1px rgba(var(--c),.28),inset 0 -70px 80px rgba(0,0,0,.6)}
 .card .in{position:absolute;inset:0;padding:18px;display:flex;flex-direction:column;will-change:transform}
-.card .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:21px;background:rgba(var(--c),.16);box-shadow:inset 0 0 0 1px rgba(var(--c),.35)}
-.card h2{margin:auto 0 2px;font-size:34px;font-weight:500;letter-spacing:-.03em;line-height:1}
-.card .st{font-size:13px;color:rgb(var(--hi));min-height:1.3em;font-variant-numeric:tabular-nums}
-.card .go{margin-top:12px;align-self:flex-start;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:999px;background:rgb(var(--c));color:#0a0a0a}
+.card .row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.card .ic{flex:none;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:21px;background:rgba(var(--c),.16);box-shadow:inset 0 0 0 1px rgba(var(--c),.35)}
+.card .bdg{display:none;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:999px;background:rgb(var(--c));color:#0a0a0a;white-space:nowrap}
+.card .bdg:before{content:"";width:6px;height:6px;border-radius:50%;background:#0a0a0a;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+.card.hot{box-shadow:inset 0 0 0 1px rgba(var(--c),.85),inset 0 -70px 80px rgba(0,0,0,.6),0 0 34px rgba(var(--c),.45)}
+.card.hot .bdg{display:inline-flex}
+.card h2{margin:auto 0 6px;font-size:34px;font-weight:500;letter-spacing:-.03em;line-height:1}
+.card .st{font-size:13.5px;font-weight:500;color:#fff;line-height:1.3;font-variant-numeric:tabular-nums;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .mt{margin-top:3px;font-size:12.5px;color:rgb(var(--hi));font-variant-numeric:tabular-nums;min-height:1.25em}
+.card .dn{color:#ff8a8a}.card .up{color:#9be89b}
 .card .fd{position:absolute;inset:0;background:#000;pointer-events:none;opacity:0}
 .card:focus-visible{outline:2px solid rgb(var(--hi));outline-offset:3px}
 .soccer{--c:200,255,46;--hi:220,255,122;--tint:#161c07}
@@ -48,7 +55,7 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
 .brew{--c:224,166,98;--hi:240,197,138;--tint:#1c140b}
 .hint{position:relative;z-index:1;text-align:center;font-size:12.5px;color:var(--faint);padding:4px 0 22px}
 @media (max-width:480px){.dt{font-size:46px}.stage{height:460px;min-height:380px}:root{--card:190px}}
-@media (prefers-reduced-motion:reduce){.rise.in{transition:none}}
+@media (prefers-reduced-motion:reduce){.rise.in{transition:none}.card .bdg:before{animation:none}}
 </style>
 </head>
 <body>
@@ -74,15 +81,17 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
   var today = now.toLocaleDateString('en-CA', tz); // YYYY-MM-DD
 
   var ITEMS = [
-    { key: 'soccer', href: '/', icon: '⚽', title: 'Soccer', stat: 'Match cards & picks' },
-    { key: 'nhl', href: '/nhl', icon: '🏒', title: 'NHL', stat: 'Winner & totals' },
-    { key: 'brew', href: '/brew', icon: '☕', title: 'Brew', stat: 'Markets brief' }
+    { key: 'soccer', href: '/', icon: '⚽', title: 'Soccer', stat: 'Match cards & picks', meta: '' },
+    { key: 'nhl', href: '/nhl', icon: '🏒', title: 'NHL', stat: 'Winner & totals', meta: '' },
+    { key: 'brew', href: '/brew', icon: '☕', title: 'Brew', stat: 'Markets brief', meta: '' }
   ];
 
   // CircularCarousel settings: preset cylinder, intro rise, cardWidth 220, aspectRatio 1, speed 14, captions off,
   // gap 25, tilt -5, curve 1, perspective 2500, autoplay drift, interval 3, direction left, momentum .6, snap,
   // pauseOnHover, focusOnClick, draggable, parallax .3, stretch .5, fadeColor #000, depthFade .55, innerShade .6, cornerRadius 12
-  var O = { speed: 14, gap: 25, curve: 1, momentum: 0.6, parallax: 0.3, stretch: 0.5, depthFade: 0.55, interval: 3, dir: -1 };
+  // interval raised from 3s to 5s, and the drift stops for good once you drag, tap or use the keys
+  var O = { speed: 14, gap: 25, curve: 1, momentum: 0.6, parallax: 0.3, stretch: 0.5, depthFade: 0.55, interval: 5, dir: -1 };
+  var touched = false;
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   var stage = document.getElementById('stage'), ring = document.getElementById('ring');
@@ -95,7 +104,7 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
     a.className = 'card ' + it.key; a.href = it.href; a.draggable = false;
     a.setAttribute('aria-label', 'Open ' + it.title);
     if (i >= ITEMS.length) { a.tabIndex = -1; a.setAttribute('aria-hidden', 'true'); }
-    a.innerHTML = '<div class="in"><div class="ic">' + it.icon + '</div><h2>' + it.title + '</h2><div class="st" data-k="' + it.key + '">' + it.stat + '</div><span class="go">Open</span></div><div class="fd"></div>';
+    a.innerHTML = '<div class="in"><div class="row"><div class="ic">' + it.icon + '</div><span class="bdg" data-b="' + it.key + '"></span></div><h2>' + it.title + '</h2><div class="st" data-k="' + it.key + '">' + it.stat + '</div><div class="mt" data-m="' + it.key + '"></div></div><div class="fd"></div>';
     ring.appendChild(a);
     cards.push({ el: a, inner: a.firstChild, fd: a.lastChild, base: i * STEP, item: it });
   }
@@ -140,7 +149,7 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
       else if (snapTo !== null) {
         var d = snapTo - angle, move = Math.sign(d) * Math.max(Math.abs(d) * Math.min(dt * 6, 1), Math.min(Math.abs(d), O.speed * dt));
         angle += move; if (Math.abs(snapTo - angle) < 0.05) { angle = snapTo; snapTo = null; idle = 0; }
-      } else if (!hover && !reduce && !document.hidden) {
+      } else if (!hover && !touched && !reduce && !document.hidden) {
         idle += dt;
         if (idle >= O.interval) { snapTo = angle + O.dir * STEP; idle = 0; }
       }
@@ -153,7 +162,7 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
   var px = 0, pt = 0, moved = 0, downCard = null, cap = false, pid = 0;
   stage.addEventListener('pointerdown', function (e) {
     if (e.button !== undefined && e.button !== 0) return;
-    dragging = true; moved = 0; px = e.clientX; pt = performance.now(); vel = 0; snapTo = null;
+    dragging = true; moved = 0; touched = true; px = e.clientX; pt = performance.now(); vel = 0; snapTo = null;
     downCard = e.target.closest ? e.target.closest('.card') : null;
     cap = false; pid = e.pointerId;
   });
@@ -185,6 +194,7 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
   stage.addEventListener('mouseenter', function () { hover = true; });
   stage.addEventListener('mouseleave', function () { hover = false; idle = 0; });
   stage.addEventListener('keydown', function (e) {
+    touched = true;
     if (e.key === 'ArrowLeft') { snapTo = (snapTo !== null ? snapTo : angle) + STEP; e.preventDefault(); }
     else if (e.key === 'ArrowRight') { snapTo = (snapTo !== null ? snapTo : angle) - STEP; e.preventDefault(); }
     else if (e.key === 'Enter') { location.href = cards[frontIndex()].item.href; }
@@ -196,12 +206,32 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
   // intro: rise into place
   requestAnimationFrame(function () { document.getElementById('rise').classList.add('in'); setTimeout(function () { requestAnimationFrame(frame); }, reduce ? 0 : 1100); });
 
-  // today's counts on each card (display only)
-  function setStat(k, txt) { document.querySelectorAll('.st[data-k="' + k + '"]').forEach(function (el) { el.textContent = txt; }); }
-  function j(u) { return fetch(u, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
-  j('/api/day?date=' + today).then(function (d) { var n = d && d.cards ? d.cards.length : 0; if (n) setStat('soccer', n + ' game' + (n === 1 ? '' : 's') + ' today'); });
-  j('/api/nhl/day?date=' + today).then(function (d) { var n = d && d.cards ? d.cards.length : 0; if (n) setStat('nhl', n + ' game' + (n === 1 ? '' : 's') + ' tonight'); });
-  j('/api/brew').then(function (d) { var n = d && d.issues ? d.issues.filter(function (x) { return x.date === today; }).length : 0; if (n) setStat('brew', n + ' brief' + (n === 1 ? '' : 's') + ' today'); });
+  // today's numbers and Best picks for each card (display only; same Best pick rule as the phone alerts)
+  function put(k, sel, html) { document.querySelectorAll('[' + sel + '="' + k + '"]').forEach(function (el) { el.innerHTML = html; }); }
+  function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+  function pct(v) { return v == null ? '' : '<span class="' + (v < 0 ? 'dn' : 'up') + '">' + (v < 0 ? '▼' : '▲') + Math.abs(v).toFixed(1) + '%</span>'; }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function sportCard(k, d, word, startWord) {
+    if (!d) return;
+    if (!d.games) { put(k, 'data-k', 'No games ' + (k === 'nhl' ? 'tonight' : 'today')); put(k, 'data-m', ''); return; }
+    put(k, 'data-k', plural(d.games, 'game') + (d.best ? ' · ' + plural(d.best, 'Best pick') : ''));
+    put(k, 'data-m', d.nextBest && d.nextBest.ko ? 'Best pick at ' + esc(d.nextBest.ko) : d.next && d.next.ko ? startWord + ' ' + esc(d.next.ko) : d.left ? '' : 'All games started');
+    put(k, 'data-b', d.best ? plural(d.best, 'Best pick') : '');
+    cards.forEach(function (c) { if (c.item.key === k) c.el.classList.toggle('hot', !!d.attention); });
+  }
+  function apply(h) {
+    if (!h) return;
+    sportCard('soccer', h.soccer, 'game', 'Next kickoff');
+    sportCard('nhl', h.nhl, 'game', 'First puck drop');
+    var b = h.brew;
+    if (b && b.count) { put('brew', 'data-k', esc(b.title || plural(b.count, 'brief') + ' today')); put('brew', 'data-m', (b.sp != null ? 'S&amp;P ' + pct(b.sp) : '') + (b.sp != null && b.nasdaq != null ? ' · ' : '') + (b.nasdaq != null ? 'Nasdaq ' + pct(b.nasdaq) : '')); }
+    else if (b) { put('brew', 'data-k', 'No brief yet today'); }
+    // open on the card that needs you: the sport whose next Best pick starts soonest
+    var hot = ['soccer', 'nhl'].filter(function (k) { return h[k] && h[k].attention && h[k].nextBest; })
+      .sort(function (x, y) { return new Date(h[x].nextBest.kickoff) - new Date(h[y].nextBest.kickoff); })[0];
+    if (hot && !touched) { var i = cards.findIndex(function (c) { return c.item.key === hot; }); if (i >= 0) { vel = 0; focusCard(i); touched = true; } } // hold it in front
+  }
+  fetch('/api/home', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(apply).catch(function () {});
 
   // installed app: keep alerts working the same way the other pages do
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
