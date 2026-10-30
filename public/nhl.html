@@ -457,8 +457,8 @@ function movesView() {
 // A card's left edge takes the highest of red and amber; the one line under the title says why.
 const BIG_MV = 5;
 const mvLv = d => { const a = Math.round(Math.abs(d)); return d == null ? '' : a >= BIG_MV ? 'r' : a >= HOT_MOVE ? 'a' : ''; };
-function cardFlags(c, hm, now = Date.now()) {
-  const items = [], add = (lv, t) => items.push({ lv, t });
+function cardFlags(c, hm, nowMs) {
+  const now = nowMs ?? Date.now(), items = [], add = (lv, t) => items.push({ lv, t });
   const mins = (new Date(c.kickoff).getTime() - now) / 60000, open = [];
   for (const [s, ab, i] of [['a', c.aAbbr, 1], ['h', c.hAbbr, 0]]) {
     const g = c.gk && c.gk[s]; if (!g) continue;

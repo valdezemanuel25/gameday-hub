@@ -224,7 +224,7 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const tags = new Function(`const esc = s => String(s); ${fn}; return gkRestTags;`)();
   const t = tags({ aAbbr: 'WPG', hAbbr: 'TBL', gk: { a: { n: 'Connor Hellebuyck' }, h: { n: 'Andrei Vasilevskiy' } }, gr: { a: 4, h: 1 } });
   ok('Movement card: his own rest in the Board\'s wording (back-to-back, 2 days rest, 3+ days rest)', t.includes('TBL · Andrei Vasilevskiy · Expected: back-to-back') && t.includes('WPG · Connor Hellebuyck · Expected: 3+ days rest') && tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } }, gr: { a: 2 } }) === '<div class="mvgk"><span class="gc">A · x · Confirmed: 2 days rest</span></div>', t);
-  ok('Movement card: his rest unknown falls back to the team\'s rest, said as the team\'s', tags({ aAbbr: 'NJD', hAbbr: 'VGK', gk: { a: { n: 'Connor Hellebuyck', st: 'e' }, h: { n: 'Carter Hart', st: 'e' } }, rs: { a: 2, h: 3 }, v5: { in: { bk: [0, 1] } } }) === '<div class="mvgk"><span class="gc">NJD · Connor Hellebuyck · Expected · Backup: team 2 days rest</span><span class="gc">VGK · Carter Hart · Expected: team 3 days rest</span></div>');
+  ok('Movement card: his rest unknown falls back to the team\'s rest, said as the team\'s', tags({ aAbbr: 'NJD', hAbbr: 'VGK', gk: { a: { n: 'Connor Hellebuyck', st: 'e' }, h: { n: 'Carter Hart', st: 'e' } }, rs: { a: 2, h: 3 }, v5: { in: { bk: [0, 1] } } }) === '<div class="mvgk"><span class="gc e x">NJD · Connor Hellebuyck · Expected · Backup: team 2 days rest</span><span class="gc x">VGK · Carter Hart · Expected: team 3 days rest</span></div>');
   ok('Movement card: nothing known says rest unknown', tags({ aAbbr: 'A', hAbbr: 'B', gk: { a: { n: 'x', st: 'c' } } }).includes('x · Confirmed · rest unknown'));
   ok('Movement card: no goalie listed, no tag', tags({ aAbbr: 'A', hAbbr: 'B' }) === '');
 }
@@ -292,5 +292,24 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   reads = 0; const r = await gkCheck(env, '2026-10-31', f);
   ok('check page: finished games left out, each starter with his id, rest and team rest; one read for the goalie that has an id', r.goalies.length === 2 && reads === 1 && r.goalies[0].espnId === '3' && r.goalies[0].log.rest === 3 && r.goalies[0].log.sample && r.goalies[0].cardRest === 2 && r.goalies[1].espnId === null && r.goalies[1].teamRest === 3, JSON.stringify(r));
   ok('check page: no saved day is an error', !!(await gkCheck({ HUB: { get: async () => null } }, '2026-10-31', f)).error);
+}
+
+// Colour code on the hockey Movement cards: red = check (goalie back-to-back, 5+ move), amber = watch (backup, team back-to-back, goalies not
+// confirmed an hour out, 3-4 move), the card edge takes the highest.
+{
+  const html = fs.readFileSync(new URL('../public/nhl.html', import.meta.url), 'utf8');
+  const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
+  const f = new Function(`const esc = s => String(s), sgn = x => (x > 0 ? '+' : '') + x, HOT_MOVE = 3; ${['BIG_MV', 'mvLv', 'cardFlags'].map(grab).join('\n')}; return { mvLv, cardFlags };`)();
+  const NOW = Date.parse('2026-10-31T20:00:00Z'), ko = m => new Date(NOW + m * 60000).toISOString();
+  const card = o => ({ aAbbr: 'WPG', hAbbr: 'FLA', kickoff: ko(180), ...o });
+  ok('levels: under 3 none, 3-4 amber, 5+ red', f.mvLv(2.4) === '' && f.mvLv(3) === 'a' && f.mvLv(-4.4) === 'a' && f.mvLv(5) === 'r' && f.mvLv(-7) === 'r' && f.mvLv(null) === '');
+  const r1 = f.cardFlags(card({ kickoff: ko(50), gk: { a: { n: 'x', st: 'e' }, h: { n: 'y', st: 'c' } }, gr: { a: 1, h: 4 }, v5: { in: { bk: [0, 1] } } }), { ml: { d: 7 } }, NOW);
+  ok('red card: goalie back-to-back, backup, not confirmed an hour out, big move', r1.level === 'r' && r1.items.map(x => x.t).join('|') === 'WPG goalie back-to-back|WPG backup in net|WPG goalie not confirmed|Big move: FLA +7', JSON.stringify(r1));
+  const r2 = f.cardFlags(card({ gk: { a: { n: 'x', st: 'e' }, h: { n: 'y', st: 'e' } }, rs: { a: 1, h: 3 } }), { ml: { d: -3.4 } }, NOW);
+  ok('amber card: team back-to-back (goalie rest unknown) and a 3-4 move; unconfirmed goalies are fine hours out', r2.level === 'a' && r2.items.map(x => x.t).join('|') === 'WPG team back-to-back|Move: WPG +3', JSON.stringify(r2));
+  const r3 = f.cardFlags(card({ gk: { a: { n: 'x', st: 'c' }, h: { n: 'y', st: 'c' } }, gr: { a: 4, h: 3 } }), { ml: { d: 1 }, ou: { d: -2 } }, NOW);
+  ok('clear card: confirmed, rested, small moves: no flags, no edge', r3.level === '' && r3.items.length === 0);
+  const r4 = f.cardFlags(card({ gk: { a: { n: 'x', st: 'c' }, h: { n: 'y', st: 'c' } } }), { ou: { d: 4 } }, NOW);
+  ok('a total move is flagged on its own', r4.level === 'a' && r4.items[0].t === 'Total: Over +4');
 }
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
