@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#161617">
+<title>Game Day Hub</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+/* Home: grey / dark grey launcher. A 3D cylinder carousel of the three Hub tabs, each card in its own tab colour. */
+:root{
+  --bg-top:#2a2a2d;--bg-bot:#111112;--ink:#ececee;--dim:rgba(236,236,238,.62);--faint:rgba(236,236,238,.38);--line:rgba(255,255,255,.09);
+  --font:"DM Sans",Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+  --card:220px;--radius:12px;color-scheme:dark
+}
+*{box-sizing:border-box}
+html{background:var(--bg-bot)}
+body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--bg-top) 0,var(--bg-bot) 78%) fixed;color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{position:relative;z-index:1;flex:1 0 auto;width:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column}
+.top{padding:22px 4px 0}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.wd{display:block;margin-top:14px;font-size:15px;color:var(--dim)}
+.dt{display:block;font-size:56px;font-weight:300;letter-spacing:-.045em;line-height:1.05}
+/* carousel */
+.stage{position:relative;flex:1 0 auto;min-height:420px;height:560px;max-height:62vh;display:grid;place-items:center;perspective:2500px;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab;outline:none}
+.stage.drag{cursor:grabbing}
+.tilt{transform-style:preserve-3d;transform:rotateX(5deg)}
+.rise{transform-style:preserve-3d;opacity:0;transform:translateY(90px)}
+.rise.in{transition:opacity 1s ease,transform 1.1s cubic-bezier(.2,.8,.2,1);opacity:1;transform:none}
+.ring{position:relative;width:var(--card);height:var(--card);transform-style:preserve-3d}
+.card{position:absolute;inset:0;border-radius:var(--radius);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;color:#fff;text-decoration:none;display:block;
+  background:radial-gradient(120% 90% at 85% 0%,rgba(var(--c),.42) 0,rgba(var(--c),.10) 45%,transparent 70%),linear-gradient(180deg,var(--tint) 0,#0b0b0c 100%);
+  box-shadow:inset 0 0 0 1px rgba(var(--c),.28),inset 0 -70px 80px rgba(0,0,0,.6)}
+.card .in{position:absolute;inset:0;padding:18px;display:flex;flex-direction:column;will-change:transform}
+.card .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:21px;background:rgba(var(--c),.16);box-shadow:inset 0 0 0 1px rgba(var(--c),.35)}
+.card h2{margin:auto 0 2px;font-size:34px;font-weight:500;letter-spacing:-.03em;line-height:1}
+.card .st{font-size:13px;color:rgb(var(--hi));min-height:1.3em;font-variant-numeric:tabular-nums}
+.card .go{margin-top:12px;align-self:flex-start;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:999px;background:rgb(var(--c));color:#0a0a0a}
+.card .fd{position:absolute;inset:0;background:#000;pointer-events:none;opacity:0}
+.card:focus-visible{outline:2px solid rgb(var(--hi));outline-offset:3px}
+.soccer{--c:200,255,46;--hi:220,255,122;--tint:#161c07}
+.nhl{--c:255,77,87;--hi:255,154,157;--tint:#1e0a0c}
+.brew{--c:224,166,98;--hi:240,197,138;--tint:#1c140b}
+.hint{position:relative;z-index:1;text-align:center;font-size:12.5px;color:var(--faint);padding:4px 0 22px}
+@media (max-width:480px){.dt{font-size:46px}.stage{height:460px;min-height:380px}:root{--card:190px}}
+@media (prefers-reduced-motion:reduce){.rise.in{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Game Day Hub</div>
+    <span class="wd" id="wd">&nbsp;</span>
+    <span class="dt" id="dt">&nbsp;</span>
+  </header>
+  <div class="stage" id="stage" tabindex="0" aria-roledescription="carousel" aria-label="Hub sections. Drag or use the arrow keys to turn; tap the front card to open it.">
+    <div class="tilt"><div class="rise" id="rise"><div class="ring" id="ring"></div></div></div>
+  </div>
+</div>
+<div class="hint">Drag to spin · tap a card to open it</div>
+
+<script>
+(function () {
+  // Header date (Central time, same as the rest of the Hub)
+  var now = new Date();
+  var tz = { timeZone: 'America/Chicago' };
+  document.getElementById('wd').textContent = now.toLocaleDateString('en-US', Object.assign({ weekday: 'long' }, tz));
+  document.getElementById('dt').textContent = now.toLocaleDateString('en-US', Object.assign({ month: 'short', day: 'numeric' }, tz));
+  var today = now.toLocaleDateString('en-CA', tz); // YYYY-MM-DD
+
+  var ITEMS = [
+    { key: 'soccer', href: '/', icon: '⚽', title: 'Soccer', stat: 'Match cards & picks' },
+    { key: 'nhl', href: '/nhl', icon: '🏒', title: 'NHL', stat: 'Winner & totals' },
+    { key: 'brew', href: '/brew', icon: '☕', title: 'Brew', stat: 'Markets brief' }
+  ];
+
+  // CircularCarousel settings: preset cylinder, intro rise, cardWidth 220, aspectRatio 1, speed 14, captions off,
+  // gap 25, tilt -5, curve 1, perspective 2500, autoplay drift, interval 3, direction left, momentum .6, snap,
+  // pauseOnHover, focusOnClick, draggable, parallax .3, stretch .5, fadeColor #000, depthFade .55, innerShade .6, cornerRadius 12
+  var O = { speed: 14, gap: 25, curve: 1, momentum: 0.6, parallax: 0.3, stretch: 0.5, depthFade: 0.55, interval: 3, dir: -1 };
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var stage = document.getElementById('stage'), ring = document.getElementById('ring');
+  // Three cards can't make a cylinder on their own, so the set repeats around the ring (Soccer, NHL, Brew, Soccer, ...)
+  var REP = 3, N = ITEMS.length * REP, STEP = 360 / N;
+  var cards = [];
+  for (var i = 0; i < N; i++) {
+    var it = ITEMS[i % ITEMS.length];
+    var a = document.createElement('a');
+    a.className = 'card ' + it.key; a.href = it.href; a.draggable = false;
+    a.setAttribute('aria-label', 'Open ' + it.title);
+    if (i >= ITEMS.length) { a.tabIndex = -1; a.setAttribute('aria-hidden', 'true'); }
+    a.innerHTML = '<div class="in"><div class="ic">' + it.icon + '</div><h2>' + it.title + '</h2><div class="st" data-k="' + it.key + '">' + it.stat + '</div><span class="go">Open</span></div><div class="fd"></div>';
+    ring.appendChild(a);
+    cards.push({ el: a, inner: a.firstChild, fd: a.lastChild, base: i * STEP, item: it });
+  }
+
+  var radius = 0;
+  function layout() {
+    var w = ring.offsetWidth;
+    radius = ((w + O.gap) / (2 * Math.tan(Math.PI / N))) * O.curve * (1 + O.stretch * 0.2);
+  }
+
+  var angle = 0, vel = 0, dragging = false, hover = false, snapTo = null, lastSnapDir = 0;
+  function norm(d) { d = ((d % 360) + 540) % 360 - 180; return d; } // -180..180
+  function render() {
+    ring.style.transform = 'translateZ(' + (-radius) + 'px) rotateY(' + angle + 'deg)';
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i], rel = norm(c.base + angle), cos = Math.cos(rel * Math.PI / 180);
+      c.el.style.transform = 'rotateY(' + c.base + 'deg) translateZ(' + radius + 'px)';
+      c.fd.style.opacity = (O.depthFade * (1 - cos) / 2 * 1.6).toFixed(3);
+      c.inner.style.transform = 'translateX(' + (-rel * O.parallax * 0.6).toFixed(2) + 'px)';
+      c.el.style.zIndex = Math.round(cos * 100) + 100;
+    }
+  }
+  function frontIndex() { // card closest to the viewer
+    var best = 0, bd = 999;
+    for (var i = 0; i < cards.length; i++) { var d = Math.abs(norm(cards[i].base + angle)); if (d < bd) { bd = d; best = i; } }
+    return best;
+  }
+  function snapNearest(bias) {
+    var k = Math.round((-angle) / STEP + (bias || 0));
+    snapTo = -k * STEP;
+  }
+  function focusCard(i) { // turn the shortest way so card i is in front
+    snapTo = angle - norm(cards[i].base + angle);
+  }
+
+  // drift: glide one card left every `interval` seconds at `speed` deg/s, snapping on each card
+  var idle = 0, t0 = performance.now(), last = t0;
+  function frame(now) {
+    var dt = Math.min((now - last) / 1000, 0.05); last = now;
+    if (!dragging) {
+      if (Math.abs(vel) > 0.5) { angle += vel * dt; vel *= Math.pow(1 - O.momentum, dt * 3); if (Math.abs(vel) <= 0.5) snapNearest(); }
+      else if (snapTo !== null) {
+        var d = snapTo - angle, move = Math.sign(d) * Math.max(Math.abs(d) * Math.min(dt * 6, 1), Math.min(Math.abs(d), O.speed * dt));
+        angle += move; if (Math.abs(snapTo - angle) < 0.05) { angle = snapTo; snapTo = null; idle = 0; }
+      } else if (!hover && !reduce && !document.hidden) {
+        idle += dt;
+        if (idle >= O.interval) { snapTo = angle + O.dir * STEP; idle = 0; }
+      }
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // drag with momentum
+  var px = 0, pt = 0, moved = 0, downCard = null, cap = false, pid = 0;
+  stage.addEventListener('pointerdown', function (e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    dragging = true; moved = 0; px = e.clientX; pt = performance.now(); vel = 0; snapTo = null;
+    downCard = e.target.closest ? e.target.closest('.card') : null;
+    cap = false; pid = e.pointerId;
+  });
+  stage.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var dx = e.clientX - px, t = performance.now(), dd = dx * 0.28;
+    angle += dd; moved += Math.abs(dx);
+    if (!cap && moved > 6) { cap = true; stage.classList.add('drag'); try { stage.setPointerCapture(pid); } catch (_) {} }
+    var dts = Math.max((t - pt) / 1000, 0.001); vel = vel * 0.6 + (dd / dts) * 0.4;
+    px = e.clientX; pt = t;
+  });
+  function release() {
+    if (!dragging) return;
+    dragging = false; stage.classList.remove('drag');
+    if (performance.now() - pt > 80) vel = 0;
+    vel = Math.max(-900, Math.min(900, vel));
+    if (Math.abs(vel) <= 0.5) snapNearest();
+    idle = 0;
+  }
+  stage.addEventListener('pointerup', release);
+  stage.addEventListener('pointercancel', release);
+  // focusOnClick: a side card turns to the front; the front card opens
+  ring.addEventListener('click', function (e) {
+    var a = e.target.closest('.card'); if (!a) return;
+    if (moved > 6) { e.preventDefault(); return; }
+    var i = cards.findIndex(function (c) { return c.el === a; });
+    if (i !== frontIndex()) { e.preventDefault(); vel = 0; focusCard(i); idle = 0; }
+  });
+  stage.addEventListener('mouseenter', function () { hover = true; });
+  stage.addEventListener('mouseleave', function () { hover = false; idle = 0; });
+  stage.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') { snapTo = (snapTo !== null ? snapTo : angle) + STEP; e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { snapTo = (snapTo !== null ? snapTo : angle) - STEP; e.preventDefault(); }
+    else if (e.key === 'Enter') { location.href = cards[frontIndex()].item.href; }
+    idle = 0;
+  });
+
+  layout(); render();
+  addEventListener('resize', function () { layout(); render(); });
+  // intro: rise into place
+  requestAnimationFrame(function () { document.getElementById('rise').classList.add('in'); setTimeout(function () { requestAnimationFrame(frame); }, reduce ? 0 : 1100); });
+
+  // today's counts on each card (display only)
+  function setStat(k, txt) { document.querySelectorAll('.st[data-k="' + k + '"]').forEach(function (el) { el.textContent = txt; }); }
+  function j(u) { return fetch(u, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+  j('/api/day?date=' + today).then(function (d) { var n = d && d.cards ? d.cards.length : 0; if (n) setStat('soccer', n + ' game' + (n === 1 ? '' : 's') + ' today'); });
+  j('/api/nhl/day?date=' + today).then(function (d) { var n = d && d.cards ? d.cards.length : 0; if (n) setStat('nhl', n + ' game' + (n === 1 ? '' : 's') + ' tonight'); });
+  j('/api/brew').then(function (d) { var n = d && d.issues ? d.issues.filter(function (x) { return x.date === today; }).length : 0; if (n) setStat('brew', n + ' brief' + (n === 1 ? '' : 's') + ' today'); });
+
+  // installed app: keep alerts working the same way the other pages do
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
+})();
+</script>
+<script src="/waves.js" data-color="#8c8c92" data-opacity="0.4" defer></script>
+</body>
+</html>
