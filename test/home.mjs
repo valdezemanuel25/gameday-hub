@@ -19,9 +19,13 @@ ok('a Best pick to play makes the card glow', h.soccer.attention === true);
 ok('a day with no hockey games is calm', h.nhl.games === 0 && h.nhl.next === null && h.nhl.attention === false);
 ok('Brew leads with today\'s Brew Markets issue and its index moves', h.brew.count === 2 && h.brew.title === 'Heist' && h.brew.sp === -2.09 && h.brew.nasdaq === -2.83);
 ok('Brew never glows', h.brew.attention === false);
+const mixed = homeSummary({ soccer, hockey: [{ id: 'h1', home: 'Rangers', away: 'Bruins', ko: 'KOh', kickoff: at(45), final: null, v2: { w: 62, o: 48 }, v4: { w: 60, o: 47 }, fb: { pick: 'H', p: [62, 38] } }], brew: [], today: '2026-10-22', now: T0 });
+ok('Next up lists the three soonest games across both sports', mixed.next.length === 3 && mixed.next.map(r => r.ko).join() === 'KOb,KOh,KOc', JSON.stringify(mixed.next));
+ok('Next up names hockey games away at home and marks Best picks', mixed.next[1].label === 'Bruins at Rangers' && mixed.next[1].sport === 'nhl' && mixed.next[1].best === true && mixed.next[2].best === false);
 const later = homeSummary({ soccer, hockey: null, brew: null, today: '2026-10-22', now: T0 + 300 * 60000 });
 ok('once every game has started nothing glows', later.soccer.left === 0 && later.soccer.best === 0 && later.soccer.attention === false);
 ok('missing data does not break it', later.brew.count === 0 && later.brew.title === null);
+ok('Next up is empty once everything has started', later.next.length === 0);
 // the route is behind the password and answers once signed in
 const kv = new Map(), env = { ADMIN_TOKEN: 's', ASSETS: { fetch: async () => new Response(JSON.stringify({ issues: brew })) }, HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv.set(k, v); }, list: async () => ({ keys: [] }) } };
 const r0 = await worker.fetch(new Request('https://hub.test/api/home'), env, {});

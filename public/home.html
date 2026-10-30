@@ -33,12 +33,16 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
 .rise{transform-style:preserve-3d;opacity:0;transform:translateY(90px)}
 .rise.in{transition:opacity 1s ease,transform 1.1s cubic-bezier(.2,.8,.2,1);opacity:1;transform:none}
 .ring{position:relative;width:var(--card);height:var(--card);transform-style:preserve-3d}
-.card{position:absolute;inset:0;border-radius:var(--radius);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;color:#fff;text-decoration:none;display:block;
+.card{position:absolute;inset:0;border-radius:var(--radius);overflow:hidden;-webkit-box-reflect:below 10px linear-gradient(transparent 68%,rgba(0,0,0,.13));backface-visibility:hidden;-webkit-backface-visibility:hidden;color:#fff;text-decoration:none;display:block;
   background:radial-gradient(120% 90% at 85% 0%,rgba(var(--c),.42) 0,rgba(var(--c),.10) 45%,transparent 70%),linear-gradient(180deg,var(--tint) 0,#0b0b0c 100%);
   box-shadow:inset 0 0 0 1px rgba(var(--c),.28),inset 0 -70px 80px rgba(0,0,0,.6)}
 .card .in{position:absolute;inset:0;padding:18px;display:flex;flex-direction:column;will-change:transform}
 .card .row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-.card .ic{flex:none;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:21px;background:rgba(var(--c),.16);box-shadow:inset 0 0 0 1px rgba(var(--c),.35)}
+.card .ic{flex:none;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:rgb(var(--hi));background:rgba(var(--c),.16);box-shadow:inset 0 0 0 1px rgba(var(--c),.35)}
+.card .ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+/* faint line art in the sport's colour behind the text: pitch, rink, market chart */
+.card .art{position:absolute;inset:0;width:100%;height:100%;color:rgb(var(--c));opacity:.17;pointer-events:none}
+.card .art *{vector-effect:non-scaling-stroke}
 .card .bdg{display:none;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:999px;background:rgb(var(--c));color:#0a0a0a;white-space:nowrap}
 .card .bdg:before{content:"";width:6px;height:6px;border-radius:50%;background:#0a0a0a;animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.25}}
@@ -54,7 +58,20 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
 .nhl{--c:255,77,87;--hi:255,154,157;--tint:#1e0a0c}
 .brew{--c:224,166,98;--hi:240,197,138;--tint:#1c140b}
 .hint{position:relative;z-index:1;text-align:center;font-size:12.5px;color:var(--faint);padding:4px 0 22px}
-@media (max-width:480px){.dt{font-size:46px}.stage{height:460px;min-height:380px}:root{--card:190px}}
+/* Next up strip */
+.nx{position:relative;z-index:2;width:100%;max-width:520px;margin:0 auto 14px}
+.nxh{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:0 4px 8px}
+.nxl{border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.035);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);overflow:hidden}
+.nr{display:grid;grid-template-columns:auto 8px minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 14px;color:var(--ink);text-decoration:none;font-size:14px}
+.nr+.nr{border-top:1px solid var(--line)}
+.nr:hover{background:rgba(255,255,255,.04)}.nr:focus-visible{outline:2px solid rgb(var(--hi));outline-offset:-2px}
+.nr .tm{font-variant-numeric:tabular-nums;color:var(--dim);font-size:13px;min-width:64px}
+.nr .dot{width:8px;height:8px;border-radius:50%;background:rgb(var(--c));box-shadow:0 0 8px rgba(var(--c),.6)}
+.nr .mu{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nr .bp{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;color:#0a0a0a;background:rgb(var(--c))}
+.nr .sp{font-size:11.5px;color:rgb(var(--hi))}
+.nx .none{padding:12px 14px;font-size:13.5px;color:var(--faint)}
+@media (max-width:480px){.dt{font-size:46px}.stage{height:420px;min-height:360px}:root{--card:190px}}
 @media (prefers-reduced-motion:reduce){.rise.in{transition:none}.card .bdg:before{animation:none}}
 </style>
 </head>
@@ -69,6 +86,7 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
     <div class="tilt"><div class="rise" id="rise"><div class="ring" id="ring"></div></div></div>
   </div>
 </div>
+<section class="nx" id="nx" hidden aria-label="Next up"><div class="nxh">Next up</div><div class="nxl" id="nxl"></div></section>
 <div class="hint">Drag to spin · tap a card to open it</div>
 
 <script>
@@ -81,9 +99,23 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
   var today = now.toLocaleDateString('en-CA', tz); // YYYY-MM-DD
 
   var ITEMS = [
-    { key: 'soccer', href: '/', icon: '⚽', title: 'Soccer', stat: 'Match cards & picks', meta: '' },
-    { key: 'nhl', href: '/nhl', icon: '🏒', title: 'NHL', stat: 'Winner & totals', meta: '' },
-    { key: 'brew', href: '/brew', icon: '☕', title: 'Brew', stat: 'Markets brief', meta: '' }
+    { key: 'soccer', href: '/', title: 'Soccer', stat: 'Match cards & picks', meta: '',
+      icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7.6l4.2 3-1.6 4.9H9.4L7.8 10.6z"/><path d="M12 7.6V3.2M16.2 10.6l4.3-1.3M14.6 15.5l2.6 3.6M9.4 15.5l-2.6 3.6M7.8 10.6L3.5 9.3"/>',
+      art: '<rect x="62" y="-24" width="210" height="268" rx="3"/><path d="M62 110h210"/><circle cx="167" cy="110" r="34"/><circle cx="167" cy="110" r="2" fill="currentColor"/><rect x="112" y="-24" width="110" height="60"/><rect x="140" y="-24" width="54" height="26"/><path d="M144 36a24 24 0 0 0 46 0"/>' },
+    { key: 'nhl', href: '/nhl', title: 'NHL', stat: 'Winner & totals', meta: '',
+      icon: '<path d="M15.5 3L9 17.4c-.4.9-1.3 1.6-2.3 1.6H3.5"/><ellipse cx="17.5" cy="18.4" rx="3.5" ry="1.6"/><path d="M14 18.4v.1"/>',
+      art: '<rect x="58" y="-40" width="230" height="300" rx="62"/><path d="M58 110h230" stroke-width="3"/><path d="M58 58h230M58 162h230" stroke-width="2"/><circle cx="173" cy="110" r="26"/><circle cx="125" cy="22" r="20"/><circle cx="221" cy="22" r="20"/><circle cx="125" cy="22" r="1.8" fill="currentColor"/><circle cx="221" cy="22" r="1.8" fill="currentColor"/>' },
+    { key: 'brew', href: '/brew', title: 'Brew', stat: 'Markets brief', meta: '',
+      icon: '<path d="M5 9.5h11v4.5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 11h1.4a2.5 2.5 0 0 1 0 5H16"/><path d="M8.6 3.4c-.6.9.6 1.6 0 2.6M12.2 3.4c-.6.9.6 1.6 0 2.6"/>',
+      art: (function () { // a small candlestick chart climbing to the top right
+        var o = '', y = 150, xs = [76, 94, 112, 130, 148, 166, 184, 202], moves = [-14, 8, -18, -10, 12, -22, -12, -16];
+        for (var i = 0; i < xs.length; i++) {
+          var a = y, b = y + moves[i], top = Math.min(a, b), h = Math.max(Math.abs(b - a), 4);
+          o += '<path d="M' + (xs[i] + 5) + ' ' + (top - 9) + 'V' + (top + h + 9) + '"/>' + '<rect x="' + xs[i] + '" y="' + top + '" width="10" height="' + h + '"' + (b < a ? '' : ' fill="currentColor"') + '/>';
+          y = b;
+        }
+        return o + '<path d="M60 176C110 166 150 120 214 64" stroke-dasharray="3 5"/>';
+      })() }
   ];
 
   // CircularCarousel settings: preset cylinder, intro rise, cardWidth 220, aspectRatio 1, speed 14, captions off,
@@ -104,9 +136,9 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
     a.className = 'card ' + it.key; a.href = it.href; a.draggable = false;
     a.setAttribute('aria-label', 'Open ' + it.title);
     if (i >= ITEMS.length) { a.tabIndex = -1; a.setAttribute('aria-hidden', 'true'); }
-    a.innerHTML = '<div class="in"><div class="row"><div class="ic">' + it.icon + '</div><span class="bdg" data-b="' + it.key + '"></span></div><h2>' + it.title + '</h2><div class="st" data-k="' + it.key + '">' + it.stat + '</div><div class="mt" data-m="' + it.key + '"></div></div><div class="fd"></div>';
+    a.innerHTML = '<svg class="art" viewBox="0 0 220 220" preserveAspectRatio="none" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4">' + it.art + '</g></svg><div class="in"><div class="row"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true">' + it.icon + '</svg></div><span class="bdg" data-b="' + it.key + '"></span></div><h2>' + it.title + '</h2><div class="st" data-k="' + it.key + '">' + it.stat + '</div><div class="mt" data-m="' + it.key + '"></div></div><div class="fd"></div>';
     ring.appendChild(a);
-    cards.push({ el: a, inner: a.firstChild, fd: a.lastChild, base: i * STEP, item: it });
+    cards.push({ el: a, inner: a.querySelector('.in'), fd: a.lastChild, base: i * STEP, item: it });
   }
 
   var radius = 0;
@@ -126,6 +158,15 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
       c.inner.style.transform = 'translateX(' + (-rel * O.parallax * 0.6).toFixed(2) + 'px)';
       c.el.style.zIndex = Math.round(cos * 100) + 100;
     }
+    tintDots();
+  }
+  // dark grey dots take on a little of the front card's colour
+  var TINT = { soccer: [200, 255, 46], nhl: [255, 77, 87], brew: [224, 166, 98] }, BASE = [69, 69, 74], lastTint = null;
+  function tintDots() {
+    if (!window.pwSetColor) return;
+    var k = cards[frontIndex()].item.key; if (k === lastTint) return; lastTint = k;
+    var m = 0.3, c = TINT[k];
+    window.pwSetColor('#' + BASE.map(function (v, i) { var x = Math.round(v * (1 - m) + c[i] * m * 0.55); return (x < 16 ? '0' : '') + x.toString(16); }).join(''));
   }
   function frontIndex() { // card closest to the viewer
     var best = 0, bd = 999;
@@ -236,6 +277,16 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
     var b = h.brew;
     if (b && b.count) { put('brew', 'data-k', esc(b.title || plural(b.count, 'brief') + ' today')); put('brew', 'data-m', (b.sp != null ? 'S&amp;P ' + pct(b.sp) : '') + (b.sp != null && b.nasdaq != null ? ' · ' : '') + (b.nasdaq != null ? 'Nasdaq ' + pct(b.nasdaq) : '')); }
     else if (b) { put('brew', 'data-k', 'No brief yet today'); }
+    // Next up strip: soonest games still to start, in each sport's colour
+    if (Array.isArray(h.next)) {
+      var nx = document.getElementById('nx'), list = document.getElementById('nxl');
+      list.innerHTML = h.next.length ? h.next.map(function (r) {
+        var href = r.sport === 'nhl' ? '/nhl' : '/';
+        return '<a class="nr ' + r.sport + '" href="' + href + '"><span class="tm">' + esc(r.ko || '') + '</span><span class="dot" aria-hidden="true"></span><span class="mu">' + esc(r.label) + '</span>' +
+          (r.best ? '<span class="bp">Best pick</span>' : '<span class="sp">' + (r.sport === 'nhl' ? 'NHL' : 'Soccer') + '</span>') + '</a>';
+      }).join('') : '<div class="none">Nothing left to start today</div>';
+      nx.hidden = false;
+    }
     // open on the card that needs you: the sport whose next Best pick starts soonest
     var hot = ['soccer', 'nhl'].filter(function (k) { return h[k] && h[k].attention && h[k].nextBest; })
       .sort(function (x, y) { return new Date(h[x].nextBest.kickoff) - new Date(h[y].nextBest.kickoff); })[0];
