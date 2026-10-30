@@ -458,8 +458,13 @@ export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
       const near = e ? undefined : r.events.filter(x => Math.abs(x.t - t) <= 3 * 3600e3 && (sameName(c.home, x.home) || sameName(c.away, x.away))).slice(0, 4).map(x => `${x.lg}: ${x.home} v ${x.away}`);
       return { game: `${c.home} v ${c.away}`, ko: c.kickoff, started: t <= now.getTime(), matched: e ? `${e.lg}: ${e.home} v ${e.away}` : null, ...(near ? { nearest: near } : {}), pinnacle: e ? pinnPrice(e) : null, draftkings: c.odds ? { h: c.odds.h, d: c.odds.d, a: c.odds.a } : null }; }) };
 }
+// One cron run looks at ONE league, except when games are inside the lineup window (LINEUP_READ to PRICE_LOCK minutes before kickoff) and have
+// no lineup read yet: those leagues come first, soonest kickoff first, up to LINEUP_BURST of them in the one run. Saturday 3 PM has
+// several leagues kicking off together and the window is only 10 minutes (two runs), so one league a run left the later leagues in the
+// list (Championship, League One...) without their closing read.
+export const LINEUP_BURST = 3;
 export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
-  const t = localDate(now.toISOString());
+  const t = localDate(now.toISOString()), urgent = [], normal = [];
   for (const date of [t, addDays(t, 1)]) {
     const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) continue;
     for (const lg of LEAGUES.filter(l => PRICED.has(l.slug))) {
@@ -467,15 +472,22 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
       if (!live.length) continue;
       // When this league is looked at again: every 6 hours as a rule, every hour in the last 3 hours before its next kickoff, and always
       // once in the window from LINEUP_READ to PRICE_LOCK minutes before it (the wait never runs past LINEUP_READ minutes before).
-      const mins = (Math.min(...live.map(c => new Date(c.kickoff).getTime())) - now.getTime()) / 60000;
+      const first = Math.min(...live.map(c => new Date(c.kickoff).getTime())), mins = (first - now.getTime()) / 60000;
+      const need = live.some(c => !(c.odds && c.odds.cl) && (new Date(c.kickoff).getTime() - now.getTime()) / 60000 <= LINEUP_READ);
       const ttl = Math.max(300, Math.min(mins <= 180 ? 3600 : 21600, Math.round((mins - LINEUP_READ) * 60)));
       const ck = new Request(`https://hub.local/odds/${date}/${lg.slug}`);
-      try { if (cache && await cache.match(ck)) continue; } catch (e) { /* no cache: just look */ }
-      try { if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': `max-age=${ttl}` } })); } catch (e) { /* ignore */ }
-      return { job: 'odds', league: lg.slug, date, ...(await refreshOdds(env, date, lg.slug, now)) };
+      try { if (cache && await cache.match(ck) && !need) continue; } catch (e) { /* no cache: just look */ }
+      (need ? urgent : normal).push({ lg, date, ttl, ck, first });
     }
   }
-  return null;
+  const pick = urgent.length ? urgent.sort((a, b) => a.first - b.first).slice(0, LINEUP_BURST) : normal.slice(0, 1);
+  if (!pick.length) return null;
+  const outs = [];
+  for (const p of pick) {
+    try { if (cache) await cache.put(p.ck, new Response('1', { headers: { 'cache-control': `max-age=${p.ttl}` } })); } catch (e) { /* ignore */ }
+    outs.push({ league: p.lg.slug, date: p.date, ...(await refreshOdds(env, p.date, p.lg.slug, now)) });
+  }
+  return { job: 'odds', ...outs[0], ...(outs.length > 1 ? { also: outs.slice(1) } : {}) };
 }
 
 // ---------------------------------------------------------------------------------------------
