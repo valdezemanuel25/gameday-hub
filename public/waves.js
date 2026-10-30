@@ -3,14 +3,14 @@
      <script src="/waves.js" data-color="#C8FF2E" defer></script>
    Settings mirror: preset/wave "silk", pattern "dot", fade "edges", interactive, cursorSize 50,
    cursorStrength .6, spacing 9, markSize .95, depth .95, light 0, shine .8, contrast 1.2,
-   speed .175 (half), scale 1, direction 20, opacity 1, fadeSize .5, intro, paused false.
+   speed .12, scale 1, direction 20, opacity 1, fadeSize .5, intro, paused false.
    Display only: it reads nothing from the Hub and changes nothing. */
 (function () {
   var me = document.currentScript;
   var O = {
     color: (me && me.dataset.color) || '#ffffff',
     cursorSize: 50, cursorStrength: 0.6, spacing: 9, markSize: 0.95, depth: 0.95,
-    light: 0, shine: 0.8, contrast: 1.2, speed: 0.175, scale: 1, direction: 20,
+    light: 0, shine: 0.8, contrast: 1.2, speed: 0.12, scale: 1, direction: 20,
     opacity: +((me && me.dataset.opacity) || 1), fadeSize: 0.5, intro: true, paused: false
   };
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
