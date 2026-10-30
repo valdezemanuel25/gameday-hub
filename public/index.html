@@ -1117,6 +1117,7 @@ function closeState(c) {
   return { k: 'pend', t: `Pending · closing read ~${tmCT(new Date(ko - 30 * 60000).toISOString())}` };
 }
 // Pinnacle (the sharp book, margin removed): the first price the Hub saw against now / the close, and where DraftKings sits from it.
+const bkName = b => (!b || b === 'draftkings' ? 'DraftKings' : b === 'pinnacle' ? 'Pinnacle' : esc(b));
 function pinnNote(c, o) {
   const pm = pinnMove(o); if (!pm) return '';
   const part = i => `${esc(sideOf(c, i))} ${Math.round(pm.p0[i])}→${Math.round(pm.p1[i])}${Math.abs(pm.d[i]) >= 1 ? ` <b>(${sgn(Math.round(pm.d[i]))})</b>` : ''}`;
@@ -1139,7 +1140,7 @@ function movesView() {
     // opening price (v6o) and on now / the close (v6), with no price of its own.
     const bm = bttsMove(o), both = fin ? fin.h > 0 && fin.a > 0 : false;
     const btRow = bm ? row('Both score', bm.b0[0], bm.b1[0], bm.p0, bm.p1, bm.d, both) : c.v6o && c.v6 ? row('Both score', null, null, c.v6o.btts, c.v6.btts, c.v6.btts - c.v6o.btts, both) : '';
-    const btNote = bm ? `Both score: ${o.bk === 'draftkings' || !o.bk ? 'DraftKings' : esc(o.bk)} Yes price${o.bfk && o.bk && o.bfk !== o.bk ? ` (opening was ${o.bfk === 'draftkings' ? 'DraftKings' : esc(o.bfk)}: different books)` : ''}${o.bcl ? `, closing read ✓ ${tmCT(o.bcl)}` : locked(c) ? ', no lineup read (last price is the close)' : ''}.${c.v6o && c.v6 ? ` Score card said ${c.v6o.btts}→${c.v6.btts}%.` : ''}`
+    const btNote = bm ? `Both score: ${bkName(o.bk)} Yes price${o.bfk && o.bk && o.bfk !== o.bk ? ` (opening was ${bkName(o.bfk)}: different books)` : ''}${o.bcl ? `, closing read ✓ ${tmCT(o.bcl)}` : locked(c) ? ', no lineup read (last price is the close)' : ''}.${c.v6o && c.v6 ? ` Score card said ${c.v6o.btts}→${c.v6.btts}%.` : ''}`
       : btRow ? 'Both score has no price of its own here: its chance is read off the score card at each price.' : '';
     const follow = fin ? (mv.size < 2 ? 'the price barely moved' : mv.d[out] > 0 ? 'the result went the way of the move' : 'the result went against the move') : '';
     return `<div class="mvg"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><span class="cs ${st.k}">${st.t}</span></div>

@@ -97,4 +97,26 @@ ok('move: needs both prices', pinnMove({ ...odds, pf: null }) === null && pinnMo
   const page2 = new Function(`${['devigP', 'pinnMove'].map(grab2).join('\n')}; return pinnMove;`)();
   ok('page and server agree with both score in the move', JSON.stringify(page2(o2)) === JSON.stringify(pinnMove(o2)));
 }
+
+// both-score order: Pinnacle first, then The Odds API, then API-Football
+{
+  const { addBtts } = await import('../src/worker.js');
+  const nowB = new Date('2026-10-30T15:00:00Z'), T1b = '2026-10-30T22:30:00Z';
+  const cardB = odds => [{ id: '1', home: 'Grêmio', away: 'Athletico-PR', kickoff: T1b, odds }];
+  const calls = []; const f = async u => { calls.push(u); return { ok: false, status: 401, headers: { get: () => null } }; };
+  { calls.length = 0; const cs = cardB({ h: 125, d: 240, a: 205, pn: { h: 130, d: 240, a: 220, bty: -129, btn: 113 }, pf: { h: 130, d: 240, a: 220, bty: -129, btn: 113 } });
+    const n = await addBtts({ PINNODDS_KEY: 'p', ODDS_API_KEY: 'k' }, cs, 'bra.1', nowB, f, '2026-10-30');
+    ok('Pinnacle first: the opening both-score price comes from Pinnacle and The Odds API is not asked', cs[0].odds.by === -129 && cs[0].odds.bn === 113 && cs[0].odds.bk === 'pinnacle' && cs[0].odds.bf.by === -129 && cs[0].odds.bfk === 'pinnacle' && calls.length === 0 && n === 1, JSON.stringify(cs[0].odds)); }
+  { calls.length = 0; const cs = cardB({ h: 125, d: 240, a: 205, pn: { h: 130, d: 240, a: 220 } });
+    await addBtts({ PINNODDS_KEY: 'p', ODDS_API_KEY: 'k' }, cs, 'bra.1', nowB, f, '2026-10-30');
+    ok('Pinnacle has no both-score price for the game: The Odds API is asked next', calls.some(u => u.includes('the-odds-api.com')) && cs[0].odds.by === undefined); }
+  { calls.length = 0; const cs = cardB({ h: 125, d: 240, a: 205, by: -120, bn: 100, bk: 'draftkings', bf: { by: -120, bn: 100 }, bfk: 'draftkings', pn: { h: 130, d: 240, a: 220, bty: -129, btn: 113 } });
+    const closeT = new Date('2026-10-30T22:10:00Z'); await addBtts({ PINNODDS_KEY: 'p' }, cs, 'bra.1', closeT, f, '2026-10-30');
+    ok('an opening from another book is not given a Pinnacle close', cs[0].odds.by === -120 && cs[0].odds.bk === 'draftkings' && !cs[0].odds.bcl); }
+  { calls.length = 0; const cs = cardB({ h: 125, d: 240, a: 205, by: -129, bn: 113, bk: 'pinnacle', bf: { by: -129, bn: 113 }, bfk: 'pinnacle', pn: { h: 130, d: 240, a: 220, bty: -150, btn: 125 } });
+    const closeT = new Date('2026-10-30T22:10:00Z'); await addBtts({ PINNODDS_KEY: 'p' }, cs, 'bra.1', closeT, f, '2026-10-30');
+    ok('a Pinnacle opening gets the Pinnacle close, noted at the lineup read', cs[0].odds.by === -150 && cs[0].odds.bf.by === -129 && cs[0].odds.bcl === closeT.toISOString()); }
+  { const cs = cardB({ h: 125, d: 240, a: 205, pn: { h: 130, d: 240, a: 220, bty: -129, btn: 113 } }); await addBtts({}, cs, 'bra.1', nowB, f, '2026-10-30'); ok('no keys at all: nothing happens', cs[0].odds.by === undefined); }
+  const html3 = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  ok('the Movement tab names Pinnacle as the book', html3.includes("b === 'pinnacle' ? 'Pinnacle'")); }
 console.log(fails ? `\n${fails} FAILED` : '\nAll Pinnacle checks passed'); process.exit(fails ? 1 : 0);
