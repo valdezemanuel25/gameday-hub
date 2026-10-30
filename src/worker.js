@@ -289,12 +289,36 @@ const priceOpen = (c, now) => new Date(c.kickoff).getTime() - now.getTime() > PR
 // Each game costs one credit per read, so two a game. Returns the number of cards changed. Never throws: a failed read is skipped.
 export const BTTS_RESERVE = 100;
 // Credits left this month, kept in the free edge cache (no KV write) for the Status tab.
-const CREDITS = 'https://hub.local/btts-credits';
-async function noteCredits(left) {
-  try { if (typeof caches !== 'undefined') await caches.default.put(CREDITS, new Response(JSON.stringify({ left, at: new Date().toISOString() }), { headers: { 'cache-control': 'max-age=2592000' } })); } catch (e) { /* ignore */ }
+const CREDITS = i => `https://hub.local/btts-credits${i ? `-${i + 1}` : ''}`; // one entry per key (the first keeps its old name)
+async function noteCredits(left, i = 0) {
+  try { if (typeof caches !== 'undefined') await caches.default.put(CREDITS(i), new Response(JSON.stringify({ left, at: new Date().toISOString() }), { headers: { 'cache-control': 'max-age=2592000' } })); } catch (e) { /* ignore */ }
 }
-async function readCredits() {
-  try { const r = typeof caches !== 'undefined' ? await caches.default.match(CREDITS) : null; return r ? await r.json() : null; } catch (e) { return null; }
+async function readCredits(i = 0) {
+  try { const r = typeof caches !== 'undefined' ? await caches.default.match(CREDITS(i)) : null; return r ? await r.json() : null; } catch (e) { return null; }
+}
+// The Odds API keys: ODDS_API_KEY first, ODDS_API_KEY_2 as the backup. The credits left are noted per key from every answer. A key is
+// used while it has credits above the reserve; once it is below, the backup is used if it has more; a key that ran out (or answers 401 /
+// 429) is skipped, and looked at again after OUT_RECHECK_H hours (reads of the event list cost no credit, and the credits reset monthly).
+export const OUT_RECHECK_H = 6;
+export const oddsKeys = env => [env.ODDS_API_KEY, env.ODDS_API_KEY_2].filter(Boolean);
+async function keyState(i, now) { const c = await readCredits(i); return c && c.left != null && c.left <= 0 && now.getTime() - new Date(c.at).getTime() > OUT_RECHECK_H * 3600e3 ? null : c; }
+// Run one Odds API call with the best key. healthyOnly: only a key above the reserve (the Analyst's calls), else a key with any credits
+// left (both-score closing reads). run(key) returns the call's answer ({ left?, error? }); a 401 / 429 moves on to the next key.
+export async function viaOddsKey(env, run, { healthyOnly = false, now = new Date() } = {}) {
+  const keys = oddsKeys(env); if (!keys.length) return { error: 'ODDS_API_KEY is not set' };
+  const reserve = num(env.BTTS_RESERVE, BTTS_RESERVE), st = await Promise.all(keys.map((k, i) => keyState(i, now))), tried = new Set();
+  for (let n = 0; n < keys.length; n++) {
+    const ok = i => !tried.has(i) && (!st[i] || st[i].left == null || st[i].left > reserve);
+    let i = keys.findIndex((k, x) => ok(x));
+    if (i < 0 && !healthyOnly) i = keys.findIndex((k, x) => !tried.has(x) && !(st[x] && st[x].left != null && st[x].left <= 0));
+    if (i < 0) break;
+    tried.add(i);
+    const r = await run(keys[i]);
+    if (r && r.left != null) await noteCredits(r.left, i);
+    if (r && r.error && /\b(401|429)\b/.test(String(r.error))) { await noteCredits(0, i); continue; }
+    return { ...r, keyIndex: i };
+  }
+  return { error: healthyOnly ? 'Odds API: no key above the credit reserve' : 'Odds API: no key has credits left' };
 }
 // Order of sources for a game's both-score price (opening once, the close at the lineup read): 1. Pinnacle, from the read addPinn just
 // made (odds.pn.bty / btn; one request covers every league, no credits), 2. The Odds API, 3. the score card's own estimate (no price;
@@ -302,7 +326,7 @@ async function readCredits() {
 // two books); it keeps to the later sources so both prices come from the same one. Pinnacle's own first-seen -> now move is always on the
 // Pinnacle line.
 export async function addBtts(env, cards, slug, now = new Date(), f = fetch) {
-  if (!env.ODDS_API_KEY && !env.PINNODDS_KEY) return 0;
+  if (!oddsKeys(env).length && !env.PINNODDS_KEY) return 0;
   const inWin = c => new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000;
   const close = c => inWin(c) && !c.odds.bcl, open = c => !c.odds.bf;
   let changed = 0;
@@ -320,12 +344,12 @@ export async function addBtts(env, cards, slug, now = new Date(), f = fetch) {
     todo = [];
     for (const c of want) { const q = c.odds.pn; if (q && q.bty != null && (!c.odds.bf || c.odds.bfk === 'pinnacle')) apply(c, { by: q.bty, bn: q.btn, bk: 'pinnacle' }); else todo.push(c); }
   }
-  if (env.ODDS_API_KEY && todo.length) {
+  if (oddsKeys(env).length && todo.length) {
     const reserve = num(env.BTTS_RESERVE, BTTS_RESERVE);
     try {
-      const r = await fetchBtts(env.ODDS_API_KEY, slug, todo, f, (c, left) => close(c) || left == null || left > reserve);
-      if (!r.error) { if (r.left != null) await noteCredits(r.left); for (const c of todo) { const p = r.prices.get(c.id); if (p) apply(c, p); } todo = todo.filter(c => !r.prices.has(c.id)); }
-    } catch (e) { /* the second source tries below */ }
+      const r = await viaOddsKey(env, key => fetchBtts(key, slug, todo, f, (c, left) => close(c) || left == null || left > reserve), { now });
+      if (!r.error) { for (const c of todo) { const p = r.prices.get(c.id); if (p) apply(c, p); } todo = todo.filter(c => !r.prices.has(c.id)); }
+    } catch (e) { /* the score card's estimate stands */ }
   }
   return changed;
 }
@@ -333,13 +357,11 @@ export async function addBtts(env, cards, slug, now = new Date(), f = fetch) {
 // for the whole league. Skipped without the key, and once the month's credits are at BTTS_RESERVE or below, so the both-score closing
 // reads keep their credits. A Worker variable BOOKS (comma-separated) limits the books to the ones you can bet at.
 export function analystShop(env, slug, f = fetch) {
-  if (!env.ODDS_API_KEY) return null;
+  if (!oddsKeys(env).length) return null;
   const books = env.BOOKS ? String(env.BOOKS).split(',').map(x => x.trim()).filter(Boolean) : BOOKS;
   if (books.every(b => b === 'draftkings')) return null; // DraftKings only: the price the rule read is the price, no credit spent
   return async cards => {
-    const c = await readCredits(); if (c && c.left != null && c.left <= num(env.BTTS_RESERVE, BTTS_RESERVE)) return null;
-    const r = await fetchBest(env.ODDS_API_KEY, slug, cards, f, books);
-    if (r.left != null) await noteCredits(r.left);
+    const r = await viaOddsKey(env, key => fetchBest(key, slug, cards, f, books), { healthyOnly: true });
     return r.error ? null : r.prices;
   };
 }
@@ -352,15 +374,14 @@ async function cacheGet(k) { try { const r = typeof caches !== 'undefined' ? awa
 async function cachePut(k, v, secs) { try { if (typeof caches !== 'undefined') await caches.default.put(k, new Response(JSON.stringify(v), { headers: { 'cache-control': `max-age=${secs}` } })); } catch (e) { /* ignore */ } }
 export const readSharpNote = () => cacheGet(SHARP_NOTE);
 export function analystSharp(env, slug, f = fetch, now = new Date()) {
-  if (!env.ODDS_API_KEY) return null;
+  if (!oddsKeys(env).length) return null;
   return async cards => {
     const day = now.toISOString().slice(0, 10), gapK = `https://hub.local/sharp/${slug}`, dayK = `https://hub.local/sharp-day/${day}`;
     if (await cacheGet(gapK)) return null;
     const used = (await cacheGet(dayK)) || 0; if (used >= num(env.SHARP_PER_DAY, SHARP_PER_DAY)) return null;
-    const c = await readCredits(); if (c && c.left != null && c.left <= num(env.BTTS_RESERVE, BTTS_RESERVE)) return null;
+    const sts = await Promise.all(oddsKeys(env).map((k, i) => readCredits(i))); if (sts.every(c => c && c.left != null && c.left <= num(env.BTTS_RESERVE, BTTS_RESERVE))) return null;
     await cachePut(gapK, 1, Math.round(num(env.SHARP_GAP_H, SHARP_GAP_H) * 3600)); await cachePut(dayK, used + 1, 90000);
-    const r = await fetchSharp(env.ODDS_API_KEY, slug, cards, f);
-    if (r.left != null) await noteCredits(r.left);
+    const r = await viaOddsKey(env, key => fetchSharp(key, slug, cards, f), { healthyOnly: true, now });
     const found = r.prices ? [...r.prices.values()] : [];
     await cachePut(SHARP_NOTE, { at: now.toISOString(), league: slug, error: r.error || null, books: r.books || [], sharp: (r.books || []).filter(b => SHARP.includes(b)), games: cards.length, matched: found.length, used: found.map(x => x.book), left: r.left ?? null, today: used + 1 }, 2592000);
     return r.error ? null : r.prices;
@@ -416,8 +437,7 @@ export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) 
   if (!open.length) return { games: 0, priced: 0 };
   const need = open.filter(c => !(c.odds && c.odds.by != null)), have = open.length - need.length; // already-priced games cost no credit
   if (!need.length) return { games: open.length, priced: have, skipped: [], left: null };
-  const r = await fetchBtts(env.ODDS_API_KEY, slug, need, f); if (r.error) return { error: r.error };
-  if (r.left != null) await noteCredits(r.left);
+  const r = await viaOddsKey(env, key => fetchBtts(key, slug, need, f), { now }); if (r.error) return { error: r.error };
   let changed = 0;
   for (const c of need) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn, bk: p.bk }; if (!c.odds.bf) c.odds.bf = { by: p.by, bn: p.bn }; changed++; } }
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
@@ -931,12 +951,12 @@ const hub = {
       return json({ error: 'Not found' }, 404);
     }
     if (req.method === 'POST' && p === '/api/analyst/sharp-check') { // which sharp books the Odds API plan returns: one call, 2 credits, no bets
-      try { const lg = leagueBySlug(q('league') || 'eng.1'); if (!lg) return json({ error: 'Unknown league' }, 400); if (!env.ODDS_API_KEY) return json({ error: 'ODDS_API_KEY is not set' });
-        const r = await fetchSharp(env.ODDS_API_KEY, lg.slug, []); if (r.left != null) await noteCredits(r.left);
+      try { const lg = leagueBySlug(q('league') || 'eng.1'); if (!lg) return json({ error: 'Unknown league' }, 400); if (!oddsKeys(env).length) return json({ error: 'ODDS_API_KEY is not set' });
+        const r = await viaOddsKey(env, key => fetchSharp(key, lg.slug, []));
         const out = { at: new Date().toISOString(), league: lg.slug, error: r.error || null, books: r.books || [], sharp: (r.books || []).filter(b => SHARP.includes(b)), games: 0, matched: 0, used: [], left: r.left ?? null, check: true };
         await cachePut(SHARP_NOTE, out, 2592000); return json(out);
       } catch (e) { return json({ error: `Sharp check: ${e && e.message ? e.message : e}` }, 500); } }
-    if (p === '/api/analyst') { try { return json({ ...(await listAnalyst(env)), sharpNote: await readSharpNote(), sharpKey: !!env.ODDS_API_KEY }); } catch (e) { return json({ error: `Analyst: ${e && e.message ? e.message : e}` }, 500); } }
+    if (p === '/api/analyst') { try { return json({ ...(await listAnalyst(env)), sharpNote: await readSharpNote(), sharpKey: oddsKeys(env).length > 0 }); } catch (e) { return json({ error: `Analyst: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/day') { const date = q('date') || today(); return json((await env.HUB.get(`nhl:day:${date}`, 'json')) || { date, cards: [] }); }
     if (p === '/api/nhl/days') { // every saved hockey day, for the Export button
       const out = []; let cursor;
@@ -986,7 +1006,7 @@ const hub = {
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
-        now: Date.now(), btts: { key: !!env.ODDS_API_KEY, credits: await readCredits(), reserve: num(env.BTTS_RESERVE, BTTS_RESERVE) }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        now: Date.now(), btts: { key: oddsKeys(env).length > 0, credits: await readCredits(0), keys: oddsKeys(env).length, credits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, reserve: num(env.BTTS_RESERVE, BTTS_RESERVE) }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }

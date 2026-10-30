@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/verify.mjs && node test/parity.mjs && node test/v4.mjs && node test/market.mjs && node test/strats.mjs && node test/analyst.mjs && node test/v5.mjs && node test/v6.mjs && node test/moves.mjs && node test/early.mjs && node test/pinn.mjs && node test/worker.mjs && node test/sm.mjs && node test/shots.mjs && node test/forebet.mjs && node test/forebetpage.mjs && node test/board.mjs && node test/nhl.mjs && node test/brew.mjs && node test/verify.mjs",
+    "test": "node test/verify.mjs && node test/parity.mjs && node test/v4.mjs && node test/market.mjs && node test/strats.mjs && node test/analyst.mjs && node test/v5.mjs && node test/v6.mjs && node test/moves.mjs && node test/early.mjs && node test/pinn.mjs && node test/oddskeys.mjs && node test/worker.mjs && node test/sm.mjs && node test/shots.mjs && node test/forebet.mjs && node test/forebetpage.mjs && node test/board.mjs && node test/nhl.mjs && node test/brew.mjs && node test/verify.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
