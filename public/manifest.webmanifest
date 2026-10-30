@@ -2,7 +2,7 @@
   "name": "Game Day Hub",
   "short_name": "Game Day",
   "description": "Match predictions, results and tracked bets.",
-  "start_url": "/",
+  "start_url": "/home",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0B1210",

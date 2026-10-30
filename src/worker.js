@@ -21,6 +21,7 @@ import { goalSeq, maxLead, earlyPaid } from './early.js';
 import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn } from './pinn.js';
 import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
+import { homeSummary } from './home.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -118,7 +119,7 @@ async function authed(req, env) {
 }
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
-const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/');
+const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/home');
 
 // ---------------------------------------------------------------------------------------------
 // Analyze ONE league for ONE date: fixtures -> v2 + v4 (official since 2026-10-26) cards.
@@ -968,6 +969,11 @@ const hub = {
     if (p === '/api/tally') return json(await tally(env));
     if (p === '/api/brew') { // newsletter summaries: public/brew.json is rewritten daily by a scheduled task
       try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; return json({ updated: j && j.updated || null, issues: Array.isArray(j && j.issues) ? j.issues : [] }); } catch (e) { return json({ updated: null, issues: [] }); }
+    }
+    if (p === '/api/home') { // home screen carousel: today's counts and Best picks (display only)
+      const d = today(), [sd, nd] = await Promise.all([env.HUB.get(`day:${d}`, 'json'), env.HUB.get(`nhl:day:${d}`, 'json')]);
+      let issues = []; try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; issues = Array.isArray(j && j.issues) ? j.issues : []; } catch (e) {}
+      return json(homeSummary({ soccer: sd && sd.cards, hockey: nd && nd.cards, brew: issues, today: d }));
     }
     if (p === '/api/candidates') return json(await candidates(q('date') || today(), env));
     if (p === '/api/pinn-check') { try { return json(await pinnCheck(env, String(url.searchParams.get('league') || ''))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
