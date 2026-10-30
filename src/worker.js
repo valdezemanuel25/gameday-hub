@@ -18,6 +18,7 @@ import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { goalSeq, maxLead, earlyPaid } from './early.js';
+import { fetchAfBtts, checkAf, AF_LEAGUE } from './apifootball.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
@@ -263,7 +264,7 @@ function keepOdds(card, old, f, slug, now) {
 // ts (when the price last changed) and cl (when the lineup read was taken: the closing price) carry over from the old price.
 export function withOdds(old, fresh) {
   const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
-  for (const k of ['bf', 'bk', 'bcl']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
+  for (const k of ['bf', 'bk', 'bcl', 'bfk', 'baf']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
   const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
@@ -294,24 +295,47 @@ async function noteCredits(left) {
 async function readCredits() {
   try { const r = typeof caches !== 'undefined' ? await caches.default.match(CREDITS) : null; return r ? await r.json() : null; } catch (e) { return null; }
 }
-export async function addBtts(env, cards, slug, now = new Date(), f = fetch) {
-  if (!env.ODDS_API_KEY) return 0;
+// API-Football requests left today, kept in the free edge cache (no KV write) for the Status tab.
+const AFLEFT = 'https://hub.local/af-left';
+async function noteAf(left) {
+  try { if (typeof caches !== 'undefined') await caches.default.put(AFLEFT, new Response(JSON.stringify({ left, at: new Date().toISOString() }), { headers: { 'cache-control': 'max-age=86400' } })); } catch (e) { /* ignore */ }
+}
+async function readAf() {
+  try { const r = typeof caches !== 'undefined' ? await caches.default.match(AFLEFT) : null; return r ? await r.json() : null; } catch (e) { return null; }
+}
+export const AF_RESERVE = 15; // opening reads stop when fewer API-Football requests than this are left today
+export const AF_RETRY_OPEN_H = 3, AF_RETRY_CLOSE_MIN = 15; // a game with no price from API-Football is tried again after this long
+// The second both-score source (src/apifootball.js) takes the games The Odds API did not price (no credits left, no key, no match).
+export async function addBtts(env, cards, slug, now = new Date(), f = fetch, date = null) {
+  if (!env.ODDS_API_KEY && !env.APIFOOTBALL_KEY) return 0;
   const inWin = c => new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000;
   const close = c => inWin(c) && !c.odds.bcl, open = c => !c.odds.bf;
   let changed = 0;
-  for (const c of cards) if (c.odds && c.odds.by != null && !c.odds.bf) { c.odds.bf = { by: c.odds.by, bn: c.odds.bn }; changed++; } // read by the button earlier
+  for (const c of cards) if (c.odds && c.odds.by != null && !c.odds.bf) { c.odds.bf = { by: c.odds.by, bn: c.odds.bn }; if (c.odds.bk) c.odds.bfk = c.odds.bk; changed++; } // read by the button earlier
   const want = cards.filter(c => c.odds && (close(c) || open(c))); if (!want.length) return changed;
-  const reserve = num(env.BTTS_RESERVE, BTTS_RESERVE);
-  let r; try { r = await fetchBtts(env.ODDS_API_KEY, slug, want, f, (c, left) => close(c) || left == null || left > reserve); } catch (e) { return changed; }
-  if (r.error) return changed;
-  if (r.left != null) await noteCredits(r.left);
-  for (const c of want) {
-    const p = r.prices.get(c.id); if (!p) continue;
+  const apply = (c, p) => {
     const o = c.odds, was = JSON.stringify([o.by, o.bn, o.bf, o.bcl]);
     o.by = p.by; o.bn = p.bn; o.bk = p.bk;
-    if (!o.bf) o.bf = { by: p.by, bn: p.bn };
+    if (!o.bf) { o.bf = { by: p.by, bn: p.bn }; o.bfk = p.bk; }
     if (inWin(c)) o.bcl = now.toISOString();
     if (JSON.stringify([o.by, o.bn, o.bf, o.bcl]) !== was) changed++;
+  };
+  let todo = want;
+  if (env.ODDS_API_KEY) {
+    const reserve = num(env.BTTS_RESERVE, BTTS_RESERVE);
+    try {
+      const r = await fetchBtts(env.ODDS_API_KEY, slug, want, f, (c, left) => close(c) || left == null || left > reserve);
+      if (!r.error) { if (r.left != null) await noteCredits(r.left); for (const c of want) { const p = r.prices.get(c.id); if (p) apply(c, p); } todo = want.filter(c => !r.prices.has(c.id)); }
+    } catch (e) { /* the second source tries below */ }
+  }
+  if (env.APIFOOTBALL_KEY && date && todo.length && AF_LEAGUE[slug]) {
+    const af = await readAf(), low = af && af.left != null && af.left < AF_RESERVE;
+    const due = todo.filter(c => { const t = c.odds.baf ? now.getTime() - new Date(c.odds.baf).getTime() : Infinity; return close(c) ? t >= AF_RETRY_CLOSE_MIN * 60000 : !low && t >= AF_RETRY_OPEN_H * 3600000; });
+    if (due.length) {
+      let r; try { r = await fetchAfBtts(env.APIFOOTBALL_KEY, slug, date, due, f); } catch (e) { r = { error: String(e && e.message || e) }; }
+      if (r.left != null) await noteAf(r.left);
+      for (const c of due) { const p = r.prices && r.prices.get(c.id); if (p) apply(c, p); else { c.odds.baf = now.toISOString(); changed++; } }
+    }
   }
   return changed;
 }
@@ -368,7 +392,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
     if (c.odds && setV6(c, c, now)) ch = true; // the score card follows the price (and a card priced before v6 existed gets one)
     if (ch) changed++;
   }
-  changed += await addBtts(env, open, slug, now, f);
+  changed += await addBtts(env, open, slug, now, f, date);
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f), analystSharp(env, slug, f, now)); // the Analyst reads the same prices (src/analyst.js)
   return { games: open.length, priced, changed, analyst: an };
@@ -865,6 +889,7 @@ const hub = {
       try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; return json({ updated: j && j.updated || null, issues: Array.isArray(j && j.issues) ? j.issues : [] }); } catch (e) { return json({ updated: null, issues: [] }); }
     }
     if (p === '/api/candidates') return json(await candidates(q('date') || today(), env));
+    if (p === '/api/apifootball-check') { try { return json(await checkAf(env.APIFOOTBALL_KEY, String(url.searchParams.get('league') || 'bra.1'), String(url.searchParams.get('date') || today()))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (p === '/api/odds-raw') { try { const lg = leagueBySlug(String(url.searchParams.get('league') || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ league: lg.slug, games: await rawOdds(lg.slug, String(url.searchParams.get('date') || '')) }); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (req.method === 'POST' && p === '/api/btts') { try { const b = await req.json(); return json(await refreshBtts(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Both score prices: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/odds') { try { const b = await req.json(); return json(await refreshOdds(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Prices: ${e && e.message || e}` }, 500); } }
@@ -936,7 +961,7 @@ const hub = {
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
-        now: Date.now(), btts: { key: !!env.ODDS_API_KEY, credits: await readCredits(), reserve: num(env.BTTS_RESERVE, BTTS_RESERVE) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        now: Date.now(), btts: { key: !!env.ODDS_API_KEY, credits: await readCredits(), reserve: num(env.BTTS_RESERVE, BTTS_RESERVE), af: { key: !!env.APIFOOTBALL_KEY, left: await readAf() } }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
