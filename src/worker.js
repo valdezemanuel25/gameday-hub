@@ -19,6 +19,7 @@ import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { goalSeq, maxLead, earlyPaid } from './early.js';
 import { fetchAfBtts, checkAf, AF_LEAGUE } from './apifootball.js';
+import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn } from './pinn.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
@@ -264,7 +265,7 @@ function keepOdds(card, old, f, slug, now) {
 // ts (when the price last changed) and cl (when the lineup read was taken: the closing price) carry over from the old price.
 export function withOdds(old, fresh) {
   const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
-  for (const k of ['bf', 'bk', 'bcl', 'bfk', 'baf']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
+  for (const k of ['bf', 'bk', 'bcl', 'bfk', 'baf', 'pn', 'pf', 'pcl', 'pat']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
   const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
@@ -376,6 +377,25 @@ export function analystSharp(env, slug, f = fetch, now = new Date()) {
     return r.error ? null : r.prices;
   };
 }
+// Pinnacle (src/pinn.js), only with the Worker secret PINNODDS_KEY: the first price seen (odds.pf) and the close at the lineup read
+// (odds.pcl), on the same schedule as the ESPN price. One request prices every league (the trimmed list is shared for 10 minutes), a game
+// it cannot match is tried again after PN_RETRY_OPEN_H hours (PN_RETRY_CLOSE_MIN minutes in the closing window). Returns cards changed.
+export const PN_RETRY_OPEN_H = 3, PN_RETRY_CLOSE_MIN = 10;
+export async function addPinn(env, cards, now = new Date(), f = fetch) {
+  if (!env.PINNODDS_KEY) return 0;
+  const inWin = c => new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000;
+  const close = c => inWin(c) && !c.odds.pcl, open = c => !c.odds.pf;
+  const due = cards.filter(c => { if (!c.odds || !(close(c) || open(c))) return false; const t = c.odds.pat ? now.getTime() - new Date(c.odds.pat).getTime() : Infinity; return t >= (close(c) ? PN_RETRY_CLOSE_MIN * 60000 : PN_RETRY_OPEN_H * 3600000); });
+  if (!due.length) return 0;
+  const r = await pinnEvents(env, f, now); if (r.error) return 0;
+  let changed = 0;
+  for (const c of due) {
+    const e = matchPinn(c, r.events), o = c.odds, was = JSON.stringify([o.pn, o.pf, o.pcl, o.pat]);
+    if (e) { o.pn = pinnPrice(e); if (!o.pf) o.pf = pinnPrice(e); if (inWin(c)) o.pcl = now.toISOString(); delete o.pat; } else o.pat = now.toISOString();
+    if (JSON.stringify([o.pn, o.pf, o.pcl, o.pat]) !== was) changed++;
+  }
+  return changed;
+}
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
@@ -393,6 +413,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
     if (ch) changed++;
   }
   changed += await addBtts(env, open, slug, now, f, date);
+  changed += await addPinn(env, open, now, f);
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f), analystSharp(env, slug, f, now)); // the Analyst reads the same prices (src/analyst.js)
   return { games: open.length, priced, changed, analyst: an };
@@ -412,6 +433,17 @@ export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) 
   for (const c of need) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn, bk: p.bk }; if (!c.odds.bf) c.odds.bf = { by: p.by, bn: p.bn }; changed++; } }
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { games: open.length, priced: have + r.prices.size, skipped: r.skipped, left: r.left };
+}
+// For checking by hand (/api/pinn-check?league=bra.1): one request to PinnOdds, then how today's and tomorrow's games of the league
+// match (or fail to), what Pinnacle's price is for each, and the size and freshness of the answer. Costs 1 request of the day's 100.
+export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
+  if (!env.PINNODDS_KEY) return { error: 'PINNODDS_KEY is not set' };
+  const r = await fetchPinn(env.PINNODDS_KEY, f); if (r.error) return { error: r.error, limited: !!r.limited };
+  const t = localDate(now.toISOString()), cards = [];
+  for (const d of [t, addDays(t, 1)]) for (const c of ((await env.HUB.get(`day:${d}`, 'json'))?.cards || [])) if (!slug || c.league === slug) cards.push(c);
+  const lgs = {}; for (const e of r.events) lgs[e.lg] = (lgs[e.lg] || 0) + 1;
+  return { requests: 1, fixtures: r.events.length, bytes: r.bytes, dataAgeMs: r.age, dataStatus: r.status, leagueNames: Object.entries(lgs).sort((a, b) => b[1] - a[1]).slice(0, 25),
+    games: cards.filter(c => !c.final).map(c => { const e = matchPinn(c, r.events); return { game: `${c.home} v ${c.away}`, ko: c.kickoff, matched: e ? `${e.lg}: ${e.home} v ${e.away}` : null, pinnacle: e ? pinnPrice(e) : null, draftkings: c.odds ? { h: c.odds.h, d: c.odds.d, a: c.odds.a } : null }; }) };
 }
 export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
   const t = localDate(now.toISOString());
@@ -890,6 +922,7 @@ const hub = {
     }
     if (p === '/api/candidates') return json(await candidates(q('date') || today(), env));
     if (p === '/api/apifootball-check') { try { return json(await checkAf(env.APIFOOTBALL_KEY, String(url.searchParams.get('league') || 'bra.1'), String(url.searchParams.get('date') || today()))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
+    if (p === '/api/pinn-check') { try { return json(await pinnCheck(env, String(url.searchParams.get('league') || ''))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (p === '/api/odds-raw') { try { const lg = leagueBySlug(String(url.searchParams.get('league') || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ league: lg.slug, games: await rawOdds(lg.slug, String(url.searchParams.get('date') || '')) }); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (req.method === 'POST' && p === '/api/btts') { try { const b = await req.json(); return json(await refreshBtts(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Both score prices: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/odds') { try { const b = await req.json(); return json(await refreshOdds(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Prices: ${e && e.message || e}` }, 500); } }
@@ -961,7 +994,7 @@ const hub = {
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
-        now: Date.now(), btts: { key: !!env.ODDS_API_KEY, credits: await readCredits(), reserve: num(env.BTTS_RESERVE, BTTS_RESERVE), af: { key: !!env.APIFOOTBALL_KEY, left: await readAf() } }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        now: Date.now(), btts: { key: !!env.ODDS_API_KEY, credits: await readCredits(), reserve: num(env.BTTS_RESERVE, BTTS_RESERVE), af: { key: !!env.APIFOOTBALL_KEY, left: await readAf() } }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
