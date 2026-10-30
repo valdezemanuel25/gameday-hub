@@ -121,6 +121,7 @@ function parseEvent(ev) {
     home: { id: String(h.team.id), name: h.team.displayName || h.team.name, abbr: h.team.abbreviation, score: done ? Number(h.score) : null },
     away: { id: String(a.team.id), name: a.team.displayName || a.team.name, abbr: a.team.abbreviation, score: done ? Number(a.score) : null },
     odds: done ? null : parseOdds(comp.odds),
+    oddsDone: done ? parseOdds(comp.odds) : null, // ESPN's closing line on a finished game, if it still lists one
     shots: done ? (sh => (sh.h && sh.a ? [sh.h[0], sh.h[1], sh.a[0], sh.a[1]] : null))({ h: teamShots(h), a: teamShots(a) }) : null,
     // Goals in order (for bet365 early payout, src/early.js): ESPN's match details, scoring plays only, by the clock. The penalty
     // shootout is left out. null when ESPN sends none.
