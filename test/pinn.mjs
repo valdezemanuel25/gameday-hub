@@ -1,5 +1,6 @@
 // Pinnacle prices from PinnOdds: trimming the fixture list, matching games, the request budget and failures, and what a card keeps.
 import fs from 'fs';
+import { same, americanOf } from '../src/names.js';
 import { reduceEvents, matchPinn, fetchPinn, pinnEvents, pinnPrice, specialsSample } from '../src/pinn.js';
 import { pinnMove } from '../src/moves.js';
 import { addPinn, pinnCheck, withOdds } from '../src/worker.js';
@@ -119,4 +120,6 @@ ok('move: needs both prices', pinnMove({ ...odds, pf: null }) === null && pinnMo
   { const cs = cardB({ h: 125, d: 240, a: 205, pn: { h: 130, d: 240, a: 220, bty: -129, btn: 113 } }); await addBtts({}, cs, 'bra.1', nowB, f, '2026-10-30'); ok('no keys at all: nothing happens', cs[0].odds.by === undefined); }
   const html3 = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   ok('the Movement tab names Pinnacle as the book', html3.includes("b === 'pinnacle' ? 'Pinnacle'")); }
+ok('names: Athletico-PR matches the spelled-out club, and an unrelated one does not', same('Athletico-PR', 'Athletico Paranaense') && same('Grêmio', 'Gremio') && !same('Santos', 'Fortaleza'));
+ok('decimal to American', americanOf('1.72') === -139 && americanOf('2.05') === 105 && americanOf('2.00') === 100 && americanOf('abc') === null && americanOf('1') === null);
 console.log(fails ? `\n${fails} FAILED` : '\nAll Pinnacle checks passed'); process.exit(fails ? 1 : 0);

@@ -1,7 +1,7 @@
 // Both-teams-to-score prices from The Odds API (DraftKings). Display and tracking only: no model ever reads a price.
 // The key lives in the Worker secret ODDS_API_KEY, never in code. Read on the same schedule as the ESPN price (src/worker.js addBtts):
 // once when a game is first priced (the opening both-score price) and once at the lineup read (the close). Without the key nothing runs.
-import { same as isName } from './apifootball.js';
+import { same as isName } from './names.js';
 
 export const SPORT = { 'eng.2': 'soccer_efl_champ', 'eng.1': 'soccer_epl', 'ger.1': 'soccer_germany_bundesliga', 'esp.1': 'soccer_spain_la_liga', 'ita.1': 'soccer_italy_serie_a', 'fra.1': 'soccer_france_ligue_one', 'ned.1': 'soccer_netherlands_eredivisie', 'usa.1': 'soccer_usa_mls', 'mex.1': 'soccer_mexico_ligamx', 'bra.1': 'soccer_brazil_campeonato',
   'uefa.champions': 'soccer_uefa_champs_league', 'uefa.europa': 'soccer_uefa_europa_league' };
