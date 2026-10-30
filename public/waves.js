@@ -3,14 +3,14 @@
      <script src="/waves.js" data-color="#C8FF2E" defer></script>
    Settings mirror: preset/wave "silk", pattern "dot", fade "edges", interactive, cursorSize 50,
    cursorStrength .6, spacing 9, markSize .95, depth .95, light 0, shine .8, contrast 1.2,
-   speed .35, scale 1, direction 20, opacity 1, fadeSize .5, intro, paused false.
+   speed .175 (half), scale 1, direction 20, opacity 1, fadeSize .5, intro, paused false.
    Display only: it reads nothing from the Hub and changes nothing. */
 (function () {
   var me = document.currentScript;
   var O = {
     color: (me && me.dataset.color) || '#ffffff',
     cursorSize: 50, cursorStrength: 0.6, spacing: 9, markSize: 0.95, depth: 0.95,
-    light: 0, shine: 0.8, contrast: 1.2, speed: 0.35, scale: 1, direction: 20,
+    light: 0, shine: 0.8, contrast: 1.2, speed: 0.175, scale: 1, direction: 20,
     opacity: +((me && me.dataset.opacity) || 1), fadeSize: 0.5, intro: true, paused: false
   };
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -40,7 +40,7 @@
       '  return h/1.85;}',
       'void main(){',
       '  vec2 px=vec2(gl_FragCoord.x,R.y-gl_FragCoord.y)/DPR;vec2 vp=R/DPR;',
-      '  float t=T*SP;',
+      '  float t=T;',
       '  float h=silk(px,t);',
       // slope for shine
       '  float e=2.;vec2 g=vec2(silk(px+vec2(e,0.),t)-h,silk(px+vec2(0.,e),t)-h)/e;',
@@ -112,11 +112,11 @@
     var t0 = performance.now(), last = t0, time = 0, raf = 0;
     function frame(now) {
       var dt = Math.min((now - last) / 1000, 0.05); last = now;
-      if (!O.paused && !reduce) time += dt;
+      if (!O.paused && !reduce) time += dt * O.speed * 25.714; // speed 0.35 = the first preview's pace
       ma += (mt - ma) * Math.min(dt * 6, 1);
       var intro = O.intro && !reduce ? Math.min((now - t0) / 1800, 1) : 1;
       intro = 1 - Math.pow(1 - intro, 3);
-      gl.uniform1f(U.T, time + 4.0);
+      gl.uniform1f(U.T, time + 36.0);
       gl.uniform1f(U.IN, intro);
       gl.uniform2f(U.M, mx, my); gl.uniform1f(U.MA, ma);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
