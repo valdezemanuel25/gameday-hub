@@ -44,3 +44,14 @@ export function bttsMove(odds) {
   const a = devig(f.by, f.bn), b = devig(odds.by, odds.bn); if (!a || !b) return null;
   return { b0: [f.by, f.bn], b1: [odds.by, odds.bn], p0: r1(100 * a[0]), p1: r1(100 * b[0]), d: r1(100 * (b[0] - a[0])) };
 }
+
+// Pinnacle (src/pinn.js): the first price the Hub saw (odds.pf) against now / the close (odds.pn), margin removed, and how far DraftKings
+// sits from it now. { p0, p1 (home / draw / away %), d (points), gap (DraftKings minus Pinnacle, points), ou } or null without both.
+export function pinnMove(odds) {
+  const f = odds && odds.pf, n = odds && odds.pn; if (!f || !n) return null;
+  const a = devig(f.h, f.d, f.a), b = devig(n.h, n.d, n.a); if (!a || !b) return null;
+  const dk = devig(odds.h, odds.d, odds.a);
+  const p0 = a.map(x => r1(100 * x)), p1 = b.map(x => r1(100 * x));
+  let ou = null; if (f.tl != null && f.tl === n.tl) { const x = devig(f.to, f.tu), y = devig(n.to, n.tu); if (x && y) ou = { line: n.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }
+  return { p0, p1, d: p1.map((x, i) => r1(x - p0[i])), gap: dk ? dk.map((x, i) => r1(100 * x - p1[i])) : null, ou };
+}
