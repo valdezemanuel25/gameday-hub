@@ -637,6 +637,13 @@ function mbetsToday() {
       <div class="note"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span>${L.p != null ? ` ${L.p}%` : ''} · ${agreeText(L)}</div></div>`;
   }).join('');
 }
+// bet365 early payout: a winner pick counts as won once that team led by 3 goals at any point (shootout not counted). Beside the
+// normal record, never instead of it; only games whose goal order ESPN's game summary gave are counted.
+function earlyLine(T) {
+  const E = T.ep, pc = (h, n) => (n ? Math.round(100 * h / n) : 0);
+  if (!E || !E.n) return `<div class="mbsec">bet365 early payout<small>Winner picks count as won once the team goes 3 goals ahead. Nothing graded with goal times yet.</small></div>`;
+  return `<div class="mbsec">bet365 early payout<small>Winner picks, counted as won once the team led by 3 goals at any point (${E.n} with goal times).</small></div><div class="mbh">Normal: <b>${E.plain}</b> of ${E.n} won (${pc(E.plain, E.n)}%) · With early payout: <b>${E.hits}</b> of ${E.n} (${pc(E.hits, E.n)}%)${E.saved ? ` · <b>${E.saved}</b> paid early that did not win` : ''}</div>`;
+}
 function mbetsView() {
   if (!tally) return `<div class="empty">Loading…</div>`;
   const T = tally.leans || { n: 0, hits: 0, push: 0, byKind: {}, byKey: {}, byBack: {}, base: {}, recent: [] }, pct = (h, n) => n ? Math.round(100 * h / n) : null;
@@ -646,8 +653,9 @@ function mbetsView() {
   const expect = x => { if (!x || !x.ks || !x.n) return null; let t = 0, c = 0; for (const [k, q] of Object.entries(x.ks)) if (chance[k] != null) { t += q * chance[k]; c += q; } return c ? t / c : null; };
   const backs = Object.keys(T.byBack).sort((a, b) => { const [ay, aa] = a.split(' of ').map(Number), [by, ba] = b.split(' of ').map(Number); return (ay === aa ? 0 : 1) - (by === ba ? 0 : 1) || ba - aa || by - ay; });
   const head = T.n ? `<div class="mbh"><b>${T.hits}</b> of <b>${T.n}</b> model bets hit (<b>${pct(T.hits, T.n)}%</b>${moe(T.hits, T.n) != null ? ` ± ${moe(T.hits, T.n)}` : ''}). One pick per game, graded when it ends${T.push ? `; ${T.push} push${T.push === 1 ? '' : 'es'} not counted` : ''}.</div>` : `<div class="mbh">No model bets are graded yet. Each game's headline pick is recorded when the game is graded, so the record starts with the next games that finish.</div>`;
-  const recent = (T.recent || []).slice(0, 15).map(r => `<div class="mbg"><div class="mbt"><b>${esc(r.key === 'H' ? r.home + ' to win' : r.key === 'A' ? r.away + ' to win' : (r.key === 'O' ? 'Over ' : 'Under ') + r.line)}</b><span class="mbs ${r.hit ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : 'Missed ✗'}</span></div><div class="note">${esc(r.away)} at ${esc(r.home)} · ${r.final.a}–${r.final.h}${r.final.last && r.final.last !== 'REG' ? ' ' + esc(r.final.last) : ''}</div><div class="note"><span class="mbk ${r.k}">${LEAN_KIND[r.k]}</span>${r.p != null ? ` ${r.p}%` : ''}${r.k === 'best' || r.k === 'lean' ? ` · ${r.y === r.a ? 'all ' + r.a + ' agree' : r.y + ' of ' + r.a + ' back it'}` : ''}</div></div>`).join('');
+  const recent = (T.recent || []).slice(0, 15).map(r => `<div class="mbg"><div class="mbt"><b>${esc(r.key === 'H' ? r.home + ' to win' : r.key === 'A' ? r.away + ' to win' : (r.key === 'O' ? 'Over ' : 'Under ') + r.line)}</b><span class="mbs ${r.hit || r.ep ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : r.ep ? 'Paid early ✓' : 'Missed ✗'}</span></div><div class="note">${esc(r.away)} at ${esc(r.home)} · ${r.final.a}–${r.final.h}${r.final.last && r.final.last !== 'REG' ? ' ' + esc(r.final.last) : ''}</div><div class="note"><span class="mbk ${r.k}">${LEAN_KIND[r.k]}</span>${r.p != null ? ` ${r.p}%` : ''}${r.k === 'best' || r.k === 'lean' ? ` · ${r.y === r.a ? 'all ' + r.a + ' agree' : r.y + ' of ' + r.a + ' back it'}` : ''}</div></div>`).join('');
   return `<div class="pad"><div class="note" style="margin:0 0 10px">Every game's headline pick (the side most of v2, v4 and Forebet back: the winner, or Over/Under at that game's DraftKings line) is one fixed bet. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. No odds are used. Over/Under needs a real line; a total exactly on the line is a push.</div>${head}
+    ${earlyLine(T)}
     <div class="mbsec">Today's model bets<small>${esc(S.date)}. Picks still update until the game starts.</small></div><div class="mbx">${mbetsToday()}</div>
     ${T.n ? `<div class="mbsec">By strength<small>Best pick: all three models agree. Lean: two of three. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k], expect(T.byKind[k]))).join('')}</div>
     <div class="mbsec">By kind of pick<small>Chance = how often it happens in all these games. Edge = the hit rate minus chance.</small></div><div class="mbx">${keys.map(k => mbRow(MB_PLAIN[k], '', T.byKey[k], chance[k])).join('')}</div>

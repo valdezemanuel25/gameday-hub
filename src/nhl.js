@@ -11,6 +11,7 @@ import { hockeyPick, hockeyHit } from './pick.js';
 import { fbHeaders, FB_HV } from './forebetpage.js';
 import { hockeyMove } from './moves.js';
 import { analystNhl } from './analyst.js';
+import { goalSeq, maxLead, earlyPaid } from './early.js';
 
 const TZ = 'America/Chicago';
 export const LINE = 5.5;
@@ -277,6 +278,20 @@ export function espnClose(c, done) {
   n.cl = c.kickoff; n.cls = 'espn';
   c.px = n; return true;
 }
+// bet365 early payout (src/early.js): the biggest lead each side had, from ESPN's game summary (its scoring plays, shootout left out).
+// [home, away] or null when the summary cannot be read or its goals do not add up to the final score.
+const SUMMARY = id => `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event=${encodeURIComponent(id)}`;
+export function leadFromSummary(j, final) {
+  const comp = j && j.header && j.header.competitions && j.header.competitions[0], cs = (comp && comp.competitors) || [];
+  const h = cs.find(c => c.homeAway === 'home'), a = cs.find(c => c.homeAway === 'away'); if (!h || !a) return null;
+  const raw = Array.isArray(j.scoringPlays) && j.scoringPlays.length ? j.scoringPlays : (j.plays || []).filter(p => p && p.scoringPlay);
+  const plays = raw.map(p => ({ team: String(p.team?.id ?? ''), own: false, so: !!p.shootoutPlay || /shootout/i.test(p.type?.text || '') || (final.last === 'SO' && Number(p.period?.number) >= 5) }));
+  const so = final.last === 'SO' ? (final.h > final.a ? [1, 0] : [0, 1]) : [0, 0]; // the shootout winner's goal is in the final score
+  return maxLead(goalSeq(plays, String(h.team?.id ?? h.id), String(a.team?.id ?? a.id), final.h - so[0], final.a - so[1]));
+}
+export async function fetchLead(fetchFn, id, final) {
+  try { const r = await fetchFn(SUMMARY(id), { headers: { 'user-agent': 'gameday-hub/1.0' } }); return r.ok ? leadFromSummary(await r.json(), final) : null; } catch (e) { return null; }
+}
 async function scoreboard(date, fetchFn, debug) {
   try {
     const res = await fetchFn(`${ESPN}?dates=${date.replace(/-/g, '')}&limit=100`, { headers: { 'user-agent': 'gameday-hub/1.0' } });
@@ -373,7 +388,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
   const restOf = (team, date) => { for (let k = 1; k <= 3; k++) { const set = played[addDays(date, -k)]; if (!set) return null; if (set.has(team)) return k; } return 4; }; // 1 = played yesterday, 4 = three or more days
   const knownDays = new Set(dates.filter((d, i) => boards[i])), gkCache = {}, prior = {}, glBudget = { n: 8 };
   const priorFor = async d => prior[d] || (prior[d] = await priorStarts(env, d, knownDays, gkCache));
-  const out = { graded: 0, created: 0, refreshed: 0 }, seen = new Set();
+  const out = { graded: 0, created: 0, refreshed: 0 }, seen = new Set(), leadBudget = { n: 6 };
   for (let i = 0; i < dates.length; i++) {
     const evs = boards[i]; if (!evs) continue;
     const date = dates[i];
@@ -395,6 +410,12 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
           if (applyGame(S, e.hc, e.ac, e.hs, e.as, e.last)) { S.applied.push(e.id); stateDirty = true; }
         }
         if (c && espnClose(c, e.pxDone)) { dirty = true; out.closed = (out.closed || 0) + 1; } // missed the lineup read: ESPN's close
+        // Leads for early payout: one summary read per finished game, at most 6 a run, 3 tries a game.
+        if (c && c.final && !c.final.lead && (c.final.ldt || 0) < 3 && leadBudget.n > 0) {
+          leadBudget.n--; const ld = await fetchLead(fetchFn, e.id, c.final);
+          if (ld) { c.final.lead = ld; delete c.final.ldt; if (c.lean) { const ep = earlyPaid(c.lean.key, c.lean.hit, ld, 'nhl'); if (ep != null) c.lean.ep = ep; } } else c.final.ldt = (c.final.ldt || 0) + 1;
+          dirty = true; out.leads = (out.leads || 0) + (ld ? 1 : 0);
+        }
         continue;
       }
       const manual = c && c.ln && c.ln.how === 'manual', lineNow = manual ? c.ln.v : e.line ?? (c && c.ln ? c.ln.v : null);
@@ -515,10 +536,11 @@ export async function nhlTally(env) {
         if (L.hit == null) LB.push++;
         else {
           LB.n++; LB.hits += L.hit ? 1 : 0; lbAdd(LB.byKind, L.k, L.hit, L.key); lbAdd(LB.byKey, L.key, L.hit);
+          if (L.ep != null) { const E = LB.ep || (LB.ep = { n: 0, plain: 0, hits: 0, saved: 0 }); E.n++; E.plain += L.hit ? 1 : 0; E.hits += L.ep ? 1 : 0; E.saved += L.ep && !L.hit ? 1 : 0; }
           if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.y} of ${L.a}`, L.hit, L.key);
           LB.base.home += c.final.h > c.final.a ? 1 : 0;
           if (c.ln && c.final.total !== c.ln.v) { LB.base.overN++; LB.base.over += c.final.total > c.ln.v ? 1 : 0; }
-          if (LB.recent.length < 40) LB.recent.push({ date: d.date, kickoff: c.kickoff, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, k: L.k, key: L.key, line: L.line ?? null, p: L.p, y: L.y, a: L.a, hit: !!L.hit });
+          if (LB.recent.length < 40) LB.recent.push({ date: d.date, kickoff: c.kickoff, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, k: L.k, key: L.key, line: L.line ?? null, p: L.p, y: L.y, a: L.a, hit: !!L.hit, ...(L.ep != null ? { ep: L.ep } : {}) });
         }
       }
       if (g.v5 && c.v5) {

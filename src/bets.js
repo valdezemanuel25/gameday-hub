@@ -9,6 +9,7 @@
 //   Settlement reads the finished score the Hub already grades from: a bet is stored once and settles by itself.
 
 import { V4, dcTau } from './v4core.js';
+import { earlyPaid } from './early.js';
 import { CUP_MODEL } from './data.js';
 import { TIE, OT_GOAL } from './nhl.js';
 
@@ -139,21 +140,30 @@ export function analyze(cards, legs0) {
 }
 
 // ---- settling and summary ----
+const mlLeg = l => l.market === 'win' && (l.sel === 'H' || l.sel === 'A');
 export function settle(bet, cards) {
   let changed = false;
   for (const l of bet.legs) {
-    if (l.res) continue;
     const c = cards.get(gameKey(l));
-    if (c && c.final) {
+    if (!l.res && c && c.final) {
       const total = c.final.total ?? c.final.h + c.final.a; // hockey totals leave out the shootout goal
       l.res = isNhl(l) && l.market === 'ou' && total === Number(l.line) ? 'void' : test(l)(c.final.h, c.final.a, total) ? 'hit' : 'miss'; changed = true;
     }
+    // bet365 early payout (src/early.js): a home / away win leg also pays once that team led by 2 goals (NHL: 3) at any moment.
+    if (l.res && l.ep == null && mlLeg(l) && c && c.final && c.final.lead) { const ep = earlyPaid(l.sel, l.res === 'hit', c.final.lead, isNhl(l) ? 'nhl' : 'soccer'); if (ep != null) { l.ep = ep; changed = true; } }
   }
-  const was = bet.status;
+  const was = bet.status, wasEp = bet.ep;
   bet.status = bet.legs.some(l => l.res === 'miss') ? 'miss' : bet.legs.every(l => l.res) ? (bet.legs.every(l => l.res === 'void') ? 'void' : 'hit') : 'pending';
   if (bet.status !== 'pending' && !bet.settledAt) { bet.settledAt = new Date().toISOString(); changed = true; }
-  return changed || was !== bet.status;
+  // The same bet under early payout: only worked out once every missed leg is known either way.
+  if (bet.status === 'miss') {
+    const lost = bet.legs.filter(l => l.res === 'miss');
+    if (lost.every(l => !mlLeg(l) || l.ep != null)) bet.ep = lost.every(l => l.ep === true) && bet.legs.every(l => l.res) ? 'hit' : 'miss';
+  } else delete bet.ep;
+  return changed || was !== bet.status || wasEp !== bet.ep;
 }
+// A missed bet whose moneyline legs still wait on goal times (hockey's are read after grading): checked again for up to 3 days.
+export const epOpen = (b, now = Date.now()) => b.status === 'miss' && b.ep == null && b.settledAt && now - new Date(b.settledAt).getTime() < 3 * 86400000 && b.legs.some(l => l.res === 'miss' && mlLeg(l) && l.ep == null);
 // How the models did on the picks you tracked: what each said on average against how often those picks landed.
 // Your own bets and any model parlays tracked earlier are kept apart: the top-level numbers are your bets, `model` is the model parlays.
 export function summary(items) {
@@ -162,7 +172,7 @@ export function summary(items) {
 function summarize(items) {
   const bets = { n: items.length, hit: 0, miss: 0, pending: 0, void: 0 }, legs = { n: 0, hit: 0 }, per = Object.fromEntries(MODELS.map(m => [m, { n: 0, sum: 0, hit: 0, brier: 0 }]));
   for (const b of items) {
-    bets[b.status === 'pending' ? 'pending' : b.status]++;
+    bets[b.status === 'pending' ? 'pending' : b.status]++; if (b.ep === 'hit') bets.early = (bets.early || 0) + 1;
     for (const l of b.legs) {
       if (l.res !== 'hit' && l.res !== 'miss') continue;
       legs.n++; legs.hit += l.res === 'hit' ? 1 : 0;
@@ -192,7 +202,7 @@ export async function addBet(env, legs, now = new Date(), source = null) {
 }
 // Open the list: settle anything whose games have finished (and save only if something changed).
 export async function listBets(env) {
-  const doc = await getBets(env), open = doc.items.filter(b => b.status === 'pending');
+  const doc = await getBets(env), open = doc.items.filter(b => b.status === 'pending' || epOpen(b));
   if (open.length) {
     const cards = await loadCards(env, open.flatMap(b => b.legs));
     let dirty = false; for (const b of open) dirty = settle(b, cards) || dirty;

@@ -122,7 +122,17 @@ function parseEvent(ev) {
     away: { id: String(a.team.id), name: a.team.displayName || a.team.name, abbr: a.team.abbreviation, score: done ? Number(a.score) : null },
     odds: done ? null : parseOdds(comp.odds),
     shots: done ? (sh => (sh.h && sh.a ? [sh.h[0], sh.h[1], sh.a[0], sh.a[1]] : null))({ h: teamShots(h), a: teamShots(a) }) : null,
+    // Goals in order (for bet365 early payout, src/early.js): ESPN's match details, scoring plays only, by the clock. The penalty
+    // shootout is left out. null when ESPN sends none.
+    plays: done ? goalPlays(comp.details) : null,
   };
+}
+export function goalPlays(details) {
+  if (!Array.isArray(details) || !details.length) return null;
+  const g = details.filter(d => d && (d.scoringPlay || /goal/i.test(d.type?.text || '')) && d.team && d.team.id != null)
+    .map((d, i) => ({ team: String(d.team.id), own: !!d.ownGoal, so: !!d.shootout, t: Number(d.clock?.value), i }));
+  g.sort((x, y) => (Number.isFinite(x.t) && Number.isFinite(y.t) ? x.t - y.t : 0) || x.i - y.i);
+  return g.map(({ team, own, so }) => ({ team, own, so }));
 }
 
 // ESPN answers 400 to date ranges (confirmed live), so ask one day at a time and merge.
