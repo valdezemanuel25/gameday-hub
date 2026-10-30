@@ -108,7 +108,7 @@ h4{margin:20px 18px 6px;font-size:14px}
 .mvg{background:var(--s);border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin:10px 18px 0;font-size:12px;color:var(--mut)}
 .mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
 .mvgk{text-align:right;margin:2px 0 2px}.mvgk .gc{margin:3px 0 0 4px}
-.mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--mut)}.cs.due{background:rgba(240,195,90,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
+.mvg button.cs.act{font:inherit;font-size:11px;font-weight:650;border:1px solid currentColor;cursor:pointer}.mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--mut)}.cs.due{background:rgba(240,195,90,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
 .mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
 table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mvx th,.mvx td{padding:4px;font-size:12px;text-align:right;border-bottom:0;border-top:1px solid var(--line)}.mvx th{font-size:10.5px;color:var(--faint);font-weight:650;border-top:0}
 .mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}
@@ -423,8 +423,8 @@ function tileOf(c, on) {
 // ---------- Movement: every priced game of the day, opening -> close ----------
 function closeState(c) {
   const ko = new Date(c.kickoff).getTime(), px = c.px || {};
-  if (pxLocked(c)) return px.cl ? { k: 'ok', t: px.cls === 'espn' ? 'Closing ✓ ESPN close (no pre-game read)' : `Closing ✓ ${tmCT(px.cl)}${px.cby === 'you' ? ' (your update)' : ''}` } : { k: 'miss', t: 'No pre-game read · last price is the close' };
-  if (ko - Date.now() <= 45 * 60000) return { k: 'due', t: px.cl ? `Closing read ${tmCT(px.cl)}${px.cby === 'you' ? ' (your update)' : ''} · Update NHL now re-reads it until puck drop` : 'Pre-game read due now · tap Update NHL now' };
+  if (pxLocked(c)) return px.cl ? { k: 'ok', t: px.cls === 'espn' ? 'Closing ✓ ESPN close (no pre-game read)' : `Closing ✓ ${tmCT(px.cl)}${px.cby === 'you' ? ' (your update)' : ''}` } : { k: 'miss', t: 'No pre-game read · tap for the final price', act: true };
+  if (ko - Date.now() <= 45 * 60000) return { k: 'due', t: px.cl ? `Closing read ${tmCT(px.cl)}${px.cby === 'you' ? ' (your update)' : ''} · tap to read again` : 'Pre-game read due now · tap to read', act: true };
   return { k: 'pend', t: `Pending · closing read from ~${tmCT(new Date(ko - 45 * 60000).toISOString())}` };
 }
 function movesView() {
@@ -441,7 +441,7 @@ function movesView() {
       + (px.tl != null ? row(`Over ${px.tl}`, ot.tl === px.tl ? ot.to : null, px.to, ou ? ou.p0 : null, ou ? ou.p1 : null, ou ? ou.d : null, over === true) + row(`Under ${px.tl}`, ot.tl === px.tl ? ot.tu : null, px.tu, ou ? 100 - ou.p0 : null, ou ? 100 - ou.p1 : null, ou ? -ou.d : null, over === false && fin.total !== px.tl) : '');
     const follow = fin && ml ? (Math.abs(ml.d) < 2 ? 'moneyline barely moved' : (ml.d > 0) === hw ? 'winner went the way of the move' : 'winner went against the move') : '';
     const fl = cardFlags(c, hm);
-    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b><span class="cs ${st.k}">${st.t}</span></div>${flagLine(fl)}${gkRestTags(c)}
+    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}${gkRestTags(c)}
       <small>${esc(c.away)} at ${esc(c.home)} · ${esc(c.ko || '')}${fin ? ` · final ${fin.a}–${fin.h}${fin.last !== 'REG' ? ' ' + esc(fin.last) : ''}${follow ? ' · ' + follow : ''}` : ''}${hm.big ? ` · <span class="mvf">big move: ${esc(mvWord(c, hm))}</span>` : ''}</small>
       <table class="mvx"><tr><th></th><th>${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
       ${px.ts ? `<small class="mvn">Price last changed ${tmCT(px.ts)}</small>` : ''}</div>`;
@@ -723,7 +723,13 @@ async function load() {
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel],[data-mvf]'); if (!t) return;
+  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel],[data-mvf],[data-getclose]'); if (!t) return;
+  if (t.dataset.getclose) {
+    if (t.disabled) return; const t0 = t.textContent; t.disabled = true; t.textContent = 'Reading the price…';
+    try { const r = await (await fetch('/api/nhl/close', { method: 'POST', body: JSON.stringify({ date: S.date, id: t.dataset.getclose }) })).json(); if (r.error) throw new Error(r.error); await load(); }
+    catch (er) { t.disabled = false; t.textContent = er.message.length > 70 ? er.message.slice(0, 67) + '…' : er.message; t.title = er.message; setTimeout(() => { if (t.isConnected) t.textContent = t0; }, 6000); }
+    return;
+  }
   if (t.dataset.mvf) { S.mvf = t.dataset.mvf; return render(); }
   if (t.dataset.push) return pushAct(t.dataset.push);
   if (t.dataset.sel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were

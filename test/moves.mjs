@@ -378,4 +378,32 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   ok('the Movement badge is a button when there is no lineup read or one is due, a plain label otherwise', html.includes('data-getclose=') && html.includes("act: true }") && html.includes("o.cby === 'you' ? ' (your update)'"));
 }
+
+// "Get the final price" on one hockey card: before puck drop the price now (the close inside 45 minutes, past the lock too); after the final
+// ESPN's closing line if the card has none; in between, refused.
+{
+  const { nhlCardClose } = await import('../src/nhl.js');
+  const date = '2026-10-31', ko = Date.parse('2026-10-31T23:00:00Z'), kv = new Map();
+  const env = { HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => kv.set(k, v) } };
+  let done = false, ml = -150, hasOdds = true;
+  const f = async () => ({ ok: true, json: async () => ({ events: [{ id: 'g1', date: new Date(ko).toISOString(), competitions: [{ status: { type: { completed: done, shortDetail: done ? 'Final' : '7:00 PM' } }, competitors: [{ homeAway: 'home', score: '3', team: { displayName: 'Florida Panthers', abbreviation: 'FLA' } }, { homeAway: 'away', score: '2', team: { displayName: 'Winnipeg Jets', abbreviation: 'WPG' } }], ...(hasOdds ? { odds: [{ homeTeamOdds: { moneyLine: ml }, awayTeamOdds: { moneyLine: 130 }, overUnder: 6.5, overOdds: -110, underOdds: -110 }] } : {}) }] }] }) });
+  const card = (o = {}) => ({ id: 'g1', kickoff: new Date(ko).toISOString(), home: 'Florida Panthers', away: 'Winnipeg Jets', hAbbr: 'FLA', aAbbr: 'WPG', final: null, px: { h: -135, a: 114, f: { h: -135, a: 114 }, ts: 'T0', ...o } });
+  const put = c => kv.set('nhl:day:' + date, JSON.stringify({ date, cards: [c] })), get = () => JSON.parse(kv.get('nhl:day:' + date)).cards[0];
+  put(card()); const at = new Date(ko - 15 * 60000);
+  const r1 = await nhlCardClose(env, date, 'g1', at, f);
+  ok('before puck drop, past the lock: the price now is the close, marked as yours', r1.ok && r1.closed && get().px.h === -150 && get().px.cl === at.toISOString() && get().px.cby === 'you', JSON.stringify([r1, get().px]));
+  put(card()); const r2 = await nhlCardClose(env, date, 'g1', new Date(ko - 120 * 60000), f);
+  ok('hours before puck drop: the price is refreshed but is not the close', r2.ok && !r2.closed && get().px.h === -150 && !get().px.cl, JSON.stringify([r2, get().px]));
+  put(card()); const r3 = await nhlCardClose(env, date, 'g1', new Date(ko + 20 * 60000), f);
+  ok('puck dropped, not final: refused, nothing changes', !!r3.error && r3.error.includes('started') && get().px.h === -135, JSON.stringify(r3));
+  done = true; ml = -170; put(card()); const r4 = await nhlCardClose(env, date, 'g1', new Date(ko + 3 * 3600e3), f);
+  ok('after the final: ESPN\'s closing line, noted as ESPN\'s', r4.ok && get().px.h === -170 && get().px.cls === 'espn', JSON.stringify([r4, get().px]));
+  put(card({ cl: 'T1' })); const r5 = await nhlCardClose(env, date, 'g1', new Date(ko + 3 * 3600e3), f);
+  ok('after the final with a read of its own: left alone', !!r5.error && r5.error.includes('already') && get().px.cl === 'T1');
+  hasOdds = false; put(card()); const r6 = await nhlCardClose(env, date, 'g1', new Date(ko + 3 * 3600e3), f);
+  ok('after the final with no closing line from ESPN: the last price stands, said plainly', !!r6.error && r6.error.includes('last price stands'));
+  ok('a game that is not saved is an error', !!(await nhlCardClose(env, date, 'nope', at, f)).error);
+  const nhlHtml2 = fs.readFileSync(new URL('../public/nhl.html', import.meta.url), 'utf8');
+  ok('the hockey badge is a button when there is no read or one is due, and posts to the close route', nhlHtml2.includes('data-getclose=') && nhlHtml2.includes("'/api/nhl/close'") && nhlHtml2.includes('act: true }'));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
