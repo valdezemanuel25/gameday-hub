@@ -24,8 +24,14 @@ export function homeSummary({ soccer, hockey, brew, today, now = Date.now() }) {
   const lead = issues.find(i => i.source === 'Brew Markets') || issues[0] || null;
   const mk = l => { const m = lead && (lead.markets || []).find(x => x.label === l); return m && Number.isFinite(m.change) ? m.change : null; };
   const s = sport(soccer, soccerAlert, now), n = sport(hockey, hockeyAlert, now);
+  // Next up: the soonest games still to start across both sports, for the strip under the carousel
+  const row = (c, sp, fn) => ({ sport: sp, ko: c.ko || null, kickoff: c.kickoff, label: sp === 'nhl' ? `${c.away} at ${c.home}` : `${c.home} vs ${c.away}`, best: !!fn(c) });
+  const next = [...(soccer || []).filter(c => c && upcoming(c, now)).map(c => row(c, 'soccer', soccerAlert)),
+    ...(hockey || []).filter(c => c && upcoming(c, now)).map(c => row(c, 'nhl', hockeyAlert))]
+    .sort((x, y) => new Date(x.kickoff) - new Date(y.kickoff) || (y.best - x.best)).slice(0, 3);
   return {
     today,
+    next,
     soccer: { ...s, attention: s.best > 0 },
     nhl: { ...n, attention: n.best > 0 },
     brew: { count: issues.length, title: lead ? lead.title : null, sp: mk('S&P 500'), nasdaq: mk('Nasdaq'), attention: false }, // a brief lands every day, so it never glows

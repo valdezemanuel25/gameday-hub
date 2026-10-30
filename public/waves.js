@@ -85,6 +85,13 @@
     if (hex.length === 3) hex = hex.replace(/./g, '$&$&');
     var rgb = [0, 2, 4].map(function (i) { return parseInt(hex.substr(i, 2), 16) / 255; });
     gl.uniform3f(U.C, rgb[0], rgb[1], rgb[2]);
+    // window.pwSetColor('#rrggbb'): fade the dots to a new colour over ~0.8s (the home screen uses it)
+    var cur = rgb.slice(), tgt = rgb.slice();
+    window.pwSetColor = function (h) {
+      h = String(h).replace('#', ''); if (h.length === 3) h = h.replace(/./g, '$&$&');
+      tgt = [0, 2, 4].map(function (i) { return parseInt(h.substr(i, 2), 16) / 255; });
+      if (!raf && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } // wake a stopped (reduced-motion) loop
+    };
     gl.uniform1f(U.SP, O.spacing); gl.uniform1f(U.MS, O.markSize); gl.uniform1f(U.DE, O.depth);
     gl.uniform1f(U.LI, O.light); gl.uniform1f(U.SH, O.shine); gl.uniform1f(U.CO, O.contrast);
     gl.uniform1f(U.SC, O.scale); gl.uniform1f(U.DIR, O.direction); gl.uniform1f(U.OP, O.opacity);
@@ -119,9 +126,15 @@
       gl.uniform1f(U.T, time + 36.0);
       gl.uniform1f(U.IN, intro);
       gl.uniform2f(U.M, mx, my); gl.uniform1f(U.MA, ma);
+      if (cur[0] !== tgt[0] || cur[1] !== tgt[1] || cur[2] !== tgt[2]) {
+        var k = Math.min(dt * 4, 1), done = true;
+        for (var ci = 0; ci < 3; ci++) { cur[ci] += (tgt[ci] - cur[ci]) * k; if (Math.abs(tgt[ci] - cur[ci]) < 0.002) cur[ci] = tgt[ci]; else done = false; }
+        gl.uniform3f(U.C, cur[0], cur[1], cur[2]);
+      }
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      raf = (reduce && intro >= 1) ? 0 : requestAnimationFrame(frame);
+      var fading = cur[0] !== tgt[0] || cur[1] !== tgt[1] || cur[2] !== tgt[2];
+      raf = (reduce && intro >= 1 && !fading) ? 0 : requestAnimationFrame(frame);
     }
     raf = requestAnimationFrame(frame);
     // save battery: stop drawing while the tab is hidden

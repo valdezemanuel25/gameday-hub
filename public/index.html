@@ -430,7 +430,7 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .tabs{border-bottom:0;padding:0 20px;margin-top:14px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
 .tab{color:var(--faint);font-size:15px;white-space:nowrap;margin-right:6px}.tab.on{color:var(--ink);font-weight:500;border-bottom-color:transparent}
 .chips{padding:14px 20px 6px;gap:6px}
-.chip{background:transparent;border:1px solid rgba(255,255,255,.16);color:var(--dim);padding:6px 13px;font-size:12.5px}.chip.on{background:rgba(255,255,255,.12);border-color:transparent;color:var(--ink)}.chip i{color:var(--faint)}
+.chip{background:transparent;border:1px solid rgba(255,255,255,.16);color:var(--dim);padding:6px 13px;font-size:12.5px}.chip.on{background:rgba(255,255,255,.12);border-color:transparent;color:var(--ink)}.chip i{color:var(--faint)}.chip .fl{display:inline-block;width:18px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-1px;box-shadow:0 0 0 1px rgba(255,255,255,.18)}.chip .fl.lgstar{width:12px;height:12px;box-shadow:none;margin-right:5px}
 /* phones: league chips instead of the side list, and one column of game cards */
 @media(max-width:899px){.bdy{display:block;padding:0}.bdy .chips{display:flex}.lsb{display:none}}
 .sgrid{display:flex;flex-direction:column;gap:12px;overflow:visible;padding:12px 18px 6px;scroll-snap-type:none}
@@ -1066,7 +1066,7 @@ function board() {
   if (S.league !== 'all' && !leagues.some(([k]) => k === S.league)) S.league = 'all';
   const chips = `<div class="chips"><button type="button" class="chip ${S.league === 'all' && !S.top ? 'on' : ''}" data-league="all">All<i>${day.cards.filter(c => c.v2).length}</i></button>` +
     `<button type="button" class="chip ${S.top ? 'on' : ''}" data-top="1">Top picks</button>` +
-    leagues.map(([k, n]) => `<button type="button" class="chip ${S.league === k && !S.top ? 'on' : ''}" data-league="${k}">${esc(LCODE[k] || n)}<i>${day.cards.filter(c => c.v2 && c.leagueKey === k).length}</i></button>`).join('') + `</div>`;
+    leagues.map(([k, n]) => `<button type="button" class="chip ${S.league === k && !S.top ? 'on' : ''}" data-league="${k}">${FLAG[k] || ''}${esc(LCODE[k] || n)}<i>${day.cards.filter(c => c.v2 && c.leagueKey === k).length}</i></button>`).join('') + `</div>`;
   if (!day.cards.length) return chips + `<div class="empty">No games analyzed for this day yet.<br>Tap <b>Analyze this day</b> below to load the fixtures and predictions.</div>`;
   if (S.league !== 'all') cs = cs.filter(c => c.leagueKey === S.league);
   const uncShown = S.top ? [] : unc.filter(c => S.league === 'all' || c.leagueKey === S.league);
@@ -1085,7 +1085,24 @@ function board() {
   return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + movesBox([...cs, ...doneCs]) + html + fin + uncovered(uncShown) + `</div></div>`;
 }
 // Left league list for wide screens: leagues with games first, the rest dimmed underneath.
-const LCODE = { bundesliga: 'GER', bundesliga2: 'GER2', laliga: 'SP', laliga2: 'SP2', seriea: 'ITA', ligue1: 'FRA', eredivisie: 'NED', epl: 'ENG', championship: 'ENG2', ligamx: 'MEX', mls: 'USA', brasileirao: 'BRA', ucl: 'UCL', uel: 'UEL', nationsleague: 'NL' };
+const LCODE = { bundesliga: 'GER', bundesliga2: 'GER2', laliga: 'SP', laliga2: 'SP2', seriea: 'ITA', ligue1: 'FRA', eredivisie: 'NED', epl: 'ENG', championship: 'ENG2', ligamx: 'MEX', mls: 'USA', brasileirao: 'BRA', ucl: 'UCL', uel: 'UEL', nationsleague: 'NL' }
+// Small flags for the league chips, drawn as SVG so they show on Windows too (Windows shows flag emoji as letters).
+const FLAG = (() => {
+  const box = body => `<svg class="fl" viewBox="0 0 18 12" aria-hidden="true">${body}</svg>`;
+  const h3 = (a, b, c) => box(`<rect width="18" height="4" fill="${a}"/><rect y="4" width="18" height="4" fill="${b}"/><rect y="8" width="18" height="4" fill="${c}"/>`);
+  const v3 = (a, b, c) => box(`<rect width="6" height="12" fill="${a}"/><rect x="6" width="6" height="12" fill="${b}"/><rect x="12" width="6" height="12" fill="${c}"/>`);
+  const de = h3('#000', '#DD0000', '#FFCE00'), es = box('<rect width="18" height="12" fill="#AA151B"/><rect y="3" width="18" height="6" fill="#F1BF00"/>');
+  const en = box('<rect width="18" height="12" fill="#fff"/><rect x="7.6" width="2.8" height="12" fill="#CE1124"/><rect y="4.6" width="18" height="2.8" fill="#CE1124"/>');
+  const star = c => `<svg class="fl lgstar" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .8l1.5 3.3 3.6.4-2.7 2.4.8 3.5L6 8.6 2.8 10.4l.8-3.5L.9 4.5l3.6-.4z" fill="${c}"/></svg>`;
+  return {
+    bundesliga: de, bundesliga2: de, laliga: es, laliga2: es, epl: en, championship: en,
+    seriea: v3('#009246', '#fff', '#CE2B37'), ligue1: v3('#002395', '#fff', '#ED2939'), eredivisie: h3('#AE1C28', '#fff', '#21468B'),
+    ligamx: box('<rect width="6" height="12" fill="#006847"/><rect x="6" width="6" height="12" fill="#fff"/><rect x="12" width="6" height="12" fill="#CE1126"/><circle cx="9" cy="6" r="1.5" fill="#8C6B2F"/>'),
+    mls: box('<rect width="18" height="12" fill="#fff"/>' + [0, 2, 4, 6, 8, 10].map(y => `<rect y="${y}" width="18" height="1" fill="#B22234"/>`).join('') + '<rect width="8" height="6.5" fill="#3C3B6E"/>'),
+    brasileirao: box('<rect width="18" height="12" fill="#009C3B"/><path d="M9 1.4L16.4 6 9 10.6 1.6 6z" fill="#FFDF00"/><circle cx="9" cy="6" r="2.6" fill="#002776"/>'),
+    ucl: star('#dfe6ff'), uel: star('#ffb347'), nationsleague: star('#9fd3ff'),
+  };
+})();;
 // Last 30 days per model, and (in Top picks) how top picks have done compared with the rest.
 function recordBar() {
   const t = tally; if (!t || !t.last30) return '';
