@@ -50,4 +50,19 @@ const both = log => async (u, o) => (u.includes('api.the-odds-api.com') ? (log.p
 { const log = [], cs = dayCards(); await addBtts({ APIFOOTBALL_KEY: 'k' }, cs, 'esp.2', now, mk(log), '2026-10-30'); ok('a league with no API-Football id is left alone', log.length === 0); }
 const chk = await checkAf('k', 'bra.1', '2026-10-30', async (u, o) => (u.includes('/odds/bets') ? { ok: true, status: 200, headers: { get: () => '97' }, json: async () => ({ response: [{ id: 8, name: 'Both Teams Score' }] }) } : mk([], 96)(u, o)));
 ok('check page: bet list, requests left and what the Hub parses', chk.bets[0].id === 8 && chk.requestsLeftToday === '96' && chk.parsed.by === -111, JSON.stringify(chk));
+
+// a plan error pauses the second source instead of spending a request on every game
+{
+  const { addBtts: add2 } = await import('../src/worker.js');
+  const planErr = log => async u => { log.push(u); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ errors: { plan: 'Free plans do not have access to this season, try from 2022 to 2024.' }, response: [] }) }; };
+  const r = await fetchAfBtts('k', 'bra.1', '2026-10-31', [card], planErr([]));
+  ok('a plan error is flagged as one', r.plan === true && r.error.includes('Free plans'), JSON.stringify(r));
+  const log = [], nowP = new Date('2026-10-30T15:00:00Z'), mkc = () => [{ id: '1', home: 'Grêmio', away: 'Athletico-PR', kickoff: T1, odds: { h: 125, d: 240, a: 205 } }, { id: '2', home: 'Santos', away: 'Fortaleza', kickoff: T1, odds: { h: 100, d: 200, a: 300 } }];
+  await add2({ APIFOOTBALL_KEY: 'k' }, mkc(), 'bra.1', nowP, planErr(log), '2026-10-31');
+  ok('one request, not one per game', log.length === 1, String(log.length));
+  await add2({ APIFOOTBALL_KEY: 'k' }, mkc(), 'bra.1', new Date(nowP.getTime() + 4 * 3600e3), planErr(log), '2026-10-31');
+  ok('paused: no more requests for a day', log.length === 1, String(log.length));
+  await add2({ APIFOOTBALL_KEY: 'k' }, mkc(), 'bra.1', new Date(nowP.getTime() + 25 * 3600e3), planErr(log), '2026-10-31');
+  ok('tried again after the pause', log.length === 2, String(log.length));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll API-Football checks passed'); process.exit(fails ? 1 : 0);

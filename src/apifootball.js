@@ -46,7 +46,7 @@ export async function fetchAfBtts(key, slug, date, cards, f = fetch, maxPages = 
     const r = await f(`${BASE}${path}`, head); used++;
     const x = r.headers && r.headers.get && r.headers.get('x-ratelimit-requests-remaining'); if (x != null) left = Number(x);
     if (!r.ok) return { error: `API-Football ${r.status}` };
-    const j = await r.json(); if (j && j.errors && (Array.isArray(j.errors) ? j.errors.length : Object.keys(j.errors).length)) return { error: `API-Football: ${JSON.stringify(j.errors).slice(0, 120)}` };
+    const j = await r.json(); if (j && j.errors && (Array.isArray(j.errors) ? j.errors.length : Object.keys(j.errors).length)) { const m = JSON.stringify(j.errors).slice(0, 160); return { error: `API-Football: ${m}`, plan: /plan|subscription|season/i.test(m) }; }
     return j;
   };
   const fx = await get(`/fixtures?league=${league}&season=${season}&date=${date}`); if (fx.error) return fx;

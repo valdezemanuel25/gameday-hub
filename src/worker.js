@@ -305,6 +305,20 @@ async function noteAf(left) {
 async function readAf() {
   try { const r = typeof caches !== 'undefined' ? await caches.default.match(AFLEFT) : null; return r ? await r.json() : null; } catch (e) { return null; }
 }
+// A plan error ("Free plans do not have access to this season") means every read would fail the same way and cost a request: reads
+// pause for AF_PAUSE_H hours. Kept in memory (this isolate) and in the edge cache (the others); shown on the Status tab.
+export const AF_PAUSE_H = 24;
+let afPauseUntil = 0, afPauseMsg = null;
+const AFPAUSE = 'https://hub.local/af-pause';
+async function afPaused(now) {
+  if (afPauseUntil > now.getTime()) return afPauseMsg;
+  try { const r = typeof caches !== 'undefined' ? await caches.default.match(AFPAUSE) : null; if (r) { const j = await r.json(); afPauseUntil = j.until; afPauseMsg = j.msg; if (j.until > now.getTime()) return j.msg; } } catch (e) { /* no cache */ }
+  return null;
+}
+async function afPause(msg, now) {
+  afPauseUntil = now.getTime() + AF_PAUSE_H * 3600e3; afPauseMsg = msg;
+  try { if (typeof caches !== 'undefined') await caches.default.put(AFPAUSE, new Response(JSON.stringify({ until: afPauseUntil, msg }), { headers: { 'cache-control': `max-age=${AF_PAUSE_H * 3600}` } })); } catch (e) { /* ignore */ }
+}
 export const AF_RESERVE = 15; // opening reads stop when fewer API-Football requests than this are left today
 export const AF_RETRY_OPEN_H = 3, AF_RETRY_CLOSE_MIN = 15; // a game with no price from API-Football is tried again after this long
 // The second both-score source (src/apifootball.js) takes the games The Odds API did not price (no credits left, no key, no match).
@@ -338,12 +352,13 @@ export async function addBtts(env, cards, slug, now = new Date(), f = fetch, dat
       if (!r.error) { if (r.left != null) await noteCredits(r.left); for (const c of todo) { const p = r.prices.get(c.id); if (p) apply(c, p); } todo = todo.filter(c => !r.prices.has(c.id)); }
     } catch (e) { /* the second source tries below */ }
   }
-  if (env.APIFOOTBALL_KEY && date && todo.length && AF_LEAGUE[slug]) {
+  if (env.APIFOOTBALL_KEY && date && todo.length && AF_LEAGUE[slug] && !(await afPaused(now))) {
     const af = await readAf(), low = af && af.left != null && af.left < AF_RESERVE;
     const due = todo.filter(c => { const t = c.odds.baf ? now.getTime() - new Date(c.odds.baf).getTime() : Infinity; return close(c) ? t >= AF_RETRY_CLOSE_MIN * 60000 : !low && t >= AF_RETRY_OPEN_H * 3600000; });
     if (due.length) {
       let r; try { r = await fetchAfBtts(env.APIFOOTBALL_KEY, slug, date, due, f); } catch (e) { r = { error: String(e && e.message || e) }; }
       if (r.left != null) await noteAf(r.left);
+      if (r.plan) { await afPause(r.error, now); return changed; } // the plan cannot read this season: no point trying every game
       for (const c of due) { const p = r.prices && r.prices.get(c.id); if (p) apply(c, p); else { c.odds.baf = now.toISOString(); changed++; } }
     }
   }
@@ -1007,7 +1022,7 @@ const hub = {
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
-        now: Date.now(), btts: { key: !!env.ODDS_API_KEY, credits: await readCredits(), reserve: num(env.BTTS_RESERVE, BTTS_RESERVE), af: { key: !!env.APIFOOTBALL_KEY, left: await readAf() } }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        now: Date.now(), btts: { key: !!env.ODDS_API_KEY, credits: await readCredits(), reserve: num(env.BTTS_RESERVE, BTTS_RESERVE), af: { key: !!env.APIFOOTBALL_KEY, left: await readAf(), paused: await afPaused(new Date()) } }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
