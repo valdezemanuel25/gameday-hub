@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#161617">
+<meta name="theme-color" content="#000000">
 <title>Game Day Hub</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/favicon.ico">
@@ -13,7 +13,7 @@
 <style>
 /* Home: grey / dark grey launcher. A 3D cylinder carousel of the three Hub tabs, each card in its own tab colour. */
 :root{
-  --bg-top:#2a2a2d;--bg-bot:#111112;--ink:#ececee;--dim:rgba(236,236,238,.62);--faint:rgba(236,236,238,.38);--line:rgba(255,255,255,.09);
+  --bg-top:#0a0a0a;--bg-bot:#000000;--ink:#ececee;--dim:rgba(236,236,238,.62);--faint:rgba(236,236,238,.38);--line:rgba(255,255,255,.09);
   --font:"DM Sans",Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
   --card:220px;--radius:12px;color-scheme:dark
 }
@@ -237,6 +237,6 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
 })();
 </script>
-<script src="/waves.js" data-color="#8c8c92" data-opacity="0.4" defer></script>
+<script src="/waves.js" data-color="#45454a" data-opacity="0.9" defer></script>
 </body>
 </html>
