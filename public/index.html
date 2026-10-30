@@ -240,9 +240,9 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .mvg{margin:10px 18px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:12px;color:var(--dim)}
 .mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
 .mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--dim)}.cs.due{background:rgba(240,181,74,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
-.mvg.lv-r{border-color:rgba(255,123,107,.5);box-shadow:inset 3px 0 0 #ff7b6b}.mvg.lv-a{border-color:rgba(240,195,90,.4);box-shadow:inset 3px 0 0 #f0c35a}
-.mvfl{margin:5px 0 1px}.fl{display:inline-block;font-size:10.5px;font-weight:700;margin:2px 10px 0 0;color:var(--dim)}.fl.r{color:#ff7b6b}.fl.a{color:var(--amber)}.fl.g{color:var(--grass)}
-.mvx td.m3 b{color:var(--amber);font-weight:750}.mvx td.m5 b{color:#ff2d55;font-weight:750;text-shadow:0 0 6px rgba(255,45,85,.7),0 0 14px rgba(255,45,85,.4)}
+.mvg.lv-r{border-color:rgba(var(--acc-rgb),.6);box-shadow:inset 3px 0 0 rgb(var(--acc-rgb)),0 0 14px rgba(var(--acc-rgb),.16)}.mvg.lv-a{border-color:rgba(var(--acc-rgb),.26);box-shadow:inset 3px 0 0 rgba(var(--acc-rgb),.42)}
+.mvfl{margin:5px 0 1px}.fl{display:inline-block;font-size:10.5px;font-weight:700;margin:2px 10px 0 0;color:var(--dim)}.fl.r{color:rgb(var(--acc-rgb));text-shadow:0 0 8px rgba(var(--acc-rgb),.4)}.fl.a{color:rgba(var(--acc-rgb),.7)}.fl.g{color:var(--ink)}
+.mvx td.m3 b{color:rgba(var(--acc-rgb),.72);font-weight:750}.mvx td.m5 b{color:rgb(var(--acc-rgb));font-weight:750;text-shadow:0 0 6px rgba(var(--acc-rgb),.7),0 0 14px rgba(var(--acc-rgb),.4)}
 .mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
 .mvx{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}.mvx th{font-size:10.5px;color:var(--faint);font-weight:650;text-align:right;padding:2px 4px}.mvx td{text-align:right;padding:4px;border-top:1px solid var(--line);color:var(--ink)}
 .mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}.mvx tr.won td.n{color:var(--grass);font-weight:650}
@@ -1119,9 +1119,10 @@ function closeState(c) {
   if (ko - Date.now() <= 30 * 60000) return { k: 'due', t: 'Lineup read due now' };
   return { k: 'pend', t: `Pending · closing read ~${tmCT(new Date(ko - 30 * 60000).toISOString())}` };
 }
-// Colour code for the Movement cards: red = check it (a 5+ point move on a result or the total, DraftKings paying 4+ points more than
-// Pinnacle), amber = watch (a 3-4 point move, a move against v4, both-score moving 3+, DraftKings paying 2-3 points more than Pinnacle, no
-// lineup read), green = v4 agrees with a 3+ point move. A card's left edge takes the highest of red and amber; one line says why.
+// Colour code for the Movement cards, in the board's neon green: bright with a glow = check it (a 5+ point move on a result or the total,
+// DraftKings paying 4+ points more than Pinnacle), dimmer = watch (a 3-4 point move, a move against v4, both-score moving 3+, DraftKings
+// paying 2-3 points more than Pinnacle, no lineup read), a white tick = v4 agrees with a 3+ point move. A card's left edge takes the
+// brighter of the first two; one line says why. (The levels are still 'r' / 'a' / 'g' in the code.)
 const HOT_MV = 3;
 const mvLv = d => { const a = Math.round(Math.abs(d)); return d == null ? '' : a >= BIG_MOVE ? 'r' : a >= HOT_MV ? 'a' : ''; };
 function socFlags(c, mv, pm, st) {
@@ -1136,7 +1137,7 @@ function socFlags(c, mv, pm, st) {
   const level = items.some(x => x.lv === 'r') ? 'r' : items.some(x => x.lv === 'a') ? 'a' : '';
   return { level, items };
 }
-const flagLine = f => (f.items.length ? `<div class="mvfl">${f.items.map(x => `<span class="fl ${x.lv}">● ${esc(x.t)}</span>`).join('')}</div>` : '');
+const flagLine = f => (f.items.length ? `<div class="mvfl">${f.items.map(x => `<span class="fl ${x.lv}">${x.lv === 'g' ? '✓' : '●'} ${esc(x.t)}</span>`).join('')}</div>` : '');
 // Pinnacle (the sharp book, margin removed): the first price the Hub saw against now / the close, and where DraftKings sits from it.
 const bkName = b => (!b || b === 'draftkings' ? 'DraftKings' : b === 'pinnacle' ? 'Pinnacle' : esc(b));
 function pinnNote(c, o) {
