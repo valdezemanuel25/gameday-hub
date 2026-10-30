@@ -1,6 +1,66 @@
 {
-  "updated": "2026-10-30T10:09:59Z",
+  "updated": "2026-10-30T20:38:30Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-10-30",
+      "title": "A crypto heist like no other",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,445",
+          "change": -2.83
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,559",
+          "change": -2.09
+        },
+        {
+          "label": "Dow",
+          "value": "51,680",
+          "change": -1.26
+        },
+        {
+          "label": "10-yr",
+          "value": "4.915%",
+          "change": -7,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$104.32",
+          "change": 2.27
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$76,717",
+          "change": -4.99
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "The tech selloff deepened, with the Nasdaq down 2.83% (off as much as 3.7% intraday) and the S&P 500 down 2.09%, while the 10-year yield eased 7 bps to 4.915%."
+        },
+        {
+          "h": "Tech wreck",
+          "t": "Intel plunged 28.58% on a weak Q4 outlook despite 21% revenue growth to $16.5B, and Amazon slipped 1.41% as free cash flow hit negative $42.4B with $220B of planned capex."
+        },
+        {
+          "h": "Crypto",
+          "t": "Hackers drained about $6.3B from Binance, the largest crypto heist ever, sending Bitcoin down 4.99% to $76,717, a six-week low."
+        },
+        {
+          "h": "Big Oil",
+          "t": "Chevron earned $9.9B (+~200%) and Exxon $15.4B (doubled) on refining, lifting shares 1.75% and 2.25% with oil up 2.27% to $104.32."
+        },
+        {
+          "h": "Big movers",
+          "t": "Reddit fell 29.34%, Roblox 18.13% and Twilio 15.48%, while FedEx Freight rose 14.91%, Regeneron 13.33% and AstraZeneca 6.78%."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-10-30",
