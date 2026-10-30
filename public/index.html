@@ -885,15 +885,15 @@ function bttsMove(odds) {
 const sgn = x => (x > 0 ? '+' : '') + x;
 const sideOf = (c, i) => (i === 1 ? 'Draw' : strip(i === 0 ? c.home : c.away));
 // Did v4 already lean the way the price moved? (its chance for the moved result against the opening price)
-// v4's chance for the result that moved against the opening price, with the numbers. Within LEAN_MIN points it is "about the same"
-// (a fraction of a point is not a lean); v4's own pick can still be another result, so it is named when it differs.
+// Did the big move go v4's way? v4's chance for the result that moved, against the opening price: 2+ points the same way as the move is
+// "in favor of v4", 2+ points the other way is "away from v4", closer than that is "v4 neutral" (a fraction of a point is not a lean).
+// Then v4's own number for that result, and v4's pick when it is another result.
 const LEAN_MIN = 2;
 const v4Read = (c, mv) => {
   if (!c.v4 || !c.v4.p) return '';
-  const q = Math.round(c.v4.p[mv.top]), o = Math.round(mv.p0[mv.top]), g = c.v4.p[mv.top] - mv.p0[mv.top], pk = c.v4.p.indexOf(Math.max(...c.v4.p));
-  const own = pk !== mv.top ? `, v4's pick is ${sideOf(c, pk)}` : '';
-  if (Math.abs(g) < LEAN_MIN) return `v4 had it about at the opening (${q}% vs ${o}%)${own}`;
-  return (g > 0) === (mv.d[mv.top] > 0) ? `v4 had it ${g > 0 ? 'higher' : 'lower'} than the opening (${q}% vs ${o}%)${own}` : `against v4 (${q}% vs ${o}% opening)${own}`;
+  const g = c.v4.p[mv.top] - mv.p0[mv.top], pk = c.v4.p.indexOf(Math.max(...c.v4.p));
+  const how = Math.abs(g) < LEAN_MIN ? 'v4 neutral' : (g > 0) === (mv.d[mv.top] > 0) ? 'in favor of v4' : 'away from v4';
+  return `${how} (v4 ${Math.round(c.v4.p[mv.top])}%${pk !== mv.top ? `, picks ${sideOf(c, pk)}` : ''})`;
 };
 const locked = c => c.final || new Date(c.kickoff).getTime() - Date.now() <= 20 * 60000;
 function moveLine(c) {
