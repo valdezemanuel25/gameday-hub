@@ -240,6 +240,9 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .mvg{margin:10px 18px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:12px;color:var(--dim)}
 .mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
 .mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--dim)}.cs.due{background:rgba(240,181,74,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
+.mvg.lv-r{border-color:rgba(255,123,107,.5);box-shadow:inset 3px 0 0 #ff7b6b}.mvg.lv-a{border-color:rgba(240,195,90,.4);box-shadow:inset 3px 0 0 #f0c35a}
+.mvfl{margin:5px 0 1px}.fl{display:inline-block;font-size:10.5px;font-weight:700;margin:2px 10px 0 0;color:var(--dim)}.fl.r{color:#ff7b6b}.fl.a{color:var(--amber)}.fl.g{color:var(--grass)}
+.mvx td.m3 b{color:var(--amber);font-weight:750}.mvx td.m5 b{color:#ff2d55;font-weight:750;text-shadow:0 0 6px rgba(255,45,85,.7),0 0 14px rgba(255,45,85,.4)}
 .mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
 .mvx{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}.mvx th{font-size:10.5px;color:var(--faint);font-weight:650;text-align:right;padding:2px 4px}.mvx td{text-align:right;padding:4px;border-top:1px solid var(--line);color:var(--ink)}
 .mvx td.n,.mvx th:first-child{text-align:left}.mvx td.bg b{color:#d9c4ff}.mvx tr.won td.n{color:var(--grass);font-weight:650}
@@ -1116,6 +1119,24 @@ function closeState(c) {
   if (ko - Date.now() <= 30 * 60000) return { k: 'due', t: 'Lineup read due now' };
   return { k: 'pend', t: `Pending · closing read ~${tmCT(new Date(ko - 30 * 60000).toISOString())}` };
 }
+// Colour code for the Movement cards: red = check it (a 5+ point move on a result or the total, DraftKings paying 4+ points more than
+// Pinnacle), amber = watch (a 3-4 point move, a move against v4, both-score moving 3+, DraftKings paying 2-3 points more than Pinnacle, no
+// lineup read), green = v4 agrees with a 3+ point move. A card's left edge takes the highest of red and amber; one line says why.
+const HOT_MV = 3;
+const mvLv = d => { const a = Math.round(Math.abs(d)); return d == null ? '' : a >= BIG_MOVE ? 'r' : a >= HOT_MV ? 'a' : ''; };
+function socFlags(c, mv, pm, st) {
+  const items = [], add = (lv, t) => items.push({ lv, t });
+  const top = mv.top, d = mv.d[top], who = sideOf(c, top);
+  if (mvLv(d)) add(mvLv(d), `${mvLv(d) === 'r' ? 'Big move' : 'Move'}: ${who} ${sgn(Math.round(d))}`);
+  if (mvLv(d) && c.v4 && c.v4.p) { const g = c.v4.p[top] - mv.p0[top], t = v4Read(c, mv); add(Math.abs(g) < LEAN_MIN ? '' : (g > 0) === (d > 0) ? 'g' : 'a', t.startsWith('v4') ? t : `Move ${t}`); }
+  if (mv.ou && mvLv(mv.ou.d)) add(mvLv(mv.ou.d), `Over ${mv.ou.line}: ${sgn(Math.round(mv.ou.d))}`);
+  if (pm && pm.bt && mvLv(pm.bt.p1 - pm.bt.p0)) add('a', `Both score (Pinnacle): ${sgn(Math.round(pm.bt.p1 - pm.bt.p0))}`);
+  if (pm && pm.gap) { let k = 0; pm.gap.forEach((g, i) => { if (g < pm.gap[k]) k = i; }); const g = -pm.gap[k]; if (g >= 2) add(g >= 4 ? 'r' : 'a', `DraftKings pays more than Pinnacle on ${sideOf(c, k)} (${Math.round(g)} pts)`); }
+  if (st && st.k === 'miss') add('a', 'No lineup read: the last price is the close');
+  const level = items.some(x => x.lv === 'r') ? 'r' : items.some(x => x.lv === 'a') ? 'a' : '';
+  return { level, items };
+}
+const flagLine = f => (f.items.length ? `<div class="mvfl">${f.items.map(x => `<span class="fl ${x.lv}">● ${esc(x.t)}</span>`).join('')}</div>` : '');
 // Pinnacle (the sharp book, margin removed): the first price the Hub saw against now / the close, and where DraftKings sits from it.
 const bkName = b => (!b || b === 'draftkings' ? 'DraftKings' : b === 'pinnacle' ? 'Pinnacle' : esc(b));
 function pinnNote(c, o) {
@@ -1134,7 +1155,7 @@ function movesView() {
   const head = `<div class="small" style="margin:8px 18px 0">DraftKings prices, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before kickoff, after the lineups, then locked. A move of ${BIG_MOVE}+ points on one result is a big move: news reaching the price, not a bet.${unpriced ? ` ${unpriced} game${unpriced === 1 ? '' : 's'} on this day ha${unpriced === 1 ? 's' : 've'} no price.` : ''}</div>`;
   const card = ({ c, mv, st }) => {
     const o = c.odds, op = o.op || o.f, fin = c.final, out = fin ? (fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2) : null;
-    const row = (label, a, b, p0, p1, d, hit) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${Math.round(p0)}→${Math.round(p1)}%</td><td class="${Math.abs(d) >= BIG_MOVE ? 'bg' : ''}"><b>${sgn(Math.round(d))}</b></td></tr>`;
+    const row = (label, a, b, p0, p1, d, hit) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${Math.round(p0)}→${Math.round(p1)}%</td><td class="${mvLv(d) === 'r' ? 'm5' : mvLv(d) === 'a' ? 'm3' : ''}"><b>${sgn(Math.round(d))}</b></td></tr>`;
     const ouRow = mv.ou ? (() => { const ot = o.opt || o.f; return row(`Over ${mv.ou.line}`, ot.to, o.to, mv.ou.p0, mv.ou.p1, mv.ou.d, fin ? fin.h + fin.a > mv.ou.line : false); })() : '';
     // Both score: the book's Yes price (The Odds API) first seen -> now / the close when there is one; else the score card's chance on the
     // opening price (v6o) and on now / the close (v6), with no price of its own.
@@ -1143,8 +1164,9 @@ function movesView() {
     const btNote = bm ? `Both score: ${bkName(o.bk)} Yes price${o.bfk && o.bk && o.bfk !== o.bk ? ` (opening was ${bkName(o.bfk)}: different books)` : ''}${o.bcl ? `, closing read ✓ ${tmCT(o.bcl)}` : locked(c) ? ', no lineup read (last price is the close)' : ''}.${c.v6o && c.v6 ? ` Score card said ${c.v6o.btts}→${c.v6.btts}%.` : ''}`
       : btRow ? 'Both score has no price of its own here: its chance is read off the score card at each price.' : '';
     const follow = fin ? (mv.size < 2 ? 'the price barely moved' : mv.d[out] > 0 ? 'the result went the way of the move' : 'the result went against the move') : '';
-    return `<div class="mvg"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><span class="cs ${st.k}">${st.t}</span></div>
-      <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}${mv.big ? ` · <span class="mvf">big move: ${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}${v4Read(c, mv) ? ', ' + esc(v4Read(c, mv)) : ''}</span>` : ''}</small>
+    const fl = socFlags(c, mv, pinnMove(o), st);
+    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><span class="cs ${st.k}">${st.t}</span></div>${flagLine(fl)}
+      <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
       <table class="mvx"><tr><th></th><th>${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
       ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>
       ${btNote ? `<small class="mvn">${btNote}</small>` : ''}

@@ -312,4 +312,26 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const r4 = f.cardFlags(card({ gk: { a: { n: 'x', st: 'c' }, h: { n: 'y', st: 'c' } } }), { ou: { d: 4 } }, NOW);
   ok('a total move is flagged on its own', r4.level === 'a' && r4.items[0].t === 'Total: Over +4');
 }
+
+// Colour code on the soccer Movement cards (same scale as hockey): red = a 5+ move or DraftKings paying 4+ points more than Pinnacle, amber =
+// a 3-4 move, a move against v4, both-score moving, DraftKings paying 2-3 more, no lineup read; green = v4 agrees.
+{
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
+  const f = new Function(`const esc = s => String(s), sgn = x => (x > 0 ? '+' : '') + x, BIG_MOVE = 5, LEAN_MIN = 2, strip = s => s, sideOf = (c, i) => (i === 1 ? 'Draw' : i === 0 ? c.home : c.away); ${['v4Read', 'HOT_MV', 'mvLv', 'socFlags'].map(grab).join('\n')}; return { mvLv, socFlags };`)();
+  const c = { home: 'Grêmio', away: 'Athletico-PR', v4: { p: [36.3, 26.9, 36.8] } };
+  const mv = (d, p0 = [36, 27, 37]) => ({ top: 0, p0, d: [d, 0, -d], ou: null });
+  const x1 = f.socFlags(c, mv(7), { gap: [-5, 1, 4] }, { k: 'pend' });
+  ok('red: big move, v4 neutral (plain), DraftKings paying 5 points more on the mover', x1.level === 'r' && x1.items.map(x => x.t + '/' + x.lv).join('|') === 'Big move: Grêmio +7/r|v4 neutral (v4 36%, picks Athletico-PR)/|DraftKings pays more than Pinnacle on Grêmio (5 pts)/r', JSON.stringify(x1));
+  const x2 = f.socFlags({ ...c, v4: { p: [61, 22, 17] } }, mv(8, [53, 26, 21]), null, { k: 'pend' });
+  ok('big move with v4 higher than the opening: red card, green v4 line', x2.level === 'r' && x2.items[1].lv === 'g' && x2.items[1].t === 'Move in favor of v4 (v4 61%)', JSON.stringify(x2));
+  const x3 = f.socFlags({ ...c, v4: { p: [30, 28, 42] } }, mv(4, [40, 29, 32]), null, { k: 'pend' });
+  ok('a 4 point move against v4: amber card', x3.level === 'a' && x3.items.map(x => x.t).join('|') === 'Move: Grêmio +4|Move away from v4 (v4 30%, picks Athletico-PR)', JSON.stringify(x3));
+  ok('a move under 3 and no Pinnacle gap: clear', f.socFlags(c, mv(1), { gap: [0, 1, -1] }, { k: 'pend' }).level === '' && f.socFlags(c, mv(2.4), null, { k: 'ok' }).items.length === 0);
+  const x4 = f.socFlags(c, { ...mv(1), ou: { line: 2.5, d: 4 } }, { gap: [0, 0, 0], bt: { p0: 50, p1: 54 } }, { k: 'miss' });
+  ok('amber: the total moved, both score moved on Pinnacle, no lineup read', x4.level === 'a' && x4.items.map(x => x.t).join('|') === 'Over 2.5: +4|Both score (Pinnacle): +4|No lineup read: the last price is the close', JSON.stringify(x4));
+  const x5 = f.socFlags(c, mv(1), { gap: [-2.6, 1, 1] }, { k: 'pend' });
+  ok('DraftKings paying 2-3 points more than Pinnacle is amber; paying less (shorter) is not flagged', x5.level === 'a' && f.socFlags(c, mv(1), { gap: [3, -1, -1.5] }, { k: 'pend' }).level === '');
+  ok('levels: under 3 none, 3-4 amber, 5+ red', f.mvLv(2.4) === '' && f.mvLv(3) === 'a' && f.mvLv(-4.4) === 'a' && f.mvLv(5) === 'r' && f.mvLv(null) === '');
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);
