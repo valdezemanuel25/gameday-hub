@@ -14,10 +14,36 @@ const SKIP = /\(women\)|\bwomen\b|\bU-?\d{2}\b|\breserves?\b|\bII\b/i; // women'
 // something else, so they must never be taken for the match result.
 const SIDE = /\b(bookings?|corners?|cards?|shots?|offsides?|fouls?|throw-?ins?|goal kicks?|specials?|props?|fantasy|e-?soccer|esports?|simulated|sim)\b/i;
 
+// Both teams to score: PinnOdds sends it as its own "special" row (parent_id = the match's event_id), always, with no include_specials.
+// Two shapes are read, and a row whose Yes / No cannot be told apart is left alone rather than guessed:
+//   special_markets.num_0[].prices = [{ name: 'Yes', price }, { name: 'No', price }]
+//   the older one: prices in periods.num_0.money_line { home, away } with special_outcomes naming the slots ({ home: 'Yes', away: 'No' }
+//   or [{ side / slot / key: 'home', name: 'Yes' }, ...]).
+const BTTS = /both teams|btts/i, BTTS_NOT = /half|1st|2nd|first|second|&|\band\b|\+|win|total|over|under|corner|card|booking/i;
+export const isBtts = e => !!(e && e.special && BTTS.test(String(e.special)) && !BTTS_NOT.test(String(e.special)));
+export function parseBttsRow(e) {
+  const nm = x => String((x && (x.name ?? x.description ?? x.label ?? x.outcome)) ?? x ?? '').trim().toLowerCase();
+  const yn = (y, n) => { const by = americanOf(y), bn = americanOf(n); return by != null && bn != null ? { by, bn } : null; };
+  for (const m of (e.special_markets && e.special_markets.num_0) || []) {
+    const pr = m.prices || [], y = pr.find(p => nm(p) === 'yes'), n = pr.find(p => nm(p) === 'no'); if (y && n) return yn(y.price, n.price);
+  }
+  const ml = e.periods && e.periods.num_0 && e.periods.num_0.money_line, so = e.special_outcomes; if (!ml || !so) return null;
+  const slot = {};
+  if (Array.isArray(so)) for (const x of so) { const k = String(x.side ?? x.slot ?? x.key ?? '').toLowerCase(); if (k === 'home' || k === 'away') slot[nm(x)] = k; }
+  else if (typeof so === 'object') for (const k of ['home', 'away']) if (so[k] != null) slot[nm(so[k])] = k;
+  return slot.yes && slot.no ? yn(ml[slot.yes], ml[slot.no]) : null;
+}
+// What a game's side rows look like, for the check page: how often each special name occurs, and a few raw both-score rows.
+export function specialsSample(j, limit = 3) {
+  const names = {}, raw = [];
+  for (const e of (j && j.events) || []) if (e && e.special) { const k = String(e.special); names[k] = (names[k] || 0) + 1; if (BTTS.test(k) && raw.length < limit) raw.push({ event_id: e.event_id, parent_id: e.parent_id, league_name: e.league_name, home: e.home, away: e.away, special: e.special, special_category: e.special_category, special_outcomes: e.special_outcomes, periods: e.periods, special_markets: e.special_markets, parsed: parseBttsRow(e) }); }
+  return { names: Object.entries(names).sort((a, b) => b[1] - a[1]).slice(0, 15), raw };
+}
 // The fixtures JSON trimmed to what the Hub needs: [{ id, lg, home, away, t (ms), h, d, a (American), tl, to, tu (the 2.5 total only) }].
 // Events with no complete home / draw / away price, special rows and women's / youth / reserve sides are left out.
 export function reduceEvents(j) {
-  const out = [];
+  const out = [], bt = new Map(), btNames = new Map(); // both-score prices by the match's event_id, and by names + kickoff as a fallback
+  for (const e of (j && j.events) || []) if (isBtts(e)) { const p = parseBttsRow(e); if (!p) continue; if (e.parent_id != null) bt.set(String(e.parent_id), p); btNames.set(`${e.home}|${e.away}|${new Date(e.starts).getTime()}`, p); }
   for (const e of (j && j.events) || []) {
     if (!e || e.special || SKIP.test(`${e.home} ${e.away} ${e.league_name}`) || SIDE.test(String(e.league_name || ''))) continue;
     const p = e.periods && e.periods.num_0, ml = p && p.money_line; if (!ml) continue;
@@ -25,6 +51,7 @@ export function reduceEvents(j) {
     const t = new Date(e.starts).getTime(); if (!Number.isFinite(t)) continue;
     const row = { id: e.event_id, lg: e.league_name, home: e.home, away: e.away, t, h, d, a };
     const tt = p.totals && p.totals['2.5']; if (tt) { const to = americanOf(tt.over), tu = americanOf(tt.under); if (to != null && tu != null) { row.tl = 2.5; row.to = to; row.tu = tu; } }
+    const b = bt.get(String(e.event_id)) || btNames.get(`${e.home}|${e.away}|${t}`); if (b) { row.bty = b.by; row.btn = b.bn; }
     out.push(row);
   }
   return out;
@@ -44,11 +71,11 @@ export async function fetchPinn(key, f = fetch) {
   if (!r.ok) return { error: `PinnOdds ${r.status}` };
   if (hd('x-data-status') === 'stale') return { error: 'PinnOdds: the prematch feed is stale (prices withheld)' };
   let txt, j; try { txt = await r.text(); j = JSON.parse(txt); } catch (e) { return { error: 'PinnOdds: answer was not JSON' }; }
-  return { events: reduceEvents(j), bytes: txt.length, age: hd('x-data-age-ms') != null ? Number(hd('x-data-age-ms')) : null, status: hd('x-data-status') };
+  return { events: reduceEvents(j), specials: specialsSample(j), bytes: txt.length, age: hd('x-data-age-ms') != null ? Number(hd('x-data-age-ms')) : null, status: hd('x-data-status') };
 }
 
 // What a card holds: px = { h, d, a, tl?, to?, tu? } (American), pf = the first one seen, pcl = when the closing read was taken.
-export const pinnPrice = e => ({ h: e.h, d: e.d, a: e.a, ...(e.tl != null ? { tl: e.tl, to: e.to, tu: e.tu } : {}) });
+export const pinnPrice = e => ({ h: e.h, d: e.d, a: e.a, ...(e.tl != null ? { tl: e.tl, to: e.to, tu: e.tu } : {}), ...(e.bty != null ? { bty: e.bty, btn: e.btn } : {}) });
 
 // The shared fixture list: the edge cache first (no request), else one request. Failures are remembered for a few minutes so a bad
 // answer is not asked again by every league; a rate limit holds until the limit says it lifts (default: until UTC midnight).

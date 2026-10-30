@@ -443,7 +443,7 @@ export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
   const t = localDate(now.toISOString()), cards = [];
   for (const d of [t, addDays(t, 1)]) for (const c of ((await env.HUB.get(`day:${d}`, 'json'))?.cards || [])) if (!slug || c.league === slug) cards.push(c);
   const lgs = {}; for (const e of r.events) lgs[e.lg] = (lgs[e.lg] || 0) + 1;
-  return { requests: 1, fixtures: r.events.length, bytes: r.bytes, dataAgeMs: r.age, dataStatus: r.status, leagueNames: Object.entries(lgs).sort((a, b) => b[1] - a[1]).slice(0, 25),
+  return { requests: 1, fixtures: r.events.length, bothScorePrices: r.events.filter(e => e.bty != null).length, specials: r.specials, bytes: r.bytes, dataAgeMs: r.age, dataStatus: r.status, leagueNames: Object.entries(lgs).sort((a, b) => b[1] - a[1]).slice(0, 25),
     // A game with no match lists the fixtures near its kickoff where either team's name fits, so a spelling that differs, a game that has
     // already started (Pinnacle moves it off the prematch list) or a duplicate listing can be told apart.
     games: cards.filter(c => !c.final).map(c => { const e = matchPinn(c, r.events), t = new Date(c.kickoff).getTime();

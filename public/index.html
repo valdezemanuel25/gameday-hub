@@ -883,7 +883,8 @@ function pinnMove(odds) {
   const dk = devigP(odds.h, odds.d, odds.a), r1 = x => Math.round(10 * x) / 10;
   const p0 = a.map(x => r1(100 * x)), p1 = b.map(x => r1(100 * x));
   let ou = null; if (f.tl != null && f.tl === n.tl) { const x = devigP(f.to, f.tu), y = devigP(n.to, n.tu); if (x && y) ou = { line: n.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }
-  return { p0, p1, d: p1.map((x, i) => r1(x - p0[i])), gap: dk ? dk.map((x, i) => r1(100 * x - p1[i])) : null, ou };
+  let bt = null; if (f.bty != null && n.bty != null) { const x = devigP(f.bty, f.btn), y = devigP(n.bty, n.btn); if (x && y) bt = { p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }
+  return { p0, p1, d: p1.map((x, i) => r1(x - p0[i])), gap: dk ? dk.map((x, i) => r1(100 * x - p1[i])) : null, ou, bt };
 }
 function bttsMove(odds) {
   const f = odds && odds.bf; if (!f || odds.by == null) return null;
@@ -1120,7 +1121,7 @@ function pinnNote(c, o) {
   const pm = pinnMove(o); if (!pm) return '';
   const part = i => `${esc(sideOf(c, i))} ${Math.round(pm.p0[i])}→${Math.round(pm.p1[i])}${Math.abs(pm.d[i]) >= 1 ? ` <b>(${sgn(Math.round(pm.d[i]))})</b>` : ''}`;
   const gap = pm.gap && pm.gap.some(g => Math.abs(g) >= 2) ? `<br>DraftKings is ${pm.gap.map((g, i) => `${esc(sideOf(c, i))} ${sgn(Math.round(g))}`).join(' · ')} points from Pinnacle now` : '';
-  return `<small class="mvn">Pinnacle${o.pcl ? ` (closing read ✓ ${tmCT(o.pcl)})` : ' (first seen → now)'}: ${[0, 1, 2].map(part).join(' · ')}${pm.ou ? ` · Over ${pm.ou.line} ${Math.round(pm.ou.p0)}→${Math.round(pm.ou.p1)}` : ''}${gap}</small>`;
+  return `<small class="mvn">Pinnacle${o.pcl ? ` (closing read ✓ ${tmCT(o.pcl)})` : ' (first seen → now)'}: ${[0, 1, 2].map(part).join(' · ')}${pm.ou ? ` · Over ${pm.ou.line} ${Math.round(pm.ou.p0)}→${Math.round(pm.ou.p1)}` : ''}${pm.bt ? ` · Both score ${Math.round(pm.bt.p0)}→${Math.round(pm.bt.p1)}${Math.abs(pm.bt.p1 - pm.bt.p0) >= 1 ? ` <b>(${sgn(Math.round(pm.bt.p1 - pm.bt.p0))})</b>` : ''}` : ''}${gap}</small>`;
 }
 function movesView() {
   if (!day || !day.cards) return `<div class="empty">Loading…</div>`;
