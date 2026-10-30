@@ -74,6 +74,7 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
   * Cost: the events list is free; each game's read is one credit, so about two credits a game. The free plan (500 a month) covers roughly 250 games; the first divisions and the two cups play more than that in a month, so a paid plan is needed for full coverage.
   * When fewer than 100 credits are left (`BTTS_RESERVE`, can be set as a Worker variable), opening reads pause so the closing reads keep going. The Status tab shows whether the key is set and the credits left.
   * The "Get Both-score prices" button still reads on demand.
+  * **Backup key:** add a second Odds API key as the Worker secret `ODDS_API_KEY_2`. Every Odds API call (both-score reads, the Analyst's price shopping and sharp-book looks, the button) goes through one chooser: key 1 while it is above the reserve (`BTTS_RESERVE`, 100), the backup when key 1 is below it and the backup has more, any key with credits left for the closing reads, and a key that answers 401 / 429 or reports 0 credits is skipped for 6 hours and then looked at again (the event list costs no credit and the credits reset monthly). Credits are noted per key; the Status tab shows both.
   * API-Football was tried and dropped on Oct 30, 2026: its free plan only reads the 2022-2024 seasons, so it cannot price current games.
 * **On the Results tab** ("Models against the market"):
   * how often results went the way of the move (56–57% on past seasons)
