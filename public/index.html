@@ -275,9 +275,10 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .rc button{flex:none;padding:7px 12px;border-radius:10px;border:1px solid var(--acc-line);font-size:12.5px;font-weight:650}
 .cl.bad{cursor:pointer}.cl.bad:active{transform:scale(.97)}
 .mo{position:fixed;inset:0;z-index:2000;background:rgba(5,9,7,.72);display:flex;align-items:flex-end;justify-content:center;padding:16px}
-.mp{width:100%;max-width:420px;background:var(--panel2);border:1px solid var(--acc-line);border-radius:18px;padding:18px 18px 16px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.mp{width:100%;max-width:420px;background:linear-gradient(var(--panel2),var(--panel2)),var(--bg);border:1px solid var(--acc-line);border-radius:18px;padding:18px 18px 16px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .mp b{font-size:16px}.mp p{font-size:13px;color:var(--dim);line-height:1.5;margin:6px 0 12px}
 .mr div{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}.mr em{font-style:normal;color:var(--faint);font-size:12.5px;text-align:right}
+#fbm .mr{max-height:52vh;overflow:auto}
 .mr .run em{color:var(--amber)}.mr .ok em{color:var(--grass)}.mr .bad em{color:#ff9d84}
 .mb{display:flex;gap:10px;margin-top:14px}.mb button{flex:1;padding:12px;border-radius:12px;font-weight:650;font-size:14px;border:1px solid var(--acc-line)}
 .mb .mgo{background:var(--grass);border-color:var(--grass);color:#06130c}.mb button:disabled{opacity:.6}
@@ -1578,7 +1579,7 @@ function sourceBoard() {
   const rows = playing.map(row).join('') + (idle.length ? `<tr class="sep"><td colspan="7">No games today: nothing to worry about here</td></tr>` + idle.map(row).join('') : '');
   const bads = playing.map(l => ({ l, ks: l.fb ? ['1x2', 'ou', 'btts'].filter(k => l.fb[k] && !l.fb[k].ok) : [] })).filter(x => x.ks.length);
   return `<div class="sec">Data by league<small>Leagues with games today are at the top and highlighted: those should have every model and source up to date. Each box is the last time that source was fetched for that league. Where it applies, a second line shows games covered (found / games today and tomorrow). Tap a red box to fetch that league from Forebet again.</small></div>
-  <div class="pair" style="padding-top:0"><table class="sb"><tr><th></th><th>ESPN<br>results</th><th>v4<br>ratings</th><th>Sports<br>Mole</th><th class="g" colspan="3">Forebet</th></tr>
+  <div class="pair" style="padding-top:0">${(n => `<button type="button" class="xbtn" data-fball="1" style="margin:0 0 10px">Update Forebet${n ? ` · ${n} league${n === 1 ? '' : 's'} need it` : ' · all up to date'}</button>`)(fbNeeds().length)}<table class="sb"><tr><th></th><th>ESPN<br>results</th><th>v4<br>ratings</th><th>Sports<br>Mole</th><th class="g" colspan="3">Forebet</th></tr>
     <tr><th></th><th></th><th></th><th></th><th>1X2</th><th>O/U</th><th>Both</th></tr>${rows}</table>
     <div class="sbl"><span><i style="background:rgba(var(--acc-rgb),.5)"></i>fresh</span><span><i style="background:rgba(240,181,74,.6)"></i>getting old</span><span><i style="background:rgba(224,122,95,.7)"></i>blocked or failed</span><span><i style="border:1px dashed var(--faint)"></i>not fetched yet</span><span><i style="background:var(--grass)"></i>games today</span></div></div>
   ${bads.length ? `<div class="sec" style="padding-top:16px">Needs a re-fetch<small>${bads.length} league${bads.length === 1 ? '' : 's'} playing today with Forebet pages that came back blocked. v2, v4 and SportsMole are not affected.</small></div>
@@ -1587,31 +1588,44 @@ function sourceBoard() {
 
 // Tap a red Forebet box: confirm, then read that league's three tables one after another.
 const FB_KINDS = [['1x2', '1X2'], ['ou', 'Over/Under'], ['btts', 'Both score']];
+// One run, several leagues: jobs = [{ slug, name, kinds }]. A tap on a red box is one league with all three tables; the Update
+// Forebet button is every league that needs it (fbNeeds).
+let FBJOBS = [];
 function fbModal(slug) {
   const l = (stat && stat.leagues || []).find(x => x.slug === slug); if (!l) return;
-  const old = $('#fbm'); if (old) old.remove();
+  fbOpen([{ slug, name: l.name, kinds: FB_KINDS.map(([k]) => k) }], `${esc(l.name)}: the Hub will read the 1X2, Over/Under and Both score pages one after another.`);
+}
+// Leagues with a Forebet page and games today or tomorrow whose tables failed, were never read, or do not cover every game yet.
+function fbNeeds() {
+  return (stat && stat.leagues || []).filter(l => l.fb && !l.support && l.games && (l.games.today + l.games.tomorrow) > 0)
+    .map(l => ({ slug: l.slug, name: l.name, kinds: FB_KINDS.map(([k]) => k).filter(k => { const m = l.fb[k]; return !m || !m.ok || (m.cov && m.cov[1] && m.cov[0] < m.cov[1]); }) }))
+    .filter(j => j.kinds.length);
+}
+function fbOpen(jobs, intro) {
+  FBJOBS = jobs; const old = $('#fbm'); if (old) old.remove();
   const el = document.createElement('div'); el.id = 'fbm'; el.className = 'mo';
+  const kn = Object.fromEntries(FB_KINDS);
+  const rows = jobs.length ? jobs.flatMap(j => j.kinds.map(k => `<div data-k="${esc(j.slug)}|${k}"><span>${jobs.length > 1 ? esc(j.name) + ' · ' : ''}${kn[k]}</span><em>waiting</em></div>`)).join('') : '<div class="ok"><span>Every league playing today or tomorrow is up to date</span><em>✓</em></div>';
   el.innerHTML = `<div class="mp" role="dialog" aria-modal="true" aria-labelledby="fbm-t"><b id="fbm-t">Fetch from Forebet?</b>
-    <p>${esc(l.name)}: the Hub will read the 1X2, Over/Under and Both score pages one after another.</p>
-    <div class="mr">${FB_KINDS.map(([k, n]) => `<div data-k="${k}"><span>${n}</span><em>waiting</em></div>`).join('')}</div>
-    <div class="mb"><button type="button" class="mn" data-fbm="cancel">Cancel</button><button type="button" class="mgo" data-fbm="go" data-slug="${esc(slug)}">Fetch from Forebet</button></div></div>`;
+    <p>${intro}</p><div class="mr">${rows}</div>
+    <div class="mb"><button type="button" class="mn" data-fbm="cancel">${jobs.length ? 'Cancel' : 'Close'}</button>${jobs.length ? `<button type="button" class="mgo" data-fbm="go">Fetch from Forebet</button>` : ''}</div></div>`;
   document.body.appendChild(el);
 }
-async function fbRun(slug) {
-  const m = $('#fbm'); if (!m) return; m.dataset.busy = '1';
+async function fbRun() {
+  const m = $('#fbm'); if (!m || !FBJOBS.length) return; m.dataset.busy = '1';
   const go = m.querySelector('[data-fbm="go"]'), cn = m.querySelector('[data-fbm="cancel"]'); go.disabled = true; cn.disabled = true; go.textContent = 'Fetching…';
-  const row = (k, cls, t) => { const r = m.querySelector(`[data-k="${k}"]`); r.className = cls; r.querySelector('em').textContent = t; };
+  const row = (id, cls, t) => { const r = m.querySelector(`[data-k="${CSS.escape(id)}"]`); if (!r) return; r.className = cls; r.querySelector('em').textContent = t; r.scrollIntoView({ block: 'nearest' }); };
   let saved = 0;
-  for (const [k] of FB_KINDS) {
-    row(k, 'run', 'reading…');
+  for (const j of FBJOBS) for (const k of j.kinds) {
+    const id = `${j.slug}|${k}`; row(id, 'run', 'reading…');
     try {
-      const r = await post(`/api/forebet?league=${encodeURIComponent(slug)}&kind=${k}`, { fetch: true });
-      if (r.error) row(k, 'bad', r.error);
-      else if (r.skipped) row(k, 'ok', 'already complete');
-      else { saved += r.saved || 0; row(k, r.rows ? 'ok' : 'bad', r.rows ? `read ${r.rows} games, saved ${r.saved}` : (r.note || 'no games found')); }
-    } catch (er) { row(k, 'bad', er.message); }
+      const r = await post(`/api/forebet?league=${encodeURIComponent(j.slug)}&kind=${k}`, { fetch: true });
+      if (r.error) row(id, 'bad', r.error);
+      else if (r.skipped) row(id, 'ok', 'already complete');
+      else { saved += r.saved || 0; row(id, r.rows ? 'ok' : 'bad', r.rows ? `read ${r.rows} games, saved ${r.saved}` : (r.note || 'no games found')); }
+    } catch (er) { row(id, 'bad', er.message); }
   }
-  delete m.dataset.busy; go.textContent = 'Done'; go.dataset.fbm = 'close'; go.disabled = false; cn.remove();
+  delete m.dataset.busy; go.textContent = `Done · ${saved} saved`; go.dataset.fbm = 'close'; go.disabled = false; cn.remove();
   try { stat = await api('/api/status'); if (S.tab === 'status') render(); if (saved) { delete counts[S.date]; tally = null; await loadDay(); } } catch (er) { /* the grid refreshes on the next visit */ }
 }
 
@@ -1812,7 +1826,8 @@ document.addEventListener('click', async e => {
   const mvf = e.target.closest('[data-mvf]'); if (mvf) { S.mvf = mvf.dataset.mvf; return render(); }
   const rf = e.target.closest('[data-refetch]'); if (rf) return fbModal(rf.dataset.refetch);
   const fm = e.target.closest('[data-fbm]');
-  if (fm) { const a = fm.dataset.fbm; if (a === 'go') return fbRun(fm.dataset.slug); const m = $('#fbm'); if (m && !m.dataset.busy) m.remove(); return; }
+  if (e.target.closest('[data-fball]')) { const J = fbNeeds(); return fbOpen(J, J.length ? `${J.length} league${J.length === 1 ? '' : 's'} with games today or tomorrow still need Forebet: the Hub reads each missing table one after another.` : 'Nothing to fetch.'); }
+  if (fm) { const a = fm.dataset.fbm; if (a === 'go') return fbRun(); const m = $('#fbm'); if (m && !m.dataset.busy) m.remove(); return; }
   if (e.target.closest('#btn-export')) return exportAll();
   if (e.target.closest('#btn-fb')) {
     const msg = $('#fb-msg'), text = $('#fb-text').value, lg = $('#fb-league').value, kind = $('#fb-kind').value; if (!text.trim()) { msg.textContent = 'Paste the table first.'; return; }
