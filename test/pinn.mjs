@@ -1,6 +1,6 @@
 // Pinnacle prices from PinnOdds: trimming the fixture list, matching games, the request budget and failures, and what a card keeps.
 import fs from 'fs';
-import { reduceEvents, matchPinn, fetchPinn, pinnEvents, pinnPrice } from '../src/pinn.js';
+import { reduceEvents, matchPinn, fetchPinn, pinnEvents, pinnPrice, specialsSample } from '../src/pinn.js';
 import { pinnMove } from '../src/moves.js';
 import { addPinn, pinnCheck, withOdds } from '../src/worker.js';
 let fails = 0; const ok = (n, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${c ? '' : x}`); };
@@ -71,4 +71,30 @@ ok('move: needs both prices', pinnMove({ ...odds, pf: null }) === null && pinnMo
   const env2 = { PINNODDS_KEY: 'K', HUB: { get: async k => (k.endsWith('2026-10-30') ? { cards: [{ id: '5', league: 'bra.1', home: 'Santos', away: 'Gremio', kickoff: T1, odds: { h: 1, d: 2, a: 3 } }] } : null) } };
   const r2 = await pinnCheck(env2, 'bra.1', mk([]), new Date('2026-10-30T15:00:00Z'));
   ok('check page: an unmatched game lists the nearest fixtures and whether it has started', r2.games[0].matched === null && r2.games[0].nearest.length === 1 && r2.games[0].nearest[0].includes('Santos v Fortaleza') && r2.games[0].started === false, JSON.stringify(r2.games[0])); }
+
+// Both teams to score: its own special row, joined to the match by parent_id (or names + kickoff)
+{
+  const sp = (id, parent, name, extra) => ({ event_id: id, parent_id: parent, league_name: 'Brazil - Serie A', home: 'Gremio', away: 'Athletico Paranaense', starts: T1, special: name, periods: {}, ...extra });
+  const j = JSON.parse(JSON.stringify(fixtures));
+  j.events.push(sp(101, 1, 'Both Teams To Score', { special_markets: { num_0: [{ type: 'moneyline', prices: [{ name: 'No', price: 2.1 }, { name: 'Yes', price: 1.75 }] }] } }));
+  j.events.push(sp(102, 2, 'Both Teams to Score', { periods: { num_0: { money_line: { home: 1.8, away: 2.0 } } }, special_outcomes: { home: 'Yes', away: 'No' }, home: 'Santos', away: 'Fortaleza' }));
+  j.events.push(sp(103, 1, 'Both Teams To Score - 1st Half', { special_markets: { num_0: [{ prices: [{ name: 'Yes', price: 5 }, { name: 'No', price: 1.1 }] }] } }));
+  const r = reduceEvents(j);
+  ok('both score, new shape: Yes and No by name (order does not matter), joined by parent_id', r[0].bty === -133 && r[0].btn === 110, JSON.stringify(r[0]));
+  ok('both score, old shape: money-line slots named by special_outcomes', r[1].bty === -125 && r[1].btn === 100, JSON.stringify(r[1]));
+  ok('a half or combined both-score row is not the match one', r[0].bty !== 400);
+  const unk = JSON.parse(JSON.stringify(fixtures)); unk.events.push(sp(104, 1, 'Both Teams To Score', { periods: { num_0: { money_line: { home: 1.8, away: 2.0 } } }, special_outcomes: ['Yes', 'No'] }));
+  ok('slots that cannot be told apart: no both-score price, never guessed', reduceEvents(unk)[0].bty === undefined);
+  ok('a fixture with no both-score row has none', reduceEvents(fixtures)[0].bty === undefined);
+  const byName = JSON.parse(JSON.stringify(fixtures)); byName.events.push(sp(105, undefined, 'Both Teams To Score', { special_markets: { num_0: [{ prices: [{ name: 'Yes', price: 1.9 }, { name: 'No', price: 1.9 }] }] } }));
+  ok('no parent id: joined by team names and kickoff', reduceEvents(byName)[0].bty === -111);
+  const sm = specialsSample(j);
+  ok('check page: special names counted and raw both-score rows shown with what the Hub parsed', sm.names[0][1] >= 1 && sm.raw.length === 3 && sm.raw[0].parsed.by === -133, JSON.stringify(sm).slice(0, 300));
+  ok('the price a card keeps includes both score', pinnPrice(r[0]).bty === -133);
+  const o2 = { h: 125, d: 240, a: 205, pf: { h: 150, d: 250, a: 190, bty: -120, btn: 100 }, pn: { h: 130, d: 240, a: 220, bty: -150, btn: 125 } };
+  const pm2 = pinnMove(o2); ok('move: both score first seen to now', pm2.bt && pm2.bt.p1 > pm2.bt.p0, JSON.stringify(pm2.bt));
+  const html2 = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'), grab2 = n => html2.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
+  const page2 = new Function(`${['devigP', 'pinnMove'].map(grab2).join('\n')}; return pinnMove;`)();
+  ok('page and server agree with both score in the move', JSON.stringify(page2(o2)) === JSON.stringify(pinnMove(o2)));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll Pinnacle checks passed'); process.exit(fails ? 1 : 0);

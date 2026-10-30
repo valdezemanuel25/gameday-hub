@@ -53,5 +53,6 @@ export function pinnMove(odds) {
   const dk = devig(odds.h, odds.d, odds.a);
   const p0 = a.map(x => r1(100 * x)), p1 = b.map(x => r1(100 * x));
   let ou = null; if (f.tl != null && f.tl === n.tl) { const x = devig(f.to, f.tu), y = devig(n.to, n.tu); if (x && y) ou = { line: n.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }
-  return { p0, p1, d: p1.map((x, i) => r1(x - p0[i])), gap: dk ? dk.map((x, i) => r1(100 * x - p1[i])) : null, ou };
+  let bt = null; if (f.bty != null && n.bty != null) { const x = devig(f.bty, f.btn), y = devig(n.bty, n.btn); if (x && y) bt = { p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }
+  return { p0, p1, d: p1.map((x, i) => r1(x - p0[i])), gap: dk ? dk.map((x, i) => r1(100 * x - p1[i])) : null, ou, bt };
 }
