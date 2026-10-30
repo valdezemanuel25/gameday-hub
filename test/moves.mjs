@@ -267,9 +267,9 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const read = new Function(`const strip = s => s, sideOf = (c, i) => (i === 1 ? 'Draw' : strip(i === 0 ? c.home : c.away)); ${grab('LEAN_MIN')}\n${grab('v4Read')}; return v4Read;`)();
   const c = { home: 'Grêmio', away: 'Athletico-PR', v4: { p: [36.3, 26.9, 36.8] } }, mv = { top: 0, p0: [35.9, 27, 37.1], d: [6.6, 0, -6] };
   const t = read(c, mv);
-  ok('Grêmio case: v4 at the opening price is "about the same", and its pick (Athletico-PR) is named', t === "v4 had it about at the opening (36% vs 36%), v4's pick is Athletico-PR", t);
-  ok('a real lean (3+ points the same way) says higher than the opening', read({ ...c, v4: { p: [40, 27, 33] } }, mv) === 'v4 had it higher than the opening (40% vs 36%)');
-  ok('v4 below the opening while the price rose: against v4', read({ ...c, v4: { p: [30, 27, 43] } }, mv) === "against v4 (30% vs 36% opening), v4's pick is Athletico-PR");
+  ok('Grêmio case: v4 at the opening price is neutral, and its pick (Athletico-PR) is named', t === 'v4 neutral (v4 36%, picks Athletico-PR)', t);
+  ok('a real lean (2+ points the same way) is in favor of v4', read({ ...c, v4: { p: [40, 27, 33] } }, mv) === 'in favor of v4 (v4 40%)');
+  ok('v4 below the opening while the price rose: away from v4', read({ ...c, v4: { p: [30, 27, 43] } }, mv) === 'away from v4 (v4 30%, picks Athletico-PR)');
   const { blankMarket, addMarket, finishMarket } = await import('../src/market.js');
   const M = blankMarket();
   addMarket(M, { odds: { h: 125, d: 240, a: 205, op: { h: 165, d: 240, a: 155 } }, final: { h: 1, a: 1 }, v4: { p: [36.3, 26.9, 36.8] } });
