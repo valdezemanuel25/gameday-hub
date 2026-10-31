@@ -1848,7 +1848,7 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['results', 'Results'], ['moves', 'Movement'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets'], ['analyst', 'Analyst']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['analyst', 'Analyst'], ['results', 'Results'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function updSDots() { const g = document.getElementById('sgrid'), ds = document.querySelectorAll('.sdots i'); if (!g || !ds.length) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2);
