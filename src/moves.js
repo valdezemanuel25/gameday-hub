@@ -20,7 +20,9 @@ export function moveOf(odds) {
   const ot = odds.opt || (odds.f && odds.f.tl != null ? odds.f : null);
   let ou = null;
   if (ot && ot.tl === odds.tl) { const x = devig(ot.to, ot.tu), y = devig(odds.to, odds.tu); if (x && y) ou = { line: odds.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
-  return { from, p0, p1, d, top, size, big: size >= BIG_MOVE, ou };
+  // no starting total to measure a move from (none at the opening or the first read, or the line changed): still show the price now
+  let ouNow = null; if (!ou && odds.tl != null) { const y = devig(odds.to, odds.tu); if (y) ouNow = { line: odds.tl, p1: r1(100 * y[0]) }; }
+  return { from, p0, p1, d, top, size, big: size >= BIG_MOVE, ou, ouNow };
 }
 
 // Hockey (src/nhl.js keeps c.px): moneyline (home / away, overtime and shootout count) and the total with its Over / Under prices.

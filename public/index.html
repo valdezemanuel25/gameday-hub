@@ -889,7 +889,9 @@ function moveOf(odds) {
   const ot = odds.opt || (odds.f && odds.f.tl != null ? odds.f : null);
   let ou = null;
   if (ot && ot.tl === odds.tl) { const x = devigP(ot.to, ot.tu), y = devigP(odds.to, odds.tu); if (x && y) ou = { line: odds.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
-  return { from, p0, p1, d, top, size, big: size >= BIG_MOVE, ou };
+  // no starting total to measure a move from (none at the opening or the first read, or the line changed): still show the price now
+  let ouNow = null; if (!ou && odds.tl != null) { const y = devigP(odds.to, odds.tu); if (y) ouNow = { line: odds.tl, p1: r1(100 * y[0]) }; }
+  return { from, p0, p1, d, top, size, big: size >= BIG_MOVE, ou, ouNow };
 }
 function pinnMove(odds) {
   const f = odds && odds.pf, n = odds && odds.pn; if (!f || !n) return null;
@@ -1188,8 +1190,9 @@ function movesView() {
   const head = `<div class="small" style="margin:8px 18px 0">DraftKings prices, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before kickoff, after the lineups, then locked. A move of ${BIG_MOVE}+ points on one result is a big move: news reaching the price, not a bet.${unpriced ? ` ${unpriced} game${unpriced === 1 ? '' : 's'} on this day ha${unpriced === 1 ? 's' : 've'} no price.` : ''}</div>`;
   const card = ({ c, mv, st }) => {
     const o = c.odds, op = o.op || o.f, fin = c.final, out = fin ? (fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2) : null;
-    const row = (label, a, b, p0, p1, d, hit) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${Math.round(p0)}→${Math.round(p1)}%</td><td class="${mvLv(d) === 'r' ? 'm5' : mvLv(d) === 'a' ? 'm3' : ''}"><b>${sgn(Math.round(d))}</b></td></tr>`;
-    const ouRow = mv.ou ? (() => { const ot = o.opt || o.f; return row(`Over ${mv.ou.line}`, ot.to, o.to, mv.ou.p0, mv.ou.p1, mv.ou.d, fin ? fin.h + fin.a > mv.ou.line : false); })() : '';
+    const row = (label, a, b, p0, p1, d, hit) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${p0 == null ? '' : Math.round(p0) + '→'}${Math.round(p1)}%</td><td class="${d != null && mvLv(d) === 'r' ? 'm5' : d != null && mvLv(d) === 'a' ? 'm3' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
+    const ouRow = mv.ou ? (() => { const ot = o.opt || o.f; return row(`Over ${mv.ou.line}`, ot.to, o.to, mv.ou.p0, mv.ou.p1, mv.ou.d, fin ? fin.h + fin.a > mv.ou.line : false); })()
+      : mv.ouNow ? row(`Over ${mv.ouNow.line}`, null, o.to, null, mv.ouNow.p1, null, fin ? fin.h + fin.a > mv.ouNow.line : false) : '';
     // Both score: the book's Yes price (The Odds API) first seen -> now / the close when there is one; else the score card's chance on the
     // opening price (v6o) and on now / the close (v6), with no price of its own.
     const bm = bttsMove(o), both = fin ? fin.h > 0 && fin.a > 0 : false;
