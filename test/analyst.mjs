@@ -75,6 +75,7 @@ ok('analystLook: no bet once the price has locked', (await analystLook({ HUB: { 
 const d = JSON.parse(kv.get('day:2026-10-28')); d.cards[0].final = { h: 0, a: 1 }; kv.set('day:2026-10-28', JSON.stringify(d));
 const L = await listAnalyst(env, new Date('2026-10-29T01:00:00Z'));
 ok('listAnalyst: settles finished games when the tab opens', L.items.every(x => x.res) && L.summary.all.settled === 2 && L.summary.all.units === 0.3, JSON.stringify(L.summary.all));
+ok('listAnalyst: the record split by market adds up, each with only its own rules', L.mk['1x2'].all.n + L.mk.ou.all.n + L.mk.btts.all.n === L.summary.all.n && L.mk.btts.all.n === 1 && L.mk.btts.rules.map(r => r.id).join() === 'bttsNo' && L.mk['1x2'].rules.every(r => r.id !== 'under') && L.mk.ou.rules.some(r => r.id === 'stale') && !('btts' in L.nhl.mk), JSON.stringify(Object.fromEntries(Object.entries(L.mk).map(([k, v]) => [k, v.all.n]))));
 // refreshOdds hands the Analyst the fresh prices: fake ESPN with one priced game
 globalThis.fetch = async () => new Response(JSON.stringify({ events: [] }));
 kv.set('day:2026-10-30', JSON.stringify({ date: '2026-10-30', cards: [card({ v2: { p: [50, 25, 25] }, kickoff: '2026-10-30T19:00:00Z' })] }));
