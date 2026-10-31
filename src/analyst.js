@@ -27,6 +27,8 @@ import { hockeyMove } from './moves.js';
 
 export const SINCE = '2026-10-27';
 export const STALE = { ev: 0.02, maxPrice: 400 }; // stale price: DraftKings pays 2%+ over the sharp fair price; nothing longer than +400
+// late rules bet only at the lineup read (30-20 minutes before kickoff, src/worker.js LINEUP_READ / PRICE_LOCK); 35 allows for a slow read
+export const LATE = 35;
 export const BENCH = { n: 40, clv: 0, roi: 0 }; // benched when, after n settled bets, average closing-line value and ROI are both <= these
 const K = 'HDA', r1 = x => Math.round(10 * x) / 10;
 const dec = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
@@ -80,7 +82,9 @@ export const RULES = [
       return { key: k, price: o.px[k === 'O' ? 0 : 1], why: `Over 2.5 ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v4 ${r1(o.p1 + o.e)}%: goals money agrees with v4` }; } },
   // Front test from Oct 31, 2026. Backtest on the Hub's own games, Oct 13-31 at DraftKings' closing price (small samples: a live test only).
   // DraftKings' prices ran high on Yes and Over: Yes implied 59% and both scored 54%; Over implied 53% and 46% went over.
-  { id: 'under', mk: ['ou'], name: 'Under: price too high on Over', rule: 'DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
+  { id: 'under', mk: ['ou'], late: true, name: 'Under: price too high on Over', rule: 'At the lineup read (30-20 minutes before kickoff), DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
+    // From Oct 31 it waits for the lineup read: the backtest picked its bets on the closing price, and the few games with an earlier
+    // price went 2 of 5 (-14%) when checked early, so betting early had no support (and the price can move against it after).
     // 17 bets, 65% hit, +46% (first half +74%, second half +14%)
     pick: V => { const o = V.ou; if (!o || o.v2 == null || o.p1 < 55 || !(o.p1 + o.e < o.p1) || !(o.v2 < o.p1)) return null;
       return { key: 'U', price: o.px[1], why: `Over 2.5 priced ${r1(o.p1)}%, v4 ${r1(o.p1 + o.e)}%, v2 ${r1(o.v2)}%: the price leans Over more than both models` }; } },
@@ -108,6 +112,7 @@ export function decide(items, cards, date, now = new Date(), benched = new Set()
     const V = lookCard(c), S = sharp && sharp.get(c.id); if (!V && !S) continue;
     for (const r of RULES) {
       if (r.retired || benched.has(r.id) || (r.sharp ? !S : !V)) continue;
+      if (r.late && (new Date(c.kickoff).getTime() - now.getTime()) / 60000 > LATE) continue; // not yet the lineup read
       const b = r.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
       const k = `${date}|${c.league}|${c.id}|${MKT(b.key)}`; if (held.has(k)) continue;
       held.add(k);
@@ -237,7 +242,16 @@ export function verdict(s) {
 
 // ---- storage: one document ('analyst'), written only when a bet is placed or settles ----
 const KEEP = 600, LOCK_MIN = 20; // LOCK_MIN: the price locks 20 minutes before kickoff (PRICE_LOCK in src/worker.js)
-export async function getAnalyst(env) { return (await env.HUB.get('analyst', 'json')) || { v: 1, items: [] }; }
+// Bets removed by hand (DROP): matched, then deleted the first time the record is read, and saved once. Oct 31, 2026: the Under on
+// Colorado Rapids v Chicago Fire was placed 4 hours early, before the Under rule waited for the lineup read; the new rule looks at that
+// game again at its lineup read. The early bet had mins 240; a lineup-read bet has 35 or less, so it is never matched.
+const DROP = [b => b.rule === 'under' && b.date === '2026-10-31' && /Colorado Rapids/.test(b.home || '') && /Chicago Fire/.test(b.away || '') && b.mins > LATE];
+export async function getAnalyst(env) {
+  const doc = (await env.HUB.get('analyst', 'json')) || { v: 1, items: [] }, n = doc.items.length;
+  doc.items = doc.items.filter(b => !DROP.some(f => f(b)));
+  if (doc.items.length !== n) await env.HUB.put('analyst', JSON.stringify(doc));
+  return doc;
+}
 // Past KEEP bets, settled ones are kept only as a short row for the record (the page lists the latest 300 in full).
 const pack = b => [b.kickoff, b.rule, b.key, b.mins, b.res, b.units, b.clv, b.price, b.dk, b.udk, b.sport || null],
   unpack = ([kickoff, rule, key, mins, res, units, clv, price, dk, udk, sport]) => ({ kickoff, rule, key, mins, res, units, clv, ...(dk != null ? { price, dk, udk } : {}), ...(sport ? { sport } : {}) });
