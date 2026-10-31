@@ -37,13 +37,17 @@ const openTotal = odds => odds && (odds.opt || (odds.f && odds.f.tl != null ? od
 
 // What the Analyst sees on one card: the move since the opening price and v4 against the price now, for home / draw / away and Over 2.5.
 // v4: { p: [h, d, a] %, over % }; open / now: American prices { h, d, a, tl, to, tu }.
-export function view({ v4, open, now, openT }) {
+export function view({ v4, open, now, openT, v2 = null }) {
   const a = hdaOf(open), b = hdaOf(now);
   if (!a || !b || !v4 || !Array.isArray(v4.p)) return null;
   const p0 = a.map(x => 100 * x), p1 = b.map(x => 100 * x);
   const out = { p0, p1, d: p1.map((x, i) => x - p0[i]), e: v4.p.map((x, i) => x - p1[i]), e0: v4.p.map((x, i) => x - p0[i]), px: [now.h, now.d, now.a], ou: null };
   const x = ouOf(openT || open), y = ouOf(now);
-  if (x && y && typeof v4.over === 'number') out.ou = { p0: 100 * x[0], p1: 100 * y[0], d: 100 * (y[0] - x[0]), e: v4.over - 100 * y[0], px: [now.to, now.tu] };
+  // the move needs an opening total (p0 / d are null without one); the price now is enough for the Under rule
+  if (y && typeof v4.over === 'number') out.ou = { p0: x ? 100 * x[0] : null, p1: 100 * y[0], d: x ? 100 * (y[0] - x[0]) : null, e: v4.over - 100 * y[0], px: [now.to, now.tu], v2: v2 && typeof v2.over === 'number' ? v2.over : null };
+  // Both teams to score: only a DraftKings price (the card sometimes carries Pinnacle's or another book's when DraftKings has none)
+  const bt = Number.isFinite(now.by) && Number.isFinite(now.bn) && (!now.bk || now.bk === 'draftkings') ? devig(now.by, now.bn) : null;
+  if (bt && typeof v4.btts === 'number') out.bt = { p1: 100 * bt[0], v4: v4.btts, v2: v2 && typeof v2.btts === 'number' ? v2.btts : null, px: [now.by, now.bn] };
   return out;
 }
 const pickIdx = (vals, ok) => { let j = -1; vals.forEach((v, i) => { if (ok(i) && (j < 0 || v > vals[j])) j = i; }); return j; };
@@ -69,20 +73,31 @@ export const RULES = [
   { id: 'fade', name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
     // close: 218 bets, -3% / -14% (-9% overall)
     pick: V => { const i = pickIdx(V.d.map(x => -x), i => V.d[i] <= -4 && V.e[i] >= 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the price drifted but v4 says it went too far') }; } },
-  { id: 'totals', name: 'Goals move, v4 agrees', rule: 'Over 2.5 moved 3+ points since the opening price (either way) and v4 is on the same side of the price now',
-    // close: 146 bets, +3% / -12% (-5% overall)
-    pick: V => { const o = V.ou; if (!o) return null; const k = o.d >= 3 && o.e >= 0 ? 'O' : o.d <= -3 && o.e <= 0 ? 'U' : null; if (!k) return null;
+  { id: 'totals', retired: '2026-10-31', name: 'Goals move, v4 agrees', rule: 'Over 2.5 moved 3+ points since the opening price (either way) and v4 is on the same side of the price now',
+    // close: 146 bets, +3% / -12% (-5% overall). Retired Oct 31, 2026 for 'under' below: on the Hub's own games (Oct 13-31) following
+    // a 3-point Over/Under move went 7 of 14 at about -30%. Its bets stay in the record; it places no new ones.
+    pick: V => { const o = V.ou; if (!o || o.d == null) return null; const k = o.d >= 3 && o.e >= 0 ? 'O' : o.d <= -3 && o.e <= 0 ? 'U' : null; if (!k) return null;
       return { key: k, price: o.px[k === 'O' ? 0 : 1], why: `Over 2.5 ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v4 ${r1(o.p1 + o.e)}%: goals money agrees with v4` }; } },
+  // Front test from Oct 31, 2026. Backtest on the Hub's own games, Oct 13-31 at DraftKings' closing price (small samples: a live test only).
+  // DraftKings' prices ran high on Yes and Over: Yes implied 59% and both scored 54%; Over implied 53% and 46% went over.
+  { id: 'under', name: 'Under: price too high on Over', rule: 'DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
+    // 17 bets, 65% hit, +46% (first half +74%, second half +14%)
+    pick: V => { const o = V.ou; if (!o || o.v2 == null || o.p1 < 55 || !(o.p1 + o.e < o.p1) || !(o.v2 < o.p1)) return null;
+      return { key: 'U', price: o.px[1], why: `Over 2.5 priced ${r1(o.p1)}%, v4 ${r1(o.p1 + o.e)}%, v2 ${r1(o.v2)}%: the price leans Over more than both models` }; } },
+  { id: 'bttsNo', name: 'Both score No: price too high on Yes', rule: 'DraftKings rates both teams to score Yes at 58%+ (margin removed) and v4 rates it lower: bet No',
+    // 67 bets, 46% hit, +26% (first half +24%, second half +29%); also needing v2 below the price: 41 bets, +25%
+    pick: V => { const t = V.bt; if (!t || t.p1 < 58 || !(t.v4 < t.p1)) return null;
+      return { key: 'N', price: t.px[1], why: `Both score Yes priced ${r1(t.p1)}%, v4 ${r1(t.v4)}%: the price leans Yes more than v4` }; } },
 ];
 
 // ---- one look at a set of cards: the new bets, if any ----
-const MKT = k => (k === 'O' || k === 'U' ? 'ou' : '1x2');
-export const LABEL = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5' };
+const MKT = k => (k === 'O' || k === 'U' ? 'ou' : k === 'B' || k === 'N' ? 'btts' : '1x2');
+export const LABEL = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U: 'Under 2.5', B: 'Both score Yes', N: 'Both score No' };
 const BOOKN = { pinnacle: 'Pinnacle', betfair_ex_eu: 'Betfair', betfair_ex_uk: 'Betfair', matchbook: 'Matchbook' };
 // The Analyst only bets a card with a v4 number that is not the rough promoted-club stand-in, and with a price to read.
 export function lookCard(c) {
   if (!c || c.final || !c.odds || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null;
-  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds) });
+  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2 });
 }
 // One position per game per market (1X2, Over/Under): the first rule to fire takes it, in RULES order, and later reads never add to it
 // or bet the other side. A benched rule places nothing. sharp: Map(cardId -> sharpOf) for the stale-price rule, or null.
@@ -92,13 +107,14 @@ export function decide(items, cards, date, now = new Date(), benched = new Set()
     if (!c || c.final || !c.odds) continue;
     const V = lookCard(c), S = sharp && sharp.get(c.id); if (!V && !S) continue;
     for (const r of RULES) {
-      if (benched.has(r.id) || (r.sharp ? !S : !V)) continue;
+      if (r.retired || benched.has(r.id) || (r.sharp ? !S : !V)) continue;
       const b = r.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
       const k = `${date}|${c.league}|${c.id}|${MKT(b.key)}`; if (held.has(k)) continue;
       held.add(k);
       const i = 'HDA'.indexOf(b.key), v4ok = c.v4 && Array.isArray(c.v4.p);
-      const mp = b.sharp ? b.sharp.fair : i >= 0 ? V.p1[i] : b.key === 'O' ? V.ou.p1 : 100 - V.ou.p1;
-      const v4p = !v4ok ? null : i >= 0 ? c.v4.p[i] : typeof c.v4.over !== 'number' ? null : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
+      const bt = b.key === 'B' || b.key === 'N';
+      const mp = b.sharp ? b.sharp.fair : i >= 0 ? V.p1[i] : bt ? (b.key === 'B' ? V.bt.p1 : 100 - V.bt.p1) : b.key === 'O' ? V.ou.p1 : 100 - V.ou.p1;
+      const v4p = !v4ok ? null : i >= 0 ? c.v4.p[i] : bt ? (typeof c.v4.btts !== 'number' ? null : b.key === 'B' ? c.v4.btts : 100 - c.v4.btts) : typeof c.v4.over !== 'number' ? null : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
       out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), date, league: c.league, gid: c.id,
         home: c.home, away: c.away, leagueName: c.leagueName || c.league, kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
         rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: v4p == null ? null : r1(v4p), why: b.why, ...(b.sharp ? { sharp: b.sharp } : {}), close: null, clv: null, res: null, units: null });
@@ -147,7 +163,7 @@ export function decideNhl(items, cards, date, now = new Date(), benched = new Se
 }
 
 // ---- settling: the closing price once the game has kicked off, the result once it is graded ----
-const closeOf = (odds, key) => { const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null })[key]; return Number.isFinite(m) ? m : null; };
+const closeOf = (odds, key) => { const dkB = odds && (!odds.bk || odds.bk === 'draftkings'); const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null, B: dkB ? odds.by : null, N: dkB ? odds.bn : null })[key]; return Number.isFinite(m) ? m : null; };
 const VOID_AFTER = 4 * 86400000; // a game with no result 4 days after kickoff (postponed, abandoned) is voided: the stake comes back
 const closeNhl = (px, b) => { const m = px && ({ H: px.h, A: px.a, O: px.tl === b.line ? px.to : null, U: px.tl === b.line ? px.tu : null })[b.key]; return Number.isFinite(m) ? m : null; };
 export function settle(b, c, now = new Date()) {
@@ -201,14 +217,14 @@ export const isBenched = s => s.settled >= BENCH.n && s.clv != null && s.clv <= 
 const WHEN = [['early', '3+ hours before kickoff', m => m >= 180], ['late', 'last 3 hours (incl. the lineup read)', m => m < 180]];
 export function summary(items0, old = [], rules0 = RULES, since = SINCE) {
   const items = [...items0, ...old.map(unpack)];
-  const all = blank(), per = Object.fromEntries(rules0.map(r => [r.id, blank()])), when = Object.fromEntries(WHEN.map(w => [w[0], blank()])), mk = { '1x2': blank(), ou: blank() };
+  const all = blank(), per = Object.fromEntries(rules0.map(r => [r.id, blank()])), when = Object.fromEntries(WHEN.map(w => [w[0], blank()])), mk = { '1x2': blank(), ou: blank(), btts: blank() };
   const curve = []; let cum = 0;
   for (const b of [...items].sort((x, y) => (x.kickoff < y.kickoff ? -1 : 1))) {
     add(all, b); if (per[b.rule]) add(per[b.rule], b); add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
     if (b.res === 'win' || b.res === 'loss') { cum += b.units; curve.push([b.kickoff.slice(0, 10), +cum.toFixed(2)]); }
   }
-  const rules = rules0.map(r => { const s = done(per[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benched: isBenched(s) }; });
-  return { since, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou) }, curve, verdict: verdict(done(all)) };
+  const rules = rules0.map(r => { const s = done(per[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benched: !r.retired && isBenched(s), ...(r.retired ? { retired: r.retired } : {}) }; });
+  return { since, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou), btts: done(mk.btts) }, curve, verdict: verdict(done(all)) };
 }
 // The Analyst's own read of its record, in one line. CLV first: it settles in tens of bets, profit needs hundreds.
 export function verdict(s) {
@@ -249,7 +265,7 @@ export async function analystLook(env, date, cards, now = new Date(), shop = nul
     const fresh = decide(doc.items, live, date, now, benched, sp);
     if (fresh.length) {
       let best = null;
-      if (shop) { try { best = await shop(cards.filter(c => fresh.some(b => b.gid === c.id))); } catch (e) { best = null; } }
+      if (shop) { try { const want = cards.filter(c => fresh.some(b => b.gid === c.id && b.key !== 'B' && b.key !== 'N')); best = want.length ? await shop(want) : null; } catch (e) { best = null; } }
       for (const b of fresh) {
         b.dk = b.price; b.bk = 'draftkings';
         const x = best && best.get(b.gid) && best.get(b.gid)[b.key];
