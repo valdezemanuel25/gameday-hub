@@ -106,7 +106,7 @@ const LEAD_MIN = 45;
 // cards: { soccer: [...], hockey: [...] } for the day(s) near now. Returns the alerts not sent yet.
 export function dueAlerts(cards, sent, now) {
   const out = [];
-  for (const [sport, list, fn, url] of [['s', cards.soccer || [], soccerAlert, '/'], ['n', cards.hockey || [], hockeyAlert, '/nhl']]) {
+  for (const [sport, list, fn, url] of [['s', cards.soccer || [], soccerAlert, '/soccer'], ['n', cards.hockey || [], hockeyAlert, '/nhl']]) {
     for (const c of list) {
       const mins = (new Date(c.kickoff).getTime() - now) / 60000;
       if (!(mins > 0 && mins <= LEAD_MIN)) continue;

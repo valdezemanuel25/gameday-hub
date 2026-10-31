@@ -942,6 +942,10 @@ const hub = {
       return new Response('Sign in to open Game Day Hub.', { status: 401, headers: { 'cache-control': 'no-store' } });
     }
 
+    // Opening the Hub lands on the Home carousel; Soccer lives at /soccer (old installs and bookmarks that open / land on Home too)
+    if (req.method === 'GET' && p === '/') return new Response(null, { status: 302, headers: { location: '/home' + url.search, 'cache-control': 'no-store' } });
+    if (req.method === 'GET' && p === '/soccer') return env.ASSETS.fetch(new Request(new URL('/' + url.search, url.origin), req));
+
     if (p.startsWith('/api/push/')) { // alerts to the installed app: which devices, and a test message
       try {
         if (req.method === 'GET' && p === '/api/push/key') return json({ key: (await getVapid(env, url.origin)).pub, devices: (await getPush(env)).subs.length });
@@ -949,7 +953,7 @@ const hub = {
         const b = await req.json().catch(() => ({}));
         if (p === '/api/push/subscribe') return json(await addSub(env, b.sub, b.label));
         if (p === '/api/push/unsubscribe') return json(await removeSub(env, String(b.endpoint || '')));
-        if (p === '/api/push/test') return json({ ok: true, ...(await sendAll(env, { title: 'Game Day Hub', body: 'Notifications are on for this device.', tag: 'test', url: '/' })) });
+        if (p === '/api/push/test') return json({ ok: true, ...(await sendAll(env, { title: 'Game Day Hub', body: 'Notifications are on for this device.', tag: 'test', url: '/home' })) });
       } catch (e) { return json({ error: e && e.message ? e.message : String(e) }, 500); }
       return json({ error: 'Not found' }, 404);
     }
