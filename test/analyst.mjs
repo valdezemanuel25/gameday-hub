@@ -7,7 +7,7 @@ let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  '
 const rule = id => RULES.find(r => r.id === id);
 const KO = '2026-10-28T19:00:00Z', NOW = new Date('2026-10-28T12:00:00Z');
 const card = (o = {}) => ({ id: 'g1', league: 'eng.1', leagueName: 'Premier League', home: 'Arsenal', away: 'Brighton', kickoff: KO,
-  v4: { p: [52, 25, 23], over: 58 }, odds: { op: { h: 150, d: 230, a: 190 }, h: 110, d: 240, a: 240, tl: 2.5, to: -120, tu: 100, opt: { tl: 2.5, to: 100, tu: -120 } }, ...o });
+  v4: { p: [52, 25, 23], over: 58, btts: 50 }, odds: { op: { h: 150, d: 230, a: 190 }, h: 110, d: 240, a: 240, tl: 2.5, to: -120, tu: 100, opt: { tl: 2.5, to: 100, tu: -120 }, by: -160, bn: 130 }, ...o });
 
 // --- rules ---
 const V = view({ v4: card().v4, open: card().odds.op, now: card().odds, openT: card().odds.opt });
@@ -15,6 +15,19 @@ ok('view: home chance rose since the opening price', V.d[0] > 3 && V.d[2] < 0, J
 ok('follow: backs the side the money moved to when v4 rated it above the opening price', (rule('follow').pick(V) || {}).key === 'H');
 ok('follow: silent when v4 rated it below the opening price', rule('follow').pick(view({ v4: { p: [30, 30, 40], over: 50 }, open: card().odds.op, now: card().odds })) === null);
 ok('totals: Over moved 3+ and v4 is on the Over side of the price now', (rule('totals').pick(V) || {}).key === 'O');
+ok('totals: retired, so decide never places it', !!rule('totals').retired && !decide([], [card()], '2026-10-28', NOW).some(b => b.rule === 'totals'));
+// under: Over priced 55%+ and both v2 and v4 below it
+const Vu = view({ v4: { p: [40, 30, 30], over: 50 }, v2: { over: 52 }, open: { h: 150, d: 230, a: 190 }, now: { h: 150, d: 230, a: 190, tl: 2.5, to: -150, tu: 120 } });
+ok('under: Over priced 55%+ (56.9%), v4 50% and v2 52% below it: bet Under at +120', (b => b && b.key === 'U' && b.price === 120)(rule('under').pick(Vu)), JSON.stringify(Vu.ou));
+ok('under: no bet when v2 is above the price', rule('under').pick(view({ v4: { p: [40, 30, 30], over: 50 }, v2: { over: 60 }, open: { h: 150, d: 230, a: 190 }, now: { h: 150, d: 230, a: 190, tl: 2.5, to: -150, tu: 120 } })) === null);
+ok('under: no bet when Over is priced under 55%', rule('under').pick(view({ v4: { p: [40, 30, 30], over: 40 }, v2: { over: 40 }, open: { h: 150, d: 230, a: 190 }, now: { h: 150, d: 230, a: 190, tl: 2.5, to: -120, tu: 100 } })) === null);
+// bttsNo: Yes priced 58%+ and v4 below it, DraftKings price only
+const bv = (o, v4b = 50) => view({ v4: { p: [40, 30, 30], over: 50, btts: v4b }, open: { h: 150, d: 230, a: 190 }, now: { h: 150, d: 230, a: 190, ...o } });
+ok('bttsNo: Yes priced 58.6%, v4 50%: bet No at +130', (b => b && b.key === 'N' && b.price === 130)(rule('bttsNo').pick(bv({ by: -160, bn: 130 }))));
+ok('bttsNo: no bet when v4 rates Yes above the price', rule('bttsNo').pick(bv({ by: -160, bn: 130 }, 65)) === null);
+ok('bttsNo: no bet when Yes is priced under 58%', rule('bttsNo').pick(bv({ by: -125, bn: 100 })) === null);
+ok('bttsNo: no bet on a Pinnacle stand-in price', rule('bttsNo').pick(bv({ by: -160, bn: 130, bk: 'pinnacle' })) === null);
+ok('settle: both score No settles on the score and closes at the both-score price', (() => { const x = { key: 'N', price: 130, kickoff: KO, mins: 60 }; settle(x, card({ odds: { ...card().odds, bn: 120 }, final: { h: 2, a: 0 } }), new Date('2026-10-29T01:00:00Z')); return x.res === 'win' && x.units === 1.3 && x.close === 120; })());
 ok('totals: no bet when v4 is on the other side', rule('totals').pick(view({ v4: { p: [52, 25, 23], over: 40 }, open: card().odds.op, now: card().odds, openT: card().odds.opt })) === null);
 const Vv = view({ v4: { p: [30, 25, 45], over: 50 }, open: { h: 120, d: 240, a: 220 }, now: { h: 120, d: 240, a: 220 } });
 ok('value: v4 5+ above the price on an away win with no move', (rule('value').pick(Vv) || {}).key === 'A');
@@ -24,7 +37,7 @@ ok('fade: away drifted 4+ but v4 still rates it above the price now', (rule('fad
 
 // --- decide: one position per game and market ---
 const first = decide([], [card()], '2026-10-28', NOW);
-ok('decide: one 1X2 and one Over/Under bet on the game', first.length === 2 && first.map(b => b.key).sort().join() === 'H,O', JSON.stringify(first.map(b => [b.rule, b.key])));
+ok('decide: one 1X2 and one both-score bet on the game', first.length === 2 && first.map(b => b.key).sort().join() === 'H,N', JSON.stringify(first.map(b => [b.rule, b.key])));
 ok('decide: bet keeps the price, market chance, v4 chance, minutes to kickoff and a reason', first[0].price === 110 && first[0].mins === 420 && first[0].v4 === 52 && /v4/.test(first[0].why));
 ok('decide: a later read never adds to or reverses a held position', decide(first, [card({ odds: { ...card().odds, h: 300, a: -150 } })], '2026-10-28', NOW).length === 0);
 ok('decide: a benched rule places nothing', !decide([], [card()], '2026-10-28', NOW, new Set(['follow'])).some(b => b.rule === 'follow'));
@@ -61,7 +74,7 @@ ok('analystLook: the same read again places nothing', r2.placed === 0 && (await 
 ok('analystLook: no bet once the price has locked', (await analystLook({ HUB: { get: async () => null, put: async () => { throw new Error('no write expected'); } } }, '2026-10-28', [card()], new Date('2026-10-28T18:45:00Z'))).placed === 0);
 const d = JSON.parse(kv.get('day:2026-10-28')); d.cards[0].final = { h: 0, a: 1 }; kv.set('day:2026-10-28', JSON.stringify(d));
 const L = await listAnalyst(env, new Date('2026-10-29T01:00:00Z'));
-ok('listAnalyst: settles finished games when the tab opens', L.items.every(x => x.res) && L.summary.all.settled === 2 && L.summary.all.units < 0, JSON.stringify(L.summary.all));
+ok('listAnalyst: settles finished games when the tab opens', L.items.every(x => x.res) && L.summary.all.settled === 2 && L.summary.all.units === 0.3, JSON.stringify(L.summary.all));
 // refreshOdds hands the Analyst the fresh prices: fake ESPN with one priced game
 globalThis.fetch = async () => new Response(JSON.stringify({ events: [] }));
 kv.set('day:2026-10-30', JSON.stringify({ date: '2026-10-30', cards: [card({ v2: { p: [50, 25, 25] }, kickoff: '2026-10-30T19:00:00Z' })] }));
@@ -83,8 +96,8 @@ ok('fetchBest: one call for the league, matched to the card', calls === 1 && fb.
 const kv2 = new Map(), env2 = { HUB: { get: async (k, t) => { const x = kv2.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { kv2.set(k, x); } } };
 calls = 0;
 await analystLook(env2, '2026-10-28', [card()], NOW, analystShop({ ODDS_API_KEY: 'k' }, 'eng.1', fakeApi));
-const sh = (await getAnalyst(env2)).items, hb = sh.find(x => x.key === 'H'), ob = sh.find(x => x.key === 'O');
-ok('shopping: the bet takes the better price and keeps DraftKings', hb.price === 120 && hb.bk === 'fanduel' && hb.dk === 110 && ob.price === -110 && ob.dk === -120, JSON.stringify(sh.map(x => [x.key, x.price, x.bk, x.dk])));
+const sh = (await getAnalyst(env2)).items, hb = sh.find(x => x.key === 'H'), ob = sh.find(x => x.key === 'N');
+ok('shopping: the bet takes the better price and keeps DraftKings (both score is not shopped)', hb.price === 120 && hb.bk === 'fanduel' && hb.dk === 110 && ob.price === 130 && ob.dk === 130 && ob.bk === 'draftkings', JSON.stringify(sh.map(x => [x.key, x.price, x.bk, x.dk])));
 ok('shopping: asked once, only because a rule fired', calls === 1);
 await analystLook(env2, '2026-10-28', [card()], NOW, analystShop({ ODDS_API_KEY: 'k' }, 'eng.1', fakeApi));
 ok('shopping: no call when nothing new fires', calls === 1);
@@ -111,7 +124,7 @@ const smap = new Map([['g1', sp]]);
 const sd = decide([], [card({ v4: null })], '2026-10-28', NOW, new Set(), smap);
 ok('decide: the stale rule bets a card with no v4, and goes first', sd.length === 1 && sd[0].rule === 'stale' && sd[0].sharp.book === 'pinnacle' && sd[0].v4 === null && sd[0].mp > 50, JSON.stringify(sd));
 const sd2 = decide([], [card()], '2026-10-28', NOW, new Set(), smap);
-ok('decide: with v4 too, stale takes the 1X2 position and the goals rule the Over/Under', sd2.find(b => b.key === 'H').rule === 'stale' && sd2.find(b => b.key === 'O').rule === 'totals');
+ok('decide: with v4 too, stale takes the 1X2 position and both-score No its own market', sd2.find(b => b.key === 'H').rule === 'stale' && sd2.find(b => b.key === 'N').rule === 'bttsNo');
 const fakeSharp = async () => ({ ok: true, headers: { get: () => '300' }, json: async () => [sev(120, 'pinnacle')] });
 const fs1 = await fetchSharp('k', 'eng.1', [card()], fakeSharp);
 ok('fetchSharp: one call, matched, books seen', fs1.prices.get('g1').book === 'pinnacle' && fs1.books.includes('pinnacle') && fs1.left === 300);
