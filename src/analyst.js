@@ -56,7 +56,7 @@ const why1 = (V, i, s) => `${['Home', 'Draw', 'Away'][i]} ${r1(V.p0[i])}%→${r1
 // is only asked when it has what it needs (sharp: true rules need S, the others V). Backtest at the closing price (1 unit a bet, first
 // half / second half of the window):
 export const RULES = [
-  { id: 'stale', sharp: true, name: 'Stale price: DraftKings behind the sharp book', rule: 'DraftKings pays 2%+ more than the sharp book\'s fair chance (Pinnacle or a betting exchange, margin removed) on a result or Over/Under 2.5, at +400 or shorter',
+  { id: 'stale', mk: ['1x2', 'ou'], sharp: true, name: 'Stale price: DraftKings behind the sharp book', rule: 'DraftKings pays 2%+ more than the sharp book\'s fair chance (Pinnacle or a betting exchange, margin removed) on a result or Over/Under 2.5, at +400 or shorter',
     // Bet365 against Pinnacle at the same moment (data/football-data, 8,389 games): opening prices +9% on 447 bets at 0%+, -5% at 2%+;
     // closing prices -3% / -4%. Bet365 is not DraftKings: the live test is whether DraftKings lags more.
     pick: (V, S) => { let best = null;
@@ -64,27 +64,27 @@ export const RULES = [
         const ev = q * dec(m) - 1; if (ev >= STALE.ev && (!best || ev > best.ev)) best = { key: k, price: m, ev, q }; }
       return best && { key: best.key, price: best.price, sharp: { book: S.book, fair: r1(100 * best.q), ev: r1(100 * best.ev) },
         why: `${LABEL[best.key]} DraftKings ${best.price > 0 ? '+' : ''}${best.price} pays ${r1(100 * best.ev)}% over ${BOOKN[S.book] || S.book}'s fair ${r1(100 * best.q)}%: DraftKings has not caught up` }; } },
-  { id: 'follow', name: 'Follow the move, v4 agrees', rule: 'A result\'s chance rose 3+ points since the opening price and v4 rated it above the opening price too',
+  { id: 'follow', mk: ['1x2'], name: 'Follow the move, v4 agrees', rule: 'A result\'s chance rose 3+ points since the opening price and v4 rated it above the opening price too',
     // close: 249 bets, -24% / +2% (-10% overall)
     pick: V => { const i = pickIdx(V.d, i => V.d[i] >= 3 && V.e0[i] > 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the money moved the way v4 already leaned') }; } },
-  { id: 'value', name: 'v4 value, price not against it', rule: 'v4 rates a home or away win 5+ points above the price now, and that price has not drifted 1+ points away from it',
+  { id: 'value', mk: ['1x2'], name: 'v4 value, price not against it', rule: 'v4 rates a home or away win 5+ points above the price now, and that price has not drifted 1+ points away from it',
     // close: 439 bets, -19% / -1% (-10% overall)
     pick: V => { const i = pickIdx(V.e, i => i !== 1 && V.e[i] >= 5 && V.d[i] > -1); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'v4 sees value and the money is not fighting it') }; } },
-  { id: 'fade', name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
+  { id: 'fade', mk: ['1x2'], name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
     // close: 218 bets, -3% / -14% (-9% overall)
     pick: V => { const i = pickIdx(V.d.map(x => -x), i => V.d[i] <= -4 && V.e[i] >= 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the price drifted but v4 says it went too far') }; } },
-  { id: 'totals', retired: '2026-10-31', name: 'Goals move, v4 agrees', rule: 'Over 2.5 moved 3+ points since the opening price (either way) and v4 is on the same side of the price now',
+  { id: 'totals', mk: ['ou'], retired: '2026-10-31', name: 'Goals move, v4 agrees', rule: 'Over 2.5 moved 3+ points since the opening price (either way) and v4 is on the same side of the price now',
     // close: 146 bets, +3% / -12% (-5% overall). Retired Oct 31, 2026 for 'under' below: on the Hub's own games (Oct 13-31) following
     // a 3-point Over/Under move went 7 of 14 at about -30%. Its bets stay in the record; it places no new ones.
     pick: V => { const o = V.ou; if (!o || o.d == null) return null; const k = o.d >= 3 && o.e >= 0 ? 'O' : o.d <= -3 && o.e <= 0 ? 'U' : null; if (!k) return null;
       return { key: k, price: o.px[k === 'O' ? 0 : 1], why: `Over 2.5 ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v4 ${r1(o.p1 + o.e)}%: goals money agrees with v4` }; } },
   // Front test from Oct 31, 2026. Backtest on the Hub's own games, Oct 13-31 at DraftKings' closing price (small samples: a live test only).
   // DraftKings' prices ran high on Yes and Over: Yes implied 59% and both scored 54%; Over implied 53% and 46% went over.
-  { id: 'under', name: 'Under: price too high on Over', rule: 'DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
+  { id: 'under', mk: ['ou'], name: 'Under: price too high on Over', rule: 'DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
     // 17 bets, 65% hit, +46% (first half +74%, second half +14%)
     pick: V => { const o = V.ou; if (!o || o.v2 == null || o.p1 < 55 || !(o.p1 + o.e < o.p1) || !(o.v2 < o.p1)) return null;
       return { key: 'U', price: o.px[1], why: `Over 2.5 priced ${r1(o.p1)}%, v4 ${r1(o.p1 + o.e)}%, v2 ${r1(o.v2)}%: the price leans Over more than both models` }; } },
-  { id: 'bttsNo', name: 'Both score No: price too high on Yes', rule: 'DraftKings rates both teams to score Yes at 58%+ (margin removed) and v4 rates it lower: bet No',
+  { id: 'bttsNo', mk: ['btts'], name: 'Both score No: price too high on Yes', rule: 'DraftKings rates both teams to score Yes at 58%+ (margin removed) and v4 rates it lower: bet No',
     // 67 bets, 46% hit, +26% (first half +24%, second half +29%); also needing v2 below the price: 41 bets, +25%
     pick: V => { const t = V.bt; if (!t || t.p1 < 58 || !(t.v4 < t.p1)) return null;
       return { key: 'N', price: t.px[1], why: `Both score Yes priced ${r1(t.p1)}%, v4 ${r1(t.v4)}%: the price leans Yes more than v4` }; } },
@@ -132,13 +132,13 @@ const hk = (c, k) => (k === 'H' ? c.hAbbr || c.home : c.aAbbr || c.away);
 const hwhy = (c, hm, k, s) => { const up = k === 'H', a = up ? hm.ml.p0 : 100 - hm.ml.p0, b = up ? hm.ml.p1 : 100 - hm.ml.p1, w = up ? c.v2.w : 100 - c.v2.w;
   return `${hk(c, k)} ${r1(a)}%→${r1(b)}% (${b - a >= 0 ? '+' : ''}${r1(b - a)}), v2 ${r1(w)}%: ${s}`; };
 export const NHL_RULES = [
-  { id: 'hfollow', name: 'Follow the move, v2 agrees', rule: 'A team\'s moneyline chance rose 3+ points since the opening price and v2 rated it above the opening price too',
+  { id: 'hfollow', mk: ['1x2'], name: 'Follow the move, v2 agrees', rule: 'A team\'s moneyline chance rose 3+ points since the opening price and v2 rated it above the opening price too',
     pick: (c, hm) => { const m = hm.ml; if (!m) return null; const k = m.d >= 3 && c.v2.w > m.p0 ? 'H' : m.d <= -3 && c.v2.w < m.p0 ? 'A' : null;
       return k && { key: k, price: k === 'H' ? c.px.h : c.px.a, why: hwhy(c, hm, k, 'the money moved the way v2 already leaned') }; } },
-  { id: 'hfade', name: 'Fade the drift, v2 disagrees with it', rule: 'A team\'s moneyline chance fell 4+ points since the opening price but v2 still rates it at or above the price now',
+  { id: 'hfade', mk: ['1x2'], name: 'Fade the drift, v2 disagrees with it', rule: 'A team\'s moneyline chance fell 4+ points since the opening price but v2 still rates it at or above the price now',
     pick: (c, hm) => { const m = hm.ml; if (!m) return null; const k = m.d <= -4 && c.v2.w >= m.p1 ? 'H' : m.d >= 4 && c.v2.w <= m.p1 ? 'A' : null;
       return k && { key: k, price: k === 'H' ? c.px.h : c.px.a, why: hwhy(c, hm, k, 'the price drifted but v2 says it went too far') }; } },
-  { id: 'htotals', name: 'Goals move, v2 agrees', rule: 'The Over moved 3+ points since the opening price (either way) and v2, rated at the same line, is on the same side of the price now',
+  { id: 'htotals', mk: ['ou'], name: 'Goals move, v2 agrees', rule: 'The Over moved 3+ points since the opening price (either way) and v2, rated at the same line, is on the same side of the price now',
     pick: (c, hm) => { const o = hm.ou; if (!o || !c.ln || c.ln.v !== o.line || typeof c.v2.o !== 'number') return null;
       const k = o.d >= 3 && c.v2.o >= o.p1 ? 'O' : o.d <= -3 && c.v2.o <= o.p1 ? 'U' : null; if (!k) return null;
       return { key: k, price: k === 'O' ? c.px.to : c.px.tu, line: o.line, why: `Over ${o.line} ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v2 ${r1(c.v2.o)}%: goals money agrees with v2` }; } },
@@ -302,6 +302,8 @@ export async function listAnalyst(env, now = new Date()) {
     if (dirty) await save(env, doc);
   }
   const old = doc.old || [];
-  return { items: soc(doc.items).slice(0, 300), summary: summary(soc(doc.items), soc(old, true)), rules: RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })),
-    nhl: { items: nhl(doc.items).slice(0, 300), summary: summary(nhl(doc.items), nhl(old, true), NHL_RULES, NHL_SINCE), rules: NHL_RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })) } };
+  // The same record split by market (Winner, Over/Under, Both score) for the Analyst tab's filter: each with only the rules that bet it
+  const byMk = (items, old, rules, since, mks) => Object.fromEntries(mks.map(m => [m, summary(items.filter(b => MKT(b.key) === m), old.filter(b => MKT(b[2]) === m), rules.filter(r => r.mk.includes(m)), since)]));
+  return { items: soc(doc.items).slice(0, 300), summary: summary(soc(doc.items), soc(old, true)), mk: byMk(soc(doc.items), soc(old, true), RULES, SINCE, ['1x2', 'ou', 'btts']), rules: RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })),
+    nhl: { items: nhl(doc.items).slice(0, 300), summary: summary(nhl(doc.items), nhl(old, true), NHL_RULES, NHL_SINCE), mk: byMk(nhl(doc.items), nhl(old, true), NHL_RULES, NHL_SINCE, ['1x2', 'ou']), rules: NHL_RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })) } };
 }
