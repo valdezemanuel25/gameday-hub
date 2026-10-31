@@ -223,6 +223,7 @@ button:focus-visible{outline:2px solid var(--blue)}
 #hub-bar a.on,.btn,.day.on,.day.on b,.day.on small,.edg.proven,.mb .mgo,.note .sv,.pv.val,.xag.s,.zgo,.chip.on,.cf.s{text-shadow:none}
 .mbx{background:rgba(4,5,4,.55);-webkit-backdrop-filter:blur(1.2px);backdrop-filter:blur(1.2px);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:2px 14px}
 .mbx>.mbr:first-child{border-top:0}
+.mvx th .fa{display:block;font-size:9.5px;font-weight:500;color:var(--faint);letter-spacing:0;text-transform:none;white-space:nowrap;margin-bottom:1px}
 </style>
 </head>
 <body>
@@ -321,6 +322,7 @@ function hockeyMove(px) {
   return { from, ml, ou, top, size, big: size >= BIG_MOVE };
 }
 const fmtOdds = m => (m > 0 ? '+' : '') + m, sgn = x => (x > 0 ? '+' : '') + x;
+const faStamp = iso => iso ? `<span class="fa" title="When the Hub first grabbed this game's price">${new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)).replace(', ', ' · ')}</span>` : '';
 const tmCT = iso => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 const pxLocked = c => c.final || new Date(c.kickoff).getTime() - Date.now() <= 20 * 60000;
 // What moved most, in words: "NYR +6" (home / away on the moneyline) or "Over 6.5 +5".
@@ -452,7 +454,7 @@ function movesView() {
     const fl = cardFlags(c, hm);
     return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}${gkRestTags(c)}
       <small>${esc(c.away)} at ${esc(c.home)} · ${esc(c.ko || '')}${fin ? ` · final ${fin.a}–${fin.h}${fin.last !== 'REG' ? ' ' + esc(fin.last) : ''}${follow ? ' · ' + follow : ''}` : ''}${hm.big ? ` · <span class="mvf">big move: ${esc(mvWord(c, hm))}</span>` : ''}</small>
-      <table class="mvx"><tr><th></th><th>${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
+      <table class="mvx"><tr><th></th><th>${faStamp(c.px.fa)}${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
       ${px.ts ? `<small class="mvn">Price last changed ${tmCT(px.ts)}</small>` : ''}</div>`;
   };
   const shown = rows.filter(r => inF(r, f));

@@ -33,6 +33,18 @@ ok('no opening or first price: no move', moveOf({ h: -150, d: 280, a: 400 }) ===
 const p = parseOdds([{ moneyline: { home: { open: { odds: '+110' }, close: { odds: '-150' } }, draw: { open: { odds: '+250' }, close: { odds: '+280' } }, away: { open: { odds: '+240' }, close: { odds: '+400' } } },
   total: { over: { open: { line: 'o2.5', odds: '+105' }, close: { line: 'o2.5', odds: '-120' } }, under: { open: { line: 'u2.5', odds: '-125' }, close: { line: 'u2.5', odds: '+100' } } } }]);
 ok('ESPN\'s opening total is kept apart from the current one', p.opt && p.opt.tl === 2.5 && p.opt.to === 105 && p.opt.tu === -125 && p.to === -120, JSON.stringify(p));
+// fa: when the Hub first grabbed the price, shown above "Opening"
+{
+  const T = new Date('2026-10-31T14:00:00Z'), T2 = new Date('2026-10-31T18:00:00Z');
+  const a = withOdds(null, { h: -150, d: 280, a: 400 }, T), b = withOdds(a, { h: -160, d: 290, a: 420 }, T2);
+  ok('first-grab time: set on the first price and kept on later prices', a.fa === T.toISOString() && b.fa === T.toISOString(), JSON.stringify(b));
+  ok('first-grab time: a price saved before this existed gets none (no made-up time)', withOdds({ h: -150, d: 280, a: 400, f: { h: -150, d: 280, a: 400 } }, { h: -160, d: 290, a: 420 }, T2).fa === undefined);
+  const g = { kickoff: '2026-11-01T00:00:00Z' };
+  setPrice(g, { h: -130, a: 110 }, T); const fa1 = g.px.fa; setPrice(g, { h: -140, a: 120 }, T2, true);
+  ok('first-grab time (hockey): set on the first price and kept', fa1 === T.toISOString() && g.px.fa === T.toISOString(), JSON.stringify(g.px));
+  const o = { kickoff: '2026-11-01T00:00:00Z', px: { h: -130, a: 110, f: { h: -130, a: 110 }, rd: T.toISOString() } }; setPrice(o, { h: -150, a: 125 }, T2, true);
+  ok('first-grab time (hockey): an older price gets none', o.px.fa === undefined);
+}
 const w = withOdds(null, { h: -150, d: 280, a: 400, tl: 2.5, to: -120, tu: 100 });
 ok('the first price seen keeps the total too', w.f.tl === 2.5 && w.f.to === -120 && w.f.tu === 100);
 ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -150, d: 280, a: 400, ts: 'T1', cl: 'T2' }, { h: -160, d: 290, a: 420 }).cl === 'T2' && withOdds({ h: 1, d: 1, a: 1, ts: 'T1' }, { h: -160, d: 290, a: 420 }).ts === 'T1');

@@ -257,19 +257,21 @@ function setV6(card, old, now = new Date()) {
 }
 // Attach the price to a card being (re)built; from PRICE_LOCK minutes before kickoff the price read before then stands.
 function keepOdds(card, old, f, slug, now) {
-  if (PRICED.has(slug) && f.odds) card.odds = withOdds(old?.odds, f.odds);
+  if (PRICED.has(slug) && f.odds) card.odds = withOdds(old?.odds, f.odds, now);
   if (old?.odds && (!card.odds || new Date(f.date).getTime() - now.getTime() <= PRICE_LOCK * 60000)) card.odds = old.odds; // locked from PRICE_LOCK minutes before kickoff
 }
 // A fresh price for a card: keeps the both-score prices (they come from another source) and `f`, the first home / draw / away price the
 // Hub saw for this game. `f` is what a bet placed when the pick first showed would have got; the price at kickoff is the closing one.
 // The first price also keeps the total (line and Over / Under prices) when the book had one, so totals can be tracked from it too.
 // ts (when the price last changed) and cl (when the lineup read was taken: the closing price) carry over from the old price.
-export function withOdds(old, fresh) {
+export function withOdds(old, fresh, now = new Date()) {
   const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
   for (const k of ['bf', 'bk', 'bcl', 'bfk', 'pn', 'pf', 'pcl', 'pat', 'cby', 'cls']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
   const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
+  // fa = when the Hub first grabbed a price for this game (shown above "Opening"); only known for prices first seen from now on
+  if (old && old.fa) n.fa = old.fa; else if (f && !(old && (old.f || old.h != null))) n.fa = now.toISOString();
   return n;
 }
 // ---------------------------------------------------------------------------------------------
@@ -420,12 +422,12 @@ export async function refreshCardClose(env, date, slug, id, now = new Date(), f 
   const started = new Date(c.kickoff).getTime() <= now.getTime();
   if (!started) {
     if (!fx.odds) return { error: 'ESPN has no price for this game right now' };
-    const n = withOdds(c.odds, fx.odds); if (sameJson(n, c.odds) === false) n.ts = now.toISOString();
+    const n = withOdds(c.odds, fx.odds, now); if (sameJson(n, c.odds) === false) n.ts = now.toISOString();
     n.cl = now.toISOString(); n.cby = 'you'; delete n.cls; c.odds = n;
     await addPinn(env, [c], now, f); await addBtts(env, [c], slug, now, f);
     setV6(c, c, now);
   } else if (fx.done && fx.oddsDone) {
-    const n = withOdds(c.odds, fx.oddsDone); if (sameJson(n, c.odds) === false) n.ts = now.toISOString();
+    const n = withOdds(c.odds, fx.oddsDone, now); if (sameJson(n, c.odds) === false) n.ts = now.toISOString();
     n.cl = c.kickoff; n.cls = 'espn'; delete n.cby; c.odds = n;
   } else return { error: fx.done ? "ESPN no longer lists a closing line for this finished game, so the last price stands as the close" : "The game has started: ESPN's price may be an in-play one, so the Hub will not take it as the close. Try again after the final." };
   await env.HUB.put(`day:${date}`, JSON.stringify(day));
@@ -441,7 +443,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
   for (const c of open) {
     const o = byId.get(c.id)?.odds; if (o) priced++;
     let ch = false;
-    if (o) { const n = withOdds(c.odds, o); if (sameJson(n, c.odds) === false) { n.ts = now.toISOString(); c.odds = n; ch = true; } }
+    if (o) { const n = withOdds(c.odds, o, now); if (sameJson(n, c.odds) === false) { n.ts = now.toISOString(); c.odds = n; ch = true; } }
     // The read inside the lineup window (LINEUP_READ to PRICE_LOCK minutes before kickoff) is the closing price: note when it was taken.
     if (o && c.odds && !c.odds.cl && new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000) { c.odds.cl = now.toISOString(); ch = true; }
     if (c.odds && setV6(c, c, now)) ch = true; // the score card follows the price (and a card priced before v6 existed gets one)
