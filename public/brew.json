@@ -1,6 +1,71 @@
 {
-  "updated": "2026-10-30T20:38:30Z",
+  "updated": "2026-10-31T10:08:29Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-10-31",
+      "title": "Nothing scarier",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,437",
+          "change": -2.86
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,580",
+          "change": -1.82
+        },
+        {
+          "label": "Dow",
+          "value": "51,770",
+          "change": -1.09
+        },
+        {
+          "label": "10-yr",
+          "value": "4.929%",
+          "change": -6,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$76,724",
+          "change": -2.74
+        },
+        {
+          "label": "SanDisk",
+          "value": "$1,150.89",
+          "change": -13.47
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Tech selloff",
+          "t": "The Nasdaq fell 2.86%, its worst day since June, and the Nasdaq 100 dropped as much as 4.5% into its third correction this year on AI-spending worries."
+        },
+        {
+          "h": "Intel",
+          "t": "Intel cratered 28.58%, its worst day in 50 years, on weak PC demand, cutting the value of the US government's 10% stake by about $12B."
+        },
+        {
+          "h": "Alphabet & Amazon",
+          "t": "Alphabet had its worst day ever Thursday, losing about $475B in value, while Amazon slipped 1.41% after spending more on AI than expected."
+        },
+        {
+          "h": "Big Oil",
+          "t": "Chevron's Q3 profit rose to $9.9B (almost +200%) and Exxon's doubled to $15.4B, with both stocks touching record highs."
+        },
+        {
+          "h": "Binance hack",
+          "t": "Hackers stole about $6.3B from Binance in roughly 20 minutes, the largest crypto theft ever; $3B has been frozen and Bitcoin slid 2.74%."
+        },
+        {
+          "h": "Reddit",
+          "t": "Reddit plans a mostly logged-in-only experience and gave weak Q4 guidance, sending shares down 29%, its worst day since its 2024 IPO."
+        }
+      ],
+      "note": "Market numbers are the Friday close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-10-30",
@@ -60,71 +125,6 @@
           "t": "Reddit fell 29.34%, Roblox 18.13% and Twilio 15.48%, while FedEx Freight rose 14.91%, Regeneron 13.33% and AstraZeneca 6.78%."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-10-30",
-      "title": "Surprising growth spurt",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "26,185",
-          "change": -1.38
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,720",
-          "change": -0.3
-        },
-        {
-          "label": "Dow",
-          "value": "52,343",
-          "change": -0.25
-        },
-        {
-          "label": "10-yr",
-          "value": "4.989%",
-          "change": -6.0,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$78,986",
-          "change": -2.8
-        },
-        {
-          "label": "Alphabet",
-          "value": "$283.82",
-          "change": -12.64
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Alphabet",
-          "t": "Shares fell 12.64% to $283.82, erasing about $482B in market value in its worst day since its 2004 IPO amid fresh AI jitters."
-        },
-        {
-          "h": "GDP",
-          "t": "Q3 GDP grew at a 3.4% annualized pace, up from 2.5% and 2.2% in prior quarters, with business investment up 12.7% and AI equipment purchases up 20.9%."
-        },
-        {
-          "h": "Inflation",
-          "t": "Price growth accelerated in September on the Fed's preferred gauge, and the savings rate slipped to 3.8%, the lowest since 2022."
-        },
-        {
-          "h": "DoorDash",
-          "t": "DoorDash agreed to buy Instacart for $17B, combining the biggest US restaurant delivery and online grocery platforms."
-        },
-        {
-          "h": "Intel & Amazon",
-          "t": "Intel dropped over 20% after hours on a weak Q4 forecast, while Amazon posted negative free cash flow and missed earnings and revenue estimates."
-        },
-        {
-          "h": "Deals",
-          "t": "Thrive is acquiring ADT for $7.6B, and law firm Weil Gotshal, with 2,000 staff and about $2B in revenue, is winding down after 30+ partner exits."
-        }
-      ],
-      "note": "Market numbers are the Thursday close."
     },
     {
       "source": "Brew Markets",
