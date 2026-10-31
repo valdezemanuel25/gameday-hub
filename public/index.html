@@ -1176,9 +1176,12 @@ function movesView() {
   if (!day || !day.cards) return `<div class="empty">Loading…</div>`;
   const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
   const rows = priced.map(c => ({ c, mv: moveOf(c.odds), st: closeState(c) }));
-  const f = S.mvf || 'all', shown = rows.filter(r => f === 'big' ? r.mv.big : f === 'pend' ? r.st.k === 'pend' || r.st.k === 'due' : f === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true);
-  const n = k => rows.filter(r => k === 'big' ? r.mv.big : k === 'pend' ? r.st.k === 'pend' || r.st.k === 'due' : r.st.k === 'ok' || r.st.k === 'miss').length;
-  const seg = `<div class="tseg"><button type="button" class="${f === 'all' ? 'on' : ''}" data-mvf="all">All<i>${rows.length}</i></button><button type="button" class="${f === 'big' ? 'on' : ''}" data-mvf="big">Big moves<i>${n('big')}</i></button><button type="button" class="${f === 'pend' ? 'on' : ''}" data-mvf="pend">Pending<i>${n('pend')}</i></button><button type="button" class="${f === 'closed' ? 'on' : ''}" data-mvf="closed">Closed<i>${n('closed')}</i></button></div>`;
+  // Upcoming = not kicked off yet. It opens first; a day with none (a past day) opens on All unless you picked a filter.
+  const up = r => !r.c.final && new Date(r.c.kickoff).getTime() > Date.now();
+  const test = k => r => k === 'big' ? r.mv.big : k === 'up' ? up(r) : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
+  const n = k => rows.filter(test(k)).length;
+  const f = S.mvf || (n('up') ? 'up' : 'all'), shown = rows.filter(test(f));
+  const seg = `<div class="tseg">${[['up', 'Upcoming'], ['big', 'Big moves'], ['all', 'All'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-mvf="${k}">${l}<i>${n(k)}</i></button>`).join('')}</div>`;
   const head = `<div class="small" style="margin:8px 18px 0">DraftKings prices, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before kickoff, after the lineups, then locked. A move of ${BIG_MOVE}+ points on one result is a big move: news reaching the price, not a bet.${unpriced ? ` ${unpriced} game${unpriced === 1 ? '' : 's'} on this day ha${unpriced === 1 ? 's' : 've'} no price.` : ''}</div>`;
   const card = ({ c, mv, st }) => {
     const o = c.odds, op = o.op || o.f, fin = c.final, out = fin ? (fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2) : null;
