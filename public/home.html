@@ -99,7 +99,7 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
   var today = now.toLocaleDateString('en-CA', tz); // YYYY-MM-DD
 
   var ITEMS = [
-    { key: 'soccer', href: '/', title: 'Soccer', stat: 'Match cards & picks', meta: '',
+    { key: 'soccer', href: '/soccer', title: 'Soccer', stat: 'Match cards & picks', meta: '',
       icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7.6l4.2 3-1.6 4.9H9.4L7.8 10.6z"/><path d="M12 7.6V3.2M16.2 10.6l4.3-1.3M14.6 15.5l2.6 3.6M9.4 15.5l-2.6 3.6M7.8 10.6L3.5 9.3"/>',
       art: '<rect x="62" y="-24" width="210" height="268" rx="3"/><path d="M62 110h210"/><circle cx="167" cy="110" r="34"/><circle cx="167" cy="110" r="2" fill="currentColor"/><rect x="112" y="-24" width="110" height="60"/><rect x="140" y="-24" width="54" height="26"/><path d="M144 36a24 24 0 0 0 46 0"/>' },
     { key: 'nhl', href: '/nhl', title: 'NHL', stat: 'Winner & totals', meta: '',
@@ -281,7 +281,7 @@ body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:col
     if (Array.isArray(h.next)) {
       var nx = document.getElementById('nx'), list = document.getElementById('nxl');
       list.innerHTML = h.next.length ? h.next.map(function (r) {
-        var href = r.sport === 'nhl' ? '/nhl' : '/';
+        var href = r.sport === 'nhl' ? '/nhl' : '/soccer';
         return '<a class="nr ' + r.sport + '" href="' + href + '"><span class="tm">' + esc(r.ko || '') + '</span><span class="dot" aria-hidden="true"></span><span class="mu">' + esc(r.label) + '</span>' +
           (r.best ? '<span class="bp">Best pick</span>' : '<span class="sp">' + (r.sport === 'nhl' ? 'NHL' : 'Soccer') + '</span>') + '</a>';
       }).join('') : '<div class="none">Nothing left to start today</div>';
