@@ -933,6 +933,8 @@ const hub = {
       return new Response(null, { status: 303, headers: { location: next, 'set-cookie': `${COOKIE}=${await sessionValue(env)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
     }
     if (p === '/logout') return new Response(null, { status: 303, headers: { location: '/login', 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
+    // iPhones also look for the home-screen icon at these fixed names; give them the same picture
+    if (req.method === 'GET' && /^\/apple-touch-icon(-precomposed|-180x180|-180x180-precomposed)\.png$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/apple-touch-icon.png', url.origin)));
     if (req.method === 'GET' && (p === '/login' || PUBLIC_FILES.has(p))) return env.ASSETS.fetch(req); // /login is public/login.html (the assets handler serves it without the .html)
 
     // Whole site is private: page and data both need the password.
