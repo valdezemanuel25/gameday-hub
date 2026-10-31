@@ -16,12 +16,16 @@ export function moveOf(odds) {
   if (!a || !b) return null;
   const p0 = a.map(x => r1(100 * x)), p1 = b.map(x => r1(100 * x)), d = p1.map((x, i) => r1(x - p0[i]));
   const top = d.reduce((m, x, i) => (Math.abs(x) > Math.abs(d[m]) ? i : m), 0), size = Math.abs(d[top]);
-  // Over / Under: only when the opening total is on the same line as now
-  const ot = odds.opt || (odds.f && odds.f.tl != null ? odds.f : null);
-  let ou = null;
-  if (ot && ot.tl === odds.tl) { const x = devig(ot.to, ot.tu), y = devig(odds.to, odds.tu); if (x && y) ou = { line: odds.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
-  // no starting total to measure a move from (none at the opening or the first read, or the line changed): still show the price now
-  let ouNow = null; if (!ou && odds.tl != null) { const y = devig(odds.to, odds.tu); if (y) ouNow = { line: odds.tl, p1: r1(100 * y[0]) }; }
+  // Over / Under, from whichever source has it. Now: DraftKings (ESPN), else Pinnacle. Start, on the same line as now: DraftKings'
+  // opening total (ESPN), else the first DraftKings total the Hub read, else the first Pinnacle total the Hub read. A start from
+  // another book than now is marked mixed (margins removed, so the chances compare, but it is two books, so it raises no flag).
+  const tot = o => o && o.tl != null && Number.isFinite(o.to) && Number.isFinite(o.tu);
+  const nowT = tot(odds) ? { ...odds, s: 'dk' } : tot(odds.pn) ? { ...odds.pn, s: 'pinnacle' } : null;
+  const ot = nowT && [[odds.opt, 'open'], [odds.f, 'first'], [odds.pf, 'pinnacle']].find(([o]) => tot(o) && o.tl === nowT.tl);
+  let ou = null, ouNow = null;
+  if (ot) { const x = devig(ot[0].to, ot[0].tu), y = devig(nowT.to, nowT.tu); if (x && y) ou = { line: nowT.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])), s0: ot[1], s1: nowT.s, o0: ot[0].to, o1: nowT.to, mixed: (ot[1] === 'pinnacle') !== (nowT.s === 'pinnacle') }; }
+  // no starting total on the same line from any source: still show the price now
+  if (!ou && nowT) { const y = devig(nowT.to, nowT.tu); if (y) ouNow = { line: nowT.tl, p1: r1(100 * y[0]), o1: nowT.to, s1: nowT.s }; }
   return { from, p0, p1, d, top, size, big: size >= BIG_MOVE, ou, ouNow };
 }
 

@@ -329,6 +329,7 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .tseg{display:flex;gap:6px;margin:10px 0 4px 4px;flex-wrap:wrap}
 .tseg button{flex:1 1 0;min-width:0;padding:9px 8px;border-radius:11px;border:1px solid var(--line);background:var(--panel);color:var(--dim);font:inherit;font-size:13px;font-weight:650;cursor:pointer;text-align:center}
 .tseg.anmk{margin:14px 4px 0;gap:5px}.tseg.anmk button{padding:9px 3px;font-size:12.5px;white-space:nowrap}.tseg.anmk button i{margin-left:3px;font-size:11px}
+.srcp{font-size:9px;font-weight:700;color:var(--amber);margin-left:2px;vertical-align:super}
 .tseg button i{font-style:normal;font-weight:500;color:var(--faint);margin-left:5px;font-size:12px}
 .tseg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}.tseg button.on i{color:inherit;opacity:.65}
 .tseg .tall{display:none}
@@ -886,11 +887,16 @@ function moveOf(odds) {
   if (!a || !b) return null;
   const r1 = x => Math.round(10 * x) / 10, p0 = a.map(x => r1(100 * x)), p1 = b.map(x => r1(100 * x)), d = p1.map((x, i) => r1(x - p0[i]));
   const top = d.reduce((m, x, i) => (Math.abs(x) > Math.abs(d[m]) ? i : m), 0), size = Math.abs(d[top]);
-  const ot = odds.opt || (odds.f && odds.f.tl != null ? odds.f : null);
-  let ou = null;
-  if (ot && ot.tl === odds.tl) { const x = devigP(ot.to, ot.tu), y = devigP(odds.to, odds.tu); if (x && y) ou = { line: odds.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
-  // no starting total to measure a move from (none at the opening or the first read, or the line changed): still show the price now
-  let ouNow = null; if (!ou && odds.tl != null) { const y = devigP(odds.to, odds.tu); if (y) ouNow = { line: odds.tl, p1: r1(100 * y[0]) }; }
+  // Over / Under, from whichever source has it. Now: DraftKings (ESPN), else Pinnacle. Start, on the same line as now: DraftKings'
+  // opening total (ESPN), else the first DraftKings total the Hub read, else the first Pinnacle total the Hub read. A start from
+  // another book than now is marked mixed (margins removed, so the chances compare, but it is two books, so it raises no flag).
+  const tot = o => o && o.tl != null && Number.isFinite(o.to) && Number.isFinite(o.tu);
+  const nowT = tot(odds) ? { ...odds, s: 'dk' } : tot(odds.pn) ? { ...odds.pn, s: 'pinnacle' } : null;
+  const ot = nowT && [[odds.opt, 'open'], [odds.f, 'first'], [odds.pf, 'pinnacle']].find(([o]) => tot(o) && o.tl === nowT.tl);
+  let ou = null, ouNow = null;
+  if (ot) { const x = devigP(ot[0].to, ot[0].tu), y = devigP(nowT.to, nowT.tu); if (x && y) ou = { line: nowT.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])), s0: ot[1], s1: nowT.s, o0: ot[0].to, o1: nowT.to, mixed: (ot[1] === 'pinnacle') !== (nowT.s === 'pinnacle') }; }
+  // no starting total on the same line from any source: still show the price now
+  if (!ou && nowT) { const y = devigP(nowT.to, nowT.tu); if (y) ouNow = { line: nowT.tl, p1: r1(100 * y[0]), o1: nowT.to, s1: nowT.s }; }
   return { from, p0, p1, d, top, size, big: size >= BIG_MOVE, ou, ouNow };
 }
 function pinnMove(odds) {
@@ -1161,7 +1167,7 @@ function socFlags(c, mv, pm, st) {
   const top = mv.top, d = mv.d[top], who = sideOf(c, top);
   if (mvLv(d)) add(mvLv(d), `${mvLv(d) === 'r' ? 'Big move' : 'Move'}: ${who} ${sgn(Math.round(d))}`);
   if (mvLv(d) && c.v4 && c.v4.p) { const g = c.v4.p[top] - mv.p0[top], t = v4Read(c, mv); add(Math.abs(g) < LEAN_MIN ? '' : (g > 0) === (d > 0) ? 'g' : 'a', t.startsWith('v4') ? t : `Move ${t}`); }
-  if (mv.ou && mvLv(mv.ou.d)) add(mvLv(mv.ou.d), `Over ${mv.ou.line}: ${sgn(Math.round(mv.ou.d))}`);
+  if (mv.ou && !mv.ou.mixed && mvLv(mv.ou.d)) add(mvLv(mv.ou.d), `Over ${mv.ou.line}: ${sgn(Math.round(mv.ou.d))}`);
   if (pm && pm.bt && mvLv(pm.bt.p1 - pm.bt.p0)) add('a', `Both score (Pinnacle): ${sgn(Math.round(pm.bt.p1 - pm.bt.p0))}`);
   if (pm && pm.gap) { let k = 0; pm.gap.forEach((g, i) => { if (g < pm.gap[k]) k = i; }); const g = -pm.gap[k]; if (g >= 2) add(g >= 4 ? 'r' : 'a', `DraftKings pays more than Pinnacle on ${sideOf(c, k)} (${Math.round(g)} pts)`); }
   if (st && st.k === 'miss') add('a', 'No lineup read: the last price is the close');
@@ -1190,9 +1196,14 @@ function movesView() {
   const head = `<div class="small" style="margin:8px 18px 0">DraftKings prices, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before kickoff, after the lineups, then locked. A move of ${BIG_MOVE}+ points on one result is a big move: news reaching the price, not a bet.${unpriced ? ` ${unpriced} game${unpriced === 1 ? '' : 's'} on this day ha${unpriced === 1 ? 's' : 've'} no price.` : ''}</div>`;
   const card = ({ c, mv, st }) => {
     const o = c.odds, op = o.op || o.f, fin = c.final, out = fin ? (fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2) : null;
-    const row = (label, a, b, p0, p1, d, hit) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a)}</td><td>${b == null ? '–' : fmtOdds(b)}</td><td>${p0 == null ? '' : Math.round(p0) + '→'}${Math.round(p1)}%</td><td class="${d != null && mvLv(d) === 'r' ? 'm5' : d != null && mvLv(d) === 'a' ? 'm3' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
-    const ouRow = mv.ou ? (() => { const ot = o.opt || o.f; return row(`Over ${mv.ou.line}`, ot.to, o.to, mv.ou.p0, mv.ou.p1, mv.ou.d, fin ? fin.h + fin.a > mv.ou.line : false); })()
-      : mv.ouNow ? row(`Over ${mv.ouNow.line}`, null, o.to, null, mv.ouNow.p1, null, fin ? fin.h + fin.a > mv.ouNow.line : false) : '';
+    const row = (label, a, b, p0, p1, d, hit, tg = ['', '']) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a) + tg[0]}</td><td>${b == null ? '–' : fmtOdds(b) + tg[1]}</td><td>${p0 == null ? '' : Math.round(p0) + '→'}${Math.round(p1)}%</td><td class="${d != null && mvLv(d) === 'r' ? 'm5' : d != null && mvLv(d) === 'a' ? 'm3' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
+    // Over / Under from whichever source has it; a price that is not DraftKings' is tagged (P = Pinnacle)
+    const pinT = x => x === 'pinnacle' ? '<sup class="srcp" title="Pinnacle price: DraftKings had no total">P</sup>' : '';
+    const ouRow = mv.ou ? row(`Over ${mv.ou.line}`, mv.ou.o0, mv.ou.o1, mv.ou.p0, mv.ou.p1, mv.ou.d, fin ? fin.h + fin.a > mv.ou.line : false, [pinT(mv.ou.s0), pinT(mv.ou.s1)])
+      : mv.ouNow ? row(`Over ${mv.ouNow.line}`, null, mv.ouNow.o1, null, mv.ouNow.p1, null, fin ? fin.h + fin.a > mv.ouNow.line : false, ['', pinT(mv.ouNow.s1)]) : '';
+    const ouNote = mv.ou && mv.ou.mixed ? `<small class="mvn">Over ${mv.ou.line}: ${mv.ou.s0 === 'pinnacle' ? "DraftKings had no total when the Hub first read this game, so the start is Pinnacle's first price (P)" : "DraftKings has no total right now, so now is Pinnacle's price (P)"}; margins removed, but two books, so the move is a guide only.</small>`
+      : mv.ou && mv.ou.s0 === 'pinnacle' ? `<small class="mvn">Over ${mv.ou.line}: Pinnacle's first price → now (DraftKings had no total).</small>`
+      : mv.ouNow ? `<small class="mvn">Over ${mv.ouNow.line}: no earlier total on this line from DraftKings or Pinnacle yet, so there is no move to show.</small>` : '';
     // Both score: the book's Yes price (The Odds API) first seen -> now / the close when there is one; else the score card's chance on the
     // opening price (v6o) and on now / the close (v6), with no price of its own.
     const bm = bttsMove(o), both = fin ? fin.h > 0 && fin.a > 0 : false;
@@ -1204,7 +1215,7 @@ function movesView() {
     return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.odds.fa)}${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
-      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>
+      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>${ouNote}
       ${btNote ? `<small class="mvn">${btNote}</small>` : ''}
       ${pinnNote(c, o)}
       ${o.ts ? `<small class="mvn">Price last changed ${tmCT(o.ts)}</small>` : ''}</div>`;
