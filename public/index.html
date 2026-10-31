@@ -472,6 +472,7 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 #hub-bar a.on,.btn,.day.on,.day.on b,.day.on small,.edg.proven,.mb .mgo,.note .sv,.pv.val,.xag.s,.zgo,.chip.on,.cf.s{text-shadow:none}
 .mbx{background:rgba(4,5,4,.55);-webkit-backdrop-filter:blur(1.2px);backdrop-filter:blur(1.2px);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:2px 14px}
 .mbx>.mbr:first-child{border-top:0}
+.mvx th .fa{display:block;font-size:9.5px;font-weight:500;color:var(--faint);letter-spacing:0;text-transform:none;white-space:nowrap;margin-bottom:1px}
 </style>
 </head>
 <body>
@@ -1138,6 +1139,7 @@ function sidebar(leagues) {
 /* ---------- Movement: opening -> closing price for every priced game of the day ---------- */
 // Status of the closing price: captured (the lineup read, 30-20 minutes before kickoff), missed (locked with no lineup read, so the last
 // price before the lock stands), due (inside the lineup window now) or pending (with the time the closing read is due).
+const faStamp = iso => iso ? `<span class="fa" title="When the Hub first grabbed this game's price">${new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)).replace(', ', ' · ')}</span>` : '';
 const tmCT = iso => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 function closeState(c) {
   const ko = new Date(c.kickoff).getTime(), o = c.odds || {};
@@ -1197,7 +1199,7 @@ function movesView() {
     const fl = socFlags(c, mv, pinnMove(o), st);
     return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
-      <table class="mvx"><tr><th></th><th>${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
+      <table class="mvx"><tr><th></th><th>${faStamp(c.odds.fa)}${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
       ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>
       ${btNote ? `<small class="mvn">${btNote}</small>` : ''}
       ${pinnNote(c, o)}

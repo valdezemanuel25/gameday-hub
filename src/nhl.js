@@ -281,7 +281,7 @@ export function setPrice(c, fresh, now = new Date(), manual = false) {
   const lineup = mins <= LINEUP_READ && (manual || lineupDue(old, now)), due = manual || !old || !old.rd || now.getTime() - new Date(old.rd).getTime() >= (mins <= 180 ? 1 : 6) * HOUR;
   if (!due && !lineup) return false;
   const snap = x => ({ ...(x.h != null ? { h: x.h, a: x.a } : {}), ...(x.tl != null ? { tl: x.tl, to: x.to, tu: x.tu } : {}) });
-  const n = { ...fresh, f: old && old.f ? old.f : snap(fresh), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.rd ? { rd: old.rd } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
+  const n = { ...fresh, f: old && old.f ? old.f : snap(fresh), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.rd ? { rd: old.rd } : {}), ...(old && old.cl ? { cl: old.cl } : {}), ...(old ? (old.fa ? { fa: old.fa } : {}) : { fa: now.toISOString() }) };
   const changed = JSON.stringify(canon(n)) !== JSON.stringify(canon(old || null));
   if (changed) { n.ts = now.toISOString(); n.rd = now.toISOString(); }
   if (lineup) { n.cl = now.toISOString(); if (manual) n.cby = 'you'; else delete n.cby; }
