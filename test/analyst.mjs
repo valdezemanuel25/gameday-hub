@@ -28,6 +28,21 @@ ok('bttsNo: no bet when v4 rates Yes above the price', rule('bttsNo').pick(bv({ 
 ok('bttsNo: no bet when Yes is priced under 58%', rule('bttsNo').pick(bv({ by: -125, bn: 100 })) === null);
 ok('bttsNo: no bet on a Pinnacle stand-in price', rule('bttsNo').pick(bv({ by: -160, bn: 130, bk: 'pinnacle' })) === null);
 ok('settle: both score No settles on the score and closes at the both-score price', (() => { const x = { key: 'N', price: 130, kickoff: KO, mins: 60 }; settle(x, card({ odds: { ...card().odds, bn: 120 }, final: { h: 2, a: 0 } }), new Date('2026-10-29T01:00:00Z')); return x.res === 'win' && x.units === 1.3 && x.close === 120; })());
+// under waits for the lineup read: Over priced 56.9%, v2 and v4 below it
+{
+  const cu = card({ id: 'u1', v2: { over: 50 }, v4: { p: [10, 10, 80], over: 50, btts: 70 }, odds: { op: { h: 900, d: 500, a: -400 }, h: 900, d: 500, a: -400, tl: 2.5, to: -150, tu: 120 } });
+  const at = m => new Date(new Date(KO).getTime() - m * 60000);
+  ok('under: no bet 4 hours before kickoff (not the lineup read yet)', !decide([], [cu], '2026-10-28', at(240)).some(b => b.rule === 'under'));
+  ok('under: bets at the lineup read, 30 minutes before', (b => b && b.key === 'U' && b.price === 120 && b.mins === 30)(decide([], [cu], '2026-10-28', at(30)).find(b => b.rule === 'under')));
+}
+// the hand-removed early Under on Colorado v Chicago Fire: deleted once on read; a lineup-read bet on the same game is kept
+{
+  const m = new Map(), e = { HUB: { get: async (k, t) => { const x = m.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { m.set(k, x); } } };
+  const bet = o => ({ id: o.id, rule: 'under', key: 'U', date: '2026-10-31', home: 'Colorado Rapids', away: 'Chicago Fire FC', price: 135, mins: 240, kickoff: '2026-11-01T01:30:00Z', ...o });
+  m.set('analyst', JSON.stringify({ v: 1, items: [bet({ id: 'early' }), bet({ id: 'late', mins: 30 }), bet({ id: 'other', home: 'Austin FC' })] }));
+  const got = await getAnalyst(e);
+  ok('drop: the early Colorado v Chicago Fire Under is removed and saved; others stay', got.items.map(b => b.id).join() === 'late,other' && JSON.parse(m.get('analyst')).items.length === 2);
+}
 ok('totals: no bet when v4 is on the other side', rule('totals').pick(view({ v4: { p: [52, 25, 23], over: 40 }, open: card().odds.op, now: card().odds, openT: card().odds.opt })) === null);
 const Vv = view({ v4: { p: [30, 25, 45], over: 50 }, open: { h: 120, d: 240, a: 220 }, now: { h: 120, d: 240, a: 220 } });
 ok('value: v4 5+ above the price on an away win with no move', (rule('value').pick(Vv) || {}).key === 'A');
