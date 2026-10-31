@@ -11,7 +11,7 @@ ok('the hockey page remembers where you were going', r.status === 302 && r.heade
 r = await go('/api/config');
 ok('signed out, the data still says 401 (json, not a redirect)', r.status === 401 && (await r.json()).error);
 r = await go('/login'); ok('the sign-in page loads without signing in', r.status === 200 && (await r.text()).includes('/login'));
-for (const f of ['/manifest.webmanifest', '/sw.js', '/icon-192.png', '/apple-touch-icon.png']) { r = await go(f); ok(`${f} loads without signing in (needed to install the app)`, r.status === 200); }
+for (const f of ['/apple-touch-icon-precomposed.png', '/apple-touch-icon-180x180.png', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/apple-touch-icon.png']) { r = await go(f); ok(`${f} loads without signing in (needed to install the app)`, r.status === 200); }
 r = await go('/login', form({ password: 'nope' }));
 ok('a wrong password sets no cookie and returns to sign-in with an error', r.status === 303 && !r.headers.get('set-cookie') && r.headers.get('location').startsWith('/login?e=1'), r.headers.get('location'));
 r = await go('/login', form({ password: 'secret', next: '/nhl' }));
