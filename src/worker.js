@@ -270,6 +270,7 @@ export function withOdds(old, fresh, now = new Date()) {
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
   const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
+  if (f && f.tl == null && fresh.tl != null && fresh.to != null && fresh.tu != null) n.f = { ...f, tl: fresh.tl, to: fresh.to, tu: fresh.tu }; // first total seen, when the first price had none
   // fa = when the Hub first grabbed a price for this game (shown above "Opening"); only known for prices first seen from now on
   if (old && old.fa) n.fa = old.fa; else if (f && !(old && (old.f || old.h != null))) n.fa = now.toISOString();
   return n;

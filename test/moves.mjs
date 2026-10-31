@@ -33,6 +33,22 @@ ok('no opening or first price: no move', moveOf({ h: -150, d: 280, a: 400 }) ===
 const p = parseOdds([{ moneyline: { home: { open: { odds: '+110' }, close: { odds: '-150' } }, draw: { open: { odds: '+250' }, close: { odds: '+280' } }, away: { open: { odds: '+240' }, close: { odds: '+400' } } },
   total: { over: { open: { line: 'o2.5', odds: '+105' }, close: { line: 'o2.5', odds: '-120' } }, under: { open: { line: 'u2.5', odds: '-125' }, close: { line: 'u2.5', odds: '+100' } } } }]);
 ok('ESPN\'s opening total is kept apart from the current one', p.opt && p.opt.tl === 2.5 && p.opt.to === 105 && p.opt.tu === -125 && p.to === -120, JSON.stringify(p));
+ok('a first price saved without a total takes the first total seen later', (n => n.f.h === -150 && n.f.tl === 2.5 && n.f.to === -130 && n.h === -160)(withOdds({ h: -150, d: 280, a: 400, f: { h: -150, d: 280, a: 400 } }, { h: -160, d: 290, a: 420, tl: 2.5, to: -130, tu: 105 })));
+ok('a first total, once saved, is kept', withOdds({ h: 1, d: 2, a: 3, f: { h: 1, d: 2, a: 3, tl: 2.5, to: -110, tu: -110 } }, { h: 1, d: 2, a: 3, tl: 2.5, to: -150, tu: 120 }).f.to === -110);
+// Over / Under from three sources: start = ESPN's DraftKings opening, else the Hub's first DraftKings read, else Pinnacle's first price
+{
+  const base = { op: { h: 115, d: 255, a: 195 }, h: 125, d: 255, a: 180 };
+  const a = moveOf({ ...base, tl: 2.5, to: -155, tu: 125, opt: { tl: 2.5, to: -130, tu: 105 }, f: { h: 1, d: 2, a: 3, tl: 2.5, to: -140, tu: 110 }, pf: { tl: 2.5, to: -120, tu: 100 } });
+  ok('totals: ESPN opening first', a.ou.s0 === 'open' && a.ou.o0 === -130 && a.ou.s1 === 'dk' && !a.ou.mixed);
+  const b = moveOf({ ...base, tl: 2.5, to: -155, tu: 125, f: { h: 1, d: 2, a: 3, tl: 2.5, to: -140, tu: 110 }, pf: { tl: 2.5, to: -120, tu: 100 } });
+  ok('totals: then the first DraftKings read', b.ou.s0 === 'first' && b.ou.o0 === -140 && !b.ou.mixed);
+  const c = moveOf({ ...base, tl: 2.5, to: -155, tu: 125, f: { h: 1, d: 2, a: 3 }, pf: { tl: 2.5, to: -135, tu: 115 } });
+  ok('totals: then Pinnacle\'s first price, marked as two books', c.ou.s0 === 'pinnacle' && c.ou.o0 === -135 && c.ou.o1 === -155 && c.ou.mixed === true);
+  const d = moveOf({ ...base, pn: { tl: 2.5, to: -150, tu: 120 }, pf: { tl: 2.5, to: -135, tu: 115 } });
+  ok('totals: no DraftKings total at all: Pinnacle first -> Pinnacle now, one book', d.ou.s0 === 'pinnacle' && d.ou.s1 === 'pinnacle' && d.ou.mixed === false && d.ou.o1 === -150);
+  const e = moveOf({ ...base, tl: 2.5, to: -155, tu: 125, pf: { tl: 3.5, to: 150, tu: -180 } });
+  ok('totals: a start on another line does not count; the price now still shows', e.ou === null && e.ouNow && e.ouNow.o1 === -155 && e.ouNow.s1 === 'dk');
+}
 // fa: when the Hub first grabbed the price, shown above "Opening"
 {
   const T = new Date('2026-10-31T14:00:00Z'), T2 = new Date('2026-10-31T18:00:00Z');
