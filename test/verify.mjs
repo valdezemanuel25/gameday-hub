@@ -41,6 +41,17 @@ kv.set(dayKey, JSON.stringify({ date, cards: [{ id: '3', league: 'ger.1', home: 
 kv.set('meta:unm', JSON.stringify({ items: [{ src: 'fb', key: 'k2', cardId: '3', date, slug: 'ger.1', kind: '1x2', title: 'A vs B', row: { home: 'A', away: 'B', date, p: [34, 33, 33] } }] }));
 const s2 = await call('/api/assign', { date, league: 'ger.1', id: '3', key: 'k2' });
 ok('a game that already started is refused', /already started/.test(s2.error || ''), JSON.stringify(s2));
+// Use all: one game with a 1X2, an Over/Under and a Both score table waiting; the button applies each one in turn
+{
+  kv.set(dayKey, JSON.stringify({ date, cards: [{ id: '5', league: 'eng.2', home: 'Southampton', away: 'Queens Park Rangers', kickoff: ko, final: null }] }));
+  const it = (kind, extra) => ({ src: 'fb', key: `fb|eng.2|${kind}|5|0`, cardId: '5', date, slug: 'eng.2', kind, title: 'Southampton vs QPR', row: { home: 'Southampton', away: 'Queens Park Rangers', date, ...extra } });
+  kv.set('meta:unm', JSON.stringify({ items: [it('1x2', { p: [55, 25, 20], pred: '1' }), it('ou', { over: 58 }), it('btts', { btts: 52 })] }));
+  const items = (await call('/api/candidates?date=' + date)).items;
+  const rs = []; for (const i of items) rs.push(await call('/api/assign', { date, league: 'eng.2', id: '5', key: i.key }));
+  const fb = JSON.parse(kv.get(dayKey)).cards[0].fb || {};
+  ok('Use all: every Forebet table lands on the one game', rs.every(r => r.assigned) && fb.p?.join('/') === '55/25/20' && fb.over === 58 && fb.btts === 52, JSON.stringify({ rs, fb }));
+  ok('Use all: nothing is left waiting for that game', (await call('/api/candidates?date=' + date)).items.length === 0);
+}
 // SportsMole: no name match, but a preview with one matching club is suggested; assigning reads its "We say" line
 {
   const { smLeague } = await import('../src/worker.js');
