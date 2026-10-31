@@ -246,10 +246,10 @@ const KEEP = 600, LOCK_MIN = 20; // LOCK_MIN: the price locks 20 minutes before 
 // Colorado Rapids v Chicago Fire was placed 4 hours early, before the Under rule waited for the lineup read; the new rule looks at that
 // game again at its lineup read. The early bet had mins 240; a lineup-read bet has 35 or less, so it is never matched.
 const DROP = [b => b.rule === 'under' && b.date === '2026-10-31' && /Colorado Rapids/.test(b.home || '') && /Chicago Fire/.test(b.away || '') && b.mins > LATE];
-export async function getAnalyst(env) {
+export async function getAnalyst(env, { readOnly = false } = {}) {
   const doc = (await env.HUB.get('analyst', 'json')) || { v: 1, items: [] }, n = doc.items.length;
   doc.items = doc.items.filter(b => !DROP.some(f => f(b)));
-  if (doc.items.length !== n) await env.HUB.put('analyst', JSON.stringify(doc));
+  if (!readOnly && doc.items.length !== n) await env.HUB.put('analyst', JSON.stringify(doc));
   return doc;
 }
 // Past KEEP bets, settled ones are kept only as a short row for the record (the page lists the latest 300 in full).

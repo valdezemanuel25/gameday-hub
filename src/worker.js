@@ -22,6 +22,7 @@ import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn } from './pinn.j
 import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { homeSummary } from './home.js';
+import { hubHealth } from './health.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -119,6 +120,7 @@ async function authed(req, env) {
 }
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
+const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, pendingWrites, writeLimit: WRITE_LIMIT });
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/home');
 
 // ---------------------------------------------------------------------------------------------
@@ -940,6 +942,8 @@ const hub = {
     if (req.method === 'GET' && /^\/apple-touch-icon(-precomposed|-180x180|-180x180-precomposed)\.png$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/apple-touch-icon.png', url.origin)));
     if (req.method === 'GET' && (p === '/login' || PUBLIC_FILES.has(p))) return env.ASSETS.fetch(req); // /login is public/login.html (the assets handler serves it without the .html)
 
+    // Hub health for the nightly sweep: read-only, with its own secret (HEALTH_TOKEN) so the scheduled task never holds the password
+    if (req.method === 'GET' && p === '/api/health' && env.HEALTH_TOKEN && same(String(q('k') || req.headers.get('x-health-token') || ''), env.HEALTH_TOKEN)) return json(await health(env));
     // Whole site is private: page and data both need the password.
     if (!(await authed(req, env))) {
       if (p.startsWith('/api/')) return json({ error: 'Bad or missing admin token' }, 401);
@@ -979,6 +983,7 @@ const hub = {
     if (p === '/api/brew') { // newsletter summaries: public/brew.json is rewritten daily by a scheduled task
       try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; return json({ updated: j && j.updated || null, issues: Array.isArray(j && j.issues) ? j.issues : [] }); } catch (e) { return json({ updated: null, issues: [] }); }
     }
+    if (p === '/api/health') return json(await health(env)); // signed in: the same read
     if (p === '/api/home') { // home screen carousel: today's counts and Best picks (display only)
       const d = today(), [sd, nd] = await Promise.all([env.HUB.get(`day:${d}`, 'json'), env.HUB.get(`nhl:day:${d}`, 'json')]);
       let issues = []; try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; issues = Array.isArray(j && j.issues) ? j.issues : []; } catch (e) {}
