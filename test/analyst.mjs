@@ -1,6 +1,6 @@
 // The Analyst (src/analyst.js): its rules, one position per game and market, settling at the close and the result, the record,
 // benching, and storage through the price read in src/worker.js.
-import { view, RULES, decide, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst, decideNhl, analystNhl, NHL_RULES } from '../src/analyst.js';
+import { view, RULES, decide, goalsSwap, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst, decideNhl, analystNhl, NHL_RULES } from '../src/analyst.js';
 import { refreshOdds, analystShop, analystSharp, readSharpNote } from '../src/worker.js';
 import { bestPrices, fetchBest, sharpOf, fetchSharp } from '../src/btts.js';
 let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) bad++; };
@@ -50,6 +50,25 @@ ok('value: never a draw', rule('value').pick(view({ v4: { p: [30, 45, 25], over:
 const Vf = view({ v4: { p: [30, 25, 45], over: 50 }, open: { h: 150, d: 230, a: 190 }, now: { h: 110, d: 240, a: 240 } });
 ok('fade: away drifted 4+ but v4 still rates it above the price now', (rule('fade').pick(Vf) || {}).key === 'A', JSON.stringify(Vf.d));
 
+// --- Nov 1, 2026: value / fade / follow retired, 'move' added, winner long shots swapped to a goals pick ---
+ok('value, fade and follow are retired; decide never places them', ['value', 'fade', 'follow'].every(id => rule(id).retired) && !decide([], [card()], '2026-10-28', NOW).some(b => ['value', 'fade', 'follow'].includes(b.rule)));
+ok('move: backs the side whose chance rose 3+, no v4 check', (rule('move').pick(view({ v4: { p: [30, 30, 40], over: 50 }, open: card().odds.op, now: card().odds })) || {}).key === 'H');
+ok('move: never a draw', rule('move').pick(view({ v4: { p: [30, 30, 40], over: 50 }, open: { h: 150, d: 400, a: 150 }, now: { h: 150, d: 250, a: 200 } })) === null);
+ok('decide: move bets a home win at +110 (short enough)', (b => b && b.rule === 'move' && b.key === 'H' && b.price === 110)(decide([], [card()], '2026-10-28', NOW).find(b => 'HDA'.includes(b.key))));
+{
+  // Levante v Atlético style: the move goes to the away long shot at +410. Over 2.5 priced about 61% and v4 60%: Over replaces it.
+  const ls = card({ id: 'ls', home: 'Levante', away: 'Atlético', v4: { p: [25, 25, 50], over: 60, btts: 45 },
+    odds: { op: { h: -200, d: 350, a: 700 }, h: -150, d: 300, a: 410, tl: 2.5, to: -165, tu: 135, by: -110, bn: -110 } });
+  const got = decide([], [ls], '2026-10-28', NOW), w = got.find(b => 'HDA'.includes(b.key)), sw = got.find(b => b.rule === 'longshot');
+  ok('long shot: no winner bet at +410', !w, JSON.stringify(got.map(b => [b.rule, b.key, b.price])));
+  ok('long shot: swapped to Over 2.5 at -165, noting the long shot it replaced', sw && sw.key === 'O' && sw.price === -165 && sw.from.key === 'A' && sw.from.price === 410 && /long shot/.test(sw.why), JSON.stringify(sw));
+  ok('long shot: no swap when no goals side is priced 50%+ with v4 within 3 points', !decide([], [card({ ...ls, v4: { p: [25, 25, 50], over: 50, btts: 60 } })], '2026-10-28', NOW).length);
+  ok('long shot: Over/Under already held, so it takes Both score No (priced 50%, v4 55%)', (b => b && b.key === 'N')(decide([{ date: '2026-10-28', league: 'eng.1', gid: 'ls', key: 'U' }], [ls], '2026-10-28', NOW).find(b => b.rule === 'longshot')));
+  ok('long shot: no swap when both goals markets are held', !decide([{ date: '2026-10-28', league: 'eng.1', gid: 'ls', key: 'U' }, { date: '2026-10-28', league: 'eng.1', gid: 'ls', key: 'N' }], [ls], '2026-10-28', NOW).some(b => b.rule === 'longshot'));
+  ok('goalsSwap: never Both score Yes', goalsSwap({ bt: { p1: 70, v4: 75, px: [-250, 190] } }) === null);
+  ok('goalsSwap: Both score No when priced 50%+ and v4 agrees', (g => g && g.key === 'N' && g.price === -120)(goalsSwap({ bt: { p1: 45, v4: 44, px: [110, -120] } })));
+}
+
 // --- decide: one position per game and market ---
 const first = decide([], [card()], '2026-10-28', NOW);
 ok('decide: one 1X2 and one both-score bet on the game', first.length === 2 && first.map(b => b.key).sort().join() === 'H,N', JSON.stringify(first.map(b => [b.rule, b.key])));
@@ -69,9 +88,9 @@ const v = { ...first[1] }; settle(v, null, new Date('2026-11-02T20:00:00Z'));
 ok('settle: no result 4 days after kickoff is a void', v.res === 'void' && v.units === 0);
 
 // --- summary and benching ---
-const loser = i => ({ id: 'x' + i, rule: 'value', key: 'A', price: 200, kickoff: `2026-10-${String(1 + (i % 25)).padStart(2, '0')}T15:00:00Z`, mins: 300, res: 'loss', units: -1, clv: -2 });
-const s = summary(Array.from({ length: BENCH.n }, (_, i) => loser(i)).concat([b]), [['2026-09-01T15:00:00Z', 'follow', 'H', 60, 'win', 0.5, 1.5]]);
-const sv = s.rules.find(r => r.id === 'value'), sf = s.rules.find(r => r.id === 'follow');
+const loser = i => ({ id: 'x' + i, rule: 'under', key: 'A', price: 200, kickoff: `2026-10-${String(1 + (i % 25)).padStart(2, '0')}T15:00:00Z`, mins: 300, res: 'loss', units: -1, clv: -2 });
+const s = summary(Array.from({ length: BENCH.n }, (_, i) => loser(i)).concat([b]), [['2026-09-01T15:00:00Z', 'move', 'H', 60, 'win', 0.5, 1.5]]);
+const sv = s.rules.find(r => r.id === 'under'), sf = s.rules.find(r => r.id === 'move');
 ok('summary: per-rule units, ROI and closing-line value', sv.settled === BENCH.n && sv.units === -BENCH.n && sv.roi === -100 && sv.clv === -2);
 ok('summary: a rule losing on price and profit after enough bets is benched', sv.benched && !sf.benched && isBenched(sv));
 ok('summary: compact old rows still count', sf.settled === 2 && sf.wins === 2);
@@ -90,7 +109,7 @@ ok('analystLook: no bet once the price has locked', (await analystLook({ HUB: { 
 const d = JSON.parse(kv.get('day:2026-10-28')); d.cards[0].final = { h: 0, a: 1 }; kv.set('day:2026-10-28', JSON.stringify(d));
 const L = await listAnalyst(env, new Date('2026-10-29T01:00:00Z'));
 ok('listAnalyst: settles finished games when the tab opens', L.items.every(x => x.res) && L.summary.all.settled === 2 && L.summary.all.units === 0.3, JSON.stringify(L.summary.all));
-ok('listAnalyst: the record split by market adds up, each with only its own rules', L.mk['1x2'].all.n + L.mk.ou.all.n + L.mk.btts.all.n === L.summary.all.n && L.mk.btts.all.n === 1 && L.mk.btts.rules.map(r => r.id).join() === 'bttsNo' && L.mk['1x2'].rules.every(r => r.id !== 'under') && L.mk.ou.rules.some(r => r.id === 'stale') && !('btts' in L.nhl.mk), JSON.stringify(Object.fromEntries(Object.entries(L.mk).map(([k, v]) => [k, v.all.n]))));
+ok('listAnalyst: the record split by market adds up, each with only its own rules', L.mk['1x2'].all.n + L.mk.ou.all.n + L.mk.btts.all.n === L.summary.all.n && L.mk.btts.all.n === 1 && L.mk.btts.rules.map(r => r.id).join() === 'bttsNo,longshot' && L.mk['1x2'].rules.every(r => r.id !== 'under') && L.mk.ou.rules.some(r => r.id === 'stale') && !('btts' in L.nhl.mk), JSON.stringify(Object.fromEntries(Object.entries(L.mk).map(([k, v]) => [k, v.all.n]))));
 // refreshOdds hands the Analyst the fresh prices: fake ESPN with one priced game
 globalThis.fetch = async () => new Response(JSON.stringify({ events: [] }));
 kv.set('day:2026-10-30', JSON.stringify({ date: '2026-10-30', cards: [card({ v2: { p: [50, 25, 25] }, kickoff: '2026-10-30T19:00:00Z' })] }));

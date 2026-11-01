@@ -16,10 +16,10 @@ const a = analystChecks({ items: [
   { rule: 'under', key: 'U', home: 'A', away: 'B', kickoff: at(-2), close: null, res: null, mins: 60 },
   { rule: 'under', key: 'U', home: 'C', away: 'D', kickoff: at(-2), close: 120, res: null, mins: 60 },
   { rule: 'bttsNo', key: 'N', home: 'E', away: 'F', kickoff: at(-60), close: 110, res: null, mins: 60 },
-  { rule: 'follow', key: 'H', home: 'G', away: 'H', kickoff: at(-30), close: 110, clv: 1, res: 'win', units: 1.1, price: 110, mins: 60 } ] }, NOW);
+  { rule: 'move', key: 'H', home: 'G', away: 'H', kickoff: at(-30), close: 110, clv: 1, res: 'win', units: 1.1, price: 110, mins: 60 } ] }, NOW);
 ok('health: an open bet past kickoff with no closing price is flagged', a.noClose.length === 1 && /A v B/.test(a.noClose[0].bet));
 ok('health: a bet still open 2+ days after kickoff is flagged', a.stale.length === 1 && /E v F/.test(a.stale[0].bet));
-const fo = a.soccer.find(r => r.id === 'follow');
+const fo = a.soccer.find(r => r.id === 'move');
 ok('health: each rule\'s record, with bets left before the bench check', fo.settled === 1 && fo.units === 1.1 && fo.toBench === a.bench.n - 1 && a.soccer.find(r => r.id === 'totals').retired, JSON.stringify(fo));
 // the route: its own secret, read-only
 const kv = new Map(), puts = []; kv.set('analyst', JSON.stringify({ v: 1, items: [] }));

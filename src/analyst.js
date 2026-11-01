@@ -30,6 +30,13 @@ export const STALE = { ev: 0.02, maxPrice: 400 }; // stale price: DraftKings pay
 // late rules bet only at the lineup read (30-20 minutes before kickoff, src/worker.js LINEUP_READ / PRICE_LOCK); 35 allows for a slow read
 export const LATE = 35;
 export const BENCH = { n: 40, clv: 0, roi: 0 }; // benched when, after n settled bets, average closing-line value and ROI are both <= these
+// Long shots (Nov 1, 2026): no winner bet (home / draw / away) priced longer than LONG. When a winner rule fires on a longer price, the
+// Analyst looks at that game's goals markets instead (goalsSwap): the side of Under / Over 2.5 or Both score No that DraftKings rates
+// SWAP.min%+ (margin removed) and v4 rates no more than SWAP.give points below the price, the one the price rates highest. Never Both
+// score Yes (DraftKings has priced Yes too high on the Hub's games). On the Hub's games Oct 13-31 at the closing price: winner bets on
+// the move longer than +150 went 3 of 11; swapped to the goals pick they went 5 of 6 (+43%). Small sample: a live test.
+export const LONG = 150;
+export const SWAP = { min: 50, give: 3 };
 const K = 'HDA', r1 = x => Math.round(10 * x) / 10;
 const dec = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
 const hdaOf = o => (o ? devig(o.h, o.d, o.a) : null);
@@ -66,14 +73,21 @@ export const RULES = [
         const ev = q * dec(m) - 1; if (ev >= STALE.ev && (!best || ev > best.ev)) best = { key: k, price: m, ev, q }; }
       return best && { key: best.key, price: best.price, sharp: { book: S.book, fair: r1(100 * best.q), ev: r1(100 * best.ev) },
         why: `${LABEL[best.key]} DraftKings ${best.price > 0 ? '+' : ''}${best.price} pays ${r1(100 * best.ev)}% over ${BOOKN[S.book] || S.book}'s fair ${r1(100 * best.q)}%: DraftKings has not caught up` }; } },
-  { id: 'follow', mk: ['1x2'], name: 'Follow the move, v4 agrees', rule: 'A result\'s chance rose 3+ points since the opening price and v4 rated it above the opening price too',
-    // close: 249 bets, -24% / +2% (-10% overall)
+  // Nov 1, 2026: on the Hub's own games (Oct 25-31, DraftKings closing price) a result whose chance rose 3+ points won 35 of 52, +33%,
+  // with or without v4 agreeing; at +150 or shorter 32 of 41, +40%. Replaces 'follow' (which also needed v4 above the opening price).
+  // Draws are left out. A long shot (longer than LONG) is never bet: decide swaps it for a goals pick (goalsSwap).
+  { id: 'move', mk: ['1x2'], name: 'Follow the move', rule: 'A home or away win\'s chance rose 3+ points since the opening price (margin removed); no v4 check. +150 or shorter, else the goals swap below',
+    pick: V => { const i = pickIdx(V.d, i => i !== 1 && V.d[i] >= 3); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the money moved to it') }; } },
+  { id: 'follow', mk: ['1x2'], retired: '2026-11-01', name: 'Follow the move, v4 agrees', rule: 'A result\'s chance rose 3+ points since the opening price and v4 rated it above the opening price too',
+    // close: 249 bets, -24% / +2% (-10% overall). Retired Nov 1, 2026 for 'move' above (same move, no v4 check). Its bets stay in the record.
     pick: V => { const i = pickIdx(V.d, i => V.d[i] >= 3 && V.e0[i] > 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the money moved the way v4 already leaned') }; } },
-  { id: 'value', mk: ['1x2'], name: 'v4 value, price not against it', rule: 'v4 rates a home or away win 5+ points above the price now, and that price has not drifted 1+ points away from it',
-    // close: 439 bets, -19% / -1% (-10% overall)
+  { id: 'value', mk: ['1x2'], retired: '2026-11-01', name: 'v4 value, price not against it', rule: 'v4 rates a home or away win 5+ points above the price now, and that price has not drifted 1+ points away from it',
+    // close: 439 bets, -19% / -1% (-10% overall). Retired Nov 1, 2026: on the Hub's games (Oct 25-31, close) it went 1 of 10, mostly long
+    // shots (e.g. Levante +410 v Atlético), and the further v4 sat above the price the worse the Hub's bets did. Its bets stay in the record.
     pick: V => { const i = pickIdx(V.e, i => i !== 1 && V.e[i] >= 5 && V.d[i] > -1); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'v4 sees value and the money is not fighting it') }; } },
-  { id: 'fade', mk: ['1x2'], name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
-    // close: 218 bets, -3% / -14% (-9% overall)
+  { id: 'fade', mk: ['1x2'], retired: '2026-11-01', name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
+    // close: 218 bets, -3% / -14% (-9% overall). Retired Nov 1, 2026: on the Hub's games (Oct 25-31, close) 6 of 29, -19%, half of them
+    // long shots. Same reason as 'value': v4 above the price has been the losing side. Its bets stay in the record.
     pick: V => { const i = pickIdx(V.d.map(x => -x), i => V.d[i] <= -4 && V.e[i] >= 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the price drifted but v4 says it went too far') }; } },
   { id: 'totals', mk: ['ou'], retired: '2026-10-31', name: 'Goals move, v4 agrees', rule: 'Over 2.5 moved 3+ points since the opening price (either way) and v4 is on the same side of the price now',
     // close: 146 bets, +3% / -12% (-5% overall). Retired Oct 31, 2026 for 'under' below: on the Hub's own games (Oct 13-31) following
@@ -92,7 +106,21 @@ export const RULES = [
     // 67 bets, 46% hit, +26% (first half +24%, second half +29%); also needing v2 below the price: 41 bets, +25%
     pick: V => { const t = V.bt; if (!t || t.p1 < 58 || !(t.v4 < t.p1)) return null;
       return { key: 'N', price: t.px[1], why: `Both score Yes priced ${r1(t.p1)}%, v4 ${r1(t.v4)}%: the price leans Yes more than v4` }; } },
+  // Not a rule of its own: the bets decide places in place of a winner long shot (see LONG). Listed so the record shows it on its own line.
+  { id: 'longshot', mk: ['ou', 'btts'], swap: true, name: 'Long shot swapped to goals', rule: 'A winner rule fired on a price longer than +150: no winner bet; instead the game\'s Under / Over 2.5 or Both score No side that DraftKings rates 50%+ and v4 no more than 3 points lower (the one the price rates highest). Never Both score Yes',
+    pick: () => null },
 ];
+
+// The goals pick that stands in for a winner long shot: Under / Over 2.5 and Both score No (never Yes), DraftKings' chance (margin
+// removed) SWAP.min+ and v4 no more than SWAP.give below it, highest DraftKings chance first. free(market) says whether the game's
+// position in that market is still open. -> { key, price, mp, v4 } | null
+export function goalsSwap(V, free = () => true) {
+  if (!V) return null; const c = [];
+  if (V.ou) { const o = V.ou, v = o.p1 + o.e; c.push({ key: 'O', price: o.px[0], mp: o.p1, v4: v }, { key: 'U', price: o.px[1], mp: 100 - o.p1, v4: 100 - v }); }
+  if (V.bt) c.push({ key: 'N', price: V.bt.px[1], mp: 100 - V.bt.p1, v4: 100 - V.bt.v4 });
+  const ok = c.filter(x => Number.isFinite(x.price) && x.mp >= SWAP.min && x.v4 >= x.mp - SWAP.give && free(MKT(x.key)));
+  return ok.sort((a, b) => b.mp - a.mp)[0] || null;
+}
 
 // ---- one look at a set of cards: the new bets, if any ----
 const MKT = k => (k === 'O' || k === 'U' ? 'ou' : k === 'B' || k === 'N' ? 'btts' : '1x2');
@@ -110,11 +138,20 @@ export function decide(items, cards, date, now = new Date(), benched = new Set()
   for (const c of cards) {
     if (!c || c.final || !c.odds) continue;
     const V = lookCard(c), S = sharp && sharp.get(c.id); if (!V && !S) continue;
-    for (const r of RULES) {
-      if (r.retired || benched.has(r.id) || (r.sharp ? !S : !V)) continue;
-      if (r.late && (new Date(c.kickoff).getTime() - now.getTime()) / 60000 > LATE) continue; // not yet the lineup read
-      const b = r.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
-      const k = `${date}|${c.league}|${c.id}|${MKT(b.key)}`; if (held.has(k)) continue;
+    for (const r0 of RULES) {
+      if (r0.swap || r0.retired || benched.has(r0.id) || (r0.sharp ? !S : !V)) continue;
+      if (r0.late && (new Date(c.kickoff).getTime() - now.getTime()) / 60000 > LATE) continue; // not yet the lineup read
+      let r = r0, b = r0.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
+      if (held.has(`${date}|${c.league}|${c.id}|${MKT(b.key)}`)) continue;
+      // a winner long shot is never bet: the game's goals markets are looked at instead (goalsSwap)
+      if ('HDA'.includes(b.key) && b.price > LONG) {
+        const sw = r = RULES.find(x => x.id === 'longshot');
+        if (benched.has(sw.id)) continue;
+        const g = goalsSwap(V, m => !held.has(`${date}|${c.league}|${c.id}|${m}`)); if (!g) continue;
+        b = { key: g.key, price: g.price, from: { rule: r0.id, key: b.key, price: b.price },
+          why: `${LABEL[b.key]} +${b.price} (${r0.name}) is a long shot, longer than +${LONG}: took ${LABEL[g.key]} instead, priced ${r1(g.mp)}%, v4 ${r1(g.v4)}%` };
+      }
+      const k = `${date}|${c.league}|${c.id}|${MKT(b.key)}`;
       held.add(k);
       const i = 'HDA'.indexOf(b.key), v4ok = c.v4 && Array.isArray(c.v4.p);
       const bt = b.key === 'B' || b.key === 'N';
@@ -122,7 +159,7 @@ export function decide(items, cards, date, now = new Date(), benched = new Set()
       const v4p = !v4ok ? null : i >= 0 ? c.v4.p[i] : bt ? (typeof c.v4.btts !== 'number' ? null : b.key === 'B' ? c.v4.btts : 100 - c.v4.btts) : typeof c.v4.over !== 'number' ? null : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
       out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), date, league: c.league, gid: c.id,
         home: c.home, away: c.away, leagueName: c.leagueName || c.league, kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
-        rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: v4p == null ? null : r1(v4p), why: b.why, ...(b.sharp ? { sharp: b.sharp } : {}), close: null, clv: null, res: null, units: null });
+        rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: v4p == null ? null : r1(v4p), why: b.why, ...(b.sharp ? { sharp: b.sharp } : {}), ...(b.from ? { from: b.from } : {}), close: null, clv: null, res: null, units: null });
     }
   }
   return out;
