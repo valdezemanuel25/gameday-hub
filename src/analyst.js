@@ -137,28 +137,42 @@ const hk = (c, k) => (k === 'H' ? c.hAbbr || c.home : c.aAbbr || c.away);
 const hwhy = (c, hm, k, s) => { const up = k === 'H', a = up ? hm.ml.p0 : 100 - hm.ml.p0, b = up ? hm.ml.p1 : 100 - hm.ml.p1, w = up ? c.v2.w : 100 - c.v2.w;
   return `${hk(c, k)} ${r1(a)}%→${r1(b)}% (${b - a >= 0 ? '+' : ''}${r1(b - a)}), v2 ${r1(w)}%: ${s}`; };
 export const NHL_RULES = [
-  { id: 'hfollow', mk: ['1x2'], name: 'Follow the move, v2 agrees', rule: 'A team\'s moneyline chance rose 3+ points since the opening price and v2 rated it above the opening price too',
+  { id: 'hfollow', retired: '2026-10-31', mk: ['1x2'], name: 'Follow the move, v2 agrees', rule: 'A team\'s moneyline chance rose 3+ points since the opening price and v2 rated it above the opening price too',
     pick: (c, hm) => { const m = hm.ml; if (!m) return null; const k = m.d >= 3 && c.v2.w > m.p0 ? 'H' : m.d <= -3 && c.v2.w < m.p0 ? 'A' : null;
       return k && { key: k, price: k === 'H' ? c.px.h : c.px.a, why: hwhy(c, hm, k, 'the money moved the way v2 already leaned') }; } },
-  { id: 'hfade', mk: ['1x2'], name: 'Fade the drift, v2 disagrees with it', rule: 'A team\'s moneyline chance fell 4+ points since the opening price but v2 still rates it at or above the price now',
+  { id: 'hfade', retired: '2026-10-31', mk: ['1x2'], name: 'Fade the drift, v2 disagrees with it', rule: 'A team\'s moneyline chance fell 4+ points since the opening price but v2 still rates it at or above the price now',
     pick: (c, hm) => { const m = hm.ml; if (!m) return null; const k = m.d <= -4 && c.v2.w >= m.p1 ? 'H' : m.d >= 4 && c.v2.w <= m.p1 ? 'A' : null;
       return k && { key: k, price: k === 'H' ? c.px.h : c.px.a, why: hwhy(c, hm, k, 'the price drifted but v2 says it went too far') }; } },
-  { id: 'htotals', mk: ['ou'], name: 'Goals move, v2 agrees', rule: 'The Over moved 3+ points since the opening price (either way) and v2, rated at the same line, is on the same side of the price now',
+  { id: 'htotals', retired: '2026-10-31', mk: ['ou'], name: 'Goals move, v2 agrees', rule: 'The Over moved 3+ points since the opening price (either way) and v2, rated at the same line, is on the same side of the price now',
     pick: (c, hm) => { const o = hm.ou; if (!o || !c.ln || c.ln.v !== o.line || typeof c.v2.o !== 'number') return null;
       const k = o.d >= 3 && c.v2.o >= o.p1 ? 'O' : o.d <= -3 && c.v2.o <= o.p1 ? 'U' : null; if (!k) return null;
       return { key: k, price: k === 'O' ? c.px.to : c.px.tu, line: o.line, why: `Over ${o.line} ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v2 ${r1(c.v2.o)}%: goals money agrees with v2` }; } },
+  // From Oct 31, 2026. On the Hub's own 41 priced hockey games (Oct 15-31), when v2 was 3+ points off the DraftKings moneyline
+  // (margin removed) the price was right: v2's side went 6 of 25 (-53%); betting the price's side went 19 of 25, +33% (first half
+  // +36%, second half +29%). v2 (and v4) rate home teams too high (55% vs 49% won). Small sample: a live test only.
+  // Bets only at the lineup read (45-20 minutes before puck drop): once both starting goalies are confirmed, or at the last read before
+  // the price locks (30 minutes or less) with whatever ESPN lists, noted on the bet.
+  { id: 'hprice', mk: ['1x2'], lineup: true, name: 'Price over v2: bet the side the price rates higher', rule: 'At the lineup read (once both starting goalies are confirmed, or at the last read before the price locks): v2 is 3+ points off the DraftKings moneyline chance (margin removed); bet the side the price rates higher than v2 does',
+    pick: (c, hm, ctx) => { const q = ctx.ml; if (!q) return null; const p = 100 * q[0], gap = c.v2.w - p; if (Math.abs(gap) < 3) return null;
+      const k = gap > 0 ? 'A' : 'H', pk = k === 'H' ? p : 100 - p, vk = k === 'H' ? c.v2.w : 100 - c.v2.w;
+      return { key: k, price: k === 'H' ? c.px.h : c.px.a, why: `${hk(c, k)} priced ${r1(pk)}%, v2 ${r1(vk)}%: the price rates ${hk(c, k)} ${r1(pk - vk)} points higher. Goalies: ${ctx.gkText}` }; } },
 ];
 export function decideNhl(items, cards, date, now = new Date(), benched = new Set()) {
   const held = new Set(items.map(b => `${b.date}|${b.league}|${b.gid}|${MKT(b.key)}`)), out = [];
   for (const c of cards) {
     if (!c || c.final || c.skipped || !c.px || !c.v2 || c.v2.w == null) continue;
-    const hm = hockeyMove(c.px); if (!hm) continue;
+    const hm = hockeyMove(c.px), ml = devig(c.px.h, c.px.a), mins = (new Date(c.kickoff).getTime() - now.getTime()) / 60000;
+    const g = c.gk || {}, gs = s => (s === 'c' ? 'confirmed' : s === 'e' ? 'expected' : 'unknown'), both = g.h && g.a && g.h.st === 'c' && g.a.st === 'c';
+    const ctx = { ml, gkText: g.h || g.a ? `${hk(c, 'A')} ${(g.a && g.a.n) || '?'} (${gs(g.a && g.a.st)}), ${hk(c, 'H')} ${(g.h && g.h.n) || '?'} (${gs(g.h && g.h.st)})` : 'not listed' };
+    // lineup rules: only after a lineup read (c.px.cl), and once both goalies are confirmed or it is the last read before the lock
+    const lineupOk = !!c.px.cl && (both || mins <= 30);
     for (const r of NHL_RULES) {
-      if (benched.has(r.id)) continue;
-      const b = r.pick(c, hm); if (!b || !Number.isFinite(b.price)) continue;
+      if (r.retired || benched.has(r.id)) continue;
+      if (r.lineup ? !lineupOk : !hm) continue;
+      const b = r.pick(c, hm, ctx); if (!b || !Number.isFinite(b.price)) continue;
       const k = `${date}|nhl|${c.id}|${MKT(b.key)}`; if (held.has(k)) continue;
       held.add(k);
-      const mp = b.key === 'H' ? hm.ml.p1 : b.key === 'A' ? 100 - hm.ml.p1 : b.key === 'O' ? hm.ou.p1 : 100 - hm.ou.p1, v2p = b.key === 'H' ? c.v2.w : b.key === 'A' ? 100 - c.v2.w : b.key === 'O' ? c.v2.o : 100 - c.v2.o;
+      const mlp = hm ? hm.ml.p1 : 100 * ml[0], mp = b.key === 'H' ? mlp : b.key === 'A' ? 100 - mlp : b.key === 'O' ? hm.ou.p1 : 100 - hm.ou.p1, v2p = b.key === 'H' ? c.v2.w : b.key === 'A' ? 100 - c.v2.w : b.key === 'O' ? c.v2.o : 100 - c.v2.o;
       out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), sport: 'nhl', date, league: 'nhl', gid: c.id,
         home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, leagueName: 'NHL', kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
         rule: r.id, key: b.key, ...(b.line != null ? { line: b.line } : {}), price: b.price, dk: b.price, bk: 'draftkings', mp: r1(mp), v2: r1(v2p), why: b.why, close: null, clv: null, res: null, units: null });

@@ -163,24 +163,37 @@ delete globalThis.caches;
 // --- hockey ---
 const hc = (o = {}) => ({ id: 'n1', home: 'Edmonton Oilers', away: 'Detroit Red Wings', hAbbr: 'EDM', aAbbr: 'DET', kickoff: KO, final: null, ln: { v: 6.5 },
   v2: { w: 66, o: 56 }, px: { op: { h: -185, a: 154 }, opt: { tl: 6.5, to: -112, tu: -108 }, h: -230, a: 190, tl: 6.5, to: -125, tu: 105 }, ...o });
-const nb = decideNhl([], [hc()], '2026-10-28', NOW);
-ok('hockey: follow the move on EDM (63% -> 68%, v2 66%) and the Over (51% -> 54%, v2 56%)', nb.length === 2 && nb.find(b => b.key === 'H').rule === 'hfollow' && nb.find(b => b.key === 'O').rule === 'htotals' && nb.find(b => b.key === 'O').line === 6.5 && nb[0].sport === 'nhl', JSON.stringify(nb.map(b => [b.rule, b.key, b.price])));
-ok('hockey: no follow when v2 rated the mover below its opening chance', !decideNhl([], [hc({ v2: { w: 60, o: 50 } })], '2026-10-28', NOW).some(b => b.rule === 'hfollow'));
-ok('hockey: fade a drifted side v2 still rates at or above the price', (() => { const x = decideNhl([], [hc({ v2: { w: 40, o: 50 } })], '2026-10-28', NOW); return x.length && x[0].rule === 'hfade' && x[0].key === 'A'; })());
-ok('hockey: no total bet when the book line is not the line v2 was rated at', !decideNhl([], [hc({ ln: { v: 5.5 } })], '2026-10-28', NOW).some(b => b.key === 'O' || b.key === 'U'));
-ok('hockey: no bet on a card with no rating', decideNhl([], [hc({ skipped: 'x' })], '2026-10-28', NOW).length === 0);
-const hw = { ...nb.find(b => b.key === 'H') }, ho = { ...nb.find(b => b.key === 'O') };
-const fin = hc({ px: { ...hc().px, h: -250 }, final: { h: 3, a: 3 + 0, total: 6, last: 'SO' } });
-fin.final = { h: 4, a: 3, total: 6, last: 'SO' };
+const { hockeyMove } = await import('../src/moves.js');
+const hr = id => NHL_RULES.find(r => r.id === id);
+// the three move rules are retired (Oct 31): their logic is kept for the record, and decideNhl never places them
+ok('hockey: follow / fade / goals-move rules are retired', ['hfollow', 'hfade', 'htotals'].every(id => hr(id).retired) && !decideNhl([], [hc()], '2026-10-28', NOW).some(b => ['hfollow', 'hfade', 'htotals'].includes(b.rule)));
+ok('hockey (retired logic): follow the move on EDM and the Over', hr('hfollow').pick(hc(), hockeyMove(hc().px)).key === 'H' && hr('htotals').pick(hc(), hockeyMove(hc().px)).key === 'O');
+// Price over v2: at the lineup read, v2 3+ points off the moneyline chance -> the side the price rates higher
+const at = m => new Date(new Date(KO).getTime() - m * 60000);
+const gkc = { h: { n: 'Stuart Skinner', st: 'c' }, a: { n: 'Cam Talbot', st: 'c' } }, gke = { h: { n: 'Stuart Skinner', st: 'e' }, a: { n: 'Cam Talbot', st: 'c' } };
+const lr = (o = {}) => hc({ v2: { w: 60, o: 50 }, gk: gkc, px: { ...hc().px, cl: at(40).toISOString() }, ...o }); // EDM priced ~68%, v2 60%
+ok('hprice: no bet before the lineup read', !decideNhl([], [lr({ px: { ...hc().px } })], '2026-10-28', at(40)).some(b => b.rule === 'hprice'));
+const p1 = decideNhl([], [lr()], '2026-10-28', at(40)).find(b => b.rule === 'hprice');
+ok('hprice: lineup read, both goalies confirmed, v2 8 points under the price on EDM: bet EDM at -230', p1 && p1.key === 'H' && p1.price === -230 && /confirmed/.test(p1.why) && /Skinner/.test(p1.why), JSON.stringify(p1));
+ok('hprice: a goalie only expected 40 minutes out: wait for the next read', !decideNhl([], [lr({ gk: gke })], '2026-10-28', at(40)).some(b => b.rule === 'hprice'));
+const p2 = decideNhl([], [lr({ gk: gke, px: { ...hc().px, cl: at(25).toISOString() } })], '2026-10-28', at(25)).find(b => b.rule === 'hprice');
+ok('hprice: the last read before the lock bets with the expected goalie, noted on the bet', p2 && p2.key === 'H' && /expected/.test(p2.why), JSON.stringify(p2));
+ok('hprice: v2 within 3 points of the price: no bet', !decideNhl([], [lr({ v2: { w: 66, o: 50 } })], '2026-10-28', at(40)).some(b => b.rule === 'hprice'));
+const p3 = decideNhl([], [lr({ v2: { w: 75, o: 50 } })], '2026-10-28', at(40)).find(b => b.rule === 'hprice');
+ok('hprice: v2 higher than the price on EDM: bet DET at +190', p3 && p3.key === 'A' && p3.price === 190);
+ok('hprice: no opening price needed', !!decideNhl([], [lr({ px: { h: -230, a: 190, cl: at(40).toISOString() } })], '2026-10-28', at(40)).find(b => b.rule === 'hprice'));
+// settling hockey bets
+const hw = { ...p1 }, ho = { sport: 'nhl', rule: 'htotals', key: 'O', line: 6.5, price: -125, kickoff: KO, mins: 60, close: null, res: null };
+const fin = hc({ px: { ...hc().px, h: -250 } }); fin.final = { h: 4, a: 3, total: 6, last: 'SO' };
 settle(hw, fin, new Date('2026-10-29T04:00:00Z')); settle(ho, fin, new Date('2026-10-29T04:00:00Z'));
 ok('hockey: a shootout win counts for the winner, close and CLV from the locked price', hw.res === 'win' && hw.close === -250 && hw.clv > 0 && /SO/.test(hw.score), JSON.stringify(hw));
 ok('hockey: the shootout goal does not count toward the total (6 < 6.5: Over loses)', ho.res === 'loss' && ho.units === -1);
-const push = { ...nb.find(b => b.key === 'O'), line: 6 }; settle(push, hc({ final: { h: 3, a: 3, total: 6, last: 'OT' } }), new Date('2026-10-29T04:00:00Z'));
+const push = { ...ho, res: null, close: null, line: 6 }; settle(push, hc({ final: { h: 3, a: 3, total: 6, last: 'OT' } }), new Date('2026-10-29T04:00:00Z'));
 ok('hockey: a total exactly on a whole-number line is a push', push.res === 'void' && push.units === 0);
 const kv4 = new Map(), env4 = { HUB: { get: async (k, t) => { const x = kv4.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { kv4.set(k, x); } } };
-await analystNhl(env4, '2026-10-28', [hc()], NOW);
-kv4.set('nhl:day:2026-10-28', JSON.stringify({ date: '2026-10-28', cards: [{ ...hc(), final: { h: 2, a: 1, total: 3, last: 'REG' } }] }));
+await analystNhl(env4, '2026-10-28', [lr()], at(40));
+kv4.set('nhl:day:2026-10-28', JSON.stringify({ date: '2026-10-28', cards: [{ ...lr(), final: { h: 2, a: 1, total: 3, last: 'REG' } }] }));
 const LN = await listAnalyst(env4, new Date('2026-10-29T04:00:00Z'));
-ok('hockey: kept apart from soccer, settled from the hockey day when the tab opens', LN.items.length === 0 && LN.nhl.items.length === 2 && LN.nhl.summary.all.settled === 2 && LN.nhl.summary.rules.length === NHL_RULES.length, JSON.stringify(LN.nhl.summary.all));
+ok('hockey: kept apart from soccer, settled from the hockey day when the tab opens', LN.items.length === 0 && LN.nhl.items.length === 1 && LN.nhl.items[0].rule === 'hprice' && LN.nhl.summary.all.settled === 1 && LN.nhl.summary.rules.length === NHL_RULES.length, JSON.stringify(LN.nhl.summary.all));
 console.log(bad ? `\n${bad} FAILED` : '\nAll Analyst checks passed');
 process.exit(bad ? 1 : 0);
