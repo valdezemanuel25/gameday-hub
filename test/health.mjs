@@ -7,11 +7,22 @@ const g = gameChecks({ '2026-10-31': [
   { id: 'a', league: 'eng.1', home: 'A', away: 'B', kickoff: at(-8), final: null, v4: {} },          // 8h past, no result: stuck
   { id: 'b', league: 'eng.1', home: 'C', away: 'D', kickoff: at(-8), final: { h: 1, a: 0 }, v4: {} }, // graded
   { id: 'c', league: 'eng.1', home: 'E', away: 'F', kickoff: at(5), final: null, v4: {} },           // 5h to go, no price
-  { id: 'd', league: 'eng.1', home: 'G', away: 'H', kickoff: at(5), final: null, v4: {}, odds: { h: 1 } },
+  { id: 'd', league: 'eng.1', home: 'G', away: 'H', kickoff: at(5), final: null, v4: {}, odds: { h: -120, d: 250, a: 300 } },
+  { id: 'p', league: 'eng.1', home: 'M', away: 'N', kickoff: at(5), final: null, v4: {}, odds: { pn: { h: -150, d: 280, a: 400 }, by: -130, bn: 105 } }, // Pinnacle / both-score only: no ESPN price
+  { id: 's', league: 'eng.1', home: 'O', away: 'P', kickoff: at(5), final: null, v4: {}, odds: { h: -182, d: 375, a: 425, src: 'bet365' } }, // Bet365 stand-in
   { id: 'e', league: 'xyz.9', home: 'I', away: 'J', kickoff: at(5), final: null, v4: {} },           // league not priced
   { id: 'f', league: 'eng.1', home: 'K', away: 'L', kickoff: at(-9), final: null, skipped: true } ] }, NOW, { graceH: 6, priced: new Set(['eng.1']) });
 ok('health: a game 8 hours past kickoff with no result is flagged; graded and skipped games are not', g.ungraded.length === 1 && /A v B/.test(g.ungraded[0].game) && g.ungraded[0].hoursPast === 8, JSON.stringify(g.ungraded));
-ok('health: a priced-league game 5 hours out with no price is flagged; priced and unpriced-league games are not', g.unpriced.length === 1 && /E v F/.test(g.unpriced[0].game), JSON.stringify(g.unpriced));
+ok('health: a priced-league game 5 hours out with no price is flagged; priced and unpriced-league games are not', g.unpriced.length === 2 && /E v F/.test(g.unpriced[0].game), JSON.stringify(g.unpriced));
+ok('health: a game with only Pinnacle or both-score prices (no home / draw / away from ESPN) counts as unpriced', g.unpriced.some(x => /M v N/.test(x.game)), JSON.stringify(g.unpriced));
+ok('health: a Bet365 stand-in counts as priced, and is listed as a stand-in with its book', !g.unpriced.some(x => /O v P/.test(x.game)) && g.standIn.length === 1 && /O v P/.test(g.standIn[0].game) && g.standIn[0].book === 'bet365', JSON.stringify(g.standIn));
+// Sweep's panel (public/sweep.js readHealth) names the stand-in games and the unpriced ones
+{
+  const src = (await import('fs')).readFileSync(new URL('../public/sweep.js', import.meta.url), 'utf8'), m = src.match(/function readHealth\(h\) \{[\s\S]*?return out;\n  \}/);
+  const readHealth = m && new Function(`${m[0]}; return readHealth;`)();
+  const f = readHealth ? readHealth({ soccer: g, nhl: { ungraded: [], unpriced: [] }, analyst: { noClose: [], stale: [] }, syncProblems: {} }) : [];
+  ok("Sweep's panel: lists the unpriced games and the Bet365 stand-in", f.some(x => /2 upcoming games with no price/.test(x)) && f.some(x => /1 upcoming game priced from Bet365, not DraftKings/.test(x)), JSON.stringify(f));
+}
 const a = analystChecks({ items: [
   { rule: 'under', key: 'U', home: 'A', away: 'B', kickoff: at(-2), close: null, res: null, mins: 60 },
   { rule: 'under', key: 'U', home: 'C', away: 'D', kickoff: at(-2), close: 120, res: null, mins: 60 },
