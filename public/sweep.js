@@ -76,6 +76,8 @@
     var nc = n(h.analyst && h.analyst.noClose), st = n(h.analyst && h.analyst.stale), sp = Object.keys(h.syncProblems || {}).length;
     if (ug) out.push(ug + ' game' + (ug > 1 ? 's' : '') + ' with no result yet');
     if (up) out.push(up + ' upcoming game' + (up > 1 ? 's' : '') + ' with no price');
+    var si = n(h.soccer && h.soccer.standIn);
+    if (si) out.push(si + ' upcoming game' + (si > 1 ? 's' : '') + ' priced from ' + (h.soccer.standIn[0].book === 'bet365' ? 'Bet365' : h.soccer.standIn[0].book) + ', not DraftKings (the Analyst sits ' + (si > 1 ? 'them' : 'it') + ' out)');
     if (nc) out.push(nc + ' Analyst bet' + (nc > 1 ? 's' : '') + ' missing a closing price');
     if (st) out.push(st + ' Analyst bet' + (st > 1 ? 's' : '') + ' open 2+ days');
     if (sp) out.push('a sync problem in ' + Object.keys(h.syncProblems).join(', '));
