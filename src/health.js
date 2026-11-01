@@ -4,7 +4,7 @@
 //   * Analyst bets past kickoff with no closing price, or open long after the game,
 //   * the daily KV write budget, Odds API credits, the last sync problem per league,
 //   * each Analyst rule's record (the weekly check-in reads it), with how close it is to being benched.
-import { getAnalyst, summary, RULES, NHL_RULES, SINCE, NHL_SINCE, BENCH } from './analyst.js';
+import { getAnalyst, summary, RULES, NHL_RULES, SINCE, NHL_SINCE, BENCH, setOf } from './analyst.js';
 
 const HOUR = 3600000;
 const lbl = c => `${c.away && c.home ? `${c.home} v ${c.away}` : c.id} (${c.league || 'nhl'}, ${c.kickoff})`;
@@ -31,7 +31,7 @@ export function analystChecks(doc, now) {
     if (now - ko > 30 * 60000 && b.close == null) noClose.push({ bet: `${b.rule} ${b.key} ${b.home} v ${b.away}`, kickoff: b.kickoff });
     if (now - ko > 2 * 86400000) stale.push({ bet: `${b.rule} ${b.key} ${b.home} v ${b.away}`, kickoff: b.kickoff });
   }
-  const rec = (its, ol, rules, since) => summary(its, ol, rules, since).rules.map(r => ({ id: r.id, name: r.name, bets: r.n, settled: r.settled, hit: r.hit, units: r.units, roi: r.roi, clv: r.clv,
+  const rec = (its, ol, rules, since) => summary(its, ol, rules, since).rules.map(r => ({ id: r.id, ...(rules === RULES ? { set: setOf({ rule: r.id }) } : {}), name: r.name, bets: r.n, settled: r.settled, hit: r.hit, units: r.units, roi: r.roi, clv: r.clv,
     benched: r.benched, retired: r.retired || null, toBench: r.retired || r.benched ? null : Math.max(0, BENCH.n - r.settled) }));
   return {
     noClose, stale,

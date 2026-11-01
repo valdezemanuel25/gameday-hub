@@ -65,8 +65,12 @@ const why1 = (V, i, s) => `${['Home', 'Draw', 'Away'][i]} ${r1(V.p0[i])}%→${r1
 // The rules. pick(V, S) -> { key, price, why } | null: V is the move and v4 (view), S the sharp price (sharpOf in src/btts.js); a rule
 // is only asked when it has what it needs (sharp: true rules need S, the others V). Backtest at the closing price (1 unit a bet, first
 // half / second half of the window):
+// Two rule sets, run side by side on the same games (Nov 1, 2026), each its own paper bettor with its own one bet per game per market:
+// Analyst 1 = the original rules (stale, follow, value, fade, totals), long shots included, as before Nov 1; Analyst 2 = the new rules
+// (move, under, bttsNo and the long-shot swap: no winner bet longer than LONG). A bet's set comes from its rule (setOf).
+export const SETS = { 1: 'Analyst 1: the original rules', 2: 'Analyst 2: the new rules' };
 export const RULES = [
-  { id: 'stale', mk: ['1x2', 'ou'], sharp: true, name: 'Stale price: DraftKings behind the sharp book', rule: 'DraftKings pays 2%+ more than the sharp book\'s fair chance (Pinnacle or a betting exchange, margin removed) on a result or Over/Under 2.5, at +400 or shorter',
+  { id: 'stale', set: 1, mk: ['1x2', 'ou'], sharp: true, name: 'Stale price: DraftKings behind the sharp book', rule: 'DraftKings pays 2%+ more than the sharp book\'s fair chance (Pinnacle or a betting exchange, margin removed) on a result or Over/Under 2.5, at +400 or shorter',
     // Bet365 against Pinnacle at the same moment (data/football-data, 8,389 games): opening prices +9% on 447 bets at 0%+, -5% at 2%+;
     // closing prices -3% / -4%. Bet365 is not DraftKings: the live test is whether DraftKings lags more.
     pick: (V, S) => { let best = null;
@@ -77,38 +81,38 @@ export const RULES = [
   // Nov 1, 2026: on the Hub's own games (Oct 25-31, DraftKings closing price) a result whose chance rose 3+ points won 35 of 52, +33%,
   // with or without v4 agreeing; at +150 or shorter 32 of 41, +40%. Replaces 'follow' (which also needed v4 above the opening price).
   // Draws are left out. A long shot (longer than LONG) is never bet: decide swaps it for a goals pick (goalsSwap).
-  { id: 'move', mk: ['1x2'], name: 'Follow the move', rule: 'A home or away win\'s chance rose 3+ points since the opening price (margin removed); no v4 check. +150 or shorter, else the goals swap below',
+  { id: 'move', set: 2, mk: ['1x2'], name: 'Follow the move', rule: 'A home or away win\'s chance rose 3+ points since the opening price (margin removed); no v4 check. +150 or shorter, else the goals swap below',
     pick: V => { const i = pickIdx(V.d, i => i !== 1 && V.d[i] >= 3); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the money moved to it') }; } },
-  { id: 'follow', mk: ['1x2'], retired: '2026-11-01', name: 'Follow the move, v4 agrees', rule: 'A result\'s chance rose 3+ points since the opening price and v4 rated it above the opening price too',
-    // close: 249 bets, -24% / +2% (-10% overall). Retired Nov 1, 2026 for 'move' above (same move, no v4 check). Its bets stay in the record.
+  { id: 'follow', set: 1, mk: ['1x2'], name: 'Follow the move, v4 agrees', rule: 'A result\'s chance rose 3+ points since the opening price and v4 rated it above the opening price too',
+    // close: 249 bets, -24% / +2% (-10% overall). Retired Nov 1, 2026 for 'move'; back Nov 1 in Analyst 1 (the original rules), so the two sets can be compared.
     pick: V => { const i = pickIdx(V.d, i => V.d[i] >= 3 && V.e0[i] > 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the money moved the way v4 already leaned') }; } },
-  { id: 'value', mk: ['1x2'], retired: '2026-11-01', name: 'v4 value, price not against it', rule: 'v4 rates a home or away win 5+ points above the price now, and that price has not drifted 1+ points away from it',
+  { id: 'value', set: 1, mk: ['1x2'], name: 'v4 value, price not against it', rule: 'v4 rates a home or away win 5+ points above the price now, and that price has not drifted 1+ points away from it',
     // close: 439 bets, -19% / -1% (-10% overall). Retired Nov 1, 2026: on the Hub's games (Oct 25-31, close) it went 1 of 10, mostly long
-    // shots (e.g. Levante +410 v Atlético), and the further v4 sat above the price the worse the Hub's bets did. Its bets stay in the record.
+    // shots (e.g. Levante +410 v Atlético), and the further v4 sat above the price the worse the Hub's bets did. Back Nov 1 in Analyst 1.
     pick: V => { const i = pickIdx(V.e, i => i !== 1 && V.e[i] >= 5 && V.d[i] > -1); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'v4 sees value and the money is not fighting it') }; } },
-  { id: 'fade', mk: ['1x2'], retired: '2026-11-01', name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
+  { id: 'fade', set: 1, mk: ['1x2'], name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
     // close: 218 bets, -3% / -14% (-9% overall). Retired Nov 1, 2026: on the Hub's games (Oct 25-31, close) 6 of 29, -19%, half of them
-    // long shots. Same reason as 'value': v4 above the price has been the losing side. Its bets stay in the record.
+    // long shots. Same reason as 'value': v4 above the price has been the losing side. Back Nov 1 in Analyst 1.
     pick: V => { const i = pickIdx(V.d.map(x => -x), i => V.d[i] <= -4 && V.e[i] >= 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the price drifted but v4 says it went too far') }; } },
-  { id: 'totals', mk: ['ou'], retired: '2026-10-31', name: 'Goals move, v4 agrees', rule: 'Over 2.5 moved 3+ points since the opening price (either way) and v4 is on the same side of the price now',
+  { id: 'totals', set: 1, mk: ['ou'], name: 'Goals move, v4 agrees', rule: 'Over 2.5 moved 3+ points since the opening price (either way) and v4 is on the same side of the price now',
     // close: 146 bets, +3% / -12% (-5% overall). Retired Oct 31, 2026 for 'under' below: on the Hub's own games (Oct 13-31) following
-    // a 3-point Over/Under move went 7 of 14 at about -30%. Its bets stay in the record; it places no new ones.
+    // a 3-point Over/Under move went 7 of 14 at about -30%. Back Nov 1 in Analyst 1.
     pick: V => { const o = V.ou; if (!o || o.d == null) return null; const k = o.d >= 3 && o.e >= 0 ? 'O' : o.d <= -3 && o.e <= 0 ? 'U' : null; if (!k) return null;
       return { key: k, price: o.px[k === 'O' ? 0 : 1], why: `Over 2.5 ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v4 ${r1(o.p1 + o.e)}%: goals money agrees with v4` }; } },
   // Front test from Oct 31, 2026. Backtest on the Hub's own games, Oct 13-31 at DraftKings' closing price (small samples: a live test only).
   // DraftKings' prices ran high on Yes and Over: Yes implied 59% and both scored 54%; Over implied 53% and 46% went over.
-  { id: 'under', mk: ['ou'], late: true, name: 'Under: price too high on Over', rule: 'At the lineup read (30-20 minutes before kickoff), DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
+  { id: 'under', set: 2, mk: ['ou'], late: true, name: 'Under: price too high on Over', rule: 'At the lineup read (30-20 minutes before kickoff), DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
     // From Oct 31 it waits for the lineup read: the backtest picked its bets on the closing price, and the few games with an earlier
     // price went 2 of 5 (-14%) when checked early, so betting early had no support (and the price can move against it after).
     // 17 bets, 65% hit, +46% (first half +74%, second half +14%)
     pick: V => { const o = V.ou; if (!o || o.v2 == null || o.p1 < 55 || !(o.p1 + o.e < o.p1) || !(o.v2 < o.p1)) return null;
       return { key: 'U', price: o.px[1], why: `Over 2.5 priced ${r1(o.p1)}%, v4 ${r1(o.p1 + o.e)}%, v2 ${r1(o.v2)}%: the price leans Over more than both models` }; } },
-  { id: 'bttsNo', mk: ['btts'], name: 'Both score No: price too high on Yes', rule: 'DraftKings rates both teams to score Yes at 58%+ (margin removed) and v4 rates it lower: bet No',
+  { id: 'bttsNo', set: 2, mk: ['btts'], name: 'Both score No: price too high on Yes', rule: 'DraftKings rates both teams to score Yes at 58%+ (margin removed) and v4 rates it lower: bet No',
     // 67 bets, 46% hit, +26% (first half +24%, second half +29%); also needing v2 below the price: 41 bets, +25%
     pick: V => { const t = V.bt; if (!t || t.p1 < 58 || !(t.v4 < t.p1)) return null;
       return { key: 'N', price: t.px[1], why: `Both score Yes priced ${r1(t.p1)}%, v4 ${r1(t.v4)}%: the price leans Yes more than v4` }; } },
   // Not a rule of its own: the bets decide places in place of a winner long shot (see LONG). Listed so the record shows it on its own line.
-  { id: 'longshot', mk: ['ou', 'btts'], swap: true, name: 'Long shot swapped to goals', rule: 'A winner rule fired on a price longer than +150: no winner bet; instead Over 2.5 (or Both score Yes when Over 2.5 has no price or is already held) if DraftKings rates it 50%+ and v4 no more than 3 points lower. Never Under or Both score No; the Under and Both score No rules skip the game',
+  { id: 'longshot', set: 2, mk: ['ou', 'btts'], swap: true, name: 'Long shot swapped to goals', rule: 'A winner rule fired on a price longer than +150: no winner bet; instead Over 2.5 (or Both score Yes when Over 2.5 has no price or is already held) if DraftKings rates it 50%+ and v4 no more than 3 points lower. Never Under or Both score No; the Under and Both score No rules skip the game',
     pick: () => null },
 ];
 
@@ -122,6 +126,9 @@ export function goalsSwap(V, free = () => true) {
   return c.find(x => Number.isFinite(x.price) && x.mp >= SWAP.min && x.v4 >= x.mp - SWAP.give) || null;
 }
 const SKIP_LONG = new Set(['under', 'bttsNo']); // goals rules that sit out a long-shot game
+// which set a bet belongs to (from its rule; a rule no longer listed counts as Analyst 1). Works on full bets and packed rows ([1] = rule).
+const SET_OF = Object.fromEntries(RULES.map(r => [r.id, r.set]));
+export const setOf = b => SET_OF[Array.isArray(b) ? b[1] : b.rule] || 1;
 
 // ---- one look at a set of cards: the new bets, if any ----
 const MKT = k => (k === 'O' || k === 'U' ? 'ou' : k === 'B' || k === 'N' ? 'btts' : '1x2');
@@ -132,37 +139,49 @@ export function lookCard(c) {
   if (!c || c.final || !c.odds || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null;
   return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2 });
 }
-// One position per game per market (1X2, Over/Under): the first rule to fire takes it, in RULES order, and later reads never add to it
-// or bet the other side. A benched rule places nothing. sharp: Map(cardId -> sharpOf) for the stale-price rule, or null.
+// One position per game per market (1X2, Over/Under, Both score) per rule set: the first rule to fire takes it, in RULES order, and later
+// reads never add to it or bet the other side. A benched rule places nothing. sharp: Map(cardId -> sharpOf) for the stale-price rule, or null.
+// Analyst 2 only: a winner long shot is swapped for a goals bet, once per game. A game with a long-shot bet stays a long-shot game on
+// later reads: its winner market counts as taken (no second swap, no winner bet if the price shortens) and Under / Both score No sit out.
 export function decide(items, cards, date, now = new Date(), benched = new Set(), sharp = null) {
-  const held = new Set(items.map(b => `${b.date}|${b.league}|${b.gid}|${MKT(b.key)}`)), out = [];
+  const gk = (c, m) => `${date}|${c.league}|${c.id}|${m}`, out = [];
+  const held = { 1: new Set(), 2: new Set() }, longGame = new Set();
+  for (const b of items) {
+    if (b.sport === 'nhl') continue;
+    const s = setOf(b), k = `${b.date}|${b.league}|${b.gid}`;
+    held[s].add(`${k}|${MKT(b.key)}`);
+    if (b.rule === 'longshot') { held[2].add(`${k}|1x2`); longGame.add(k); }
+  }
   for (const c of cards) {
     if (!c || c.final || !c.odds) continue;
     const V = lookCard(c), S = sharp && sharp.get(c.id); if (!V && !S) continue;
-    let long = false; // a winner rule fired on a long shot at this read
-    for (const r0 of RULES) {
-      if (r0.swap || r0.retired || benched.has(r0.id) || (r0.sharp ? !S : !V)) continue;
-      if (long && SKIP_LONG.has(r0.id)) continue;
-      if (r0.late && (new Date(c.kickoff).getTime() - now.getTime()) / 60000 > LATE) continue; // not yet the lineup read
-      let r = r0, b = r0.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
-      if (held.has(`${date}|${c.league}|${c.id}|${MKT(b.key)}`)) continue;
-      // a winner long shot is never bet: the game's goals markets are looked at instead (goalsSwap)
-      if ('HDA'.includes(b.key) && b.price > LONG) {
-        long = true; const sw = r = RULES.find(x => x.id === 'longshot');
-        if (benched.has(sw.id)) continue;
-        const g = goalsSwap(V, m => !held.has(`${date}|${c.league}|${c.id}|${m}`)); if (!g) continue;
-        b = { key: g.key, price: g.price, from: { rule: r0.id, key: b.key, price: b.price },
-          why: `${LABEL[b.key]} +${b.price} (${r0.name}) is a long shot, longer than +${LONG}: took ${LABEL[g.key]} instead, priced ${r1(g.mp)}%, v4 ${r1(g.v4)}%` };
+    for (const set of [1, 2]) {
+      const H = held[set];
+      let long = set === 2 && longGame.has(`${date}|${c.league}|${c.id}`); // a long-shot game (now or at an earlier read)
+      for (const r0 of RULES) {
+        if (r0.set !== set || r0.swap || r0.retired || benched.has(r0.id) || (r0.sharp ? !S : !V)) continue;
+        if (long && SKIP_LONG.has(r0.id)) continue;
+        if (r0.late && (new Date(c.kickoff).getTime() - now.getTime()) / 60000 > LATE) continue; // not yet the lineup read
+        let r = r0, b = r0.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
+        if (H.has(gk(c, MKT(b.key)))) continue;
+        // Analyst 2: a winner long shot is never bet; the game's goals markets are looked at instead (goalsSwap), once
+        if (set === 2 && 'HDA'.includes(b.key) && b.price > LONG) {
+          long = true; const sw = r = RULES.find(x => x.id === 'longshot');
+          if (benched.has(sw.id)) continue;
+          const g = goalsSwap(V, m => !H.has(gk(c, m))); if (!g) continue;
+          H.add(gk(c, '1x2')); // the swap stands in for the winner bet
+          b = { key: g.key, price: g.price, from: { rule: r0.id, key: b.key, price: b.price },
+            why: `${LABEL[b.key]} +${b.price} (${r0.name}) is a long shot, longer than +${LONG}: took ${LABEL[g.key]} instead, priced ${r1(g.mp)}%, v4 ${r1(g.v4)}%` };
+        }
+        H.add(gk(c, MKT(b.key)));
+        const i = 'HDA'.indexOf(b.key), v4ok = c.v4 && Array.isArray(c.v4.p);
+        const bt = b.key === 'B' || b.key === 'N';
+        const mp = b.sharp ? b.sharp.fair : i >= 0 ? V.p1[i] : bt ? (b.key === 'B' ? V.bt.p1 : 100 - V.bt.p1) : b.key === 'O' ? V.ou.p1 : 100 - V.ou.p1;
+        const v4p = !v4ok ? null : i >= 0 ? c.v4.p[i] : bt ? (typeof c.v4.btts !== 'number' ? null : b.key === 'B' ? c.v4.btts : 100 - c.v4.btts) : typeof c.v4.over !== 'number' ? null : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
+        out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), date, league: c.league, gid: c.id,
+          home: c.home, away: c.away, leagueName: c.leagueName || c.league, kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
+          rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: v4p == null ? null : r1(v4p), why: b.why, ...(b.sharp ? { sharp: b.sharp } : {}), ...(b.from ? { from: b.from } : {}), close: null, clv: null, res: null, units: null });
       }
-      const k = `${date}|${c.league}|${c.id}|${MKT(b.key)}`;
-      held.add(k);
-      const i = 'HDA'.indexOf(b.key), v4ok = c.v4 && Array.isArray(c.v4.p);
-      const bt = b.key === 'B' || b.key === 'N';
-      const mp = b.sharp ? b.sharp.fair : i >= 0 ? V.p1[i] : bt ? (b.key === 'B' ? V.bt.p1 : 100 - V.bt.p1) : b.key === 'O' ? V.ou.p1 : 100 - V.ou.p1;
-      const v4p = !v4ok ? null : i >= 0 ? c.v4.p[i] : bt ? (typeof c.v4.btts !== 'number' ? null : b.key === 'B' ? c.v4.btts : 100 - c.v4.btts) : typeof c.v4.over !== 'number' ? null : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
-      out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), date, league: c.league, gid: c.id,
-        home: c.home, away: c.away, leagueName: c.leagueName || c.league, kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
-        rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: v4p == null ? null : r1(v4p), why: b.why, ...(b.sharp ? { sharp: b.sharp } : {}), ...(b.from ? { from: b.from } : {}), close: null, clv: null, res: null, units: null });
     }
   }
   return out;
@@ -376,6 +395,10 @@ export async function listAnalyst(env, now = new Date()) {
   const old = doc.old || [];
   // The same record split by market (Winner, Over/Under, Both score) for the Analyst tab's filter: each with only the rules that bet it
   const byMk = (items, old, rules, since, mks) => Object.fromEntries(mks.map(m => [m, summary(items.filter(b => MKT(b.key) === m), old.filter(b => MKT(b[2]) === m), rules.filter(r => r.mk.includes(m)), since)]));
-  return { items: soc(doc.items).slice(0, 300), summary: summary(soc(doc.items), soc(old, true)), mk: byMk(soc(doc.items), soc(old, true), RULES, SINCE, ['1x2', 'ou', 'btts']), rules: RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })),
+  // Soccer, one block per rule set (the Analyst tab's Analyst 1 / Analyst 2 switch), each shaped like the whole: items, summary, mk, rules
+  const si = soc(doc.items), so = soc(old, true);
+  const one = (items, old, rules) => ({ items: items.slice(0, 300), summary: summary(items, old, rules), mk: byMk(items, old, rules, SINCE, ['1x2', 'ou', 'btts']), rules: rules.map(r => ({ id: r.id, name: r.name, rule: r.rule })) });
+  const sets = Object.fromEntries(Object.keys(SETS).map(n => [n, { name: SETS[n], ...one(si.filter(b => setOf(b) === +n), so.filter(b => setOf(b) === +n), RULES.filter(r => r.set === +n)) }]));
+  return { items: si.slice(0, 300), summary: summary(si, so), mk: byMk(si, so, RULES, SINCE, ['1x2', 'ou', 'btts']), rules: RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })), sets,
     nhl: { items: nhl(doc.items).slice(0, 300), summary: summary(nhl(doc.items), nhl(old, true), NHL_RULES, NHL_SINCE), mk: byMk(nhl(doc.items), nhl(old, true), NHL_RULES, NHL_SINCE, ['1x2', 'ou']), rules: NHL_RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })) } };
 }
