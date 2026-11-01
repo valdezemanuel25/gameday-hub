@@ -136,7 +136,7 @@ export const LABEL = { H: 'Home win', D: 'Draw', A: 'Away win', O: 'Over 2.5', U
 const BOOKN = { pinnacle: 'Pinnacle', betfair_ex_eu: 'Betfair', betfair_ex_uk: 'Betfair', matchbook: 'Matchbook' };
 // The Analyst only bets a card with a v4 number that is not the rough promoted-club stand-in, and with a price to read.
 export function lookCard(c) {
-  if (!c || c.final || !c.odds || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null;
+  if (!c || c.final || !c.odds || c.odds.src || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null; // src: a stand-in book, not DraftKings
   return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2 });
 }
 // One position per game per market (1X2, Over/Under, Both score) per rule set: the first rule to fire takes it, in RULES order, and later
@@ -241,7 +241,7 @@ export function decideNhl(items, cards, date, now = new Date(), benched = new Se
 }
 
 // ---- settling: the closing price once the game has kicked off, the result once it is graded ----
-const closeOf = (odds, key) => { const dkB = odds && (!odds.bk || odds.bk === 'draftkings'); const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null, B: dkB ? odds.by : null, N: dkB ? odds.bn : null })[key]; return Number.isFinite(m) ? m : null; };
+const closeOf = (odds, key) => { const dkB = odds && (!odds.bk || odds.bk === 'draftkings'); if (odds && odds.src && 'HDAOU'.includes(key)) return null; const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null, B: dkB ? odds.by : null, N: dkB ? odds.bn : null })[key]; return Number.isFinite(m) ? m : null; };
 const VOID_AFTER = 4 * 86400000; // a game with no result 4 days after kickoff (postponed, abandoned) is voided: the stake comes back
 const closeNhl = (px, b) => { const m = px && ({ H: px.h, A: px.a, O: px.tl === b.line ? px.to : null, U: px.tl === b.line ? px.tu : null })[b.key]; return Number.isFinite(m) ? m : null; };
 export function settle(b, c, now = new Date()) {

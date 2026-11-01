@@ -90,8 +90,21 @@ export const FIRST_DIV = new Set(['eng.2', 'eng.1', 'ger.1', 'esp.1', 'ita.1', '
 export const PRICED = new Set([...FIRST_DIV, ...CUP_MODEL.map(l => l.slug)]);
 // ESPN's odds block (DraftKings): American prices for home / draw / away and the Over/Under 2.5 line when it is offered. Anything missing is left out.
 const am = v => { if (v == null) return null; const t = String(v).trim().toUpperCase(); if (t === 'EVEN' || t === 'EV') return 100; const n = Number(t.replace('+', '')); return Number.isInteger(n) && Math.abs(n) >= 100 ? n : null; };
+// When ESPN has no DraftKings price for a game it sometimes sends another book's, in decimal odds (Bet365: 1.55 / 4.75 / 5.25, no total,
+// no opening price). Those are turned into American odds and marked with the book (src: 'bet365'): a stand-in the board and Movement
+// show, tagged, but the Analyst never bets or closes on (src/analyst.js). A DraftKings entry, when ESPN lists one, always comes first.
+const decAm = v => { if (v == null || typeof v === 'boolean') return null; const n = Number(String(v).trim()); if (!Number.isFinite(n) || n <= 1.01 || n >= 100) return null;
+  return n >= 2 ? Math.round((n - 1) * 100) : -Math.round(100 / (n - 1)); };
+const bookOf = o => String(o?.provider?.name || 'other').toLowerCase().replace(/[^a-z0-9]/g, '') || 'other';
 export function parseOdds(list) {
-  const o = (list || []).find(x => x && (x.moneyline || x.homeTeamOdds || x.drawOdds || x.total || x.overUnder != null)); if (!o) return null;
+  const has = x => x && (x.moneyline || x.homeTeamOdds || x.drawOdds || x.total || x.overUnder != null);
+  const all = (list || []).filter(has), o = all.find(x => /draftkings/i.test(x.provider?.name || '')) || all[0]; if (!o) return null;
+  const out0 = parseAm(o); if (out0) return out0;
+  // no American price anywhere: the decimal stand-in, home / draw / away only
+  const h = decAm(o.homeTeamOdds?.moneyLine), d = decAm(o.drawOdds?.moneyLine), a = decAm(o.awayTeamOdds?.moneyLine);
+  return h != null && d != null && a != null ? { h, d, a, src: bookOf(o) } : null;
+}
+function parseAm(o) {
   const out = {}, ml = o.moneyline || {}, pick = (...xs) => { for (const x of xs) { const v = am(x); if (v != null) return v; } return null; };
   const h = pick(ml.home?.close?.odds, ml.home?.open?.odds, o.homeTeamOdds?.moneyLine), d = pick(ml.draw?.close?.odds, ml.draw?.open?.odds, o.drawOdds?.moneyLine), a = pick(ml.away?.close?.odds, ml.away?.open?.odds, o.awayTeamOdds?.moneyLine);
   if (h != null) out.h = h; if (d != null) out.d = d; if (a != null) out.a = a;

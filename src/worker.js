@@ -283,6 +283,11 @@ function keepOdds(card, old, f, slug, now) {
 // The first price also keeps the total (line and Over / Under prices) when the book had one, so totals can be tracked from it too.
 // ts (when the price last changed) and cl (when the lineup read was taken: the closing price) carry over from the old price.
 export function withOdds(old, fresh, now = new Date()) {
+  // A stand-in price (another book's, src set: src/data.js parseOdds) never replaces a DraftKings price already on the card; DraftKings
+  // arriving on a card that only had a stand-in starts the price over (first price, first-grab time) so moves compare one book.
+  const PX = ['h', 'd', 'a', 'tl', 'to', 'tu', 'op', 'opt'];
+  if (fresh && fresh.src && old && old.h != null && !old.src) fresh = Object.fromEntries(PX.filter(k => old[k] != null).map(k => [k, old[k]]));
+  if (fresh && !fresh.src && old && old.src) { old = { ...old }; for (const k of [...PX, 'f', 'fa', 'src']) delete old[k]; if (!Object.keys(old).length) old = null; }
   const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
   for (const k of ['bf', 'bk', 'bcl', 'bfk', 'pn', 'pf', 'pcl', 'pat', 'cby', 'cls']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
