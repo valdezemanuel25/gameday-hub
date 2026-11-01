@@ -296,7 +296,11 @@ const KEEP = 600, LOCK_MIN = 20; // LOCK_MIN: the price locks 20 minutes before 
 // Bets removed by hand (DROP): matched, then deleted the first time the record is read, and saved once. Oct 31, 2026: the Under on
 // Colorado Rapids v Chicago Fire was placed 4 hours early, before the Under rule waited for the lineup read; the new rule looks at that
 // game again at its lineup read. The early bet had mins 240; a lineup-read bet has 35 or less, so it is never matched.
-const DROP = [b => b.rule === 'under' && b.date === '2026-10-31' && /Colorado Rapids/.test(b.home || '') && /Chicago Fire/.test(b.away || '') && b.mins > LATE];
+// Nov 1, 2026: the long-shot rules went live; every soccer bet placed before them (at < RULES_NOV1) on a game that had not kicked off
+// by then is removed, so those games are bet again under the new rules at their next price read.
+const RULES_NOV1 = '2026-11-01T04:00:00Z';
+const DROP = [b => b.rule === 'under' && b.date === '2026-10-31' && /Colorado Rapids/.test(b.home || '') && /Chicago Fire/.test(b.away || '') && b.mins > LATE,
+  b => b.sport !== 'nhl' && !!b.at && b.at < RULES_NOV1 && !!b.kickoff && b.kickoff > RULES_NOV1];
 export async function getAnalyst(env, { readOnly = false } = {}) {
   const doc = (await env.HUB.get('analyst', 'json')) || { v: 1, items: [] }, n = doc.items.length;
   doc.items = doc.items.filter(b => !DROP.some(f => f(b)));

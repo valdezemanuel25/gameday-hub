@@ -43,6 +43,16 @@ ok('settle: both score No settles on the score and closes at the both-score pric
   const got = await getAnalyst(e);
   ok('drop: the early Colorado v Chicago Fire Under is removed and saved; others stay', got.items.map(b => b.id).join() === 'late,other' && JSON.parse(m.get('analyst')).items.length === 2);
 }
+{
+  const m = new Map(), e = { HUB: { get: async (k, t) => { const x = m.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { m.set(k, x); } } };
+  m.set('analyst', JSON.stringify({ v: 1, items: [
+    { id: 'sunPre', rule: 'value', key: 'A', at: '2026-11-01T02:00:00Z', kickoff: '2026-11-01T14:00:00Z' },
+    { id: 'sunNew', rule: 'move', key: 'H', at: '2026-11-01T10:00:00Z', kickoff: '2026-11-01T14:00:00Z' },
+    { id: 'satDone', rule: 'under', key: 'U', at: '2026-10-31T12:00:00Z', kickoff: '2026-10-31T19:00:00Z', res: 'win' },
+    { id: 'nhlPre', sport: 'nhl', rule: 'hprice', key: 'H', at: '2026-11-01T02:00:00Z', kickoff: '2026-11-01T23:00:00Z' } ] }));
+  const got = await getAnalyst(e);
+  ok('drop: soccer bets placed before the Nov 1 rules on games not yet started are removed; later bets, settled games and hockey stay', got.items.map(b => b.id).join() === 'sunNew,satDone,nhlPre', got.items.map(b => b.id).join());
+}
 ok('totals: no bet when v4 is on the other side', rule('totals').pick(view({ v4: { p: [52, 25, 23], over: 40 }, open: card().odds.op, now: card().odds, openT: card().odds.opt })) === null);
 const Vv = view({ v4: { p: [30, 25, 45], over: 50 }, open: { h: 120, d: 240, a: 220 }, now: { h: 120, d: 240, a: 220 } });
 ok('value: v4 5+ above the price on an away win with no move', (rule('value').pick(Vv) || {}).key === 'A');
