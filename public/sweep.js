@@ -1,14 +1,20 @@
 // Sweep, the night janitor: the nightly sweep's mascot (the scheduled task that checks the Hub at 12:37 AM Central and reports).
-// Shown only on the night shift, 10 PM to 6 AM Central, small in the bottom-left corner, above a page's bottom bar if it has one.
-// Moods: "work" until the night's sweep has run (12:45 AM), then "clear" or "issue" from the Hub's read-only health report
-// (/api/health, the same one the sweep reads). Tap him for a one-line note. Display only: reads, never saves.
-// Add ?sweep=1 to the address to see him by day (and ?sweep=clear / ?sweep=issue to see a mood).
+// His shift starts at 10 PM Central. Until the sweep has run (12:45 AM) he works; after that he waits with the night's report (from the
+// Hub's read-only health report, /api/health, the same one the sweep reads) and stays on every page, through the day, until you tap him
+// and close the report with "Got it". Then he is gone until the next shift at 10 PM. That one fact (which night's report you closed) is
+// kept in this browser only; with storage blocked he comes back on the next page load. Display only otherwise: reads, never saves.
+// Add ?sweep=1 to the address to see him even after closing (and ?sweep=clear / ?sweep=issue to see a mood).
 (function () {
-  var q = (location.search.match(/[?&]sweep=(\w+)/) || [])[1], force = !!q, el = null, tip = null, mood = null, note = '';
-  var ct = function () { var p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date()), g = function (t) { return +(p.find(function (x) { return x.type === t; }) || {}).value; }; return g('hour') * 60 + g('minute'); };
-  var onShift = function () { var m = ct(); return force || m >= 22 * 60 || m < 6 * 60; };
-  var swept = function () { var m = ct(); return m >= 45 && m < 6 * 60; }; // the sweep runs at 12:37 AM
-
+  var q = (location.search.match(/[?&]sweep=(\w+)/) || [])[1], force = !!q, el = null, tip = null, panel = null, mood = null, note = '', H = null, closedHere = null;
+  var parts = function () { var p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date()), g = function (t) { return (p.find(function (x) { return x.type === t; }) || {}).value; }; return { d: g('year') + '-' + g('month') + '-' + g('day'), m: +g('hour') * 60 + +g('minute') }; };
+  var addDays = function (d, n) { return new Date(new Date(d + 'T12:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10); };
+  // the shift a moment belongs to: from 10 PM on day D until 10 PM on D+1 it is "night D"
+  var shift = function () { var x = parts(); return x.m >= 22 * 60 ? x.d : addDays(x.d, -1); };
+  var swept = function () { var m = parts().m; return !(m >= 22 * 60 || m < 45); }; // the sweep runs at 12:37 AM; its report is ready from 12:45
+  var KEY = 'sweepClosed';
+  var closed = function () { if (force) return false; try { return localStorage.getItem(KEY) === shift(); } catch (e) { return closedHere === shift(); } };
+  var close = function () { closedHere = shift(); try { localStorage.setItem(KEY, shift()); } catch (e) { /* this page load only */ } };
+  var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   function svg(state) {
     var issue = state === 'issue', ant = issue ? '#FF4D57' : '#DBFF4F', hi = issue ? '#FFD0D3' : '#F4FFC2', halo = issue ? '#FF4D57' : '#C8FF2E';
     var eyes = state === 'clear' ? '<path d="M78 103 q6 -9 12 0 M110 103 q6 -9 12 0" stroke="#DBFF4F" stroke-width="4.5" fill="none" stroke-linecap="round"/>'
@@ -54,6 +60,15 @@
     + '@keyframes swo{0%,100%{transform:scale(.9) translateY(0)}50%{transform:scale(1.08) translateY(-4px)}}@keyframes sww{0%,100%{transform:rotate(0)}50%{transform:rotate(-16deg)}}'
     + '@media (prefers-reduced-motion:reduce){.sw *{animation:none!important}}';
 
+  var PANEL_CSS = '#sweep.away{opacity:0;transform:translate(-30px,10px) rotate(-12deg)}'
+    + '#sweep-panel{position:fixed;left:max(10px,env(safe-area-inset-left,0px));z-index:902;width:min(340px,calc(100vw - 20px));max-height:min(70vh,560px);overflow:auto;background:#0b0e09;color:#e8eee0;border:1px solid rgba(200,255,46,.45);border-radius:16px;padding:12px 14px 14px;font:500 13px/1.45 "DM Sans",system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.7)}'
+    + '#sweep-panel .sr-h{display:flex;align-items:center;gap:10px;margin-bottom:6px}#sweep-panel .sr-h b{display:block;font-size:15px}#sweep-panel .sr-h small{color:#9aa093;font-size:11.5px}'
+    + '#sweep-panel .sr-s{margin:6px 0}#sweep-panel .sr-s b{color:#C8FF2E}#sweep-panel .sr-s.issue b{color:#FF4D57}'
+    + '#sweep-panel ul{margin:2px 0 6px;padding-left:18px}#sweep-panel li{margin:2px 0}'
+    + '#sweep-panel h4{margin:10px 0 4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#9aa093}#sweep-panel p{margin:2px 0}'
+    + '#sweep-panel table{width:100%;border-collapse:collapse;font-size:12px}#sweep-panel th{color:#9aa093;font-weight:500;text-align:right;padding:2px 4px}#sweep-panel td{padding:3px 4px;border-top:1px solid #20251c;text-align:right}'
+    + '#sweep-panel td:first-child{text-align:left}#sweep-panel td i{font-style:normal;color:#FF4D57;font-size:10.5px}#sweep-panel td.up{color:#C8FF2E}#sweep-panel td.dn{color:#FF4D57}#sweep-panel td.sp{text-align:left;color:#9aa093;font-size:11px;padding-top:8px}'
+    + '#sweep-panel .sr-n{color:#9aa093;font-size:11.5px;margin-top:10px}#sweep-panel .sr-ok{position:sticky;bottom:0;box-shadow:0 -10px 14px #0b0e09;margin-top:10px;width:100%;padding:10px;border-radius:12px;border:0;background:#C8FF2E;color:#0b0d0b;font:700 13px "DM Sans",system-ui,sans-serif;cursor:pointer}';
   // What the health report says, in a line: the same things the sweep flags from live data
   function readHealth(h) {
     var out = [], n = function (a) { return (a && a.length) || 0; };
@@ -74,35 +89,55 @@
     if (tip) { tip.className = m === 'issue' ? 'issue' : ''; tip.innerHTML = note; }
   }
   function decide() {
-    if (q === 'clear' || q === 'issue') return setMood(q, q === 'clear' ? '<b>All clear.</b> Tonight\'s sweep found nothing wrong.' : '<b>Found something:</b> an example problem (preview).');
-    if (!swept() && q !== '1') return setMood('work', '<b>Sweep</b> on the night shift. I check the whole Hub at 12:37 AM: tests, the build, prices, grading and the Analyst, then leave my report in Notion. I never change anything.');
-    if (!swept()) return setMood('work', '<b>Sweep</b> on the night shift. I check the whole Hub at 12:37 AM, then leave my report in Notion.');
+    if (q === 'clear' || q === 'issue') { H = null; return setMood(q, ''); }
+    if (!swept()) return setMood('work', '<b>Sweep</b> on the night shift. I check the whole Hub at 12:37 AM: tests, the build, prices, grading and the Analyst. Tap me after that for my report.');
     fetch('/api/health', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (h) {
-      if (!h) return setMood('work', '<b>Sweep</b>: tonight\'s report is in Notion.');
-      var f = readHealth(h);
-      setMood(f.length ? 'issue' : 'clear', f.length ? '<b>Found ' + f.length + ' thing' + (f.length > 1 ? 's' : '') + ':</b> ' + f.join('; ') + '. Full report in Notion.' : '<b>All clear.</b> No stuck games, prices are in and the Analyst is up to date.');
-    }).catch(function () { setMood('work', '<b>Sweep</b>: tonight\'s report is in Notion.'); });
+      H = h; if (!h) return setMood('work', '');
+      setMood(readHealth(h).length ? 'issue' : 'clear', '');
+    }).catch(function () { H = null; setMood('work', ''); });
+  }
+  // The day report: what he sees in the Hub's data, the Analyst's record, and the day's saves. Tests and the build are in the Notion report.
+  function report() {
+    var f = H ? readHealth(H) : (q === 'issue' ? ['an example problem (preview)'] : []), when = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date());
+    var rows = function (list, sport) { return (list || []).filter(function (r) { return !r.retired; }).map(function (r) {
+      return '<tr><td>' + esc(r.name.split(':')[0]) + (r.benched ? ' <i>benched</i>' : '') + '</td><td>' + r.settled + '</td><td class="' + (r.units > 0 ? 'up' : r.units < 0 ? 'dn' : '') + '">' + (r.units > 0 ? '+' : '') + r.units.toFixed(2) + 'u</td><td>' + (r.clv == null ? '–' : (r.clv > 0 ? '+' : '') + r.clv + '%') + '</td></tr>'; }).join(''); };
+    var an = H && H.analyst ? '<h4>Analyst</h4><table><tr><th></th><th>settled</th><th>units</th><th>vs close</th></tr>' + rows(H.analyst.soccer) + '<tr><td colspan="4" class="sp">Hockey</td></tr>' + rows(H.analyst.nhl) + '</table>' : '';
+    var by = H && H.writes ? Object.keys(H.writes.by || {}).sort(function (a, b) { return H.writes.by[b] - H.writes.by[a]; }).slice(0, 2) : [];
+    var sv = H && H.writes ? '<h4>Saves today</h4><p>' + H.writes.used + ' of ' + H.writes.limit + (by.length ? ' · most from ' + by.map(function (k) { return esc(k) + ' (' + H.writes.by[k] + ')'; }).join(', ') : '') + (H.writes.saver ? ' · <b>saver mode on</b>' : '') + '</p>' : '';
+    return '<div class="sr-h">' + svg(mood || 'work').replace('<svg ', '<svg width="44" height="46" ') + '<div><b>Sweep\'s report</b><small>' + when + ' · checked ' + (H && H.at ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(H.at)) : 'just now') + '</small></div></div>'
+      + (f.length ? '<p class="sr-s issue"><b>Found ' + f.length + ' thing' + (f.length > 1 ? 's' : '') + '</b></p><ul>' + f.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>'
+        : '<p class="sr-s"><b>All clear.</b> No stuck games, prices are in, and every Analyst bet has its closing price.</p>')
+      + an + sv
+      + '<p class="sr-n">Tests, the build and code suggestions are in the full report in Notion (Game Day Hub sweep log).</p>'
+      + '<button type="button" class="sr-ok">Got it · see you at 10 PM</button>';
+  }
+  function openPanel() {
+    panel = document.createElement('div'); panel.id = 'sweep-panel'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', "Sweep's report");
+    panel.innerHTML = report(); document.body.appendChild(panel);
+    panel.querySelector('.sr-ok').addEventListener('click', function () { close(); panel.remove(); panel = null; if (el) { el.className = 'away'; setTimeout(hide, 500); } });
   }
   var place = function () {
     var dock = document.querySelector('.dock'), b = dock ? 12 + dock.getBoundingClientRect().height : 2;
     if (el) { el.style.width = dock ? '60px' : '50px'; el.style.height = dock ? '63px' : '52px'; } // no bottom bar (Home): smaller and lower
     if (el) el.style.bottom = 'calc(' + b + 'px + env(safe-area-inset-bottom,0px))';
     if (tip) tip.style.bottom = 'calc(' + (b + 68) + 'px + env(safe-area-inset-bottom,0px))';
+    if (panel) panel.style.bottom = 'calc(' + (b + 70) + 'px + env(safe-area-inset-bottom,0px))';
   };
   var show = function () {
     if (el) return;
-    var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+    var st = document.createElement('style'); st.textContent = css + PANEL_CSS; document.head.appendChild(st);
     el = document.createElement('button'); el.id = 'sweep'; el.type = 'button'; el.className = 'out'; el.setAttribute('aria-label', 'Sweep, the night janitor');
     el.addEventListener('click', function () {
+      if (panel) { panel.remove(); panel = null; return; }
       if (tip) { tip.remove(); tip = null; return; }
-      tip = document.createElement('div'); tip.id = 'sweep-tip'; tip.setAttribute('role', 'status'); tip.className = mood === 'issue' ? 'issue' : ''; tip.innerHTML = note;
-      document.body.appendChild(tip); place();
+      if (mood === 'work' && !swept()) { tip = document.createElement('div'); tip.id = 'sweep-tip'; tip.setAttribute('role', 'status'); tip.innerHTML = note; document.body.appendChild(tip); return place(); }
+      openPanel(); place();
     });
     document.body.appendChild(el); decide(); place(); requestAnimationFrame(function () { el.className = 'in'; });
   };
-  var hide = function () { if (tip) { tip.remove(); tip = null; } if (el) { el.remove(); el = null; } mood = null; };
+  var hide = function () { if (tip) { tip.remove(); tip = null; } if (panel) { panel.remove(); panel = null; } if (el) { el.remove(); el = null; } mood = null; };
   var last = null;
-  var check = function () { if (!onShift()) return hide(); var s = swept(); if (!el) { last = s; return show(); } if (s !== last) { last = s; decide(); } };
+  var check = function () { if (closed()) return hide(); var s = swept(); if (!el) { last = s; return show(); } if (s !== last) { last = s; decide(); } };
   window.addEventListener('resize', place);
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', check) : check();
   setInterval(check, 60000);
