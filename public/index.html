@@ -409,7 +409,9 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 
 .xhl{display:flex;align-items:baseline;gap:7px;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid var(--line);font-size:13px;flex-wrap:wrap}
 .xhl .k{font-size:10.5px;font-weight:700;color:var(--faint)}.xhl b{color:var(--ink);font-weight:700}.xhl .p{margin-left:auto;font-weight:750;color:var(--grass)}
-.xhl small.pr{flex-basis:100%;font-size:11px;line-height:1.5}.xhl .ag{font-size:11px;color:var(--dim);flex-basis:100%}.xhl .ag.all{color:var(--grass)}
+.xhl small.pr{flex-basis:100%;font-size:11px;line-height:1.5}
+/* the Analyst's bets on this game (Original / New rule sets), one line under the price; only when a set has bet it */
+.xhl .anl{flex-basis:100%;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;font-size:11px;line-height:1.5;color:var(--dim);margin-top:2px}.xhl .anl .k{margin-right:2px}.xhl .anl b{font-weight:650;color:var(--ink)}.xhl .anl .w{color:var(--grass)}.xhl .anl .l{color:var(--miss)}.xhl .anl .go{margin-left:auto;color:var(--faint);font-size:13px}.xhl .ag{font-size:11px;color:var(--dim);flex-basis:100%}.xhl .ag.all{color:var(--grass)}
 .xag .pt{opacity:.78}
 .rec{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;margin:10px 0 2px 4px;padding:8px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--dim)}
 .rec b{flex-basis:100%;color:var(--ink);font-size:12px}.rec u{text-decoration:none;color:var(--ink);font-weight:700}.rec small{color:var(--faint)}.rec .rg{display:grid;grid-template-columns:auto repeat(3,auto);justify-content:start;gap:3px 22px;align-items:baseline}.rec .rn{color:var(--ink);font-weight:600}.rec .rg small{font-size:11px}
@@ -816,18 +818,29 @@ function splitText(c) {
 }
 // The one line a card leads with: what most of the models back. Every model gets one vote on the result, Over/Under 2.5 and
 // both-score (SportsMole's vote comes from its score). A pick only leads when a majority backs it; with no majority the card says Split.
+// The Analyst's bets on a card, from the Analyst record (ANB: game id -> bets, filled when /api/analyst loads): one line, Original
+// then New, each with the bet, the price taken and, once settled, ✓ / ✗. Nothing when neither set bet the game. Tap: the Analyst tab.
+let ANB = null;
+const AN_SHORT = { H: g => strip(g.home), A: g => strip(g.away), D: () => 'Draw', O: () => 'Over 2.5', U: () => 'Under 2.5', B: () => 'Both score', N: () => 'Not both score' };
+function anLine(c) {
+  const by = ANB && ANB.get(c.id); if (!by) return '';
+  const one = (n, b) => { const res = b.res === 'win' ? ' <span class="w">✓</span>' : b.res === 'loss' ? ' <span class="l">✗</span>' : b.res === 'void' ? ' void' : '';
+    return `${n}: <b>${esc(AN_SHORT[b.key] ? AN_SHORT[b.key](c) : b.key)} ${fmtOdds(b.price)}</b>${res}`; };
+  const parts = [['1', 'Original'], ['2', 'New']].flatMap(([k, n]) => (by[k] || []).map(b => one(n, b)));
+  return parts.length ? `<span class="anl" data-anopen="${esc(by[1] && by[1].length ? '1' : '2')}"><span class="k">Analyst</span>${parts.join(' · ')}<span class="go">›</span></span>` : '';
+}
 function headline(c) {
   const L = ((c.v6 && c.v6.p) || (c.v4 && c.v4.p)) && typeof leanPick === 'function' ? leanPick(c) : null;
   if (L && L.src === 'market') { // the market leads (the score card from the price); the models are agree / disagree tags only
     const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key];
     const tags = [...L.by.map(n => `<span class="ag all">${esc(n)} agrees</span>`), ...L.no.map(n => `<span class="ag">${esc(n)} disagrees</span>`)].join(' ');
     const ag = `<span class="ag">Market pick (price, margin removed)${L.a ? '' : ' · no model has numbers yet'}</span>${tags ? ' ' + tags : ''}`;
-    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}</div>`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
   }
   if (L && L.src === 'v4') { // no price yet: v4 leads with its single strongest call, the other models counted as agree / disagree
     const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key], names = r => r.join(', ');
     const ag = L.k === 'solo' ? `<span class="ag">v4's pick · no other model has numbers yet</span>` : L.k === 'split' ? `<span class="ag">v4's pick · no majority across the models</span>` : L.no.length === 0 ? `<span class="ag all">v4's pick · all ${L.a} models agree</span>` : `<span class="ag">v4's pick · ${L.y} of ${L.a} back it (${names(L.by)}) · ${names(L.no)} disagree${L.no.length === 1 ? 's' : ''}</span>`;
-    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}</div>`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
   }
   const v = c.v2, v4 = c.v4 || {}, f = c.fb || {};
   const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
@@ -854,7 +867,7 @@ function headline(c) {
   }
   const names = r => r.map(m => m.n).join(', ');
   const ag = all ? `<span class="ag all">All ${best.a.length} models agree</span>` : `<span class="ag">${best.yes.length} of ${best.a.length} back it (${names(best.yes)}) · ${names(best.no)} disagree${best.no.length === 1 ? 's' : ''}</span>`;
-  return `<div class="xhl"><span class="k">${all && best.p != null && best.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${best.label}</b>${best.p != null ? `<span class="p">${best.p}%</span>` : ''}${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === best.key ? c.lean : { key: best.key, p: best.p }) : ''}</div>`;
+  return `<div class="xhl"><span class="k">${all && best.p != null && best.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${best.label}</b>${best.p != null ? `<span class="p">${best.p}%</span>` : ''}${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === best.key ? c.lean : { key: best.key, p: best.p }) : ''}${anLine(c)}</div>`;
 }
 // The likeliest exact score that agrees with the model's own pick, its Over 2.5 side and its both-score side, worked out from the
 // same expected goals the model used. (The single most common score can clash with those, e.g. 2-0 beside both-score 53%.)
@@ -1531,7 +1544,9 @@ function edgesView() {
 }
 /* ---------- Analyst: a paper bettor that bets its own rules off price moves and v4 (src/analyst.js) ---------- */
 let AN = null;
-async function loadAnalyst() { try { AN = await api('/api/analyst'); } catch (e) { AN = { error: e.message }; } }
+async function loadAnalyst() { try { AN = await api('/api/analyst'); } catch (e) { AN = { error: e.message }; } ANB = anByGame(AN); }
+// game id -> { '1': [bets], '2': [bets] } from the soccer rule sets, for the Analyst line on the cards (anLine)
+function anByGame(A) { if (!A || !A.sets) return null; const m = new Map(); for (const k of Object.keys(A.sets)) for (const b of A.sets[k].items || []) { const g = m.get(b.gid) || {}; (g[k] = g[k] || []).push(b); m.set(b.gid, g); } return m; }
 const BOOK = { draftkings: 'DraftKings', fanduel: 'FanDuel', betmgm: 'BetMGM', williamhill_us: 'Caesars', betrivers: 'BetRivers', espnbet: 'ESPN BET', fanatics: 'Fanatics', ballybet: 'Bally Bet', hardrockbet: 'Hard Rock' };
 function anShop(x) {
   if (!x) return '<div class="small" style="margin:6px 18px 0">No bets with a price comparison yet. Shopping needs the ODDS_API_KEY secret and credits above the reserve.</div>';
@@ -2026,8 +2041,9 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset]'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;
   if (t.dataset.ansp) { AN_SP = t.dataset.ansp; return render(); }
+  if (t.dataset.anopen) { S.tab = 'analyst'; S.open = null; AN_SP = 'soccer'; AN_SET = t.dataset.anopen; AN_MK = 'all'; saveView(); render(); window.scrollTo(0, 0); return; } // the card's Analyst line
   if (t.dataset.anset) { const y = window.scrollY; AN_SET = t.dataset.anset; render(); window.scrollTo(0, y); return; }
   if (t.dataset.anmk) { const y = window.scrollY; AN_MK = t.dataset.anmk; render(); window.scrollTo(0, y); return; }
   if (t.dataset.sharpchk) { t.disabled = true; t.textContent = 'Checking…'; try { const r = await post('/api/analyst/sharp-check'); if (r.error) say(r.error); } catch (er) { say(er.message); } await loadAnalyst(); return render(); }
@@ -2089,6 +2105,7 @@ $('#btn-grade').onclick = () => runAll('grade');
 
 (async () => {
   cfg = await api('/api/config'); S.date = cfg.today; await loadDay();
+  loadAnalyst().then(() => { if (S.tab === 'board' && (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA')) render(); }); // the cards' Analyst line (a read, no save)
   if (S.tab === 'results' || S.tab === 'mbets') { await ensureTally(); render(); }
   try { stat = await api('/api/status'); if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') render(); } catch (e) { /* alerts are optional */ }
 })();

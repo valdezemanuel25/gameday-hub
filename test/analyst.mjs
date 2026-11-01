@@ -143,6 +143,22 @@ kv.set('day:2026-10-30', JSON.stringify({ date: '2026-10-30', cards: [card({ v2:
 const ro = await refreshOdds(env, '2026-10-30', 'eng.1', new Date('2026-10-30T12:00:00Z'));
 ok('refreshOdds: the Analyst looks at the league after its price read', ro.games === 1 && ro.analyst && ro.analyst.placed === 4 && (await getAnalyst(env)).items.filter(x => x.date === '2026-10-30').length === 4, JSON.stringify(ro));
 
+// --- the cards' Analyst line (public/index.html anByGame / anLine), built from listAnalyst's sets ---
+{
+  const html = (await import('fs')).readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const grab = re => { const m = html.match(re); if (!m) throw new Error('not found: ' + re); return m[0]; };
+  const src = [grab(/const AN_SHORT = [^\n]+/), grab(/function anLine\(c\) \{[\s\S]*?\n\}/), grab(/function anByGame\(A\) \{[^\n]+/)].join('\n');
+  const mk = new Function('esc', 'strip', 'fmtOdds', `let ANB = null; ${src}; return { set: m => { ANB = m; }, anLine, anByGame };`);
+  const P = mk(x => String(x), x => x, m => (m > 0 ? '+' : '') + m);
+  P.set(P.anByGame(L));
+  const line = P.anLine(card({ v2: { p: [50, 25, 25] } }));
+  ok('card line: both sets\' bets on the game, Original first, with the price and the result', /Analyst/.test(line) && line.indexOf('Original') < line.indexOf('New') && /Arsenal \+110/.test(line) && /Not both score \+130/.test(line) && /✓/.test(line) && /✗/.test(line), line);
+  ok('card line: blank on a game neither set bet', P.anLine(card({ id: 'nobody' })) === '');
+  P.set(P.anByGame({ sets: { 1: { items: [] }, 2: { items: [{ gid: 'g9', key: 'O', price: -165, res: null }] } } }));
+  const one = P.anLine({ ...card(), id: 'g9' });
+  ok('card line: only the set that bet is shown, and the tap opens that set', !/Original/.test(one) && /New: <b>Over 2.5 -165<\/b>/.test(one) && /data-anopen="2"/.test(one), one);
+}
+
 // --- price shopping ---
 const ev = { id: 'e1', home_team: 'Arsenal', away_team: 'Brighton and Hove Albion', commence_time: KO, bookmakers: [
   { key: 'draftkings', markets: [{ key: 'h2h', outcomes: [{ name: 'Arsenal', price: 110 }, { name: 'Draw', price: 240 }, { name: 'Brighton and Hove Albion', price: 240 }] }, { key: 'totals', outcomes: [{ name: 'Over', price: -120, point: 2.5 }, { name: 'Under', price: 100, point: 2.5 }] }] },
