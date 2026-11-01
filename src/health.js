@@ -55,6 +55,7 @@ export async function hubHealth(env, { today, addDays, priced, readCredits, pend
     analyst: analystChecks(doc, now),
     writes: { used: (w && w.d === ud ? w.n : 0) + await pendingWrites(ud), limit: writeLimit },
     oddsApiCredits: await readCredits(0),
-    syncProblems: errs || {},
+    // only problems from the last 3 days: older entries are leagues ESPN stopped answering for long ago, not news
+    syncProblems: Object.fromEntries(Object.entries(errs || {}).filter(([, e]) => e && e.at && now - Date.parse(e.at) <= 3 * 86400000)),
   };
 }
