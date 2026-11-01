@@ -72,11 +72,13 @@ ok('decide: move bets a home win at +110 (short enough)', (b => b && b.rule === 
   const got = decide([], [ls], '2026-10-28', NOW), w = got.find(b => 'HDA'.includes(b.key)), sw = got.find(b => b.rule === 'longshot');
   ok('long shot: no winner bet at +410', !w, JSON.stringify(got.map(b => [b.rule, b.key, b.price])));
   ok('long shot: swapped to Over 2.5 at -165, noting the long shot it replaced', sw && sw.key === 'O' && sw.price === -165 && sw.from.key === 'A' && sw.from.price === 410 && /long shot/.test(sw.why), JSON.stringify(sw));
-  ok('long shot: no swap when no goals side is priced 50%+ with v4 within 3 points', !decide([], [card({ ...ls, v4: { p: [25, 25, 50], over: 50, btts: 60 } })], '2026-10-28', NOW).length);
-  ok('long shot: Over/Under already held, so it takes Both score No (priced 50%, v4 55%)', (b => b && b.key === 'N')(decide([{ date: '2026-10-28', league: 'eng.1', gid: 'ls', key: 'U' }], [ls], '2026-10-28', NOW).find(b => b.rule === 'longshot')));
+  ok('long shot: no swap when neither Over nor Both score Yes is priced 50%+ with v4 within 3 points', !decide([], [card({ ...ls, v4: { p: [25, 25, 50], over: 50, btts: 40 } })], '2026-10-28', NOW).some(b => b.rule === 'longshot'));
+  ok('long shot: Over/Under already held, so it takes Both score Yes (priced 50%, v4 52%)', (b => b && b.key === 'B')(decide([{ date: '2026-10-28', league: 'eng.1', gid: 'ls', key: 'U' }], [card({ ...ls, v4: { ...ls.v4, btts: 52 } })], '2026-10-28', NOW).find(b => b.rule === 'longshot')));
   ok('long shot: no swap when both goals markets are held', !decide([{ date: '2026-10-28', league: 'eng.1', gid: 'ls', key: 'U' }, { date: '2026-10-28', league: 'eng.1', gid: 'ls', key: 'N' }], [ls], '2026-10-28', NOW).some(b => b.rule === 'longshot'));
-  ok('goalsSwap: never Both score Yes', goalsSwap({ bt: { p1: 70, v4: 75, px: [-250, 190] } }) === null);
-  ok('goalsSwap: Both score No when priced 50%+ and v4 agrees', (g => g && g.key === 'N' && g.price === -120)(goalsSwap({ bt: { p1: 45, v4: 44, px: [110, -120] } })));
+  ok('goalsSwap: never Under or Both score No', goalsSwap({ ou: { p1: 30, e: -5, px: [200, -250] }, bt: { p1: 30, v4: 25, px: [200, -250] } }) === null);
+  ok('goalsSwap: Over first, Both score Yes when Over is not priced', goalsSwap({ ou: { p1: 55, e: 0, px: [-125, 105] }, bt: { p1: 60, v4: 60, px: [-150, 125] } }).key === 'O' && goalsSwap({ bt: { p1: 60, v4: 60, px: [-150, 125] } }).key === 'B');
+  // a long-shot game: Both score Yes priced 61.5% and v4 50% would fire the Both score No rule, but it sits out; Over 2.5 is taken
+  ok('long shot: the Under and Both score No rules sit out the game', (g => g.length === 1 && g[0].rule === 'longshot' && g[0].key === 'O')(decide([], [card({ ...ls, v4: { ...ls.v4, btts: 50 }, odds: { ...ls.odds, by: -175, bn: 140 } })], '2026-10-28', NOW)));
 }
 
 // --- decide: one position per game and market ---

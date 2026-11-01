@@ -31,10 +31,11 @@ export const STALE = { ev: 0.02, maxPrice: 400 }; // stale price: DraftKings pay
 export const LATE = 35;
 export const BENCH = { n: 40, clv: 0, roi: 0 }; // benched when, after n settled bets, average closing-line value and ROI are both <= these
 // Long shots (Nov 1, 2026): no winner bet (home / draw / away) priced longer than LONG. When a winner rule fires on a longer price, the
-// Analyst looks at that game's goals markets instead (goalsSwap): the side of Under / Over 2.5 or Both score No that DraftKings rates
-// SWAP.min%+ (margin removed) and v4 rates no more than SWAP.give points below the price, the one the price rates highest. Never Both
-// score Yes (DraftKings has priced Yes too high on the Hub's games). On the Hub's games Oct 13-31 at the closing price: winner bets on
-// the move longer than +150 went 3 of 11; swapped to the goals pick they went 5 of 6 (+43%). Small sample: a live test.
+// Analyst bets that game's goals instead (goalsSwap): Over 2.5, or Both score Yes when Over 2.5 has no price or is already held, if
+// DraftKings rates it SWAP.min%+ (margin removed) and v4 no more than SWAP.give points below the price. Never Under or Both score No,
+// and the Under and Both score No rules skip a long-shot game. On the Hub's games Oct 25-31 at the closing price, the 31 games where a
+// winner rule flagged a +200 or longer side were open games: Over 2.5 hit 61% (+5%), Both score Yes 62% (-1%), Under 39% (-22%),
+// Both score No 38% (-13%). Small samples: a live test from the week of Nov 1.
 export const LONG = 150;
 export const SWAP = { min: 50, give: 3 };
 const K = 'HDA', r1 = x => Math.round(10 * x) / 10;
@@ -107,20 +108,20 @@ export const RULES = [
     pick: V => { const t = V.bt; if (!t || t.p1 < 58 || !(t.v4 < t.p1)) return null;
       return { key: 'N', price: t.px[1], why: `Both score Yes priced ${r1(t.p1)}%, v4 ${r1(t.v4)}%: the price leans Yes more than v4` }; } },
   // Not a rule of its own: the bets decide places in place of a winner long shot (see LONG). Listed so the record shows it on its own line.
-  { id: 'longshot', mk: ['ou', 'btts'], swap: true, name: 'Long shot swapped to goals', rule: 'A winner rule fired on a price longer than +150: no winner bet; instead the game\'s Under / Over 2.5 or Both score No side that DraftKings rates 50%+ and v4 no more than 3 points lower (the one the price rates highest). Never Both score Yes',
+  { id: 'longshot', mk: ['ou', 'btts'], swap: true, name: 'Long shot swapped to goals', rule: 'A winner rule fired on a price longer than +150: no winner bet; instead Over 2.5 (or Both score Yes when Over 2.5 has no price or is already held) if DraftKings rates it 50%+ and v4 no more than 3 points lower. Never Under or Both score No; the Under and Both score No rules skip the game',
     pick: () => null },
 ];
 
-// The goals pick that stands in for a winner long shot: Under / Over 2.5 and Both score No (never Yes), DraftKings' chance (margin
-// removed) SWAP.min+ and v4 no more than SWAP.give below it, highest DraftKings chance first. free(market) says whether the game's
-// position in that market is still open. -> { key, price, mp, v4 } | null
+// The goals pick that stands in for a winner long shot: Over 2.5 first, else Both score Yes; never Under or Both score No. It needs
+// DraftKings' chance (margin removed) SWAP.min+ and v4 no more than SWAP.give below it. free(market) says whether the game's position
+// in that market is still open. -> { key, price, mp, v4 } | null
 export function goalsSwap(V, free = () => true) {
   if (!V) return null; const c = [];
-  if (V.ou) { const o = V.ou, v = o.p1 + o.e; c.push({ key: 'O', price: o.px[0], mp: o.p1, v4: v }, { key: 'U', price: o.px[1], mp: 100 - o.p1, v4: 100 - v }); }
-  if (V.bt) c.push({ key: 'N', price: V.bt.px[1], mp: 100 - V.bt.p1, v4: 100 - V.bt.v4 });
-  const ok = c.filter(x => Number.isFinite(x.price) && x.mp >= SWAP.min && x.v4 >= x.mp - SWAP.give && free(MKT(x.key)));
-  return ok.sort((a, b) => b.mp - a.mp)[0] || null;
+  if (V.ou && free('ou')) c.push({ key: 'O', price: V.ou.px[0], mp: V.ou.p1, v4: V.ou.p1 + V.ou.e });
+  if (V.bt && free('btts')) c.push({ key: 'B', price: V.bt.px[0], mp: V.bt.p1, v4: V.bt.v4 });
+  return c.find(x => Number.isFinite(x.price) && x.mp >= SWAP.min && x.v4 >= x.mp - SWAP.give) || null;
 }
+const SKIP_LONG = new Set(['under', 'bttsNo']); // goals rules that sit out a long-shot game
 
 // ---- one look at a set of cards: the new bets, if any ----
 const MKT = k => (k === 'O' || k === 'U' ? 'ou' : k === 'B' || k === 'N' ? 'btts' : '1x2');
@@ -138,14 +139,16 @@ export function decide(items, cards, date, now = new Date(), benched = new Set()
   for (const c of cards) {
     if (!c || c.final || !c.odds) continue;
     const V = lookCard(c), S = sharp && sharp.get(c.id); if (!V && !S) continue;
+    let long = false; // a winner rule fired on a long shot at this read
     for (const r0 of RULES) {
       if (r0.swap || r0.retired || benched.has(r0.id) || (r0.sharp ? !S : !V)) continue;
+      if (long && SKIP_LONG.has(r0.id)) continue;
       if (r0.late && (new Date(c.kickoff).getTime() - now.getTime()) / 60000 > LATE) continue; // not yet the lineup read
       let r = r0, b = r0.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
       if (held.has(`${date}|${c.league}|${c.id}|${MKT(b.key)}`)) continue;
       // a winner long shot is never bet: the game's goals markets are looked at instead (goalsSwap)
       if ('HDA'.includes(b.key) && b.price > LONG) {
-        const sw = r = RULES.find(x => x.id === 'longshot');
+        long = true; const sw = r = RULES.find(x => x.id === 'longshot');
         if (benched.has(sw.id)) continue;
         const g = goalsSwap(V, m => !held.has(`${date}|${c.league}|${c.id}|${m}`)); if (!g) continue;
         b = { key: g.key, price: g.price, from: { rule: r0.id, key: b.key, price: b.price },
