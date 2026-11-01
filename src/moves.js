@@ -56,7 +56,7 @@ export function bttsMove(odds) {
 export function pinnMove(odds) {
   const f = odds && odds.pf, n = odds && odds.pn; if (!f || !n) return null;
   const a = devig(f.h, f.d, f.a), b = devig(n.h, n.d, n.a); if (!a || !b) return null;
-  const dk = devig(odds.h, odds.d, odds.a);
+  const dk = odds.src ? null : devig(odds.h, odds.d, odds.a); // the gap is DraftKings v Pinnacle: none on a stand-in price
   const p0 = a.map(x => r1(100 * x)), p1 = b.map(x => r1(100 * x));
   let ou = null; if (f.tl != null && f.tl === n.tl) { const x = devig(f.to, f.tu), y = devig(n.to, n.tu); if (x && y) ou = { line: n.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }
   let bt = null; if (f.bty != null && n.bty != null) { const x = devig(f.bty, f.btn), y = devig(n.bty, n.btn); if (x && y) bt = { p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }

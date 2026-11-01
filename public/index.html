@@ -909,7 +909,7 @@ function moveOf(odds) {
 function pinnMove(odds) {
   const f = odds && odds.pf, n = odds && odds.pn; if (!f || !n) return null;
   const a = devigP(f.h, f.d, f.a), b = devigP(n.h, n.d, n.a); if (!a || !b) return null;
-  const dk = devigP(odds.h, odds.d, odds.a), r1 = x => Math.round(10 * x) / 10;
+  const dk = odds.src ? null : devigP(odds.h, odds.d, odds.a), r1 = x => Math.round(10 * x) / 10;
   const p0 = a.map(x => r1(100 * x)), p1 = b.map(x => r1(100 * x));
   let ou = null; if (f.tl != null && f.tl === n.tl) { const x = devigP(f.to, f.tu), y = devigP(n.to, n.tu); if (x && y) ou = { line: n.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }
   let bt = null; if (f.bty != null && n.bty != null) { const x = devigP(f.bty, f.btn), y = devigP(n.bty, n.btn); if (x && y) bt = { p0: r1(100 * x[0]), p1: r1(100 * y[0]) }; }
@@ -1222,7 +1222,7 @@ function movesView() {
     return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.odds.fa)}${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
-      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>${ouNote}
+      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>${ouNote}${o.src ? `<small class="mvn">${esc(BOOKS[o.src] || o.src)} prices: ESPN had no DraftKings price for this game, so the Hub tracks ${esc(BOOKS[o.src] || o.src)}'s (no opening price; the move is from the first one seen). The Analyst does not bet on them.</small>` : ''}
       ${btNote ? `<small class="mvn">${btNote}</small>` : ''}
       ${pinnNote(c, o)}
       ${o.ts ? `<small class="mvn">Price last changed ${tmCT(o.ts)}</small>` : ''}</div>`;
@@ -1448,6 +1448,7 @@ function trackedView() {
 // Prices (American odds, from ESPN's sportsbook block) are shown next to a pick for first divisions only. They never feed a model.
 const needP = m => m < 0 ? -m / (-m + 100) * 100 : 100 / (m + 100) * 100;
 const fmtOdds = m => (m > 0 ? '+' : '') + m;
+const BOOKS = { bet365: 'Bet365', draftkings: 'DraftKings' }; // a stand-in book's name, when ESPN had no DraftKings price (c.odds.src)
 function priceFor(c, key) { const o = c.odds; if (!o) return null; const m = ({ H: o.h, D: o.d, A: o.a, O: o.tl === 2.5 ? o.to : null, U: o.tl === 2.5 ? o.tu : null, B: o.by, N: o.bn })[key]; return Number.isFinite(m) ? m : null; }
 // The model's chance that the game total goes over / under a book line (half lines only), from v4's expected goals (v2's when v4 has none).
 function pTotal(c, line, over) { const q = c.v4 && c.v4.lam ? c.v4 : c.v2, lam = q && q.lam ? q.lam[0] + q.lam[1] : null; if (lam == null || line % 1 !== 0.5) return null; let term = Math.exp(-lam), cdf = 0; for (let i = 0; i <= Math.floor(line); i++) { cdf += term; term *= lam / (i + 1); } return Math.round(100 * (over ? 1 - cdf : cdf)); }
@@ -1464,7 +1465,8 @@ function priceLine(c, L) {
   }
   // The price and the chance it needs to break even, next to the model's chance. No Value / Fair / Not worth it tag: on 8,026 past
   // games, picks the model rated 5+ points over the price lost 15-20% and their price drifted against them by kickoff.
-  return `<small class="pr"><b>${fmtOdds(m)}</b> needs ${Math.round(needP(m))}%${L.p != null ? ` · model ${L.p}%` : ''}</small>`;
+  const sb = c.odds && c.odds.src && 'HDA'.includes(L.key) ? ` · <span title="ESPN had no DraftKings price for this game">${esc(BOOKS[c.odds.src] || c.odds.src)}</span>` : '';
+  return `<small class="pr"><b>${fmtOdds(m)}</b> needs ${Math.round(needP(m))}%${L.p != null ? ` · model ${L.p}%` : ''}${sb}</small>`;
 }
 // "Refresh prices": one request per first-division league that has a model pick not yet started on this day. Nothing else is touched.
 function oddsLeagues() { const n = Date.now(); return [...new Set((day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > n).map(c => c.league))]; }

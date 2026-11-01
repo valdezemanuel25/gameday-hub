@@ -437,4 +437,26 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const nhlHtml2 = fs.readFileSync(new URL('../public/nhl.html', import.meta.url), 'utf8');
   ok('the hockey badge is a button when there is no read or one is due, and posts to the close route', nhlHtml2.includes('data-getclose=') && nhlHtml2.includes("'/api/nhl/close'") && nhlHtml2.includes('act: true }'));
 }
+// --- Nov 1, 2026: ESPN sends only Bet365 decimal odds for a game (Frankfurt v Hamburg): a tagged stand-in price ---
+{
+  const b365 = [{ provider: { id: '2000', name: 'Bet 365' }, homeTeamOdds: { moneyLine: 1.55, summary: '11/20' }, awayTeamOdds: { moneyLine: 5.25 }, drawOdds: { moneyLine: 4.75 } }];
+  const s = parseOdds(b365);
+  ok('stand-in: Bet365 decimal 1.55 / 4.75 / 5.25 becomes -182 / +375 / +425, marked bet365', s && s.h === -182 && s.d === 375 && s.a === 425 && s.src === 'bet365' && s.tl == null, JSON.stringify(s));
+  ok('stand-in: decimal evens (2.0) is +100', parseOdds([{ provider: { name: 'Bet 365' }, homeTeamOdds: { moneyLine: 2 }, awayTeamOdds: { moneyLine: 3.5 }, drawOdds: { moneyLine: 3.4 } }]).h === 100);
+  const dk = [{ provider: { name: 'DraftKings' }, moneyline: { home: { close: { odds: '+160' } }, draw: { close: { odds: '+245' } }, away: { close: { odds: '+150' } } } }];
+  ok('stand-in: a DraftKings price is read as before, with no book mark', (x => x.h === 160 && x.d === 245 && x.a === 150 && !x.src)(parseOdds(dk)));
+  ok('stand-in: when ESPN lists both, DraftKings is taken even if listed second', (x => x.h === 160 && !x.src)(parseOdds([...b365, ...dk])));
+  ok('stand-in: half a decimal price is no price', parseOdds([{ provider: { name: 'Bet 365' }, homeTeamOdds: { moneyLine: 1.55 }, awayTeamOdds: {}, drawOdds: { moneyLine: 4.75 } }]) === null);
+  const T1 = new Date('2026-11-01T10:00:00Z'), T2 = new Date('2026-11-01T12:00:00Z');
+  const a1 = withOdds(null, s, T1);
+  ok('stand-in: first price saved with its book, a first price and a first-grab time', a1.src === 'bet365' && a1.f && a1.f.h === -182 && a1.fa === T1.toISOString());
+  const mv = moveOf(withOdds(a1, { h: -200, d: 400, a: 475, src: 'bet365' }, T2));
+  ok('stand-in: Movement tracks the stand-in from its first price', mv && mv.from === 'first' && mv.d[0] > 0, JSON.stringify(mv));
+  const dk1 = withOdds(a1, { h: -170, d: 360, a: 400 }, T2);
+  ok('stand-in: DraftKings arriving starts the price over (DraftKings first price, new first-grab time, no book mark)', !dk1.src && dk1.f.h === -170 && dk1.fa === T2.toISOString(), JSON.stringify(dk1));
+  const kept = withOdds({ h: -170, d: 360, a: 400, tl: 2.5, to: -140, tu: 110, f: { h: -160, d: 350, a: 390 }, fa: T1.toISOString(), by: -150, bn: 120 }, s, T2);
+  ok('stand-in: never replaces a DraftKings price already on the card', !kept.src && kept.h === -170 && kept.to === -140 && kept.f.h === -160 && kept.fa === T1.toISOString() && kept.by === -150, JSON.stringify(kept));
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  ok('stand-in: the page tags the price with its book on the pick and on Movement', /BOOKS\[c\.odds\.src\]/.test(html) && /ESPN had no DraftKings price for this game, so the Hub tracks/.test(html));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll price-move checks passed'); process.exit(fails ? 1 : 0);

@@ -99,6 +99,8 @@ ok('decide: each set takes its own positions on the game (Analyst 1: follow H, t
 ok('decide: bet keeps the price, market chance, v4 chance, minutes to kickoff and a reason', first[0].price === 110 && first[0].mins === 420 && first[0].v4 === 52 && /v4/.test(first[0].why));
 ok('decide: a later read never adds to or reverses a held position', decide(first, [card({ odds: { ...card().odds, h: 300, a: -150 } })], '2026-10-28', NOW).length === 0);
 ok('decide: a benched rule places nothing', !decide([], [card()], '2026-10-28', NOW, new Set(['follow'])).some(b => b.rule === 'follow'));
+ok('decide: no bet on a stand-in book price (ESPN had no DraftKings price)', decide([], [card({ odds: { ...card().odds, src: 'bet365' } })], '2026-10-28', NOW).length === 0);
+ok('settle: a stand-in price is never taken as the close', (() => { const x = { key: 'H', price: 110, kickoff: KO, mins: 60 }; settle(x, card({ odds: { h: -120, d: 250, a: 300, src: 'bet365' } }), new Date('2026-10-28T19:05:00Z')); return x.close == null; })());
 ok('decide: no bet on a promoted-club stand-in or a card without a price', decide([], [card({ v4: { ...card().v4, promo: true } }), card({ id: 'g2', odds: null })], '2026-10-28', NOW).length === 0);
 
 // --- settle ---
