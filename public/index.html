@@ -1544,7 +1544,9 @@ function edgesView() {
 }
 /* ---------- Analyst: a paper bettor that bets its own rules off price moves and v4 (src/analyst.js) ---------- */
 let AN = null;
-async function loadAnalyst() { try { AN = await api('/api/analyst'); } catch (e) { AN = { error: e.message }; } }
+async function loadAnalyst() { try { AN = await api('/api/analyst'); } catch (e) { AN = { error: e.message }; } ANB = anByGame(AN); }
+// game id -> { '1': [bets], '2': [bets] } from the soccer rule sets, for the Analyst line on the cards (anLine)
+function anByGame(A) { if (!A || !A.sets) return null; const m = new Map(); for (const k of Object.keys(A.sets)) for (const b of A.sets[k].items || []) { const g = m.get(b.gid) || {}; (g[k] = g[k] || []).push(b); m.set(b.gid, g); } return m; }
 const BOOK = { draftkings: 'DraftKings', fanduel: 'FanDuel', betmgm: 'BetMGM', williamhill_us: 'Caesars', betrivers: 'BetRivers', espnbet: 'ESPN BET', fanatics: 'Fanatics', ballybet: 'Bally Bet', hardrockbet: 'Hard Rock' };
 function anShop(x) {
   if (!x) return '<div class="small" style="margin:6px 18px 0">No bets with a price comparison yet. Shopping needs the ODDS_API_KEY secret and credits above the reserve.</div>';
@@ -2039,8 +2041,9 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset]'); if (!t) return;
+  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;
   if (t.dataset.ansp) { AN_SP = t.dataset.ansp; return render(); }
+  if (t.dataset.anopen) { S.tab = 'analyst'; S.open = null; AN_SP = 'soccer'; AN_SET = t.dataset.anopen; AN_MK = 'all'; saveView(); render(); window.scrollTo(0, 0); return; } // the card's Analyst line
   if (t.dataset.anset) { const y = window.scrollY; AN_SET = t.dataset.anset; render(); window.scrollTo(0, y); return; }
   if (t.dataset.anmk) { const y = window.scrollY; AN_MK = t.dataset.anmk; render(); window.scrollTo(0, y); return; }
   if (t.dataset.sharpchk) { t.disabled = true; t.textContent = 'Checking…'; try { const r = await post('/api/analyst/sharp-check'); if (r.error) say(r.error); } catch (er) { say(er.message); } await loadAnalyst(); return render(); }
@@ -2102,6 +2105,7 @@ $('#btn-grade').onclick = () => runAll('grade');
 
 (async () => {
   cfg = await api('/api/config'); S.date = cfg.today; await loadDay();
+  loadAnalyst().then(() => { if (S.tab === 'board' && (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA')) render(); }); // the cards' Analyst line (a read, no save)
   if (S.tab === 'results' || S.tab === 'mbets') { await ensureTally(); render(); }
   try { stat = await api('/api/status'); if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') render(); } catch (e) { /* alerts are optional */ }
 })();
