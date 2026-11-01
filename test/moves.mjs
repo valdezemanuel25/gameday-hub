@@ -78,9 +78,12 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   await oddsStep(env, at(600), cache); await oddsStep(env, at(150), cache); await oddsStep(env, at(50), cache);
   ok('reads before the lineup window are not the close', !JSON.parse(kv.get('day:' + date)).cards[0].odds.cl);
   ok('10 hours out: next look in 6 hours; 2.5 hours out: in an hour; 50 minutes out: exactly at 30 minutes before', ttls[0] === 21600 && ttls[1] === 3600 && ttls[2] === 1200, JSON.stringify(ttls));
-  price = -170; await oddsStep(env, at(28), cache);
+  // saver mode: a regular read (2.5 hours out) is skipped, the lineup read is not
+  { const before = kv.get('day:' + date); price = -160;
+    ok('saver mode: the regular price read is skipped (nothing read or saved)', (await oddsStep({ ...env, SAVER: true }, at(150), cache)) === null && kv.get('day:' + date) === before); }
+  price = -170; await oddsStep({ ...env, SAVER: true }, at(28), cache); // in saver mode: the lineup read must still be taken
   const c28 = JSON.parse(kv.get('day:' + date)).cards[0];
-  ok('the read 28 minutes before kickoff (lineups out) is taken', c28.odds.h === -170, JSON.stringify(c28.odds));
+  ok('the read 28 minutes before kickoff (lineups out) is taken, even in saver mode', c28.odds.h === -170, JSON.stringify(c28.odds));
   ok('that read is noted as the closing (lineup) read, and when the price changed', c28.odds.cl === at(28).toISOString() && c28.odds.ts === at(28).toISOString(), JSON.stringify(c28.odds));
   price = -250; const r = await oddsStep(env, at(15), cache);
   const c15 = JSON.parse(kv.get('day:' + date)).cards[0];

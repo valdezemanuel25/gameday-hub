@@ -34,30 +34,46 @@ const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
 
 // Counts this request's KV writes so the Status tab can show how close the day is to the limit.
 // The count is saved with ONE extra write at the end, and only when something was written.
+// What a key's write is for, for the per-job breakdown (meta:writes.by): soccer day cards, hockey day cards, the Analyst, and so on.
+export const writeKind = k => { const s = String(k); return s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
+  : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? 'bookkeeping' : 'other'; };
+const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
 function counted(env) {
-  const base = env.HUB; let n = 0;
+  const base = env.HUB; let n = 0, by = {};
   const hub = Object.create(base);
   hub.get = (...a) => base.get(...a);
   hub.list = (...a) => base.list(...a);
-  hub.put = (...a) => { n++; return base.put(...a); };
+  hub.put = (...a) => { n++; const k = writeKind(a[0]); by[k] = (by[k] || 0) + 1; return base.put(...a); };
   return { env: { ...env, HUB: hub }, flush: async () => {
     if (!n) return;
     const d = new Date().toISOString().slice(0, 10);
     // Counting must not eat the budget it counts: keep a running tally in the (free) edge cache and
     // save it to KV only once about 15 writes have piled up.
-    let pending = n;
+    let pending = n, pby = by;
     const cache = typeof caches !== 'undefined' ? caches.default : null, ck = new Request(`https://hub.local/writes/${d}`);
-    if (cache) { try { const r = await cache.match(ck); pending += r ? Number(await r.text()) || 0 : 0; } catch (e) { /* count from this run only */ } }
-    if (cache && pending < 15) { try { await cache.put(ck, new Response(String(pending), { headers: { 'cache-control': 'max-age=86400' } })); return; } catch (e) { /* fall through and save */ } }
-    const c = (await base.get('meta:writes', 'json').catch(() => null)) || {};
-    await base.put('meta:writes', JSON.stringify({ d, n: (c.d === d ? c.n : 0) + pending + 1 })).catch(() => {});
+    if (cache) { try { const r = await cache.match(ck); if (r) { const x = readPending(await r.text()); pending += x.n; pby = addBy(by, x.by); } } catch (e) { /* count from this run only */ } }
+    if (cache && pending < 15) { try { await cache.put(ck, new Response(JSON.stringify({ n: pending, by: pby }), { headers: { 'cache-control': 'max-age=86400' } })); return; } catch (e) { /* fall through and save */ } }
+    const c = (await base.get('meta:writes', 'json').catch(() => null)) || {}, same = c.d === d;
+    await base.put('meta:writes', JSON.stringify({ d, n: (same ? c.n : 0) + pending + 1, by: addBy(addBy(same ? c.by : {}, pby), { bookkeeping: 1 }) })).catch(() => {});
     if (cache) { try { await cache.delete(ck); } catch (e) { /* ignore */ } }
   } };
 }
+// the cached tally: {n, by} (older runs saved a bare number)
+const readPending = t => { try { const j = JSON.parse(t); return typeof j === 'number' ? { n: j, by: {} } : { n: Number(j.n) || 0, by: j.by || {} }; } catch (e) { return { n: Number(t) || 0, by: {} }; } };
 
 async function pendingWrites(d) {
-  try { if (typeof caches === 'undefined') return 0; const r = await caches.default.match(new Request(`https://hub.local/writes/${d}`)); return r ? Number(await r.text()) || 0 : 0; } catch (e) { return 0; }
+  try { if (typeof caches === 'undefined') return 0; const r = await caches.default.match(new Request(`https://hub.local/writes/${d}`)); return r ? readPending(await r.text()).n : 0; } catch (e) { return 0; }
 }
+// Writes used today (UTC day, the free plan's day): the saved count plus this server's not-yet-saved tally. A close estimate: other
+// servers can each hold up to 14 not-yet-saved writes, which is why saver mode starts early (SAVER_AT).
+export async function writesToday(hub, now = new Date()) {
+  const d = now.toISOString().slice(0, 10), w = await hub.get('meta:writes', 'json').catch(() => null);
+  return { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), by: w && w.d === d ? w.by || {} : {} };
+}
+// Saver mode: from 80% of the daily writes, the background job skips the saves that matter least (the regular 6-hourly and hourly
+// price reads, SportsMole and Forebet fetches, v4 ratings rebuilds, re-analyzing a league already analyzed today) and keeps the ones
+// that matter (closing / lineup reads, grading, results syncs, first analysis of a day, hockey, the Analyst, alerts).
+export const SAVER_AT = 0.8;
 
 // Last problem per league (shown on the Status tab). Written only when it changes, to save writes.
 async function noteLeague(env, slug, kind, msg) {
@@ -120,7 +136,7 @@ async function authed(req, env) {
 }
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
-const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, pendingWrites, writeLimit: WRITE_LIMIT });
+const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT });
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/home');
 
 // ---------------------------------------------------------------------------------------------
@@ -510,7 +526,7 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
       (need ? urgent : normal).push({ lg, date, ttl, ck, first });
     }
   }
-  const pick = urgent.length ? urgent.sort((a, b) => a.first - b.first).slice(0, LINEUP_BURST) : normal.slice(0, 1);
+  const pick = urgent.length ? urgent.sort((a, b) => a.first - b.first).slice(0, LINEUP_BURST) : env.SAVER ? [] : normal.slice(0, 1); // saver mode: closing reads only
   if (!pick.length) return null;
   const outs = [];
   for (const p of pick) {
@@ -878,6 +894,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     }
     due.sort((a, b) => a.last - b.last || (a.slug < b.slug ? -1 : 1)); // oldest games first, then rotate by the clock
     if (!due.length) {
+      if (env.SAVER) return { job: 'grade', idle: true, saver: true };
       const fbr = await forebetStep(env, now);
       if (fbr) return { job: 'forebet', ...fbr };
       return { job: 'grade', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
@@ -887,6 +904,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   }
 
   if (slot === 3) { // SportsMole "We say" for today / tomorrow, one league per run
+    if (env.SAVER) return await safeNhl(env, now); // saver mode: no SportsMole / Forebet / ratings saves
     try { await getListing(env, now.getTime()); } catch (e) { /* keep going; retried next run */ }
     for (const date of [t, addDays(t, 1)]) {
       const day = await env.HUB.get(`day:${date}`, 'json');
@@ -907,7 +925,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     const day = await env.HUB.get(`day:${date}`, 'json');
     for (const lg of ordered) {
       const at = day?.analyzed?.[lg.slug];
-      if (at && now.getTime() - at < 6 * HOUR) continue;
+      if (at && (env.SAVER || now.getTime() - at < 6 * HOUR)) continue; // saver mode: only leagues not yet analyzed today
       const r = await analyzeLeague(date, lg.slug, env, now);
       if (r.needsSync) { if (++tries >= 3) return { job: 'analyze', waiting: 'data sync' }; continue; }
       return { job: 'analyze', league: lg.slug, date, ...r };
@@ -1065,7 +1083,7 @@ const hub = {
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
-        now: Date.now(), btts: { key: oddsKeys(env).length > 0, credits: await readCredits(0), keys: oddsKeys(env).length, credits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, reserve: num(env.BTTS_RESERVE, BTTS_RESERVE) }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z' },
+        now: Date.now(), btts: { key: oddsKeys(env).length > 0, credits: await readCredits(0), keys: oddsKeys(env).length, credits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, reserve: num(env.BTTS_RESERVE, BTTS_RESERVE) }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z', by: w && w.d === d ? w.by || {} : {}, saverAt: Math.round(SAVER_AT * WRITE_LIMIT) },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
     }
@@ -1102,6 +1120,7 @@ const hub = {
   async scheduled(event, env0, ctx) {
     const c = counted(env0);
     ctx.waitUntil((async () => {
+      try { c.env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit
       // (a heavy soccer job) used to drop them. The rotating job runs after.
       try { await nhlLineupStep(c.env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }

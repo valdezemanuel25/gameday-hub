@@ -41,19 +41,18 @@ export function analystChecks(doc, now) {
   };
 }
 
-export async function hubHealth(env, { today, addDays, priced, readCredits, pendingWrites, writeLimit }, now = Date.now()) {
+export async function hubHealth(env, { today, addDays, priced, readCredits, writesToday, writeLimit, saverAt }, now = Date.now()) {
   const t = today(), ds = [addDays(t, -1), t, addDays(t, 1)];
-  const [sd, nd, errs, w, doc] = await Promise.all([
+  const [sd, nd, errs, wt, doc] = await Promise.all([
     Promise.all(ds.map(d => env.HUB.get(`day:${d}`, 'json'))), Promise.all(ds.map(d => env.HUB.get(`nhl:day:${d}`, 'json'))),
-    env.HUB.get('meta:errors', 'json'), env.HUB.get('meta:writes', 'json'), getAnalyst(env, { readOnly: true })]);
+    env.HUB.get('meta:errors', 'json'), writesToday(env.HUB, new Date(now)), getAnalyst(env, { readOnly: true })]);
   const soc = Object.fromEntries(ds.map((d, i) => [d, sd[i]?.cards || []])), hk = Object.fromEntries(ds.map((d, i) => [d, nd[i]?.cards || []]));
-  const ud = new Date(now).toISOString().slice(0, 10);
   return {
     at: new Date(now).toISOString(), today: t,
     soccer: gameChecks(soc, now, { graceH: 6, priced }),
     nhl: gameChecks(hk, now, { graceH: 5, needPrice: c => !c.px }),
     analyst: analystChecks(doc, now),
-    writes: { used: (w && w.d === ud ? w.n : 0) + await pendingWrites(ud), limit: writeLimit },
+    writes: { used: wt.used, limit: writeLimit, by: wt.by, saver: wt.used >= saverAt * writeLimit }, // by = which job wrote what today; saver = background job skipping low-priority saves
     oddsApiCredits: await readCredits(0),
     // only problems from the last 3 days: older entries are leagues ESPN stopped answering for long ago, not news
     syncProblems: Object.fromEntries(Object.entries(errs || {}).filter(([, e]) => e && e.at && now - Date.parse(e.at) <= 3 * 86400000)),
