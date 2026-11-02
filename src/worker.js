@@ -441,7 +441,7 @@ export async function addPinn(env, cards, now = new Date(), f = fetch) {
 // After the final: ESPN's closing line on the finished game when it still lists one (cls = 'espn'). In between, ESPN's price may be an
 // in-play one, so it is not taken. One KV write.
 export async function refreshCardClose(env, date, slug, id, now = new Date(), f = fetch) {
-  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
+  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); const c = (day?.cards || []).find(x => x.id === id && x.league === slug);
   if (!c) return { error: 'That game is not saved for this day' };
   if (!c.odds) return { error: 'This game has no saved price to update' };
@@ -461,7 +461,7 @@ export async function refreshCardClose(env, date, slug, id, now = new Date(), f 
   return { ok: true, price: { h: c.odds.h, d: c.odds.d, a: c.odds.a, tl: c.odds.tl ?? null, to: c.odds.to ?? null, tu: c.odds.tu ?? null }, source: started ? 'espn-close' : 'now' };
 }
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
-  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
+  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && priceOpen(c, now));
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
@@ -485,7 +485,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
 // Background: look at ONE first-division league per run (each at most every 6 hours, remembered in the free edge cache so it costs no
 // KV writes). Display only; no model reads a price.
 export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) {
-  if (!PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
+  if (!PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && new Date(c.kickoff).getTime() > now.getTime());
   if (!open.length) return { games: 0, priced: 0 };

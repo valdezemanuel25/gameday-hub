@@ -86,8 +86,11 @@ function teamShots(c) {
 // First divisions: the only leagues where a sportsbook price is shown next to a pick (display only, no model reads it).
 export const FIRST_DIV = new Set(['eng.2', 'eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1', 'usa.1', 'mex.1', 'bra.1']);
 // Leagues whose prices are recorded: the first divisions plus the two cups with a v4 model, i.e. every game that counts in the records,
-// so the model can be scored against the market (src/market.js). Second divisions are left out (not counted anywhere).
-export const PRICED = new Set([...FIRST_DIV, ...CUP_MODEL.map(l => l.slug)]);
+// so the model can be scored against the market (src/market.js). Second divisions stay out of the model records (UNTRACKED), but from
+// Nov 2, 2026 La Liga 2 and 2. Bundesliga are priced too (SECOND_PRICED): ESPN's DraftKings price only (no Odds API league in
+// src/btts.js SPORT, so no credits), for the board, Movement and the Analyst, whose record splits them out as second divisions.
+export const SECOND_PRICED = new Set(['esp.2', 'ger.2']);
+export const PRICED = new Set([...FIRST_DIV, ...SECOND_PRICED, ...CUP_MODEL.map(l => l.slug)]);
 // ESPN's odds block (DraftKings): American prices for home / draw / away and the Over/Under 2.5 line when it is offered. Anything missing is left out.
 const am = v => { if (v == null) return null; const t = String(v).trim().toUpperCase(); if (t === 'EVEN' || t === 'EV') return 100; const n = Number(t.replace('+', '')); return Number.isInteger(n) && Math.abs(n) >= 100 ? n : null; };
 // When ESPN has no DraftKings price for a game it sometimes sends another book's, in decimal odds (Bet365: 1.55 / 4.75 / 5.25, no total,
