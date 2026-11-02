@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-01T12:12:44Z",
+  "updated": "2026-11-02T01:52:50Z",
   "issues": [
     {
       "source": "Morning Brew",
@@ -473,6 +473,71 @@
           "t": "Lam Research -11.8%. Semis had their worst week since April 2025."
         }
       ]
+    },
+    {
+      "source": "Humbled Trader",
+      "date": "2026-11-01",
+      "weekly": true,
+      "title": "AI Stocks Crack While Retail and Energy Take the Lead",
+      "markets": [
+        {
+          "label": "S&P 500",
+          "value": "7,580",
+          "change": -0.6
+        },
+        {
+          "label": "Dow",
+          "value": "51,770",
+          "change": -0.9
+        },
+        {
+          "label": "Nasdaq",
+          "value": "25,437",
+          "change": -2.0
+        },
+        {
+          "label": "Russell 2000",
+          "value": "2,812",
+          "change": 1.3
+        },
+        {
+          "label": "VIX",
+          "value": "19.42",
+          "change": 12.9
+        },
+        {
+          "label": "Oil (WTI)",
+          "value": "$104.12",
+          "change": 15
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Week",
+          "t": "A Friday chip rout made it a third straight weekly loss for the S&P 500, while the Russell 2000 was the only major index up on the week (+1.3%)."
+        },
+        {
+          "h": "Chips",
+          "t": "Intel fell 28.6% on weak guidance and the Philadelphia Semiconductor Index dropped 7.2% Friday, down 15.3% in October."
+        },
+        {
+          "h": "AI spend",
+          "t": "Amazon is on a $220B capex plan with negative $42.4B trailing free cash flow; Alphabet burned $9.1B in the quarter and Meta posted negative FCF for the first time since 2012."
+        },
+        {
+          "h": "Fed",
+          "t": "The Fed held at 3.75% to 4.00% in a 10-2 vote, with both dissenters wanting a hike; a December hike is priced near 76%."
+        },
+        {
+          "h": "Commodities",
+          "t": "WTI gained about 15% in October to $104.12 while gold fell 3.3% to a one-year low of $3,899 and silver slipped below $50."
+        },
+        {
+          "h": "Levels",
+          "t": "S&P support sits at 7,500 then the 200-day near 7,300; resistance is 7,800. Watchlist ideas: CROX near $148-150 and COP near $146-149 (earnings Nov 5)."
+        }
+      ],
+      "note": "Weekly Sunday edition. Market numbers are the Oct 31 close; the Oil tile shows the October monthly gain."
     }
   ]
 }
