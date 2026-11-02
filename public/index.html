@@ -242,7 +242,7 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .mvg{margin:10px 18px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:12px;color:var(--dim)}
 /* Movement: a game in a priced league with no price (red outline, "No price" signal; brighter under an hour to kickoff) */
 .mvg.np{border-color:rgba(255,107,122,.5);box-shadow:inset 3px 0 0 rgba(255,107,122,.85)}.mvg.np2{border-color:rgba(255,107,122,.95);box-shadow:inset 3px 0 0 #FF6B7A,0 0 16px rgba(255,107,122,.25)}
-.cs.nop{background:rgba(255,107,122,.15);color:#FF8A96}.mvg .npr{display:block;margin-top:5px;color:#FFB3BB}.tseg button i b.np{color:#FF8A96;font-weight:650}.tseg button.on i b.np{color:#C62F43}
+.cs.nop{background:rgba(255,107,122,.15);color:#FF8A96;border:0;font:inherit;font-size:11px;font-weight:650;cursor:pointer}.cs.nop:disabled{opacity:.6}.mvg .nph{display:block;margin-top:4px;color:var(--faint)}.mvg .npw{display:block;margin-top:6px;padding:7px 9px;border-radius:9px;background:rgba(255,107,122,.08);color:var(--ink)}.mvg .npw.saved{background:rgba(var(--acc-rgb),.12)}.mvg .npw b{font-weight:650}.mvg .npr{display:block;margin-top:5px;color:#FFB3BB}.tseg button i b.np{color:#FF8A96;font-weight:650}.tseg button.on i b.np{color:#C62F43}
 .mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
 .mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--dim)}.cs.due{background:rgba(240,181,74,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
 .mvg.lv-r{border-color:rgba(var(--acc-rgb),.6);box-shadow:inset 3px 0 0 rgb(var(--acc-rgb)),0 0 14px rgba(var(--acc-rgb),.16)}.mvg.lv-a{border-color:rgba(var(--acc-rgb),.26);box-shadow:inset 3px 0 0 rgba(var(--acc-rgb),.42)}
@@ -1209,9 +1209,10 @@ function pinnNote(c, o) {
   const gap = pm.gap && pm.gap.some(g => Math.abs(g) >= 2) ? `<br>DraftKings is ${pm.gap.map((g, i) => `${esc(sideOf(c, i))} ${sgn(Math.round(g))}`).join(' · ')} points from Pinnacle now` : '';
   return `<small class="mvn">Pinnacle${o.pcl ? ` (closing read ✓ ${tmCT(o.pcl)})` : ' (first seen → now)'}: ${[0, 1, 2].map(part).join(' · ')}${pm.ou ? ` · Over ${pm.ou.line} ${Math.round(pm.ou.p0)}→${Math.round(pm.ou.p1)}` : ''}${pm.bt ? ` · Both score ${Math.round(pm.bt.p0)}→${Math.round(pm.bt.p1)}${Math.abs(pm.bt.p1 - pm.bt.p0) >= 1 ? ` <b>(${sgn(Math.round(pm.bt.p1 - pm.bt.p0))})</b>` : ''}` : ''}${gap}</small>`;
 }
+const NPW = {}; // game id -> the "No price" check's answer { kind, title, detail } (or { busy })
 function movesView() {
   if (!day || !day.cards) return `<div class="empty">Loading…</div>`;
-  const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
+  const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
   // A game in a priced league with no home / draw / away price gets its own card too: red outline and a "No price" signal (npCard)
   const np = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).map(c => ({ c, np: true }));
   const rows = [...priced.map(c => ({ c, mv: moveOf(c.odds), st: closeState(c) })), ...np].sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
@@ -1226,8 +1227,10 @@ function movesView() {
   const npCard = c => {
     const ko = new Date(c.kickoff).getTime(), now = Date.now(), urgent = now < ko && ko - now < 3600000;
     const why = now >= ko || c.final ? 'No price was read before kickoff.' : urgent ? 'Under an hour to kickoff and still no price, so the Analyst can\'t bet this game.' : 'ESPN hasn\'t posted a DraftKings price yet. The Hub checks every 6 hours, then hourly in the last 3.';
-    return `<div class="mvg np${urgent ? ' np2' : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><span class="cs nop">● No price</span></div>
-      <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${c.final ? ` · final ${c.final.h}–${c.final.a}` : ''}</small><small class="mvn npr">${why}</small></div>`;
+    const w = NPW[c.id]; // the "No price" check: busy, or its answer
+    const res = w ? (w.busy ? '<small class="mvn npw">Checking ESPN…</small>' : `<small class="mvn npw ${esc(w.kind)}"><b>${esc(w.title)}.</b> ${esc(w.detail)}</small>`) : '<small class="mvn nph">Tap No price to check why.</small>';
+    return `<div class="mvg np${urgent ? ' np2' : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><button type="button" class="cs nop act" data-npwhy="${esc(c.id)}" data-lg="${esc(c.league)}"${w && w.busy ? ' disabled' : ''}>● No price ›</button></div>
+      <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${c.final ? ` · final ${c.final.h}–${c.final.a}` : ''}</small><small class="mvn npr">${why}</small>${res}</div>`;
   };
   const card = ({ c, mv, st, np }) => {
     if (np) return npCard(c);
@@ -1980,6 +1983,13 @@ async function runAll(kind) {
 document.addEventListener('click', async e => {
   const edl = e.target.closest('[data-edlong]'); if (edl) { S.edLong = !S.edLong; return render(); }
   const mvf = e.target.closest('[data-mvf]'); if (mvf) { S.mvf = mvf.dataset.mvf; return render(); }
+  const nw = e.target.closest('[data-npwhy]');
+  if (nw) { // the Movement tab's "No price" button: ask the Hub why, and reload the day when it found and saved a price
+    const id = nw.dataset.npwhy; if (NPW[id] && NPW[id].busy) return; NPW[id] = { busy: true }; render();
+    try { const r = await post('/api/price-why', { date: S.date, league: nw.dataset.lg, id }); NPW[id] = r && r.title ? r : { kind: 'error', title: 'Check failed', detail: (r && r.error) || 'No answer' }; if (r && r.kind === 'saved') { await loadDay(S.date); } }
+    catch (er) { NPW[id] = { kind: 'error', title: 'Check failed', detail: er.message }; }
+    return render();
+  }
   const gc = e.target.closest('[data-getclose]');
   if (gc) {
     if (gc.disabled) return; const t0 = gc.textContent; gc.disabled = true; gc.textContent = 'Reading the price…';
