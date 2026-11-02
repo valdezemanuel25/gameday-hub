@@ -240,6 +240,9 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .xag.s{background:var(--grass);color:#07150d;font-weight:750}.xag.s:before{content:"✓";width:auto;height:auto;background:none;font-weight:800}
 .xag.gl{background:rgba(127,166,217,.15);color:#b6cdf0}.xag.mv{background:rgba(201,168,255,.14);color:#d9c4ff}
 .mvg{margin:10px 18px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:12px;color:var(--dim)}
+/* Movement: a game in a priced league with no price (red outline, "No price" signal; brighter under an hour to kickoff) */
+.mvg.np{border-color:rgba(255,107,122,.5);box-shadow:inset 3px 0 0 rgba(255,107,122,.85)}.mvg.np2{border-color:rgba(255,107,122,.95);box-shadow:inset 3px 0 0 #FF6B7A,0 0 16px rgba(255,107,122,.25)}
+.cs.nop{background:rgba(255,107,122,.15);color:#FF8A96;border:0;font:inherit;font-size:11px;font-weight:650;cursor:pointer}.cs.nop:disabled{opacity:.6}.mvg .nph{display:block;margin-top:4px;color:var(--faint)}.mvg .npw{display:block;margin-top:6px;padding:7px 9px;border-radius:9px;background:rgba(255,107,122,.08);color:var(--ink)}.mvg .npw.saved{background:rgba(var(--acc-rgb),.12)}.mvg .npw b{font-weight:650}.mvg .npr{display:block;margin-top:5px;color:#FFB3BB}.tseg button i b.np{color:#FF8A96;font-weight:650}.tseg button.on i b.np{color:#C62F43}
 .mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
 .mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--dim)}.cs.due{background:rgba(240,181,74,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
 .mvg.lv-r{border-color:rgba(var(--acc-rgb),.6);box-shadow:inset 3px 0 0 rgb(var(--acc-rgb)),0 0 14px rgba(var(--acc-rgb),.16)}.mvg.lv-a{border-color:rgba(var(--acc-rgb),.26);box-shadow:inset 3px 0 0 rgba(var(--acc-rgb),.42)}
@@ -828,7 +831,7 @@ const AN_SHORT = { H: g => strip(g.home), A: g => strip(g.away), D: () => 'Draw'
 function anLine(c) {
   const by = ANB && ANB.get(c.id); if (!by) return '';
   const one = (n, b) => { const res = b.res === 'win' ? ' <span class="w">✓</span>' : b.res === 'loss' ? ' <span class="l">✗</span>' : b.res === 'void' ? ' void' : '';
-    return `${n}: <b>${esc(AN_SHORT[b.key] ? AN_SHORT[b.key](c) : b.key)} ${fmtOdds(b.price)}</b>${res}`; };
+    return `${n}: <b>${esc(AN_SHORT[b.key] ? AN_SHORT[b.key](c) : b.key)} ${fmtOdds(b.price)}</b>${b.bk === 'pinnacle' ? ' (Pinnacle)' : ''}${res}`; };
   const parts = [['1', 'Original'], ['2', 'New']].flatMap(([k, n]) => (by[k] || []).map(b => one(n, b)));
   return parts.length ? `<span class="anl" data-anopen="${esc(by[1] && by[1].length ? '1' : '2')}"><span class="k">Analyst</span>${parts.join(' · ')}<span class="go">›</span></span>` : '';
 }
@@ -1206,18 +1209,31 @@ function pinnNote(c, o) {
   const gap = pm.gap && pm.gap.some(g => Math.abs(g) >= 2) ? `<br>DraftKings is ${pm.gap.map((g, i) => `${esc(sideOf(c, i))} ${sgn(Math.round(g))}`).join(' · ')} points from Pinnacle now` : '';
   return `<small class="mvn">Pinnacle${o.pcl ? ` (closing read ✓ ${tmCT(o.pcl)})` : ' (first seen → now)'}: ${[0, 1, 2].map(part).join(' · ')}${pm.ou ? ` · Over ${pm.ou.line} ${Math.round(pm.ou.p0)}→${Math.round(pm.ou.p1)}` : ''}${pm.bt ? ` · Both score ${Math.round(pm.bt.p0)}→${Math.round(pm.bt.p1)}${Math.abs(pm.bt.p1 - pm.bt.p0) >= 1 ? ` <b>(${sgn(Math.round(pm.bt.p1 - pm.bt.p0))})</b>` : ''}` : ''}${gap}</small>`;
 }
+const NPW = {}; // game id -> the "No price" check's answer { kind, title, detail } (or { busy })
 function movesView() {
   if (!day || !day.cards) return `<div class="empty">Loading…</div>`;
-  const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
-  const rows = priced.map(c => ({ c, mv: moveOf(c.odds), st: closeState(c) }));
+  const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
+  // A game in a priced league with no home / draw / away price gets its own card too: red outline and a "No price" signal (npCard)
+  const np = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).map(c => ({ c, np: true }));
+  const rows = [...priced.map(c => ({ c, mv: moveOf(c.odds), st: closeState(c) })), ...np].sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
   // Upcoming = not kicked off yet. It opens first; a day with none (a past day) opens on All unless you picked a filter.
   const up = r => !r.c.final && new Date(r.c.kickoff).getTime() > Date.now();
-  const test = k => r => k === 'big' ? r.mv.big : k === 'up' ? up(r) : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
-  const n = k => rows.filter(test(k)).length;
+  const test = k => r => r.np ? (k === 'up' ? up(r) : k === 'all') : k === 'big' ? r.mv.big : k === 'up' ? up(r) : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
+  const n = k => rows.filter(test(k)).length, nNp = k => rows.filter(r => r.np && test(k)(r)).length;
   const f = S.mvf || (n('up') ? 'up' : 'all'), shown = rows.filter(test(f));
-  const seg = `<div class="tseg">${[['up', 'Upcoming'], ['big', 'Big moves'], ['all', 'All'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-mvf="${k}">${l}<i>${n(k)}</i></button>`).join('')}</div>`;
+  const seg = `<div class="tseg">${[['up', 'Upcoming'], ['big', 'Big moves'], ['all', 'All'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-mvf="${k}">${l}<i>${n(k)}${k === 'up' && nNp(k) ? ` <b class="np" title="${nNp(k)} with no price">● ${nNp(k)}</b>` : ''}</i></button>`).join('')}</div>`;
   const head = `<div class="small" style="margin:8px 18px 0">DraftKings prices, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read 30 minutes before kickoff, after the lineups, then locked. A move of ${BIG_MOVE}+ points on one result is a big move: news reaching the price, not a bet.${unpriced ? ` ${unpriced} game${unpriced === 1 ? '' : 's'} on this day ha${unpriced === 1 ? 's' : 've'} no price.` : ''}</div>`;
-  const card = ({ c, mv, st }) => {
+  // no price: why, by how close kickoff is; under an hour out it is urgent (the Analyst can no longer bet it)
+  const npCard = c => {
+    const ko = new Date(c.kickoff).getTime(), now = Date.now(), urgent = now < ko && ko - now < 3600000;
+    const why = now >= ko || c.final ? 'No price was read before kickoff.' : urgent ? 'Under an hour to kickoff and still no price, so the Analyst can\'t bet this game.' : 'ESPN hasn\'t posted a DraftKings price yet. The Hub checks every 6 hours, then hourly in the last 3.';
+    const w = NPW[c.id]; // the "No price" check: busy, or its answer
+    const res = w ? (w.busy ? '<small class="mvn npw">Checking ESPN…</small>' : `<small class="mvn npw ${esc(w.kind)}"><b>${esc(w.title)}.</b> ${esc(w.detail)}</small>`) : '<small class="mvn nph">Tap No price to check why.</small>';
+    return `<div class="mvg np${urgent ? ' np2' : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><button type="button" class="cs nop act" data-npwhy="${esc(c.id)}" data-lg="${esc(c.league)}"${w && w.busy ? ' disabled' : ''}>● No price ›</button></div>
+      <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${c.final ? ` · final ${c.final.h}–${c.final.a}` : ''}</small><small class="mvn npr">${why}</small>${res}</div>`;
+  };
+  const card = ({ c, mv, st, np }) => {
+    if (np) return npCard(c);
     const o = c.odds, op = o.op || o.f, fin = c.final, out = fin ? (fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2) : null;
     const row = (label, a, b, p0, p1, d, hit, tg = ['', '']) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a) + tg[0]}</td><td>${b == null ? '–' : fmtOdds(b) + tg[1]}</td><td>${p0 == null ? '' : Math.round(p0) + '→'}${Math.round(p1)}%</td><td class="${d != null && mvLv(d) === 'r' ? 'm5' : d != null && mvLv(d) === 'a' ? 'm3' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
     // Over / Under from whichever source has it; a price that is not DraftKings' is tagged (P = Pinnacle)
@@ -1576,7 +1592,7 @@ function anBet(b) {
   const st = !b.res ? `<span class="mbs">${new Date(b.kickoff).getTime() > Date.now() ? 'Open' : 'In play'}</span>` : b.res === 'void' ? '<span class="mbs">Void</span>' : `<span class="mbs ${b.res === 'win' ? 'hit' : 'miss'}">${b.res === 'win' ? 'Won' : 'Lost'} ${u2(b.units)}</span>`;
   const when = b.mins >= 120 ? `${Math.round(b.mins / 60)}h before` : `${b.mins}m before`, rule = ((b.sport === 'nhl' ? AN.nhl && AN.nhl.rules : AN.rules) || []).find(r => r.id === b.rule);
   const cl = b.close != null ? ` · close ${fmtOdds(b.close)} <span class="${b.clv > 0 ? 'up' : b.clv < 0 ? 'dn' : ''}">(${sgn(b.clv)}%)</span>` : '';
-  const bk = b.bk && b.bk !== 'draftkings' ? ` <small class="fnt">${esc(BOOK[b.bk] || b.bk)} (DK ${fmtOdds(b.dk)})</small>` : b.bk ? ' <small class="fnt">DK</small>' : '';
+  const bk = b.bk && b.bk !== 'draftkings' ? ` <small class="fnt">${esc(BOOK[b.bk] || (b.bk === 'pinnacle' ? 'Pinnacle' : b.bk))}${b.dk != null ? ` (DK ${fmtOdds(b.dk)})` : ''}</small>` : b.bk ? ' <small class="fnt">DK</small>' : '';
   const game = b.sport === 'nhl' ? `${esc(b.away)} at ${esc(b.home)}` : `${esc(b.home)} vs ${esc(b.away)}`;
   return `<div class="mbg"><div class="mbt"><b>${esc(anLabel(b))} ${fmtOdds(b.price)}${bk}</b>${st}</div><small>${game} · ${esc(b.leagueName)}${b.score ? ` · ${esc(b.score)}` : ''}</small><small>${esc(rule ? rule.name : b.rule)} · bet ${when}${cl}</small><small>${esc(b.why || '')}</small></div>`;
 }
@@ -1967,6 +1983,13 @@ async function runAll(kind) {
 document.addEventListener('click', async e => {
   const edl = e.target.closest('[data-edlong]'); if (edl) { S.edLong = !S.edLong; return render(); }
   const mvf = e.target.closest('[data-mvf]'); if (mvf) { S.mvf = mvf.dataset.mvf; return render(); }
+  const nw = e.target.closest('[data-npwhy]');
+  if (nw) { // the Movement tab's "No price" button: ask the Hub why, and reload the day when it found and saved a price
+    const id = nw.dataset.npwhy; if (NPW[id] && NPW[id].busy) return; NPW[id] = { busy: true }; render();
+    try { const r = await post('/api/price-why', { date: S.date, league: nw.dataset.lg, id }); NPW[id] = r && r.title ? r : { kind: 'error', title: 'Check failed', detail: (r && r.error) || 'No answer' }; if (r && r.kind === 'saved') { await loadDay(S.date); } }
+    catch (er) { NPW[id] = { kind: 'error', title: 'Check failed', detail: er.message }; }
+    return render();
+  }
   const gc = e.target.closest('[data-getclose]');
   if (gc) {
     if (gc.disabled) return; const t0 = gc.textContent; gc.disabled = true; gc.textContent = 'Reading the price…';

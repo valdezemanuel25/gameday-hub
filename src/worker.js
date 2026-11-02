@@ -4,7 +4,7 @@ import { scoreCard } from './v6core.js';
 import { usualOverSide, supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
   TZ, LEAGUES, UNTRACKED, isCounted, FIRST_DIV, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
-  findTeam, getContext, missingContexts, fixturesForLeague, rawOdds, shotsCoverage, PRICED,
+  findTeam, getContext, missingContexts, fixturesForLeague, rawOdds, oddsWhy, shotsCoverage, PRICED,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
 import { forebetStep, forebetFetch, FB_PAGES, matchRows, is as isName } from './forebetpage.js';
@@ -459,6 +459,26 @@ export async function refreshCardClose(env, date, slug, id, now = new Date(), f 
   } else return { error: fx.done ? "ESPN no longer lists a closing line for this finished game, so the last price stands as the close" : "The game has started: ESPN's price may be an in-play one, so the Hub will not take it as the close. Try again after the final." };
   await env.HUB.put(`day:${date}`, JSON.stringify(day));
   return { ok: true, price: { h: c.odds.h, d: c.odds.d, a: c.odds.a, tl: c.odds.tl ?? null, to: c.odds.to ?? null, tu: c.odds.tu ?? null }, source: started ? 'espn-close' : 'now' };
+}
+// The Movement tab's "No price" button: why one game has no price, in plain words, from ESPN's feed read now. When ESPN does have a
+// price now and the game is still open, the league's prices are read and saved at once (the same as Refresh prices).
+// -> { kind: 'saved' | 'none' | 'partial' | 'gone' | 'locked' | 'unpriced' | 'error', title, detail }
+export async function priceWhy(env, date, slug, id, now = new Date(), why = oddsWhy) {
+  if (!PRICED.has(slug)) return { kind: 'unpriced', title: 'League not priced', detail: 'The Hub does not read prices for this league.' };
+  const day = await env.HUB.get(`day:${date}`, 'json'), c = (day?.cards || []).find(x => x.id === id && x.league === slug);
+  if (!c) return { kind: 'error', title: 'Game not found', detail: 'This game is not saved for that day any more. Reload the page.' };
+  const r = await why(slug, date, id);
+  if (r.error) return { kind: 'error', title: 'ESPN did not answer', detail: `The check could not reach ESPN (${String(r.error).slice(0, 80)}). Try again in a minute.` };
+  if (!r.found) return { kind: 'gone', title: 'Not on ESPN for this day', detail: 'ESPN no longer lists this game on this day: it may have been postponed or moved. With no game in the feed there is no price to read.' };
+  const bk = r.books.length ? r.books.join(', ') : null;
+  if (r.parsed && [r.parsed.h, r.parsed.d, r.parsed.a].every(Number.isFinite)) {
+    const px = `${[r.parsed.h, r.parsed.d, r.parsed.a].map(m => (m > 0 ? '+' : '') + m).join(' / ')}${r.parsed.src ? ` (${r.parsed.src === 'bet365' ? 'Bet365' : r.parsed.src} stand-in)` : ''}`;
+    if (!priceOpen(c, now)) return { kind: 'locked', title: 'Price came too late', detail: `ESPN has a price now (${px}), but prices lock 20 minutes before kickoff, so it was not taken for this game.` };
+    const s = await refreshOdds(env, date, slug, now);
+    return { kind: 'saved', title: 'Price found and saved', detail: `ESPN has a price now (${px}). It was missing at the Hub's last read; it is saved now${s && s.analyst && s.analyst.placed ? ` and the Analyst placed ${s.analyst.placed} bet${s.analyst.placed === 1 ? '' : 's'}` : ''}.` };
+  }
+  if (!bk) return { kind: 'none', title: 'No book on ESPN yet', detail: "ESPN lists the game but no sportsbook has a price on it in ESPN's feed yet. Smaller leagues often get theirs a day or two before kickoff. The Hub keeps checking: every 6 hours, then hourly in the last 3." };
+  return { kind: 'partial', title: 'Incomplete price on ESPN', detail: `ESPN lists ${bk} for this game${r.missing.length ? ` but without the ${r.missing.join(' and ')} price` : ' but not as a home / draw / away price the Hub can read'}. The Hub needs all three to price the game.` };
 }
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
@@ -1018,6 +1038,7 @@ const hub = {
     if (p === '/api/candidates') return json(await candidates(q('date') || today(), env));
     if (p === '/api/pinn-check') { try { return json(await pinnCheck(env, String(url.searchParams.get('league') || ''))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (p === '/api/odds-raw') { try { const lg = leagueBySlug(String(url.searchParams.get('league') || '')); if (!lg) return json({ error: 'Unknown league' }, 400); return json({ league: lg.slug, games: await rawOdds(lg.slug, String(url.searchParams.get('date') || '')) }); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
+    if (req.method === 'POST' && p === '/api/price-why') { try { const b = await req.json(); return json(await priceWhy(env, String(b.date || ''), String(b.league || ''), String(b.id || ''), new Date())); } catch (e) { return json({ kind: 'error', title: 'Check failed', detail: String(e && e.message || e).slice(0, 120) }); } }
     if (req.method === 'POST' && p === '/api/btts') { try { const b = await req.json(); return json(await refreshBtts(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Both score prices: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/odds-close') { try { const b = await req.json(); return json(await refreshCardClose(env, String(b.date || ''), String(b.league || ''), String(b.id || ''), new Date())); } catch (e) { return json({ error: `Final price: ${e && e.message || e}` }, 500); } }
     if (req.method === 'POST' && p === '/api/odds') { try { const b = await req.json(); return json(await refreshOdds(env, String(b.date || ''), String(b.league || ''), new Date())); } catch (e) { return json({ error: `Prices: ${e && e.message || e}` }, 500); } }

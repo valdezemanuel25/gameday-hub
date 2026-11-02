@@ -319,6 +319,20 @@ export async function fixturesForLeague(league, date, debug) {
 
 // What ESPN sends for a game's odds, untouched, for the "check raw prices" button. It also tries ESPN's other odds endpoints for the first
 // game (where props such as Both teams to score would live) and reports what each one returns, so we can see where the data is, if anywhere.
+// Why a game has no price (the Movement tab's "No price" button): ESPN's scoreboard for the game's day, read now, and what its odds
+// block holds. -> { error } | { found: false } | { found: true, books: [names], parsed: parseOdds result | null, missing: ['draw', ...] }
+export async function oddsWhy(slug, date, id) {
+  const d = new Date(`${date}T12:00:00Z`), dbg = [];
+  const days = [d, new Date(d.getTime() + DAY)].map(x => x.toISOString().slice(0, 10).replace(/-/g, ''));
+  const js = await Promise.all(days.map(x => getJson(`${BASE}/${slug}/scoreboard?dates=${x}&limit=300`, dbg)));
+  if (js.every(j => !j)) return { error: dbg[0] || 'ESPN did not answer' };
+  const ev = js.flatMap(j => (j && j.events) || []).find(e => String(e.id) === String(id));
+  if (!ev) return { found: false };
+  const list = (ev.competitions?.[0]?.odds || []).filter(Boolean), o = list.find(x => /draftkings/i.test(x.provider?.name || '')) || list[0];
+  const books = [...new Set(list.map(x => x.provider?.name).filter(Boolean))];
+  const missing = o ? [['home', o.moneyline?.home?.close?.odds ?? o.moneyline?.home?.open?.odds ?? o.homeTeamOdds?.moneyLine], ['draw', o.moneyline?.draw?.close?.odds ?? o.moneyline?.draw?.open?.odds ?? o.drawOdds?.moneyLine], ['away', o.moneyline?.away?.close?.odds ?? o.moneyline?.away?.open?.odds ?? o.awayTeamOdds?.moneyLine]].filter(([, v]) => v == null || v === '').map(([k]) => k) : [];
+  return { found: true, status: ev.status?.type?.name || null, books, parsed: parseOdds(list), missing };
+}
 export async function rawOdds(slug, date) {
   const j = await getJson(`${BASE}/${slug}/scoreboard?dates=${String(date).replace(/-/g, '')}&limit=300`, []);
   const strip = o => JSON.parse(JSON.stringify(o ?? null, (k, v) => (k === 'link' || k === 'logos' || k === 'tracking' ? undefined : v))); // links and logos only bury the prices

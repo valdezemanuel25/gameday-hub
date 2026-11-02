@@ -152,6 +152,24 @@ ok('refreshOdds: the Analyst looks at the league after its price read', ro.games
   ok('listAnalyst: each set carries its record split by division, adding up to the set', [1, 2].every(k => L.sets[k].tiers.top.n + L.sets[k].tiers.second.n === L.sets[k].summary.all.n));
 }
 
+// --- second divisions: Pinnacle's both-score price stands in for DraftKings' (Nov 2, 2026) ---
+{
+  const pin = { ...card().odds, by: -160, bn: 130, bk: 'pinnacle' };
+  const g2 = card({ id: 'p2', league: 'ger.2', odds: pin }), g1 = card({ id: 'p1', league: 'eng.1', odds: pin });
+  const d2 = decide([], [g2], '2026-10-28', NOW), d1 = decide([], [g1], '2026-10-28', NOW);
+  ok('second division: Both score No bets on Pinnacle\'s both-score price, tagged Pinnacle', (b => b && b.key === 'N' && b.price === 130 && b.book === 'pinnacle')(d2.find(b => b.rule === 'bttsNo')), JSON.stringify(d2));
+  ok('first division: a Pinnacle both-score price is still not bet (DraftKings only)', !d1.some(b => b.rule === 'bttsNo'));
+  ok('second division: the other bets on the game stay DraftKings bets', d2.filter(b => b.key !== 'N').every(b => !b.book));
+  const m2 = new Map([['day:2026-10-28', JSON.stringify({ date: '2026-10-28', cards: [g2] })]]), e2 = { HUB: { get: async (k, t) => { const x = m2.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { m2.set(k, x); } } };
+  await analystLook(e2, '2026-10-28', [g2], NOW);
+  const pb = (await getAnalyst(e2)).items.find(b => b.rule === 'bttsNo');
+  ok('second division: saved with book Pinnacle and no DraftKings price', pb && pb.bk === 'pinnacle' && pb.dk == null && !('book' in pb), JSON.stringify(pb));
+  const x = { ...pb }; settle(x, card({ id: 'p2', league: 'ger.2', odds: { ...pin, bn: 115 } }), new Date('2026-10-28T19:05:00Z'));
+  ok('second division: a Pinnacle bet closes at Pinnacle\'s both-score price', x.close === 115 && x.clv > 0, JSON.stringify(x));
+  const y = { ...pb }; settle(y, card({ id: 'p2', league: 'ger.2', odds: { ...pin, bn: 115, bk: 'draftkings' } }), new Date('2026-10-28T19:05:00Z'));
+  ok('second division: a Pinnacle bet never closes at a DraftKings price (and the other way round)', y.close == null);
+}
+
 // --- the cards' Analyst line (public/index.html anByGame / anLine), built from listAnalyst's sets ---
 {
   const html = (await import('fs')).readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
