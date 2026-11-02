@@ -339,6 +339,7 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .anset button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:9px 12px 10px;border-radius:14px;border:1px solid var(--line);background:rgba(11,13,10,.72);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);color:var(--dim);font:inherit;font-size:13px;font-weight:650;cursor:pointer;text-align:left}
 .anset button i{font-style:normal;font-weight:500;color:var(--faint);margin-left:4px}
 .anset button small{font-size:11px;font-weight:500;line-height:1.35;color:var(--faint)}.anset button small b{font-weight:650}.anset button small .up{color:var(--grass)}.anset button small .dn{color:var(--miss)}
+.anset .tierl{margin:8px 0 0;padding:7px 12px;border-radius:12px;background:rgba(11,13,10,.72);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);font-size:11.5px;line-height:1.6;color:var(--faint)}.anset .tierl b{font-weight:650;color:var(--dim)}.anset .tierl .up{color:var(--grass)}.anset .tierl .dn{color:var(--miss)}.anset .tierl span{color:var(--faint)}
 .anset button.on{border-color:var(--acc-line);background:var(--pick-bg);color:var(--ink)}.anset button.on i,.anset button.on small{color:var(--dim)}
 .tcols{display:grid;gap:12px;margin:8px 0 0 4px}
 .tcol{min-width:0}
@@ -1597,8 +1598,11 @@ function analystView() {
   const hockey = AN_SP === 'nhl' && AN.nhl, sets = !hockey && AN.sets, set = sets && sets[AN_SET] ? AN_SET : '1', D = hockey ? AN.nhl : sets ? sets[set] : AN;
   // soccer: the two rule sets as a smaller choice inside Soccer, each button with its own record (Original rules = Analyst 1, New rules = Analyst 2)
   const SETN = { 1: 'Original rules', 2: 'New rules' };
+  // the picked set's record split by division: top divisions v second divisions (La Liga 2, 2. Bundesliga, priced from Nov 2, 2026)
+  const tierRec = (n, a) => `<b>${n}</b> ${a.n} bet${a.n === 1 ? '' : 's'}${a.settled ? ` · <span class="${a.units >= 0 ? 'up' : 'dn'}">${u2(a.units)}</span> · ROI ${sgn(a.roi)}% · close ${a.clv != null ? sgn(a.clv) + '%' : '–'}` : ''}`;
+  const tierLine = x => x && x.tiers ? `<div class="tierl">${tierRec('Top divisions', x.tiers.top)}<br>${tierRec('Second divisions', x.tiers.second)}${x.tiers.second.n ? '' : ' <span>(La Liga 2 and 2. Bundesliga, from Nov 2)</span>'}</div>` : '';
   const rec = x => { const a = x.summary.all; return a.settled ? `<b class="${a.units >= 0 ? 'up' : 'dn'}">${u2(a.units)}</b> · ROI ${sgn(a.roi)}% · close ${a.clv != null ? sgn(a.clv) + '%' : '–'}` : 'no results yet'; };
-  const setSw = sets ? `<div class="anset"><div class="lb">Soccer rule sets</div><div class="pl">${Object.keys(sets).map(k => `<button type="button" class="${set === k ? 'on' : ''}" data-anset="${k}"><span>${SETN[k] || 'Analyst ' + k}<i>${sets[k].summary.all.n} bets</i></span><small>${rec(sets[k])}</small></button>`).join('')}</div></div>` : '';
+  const setSw = sets ? `<div class="anset"><div class="lb">Soccer rule sets</div><div class="pl">${Object.keys(sets).map(k => `<button type="button" class="${set === k ? 'on' : ''}" data-anset="${k}"><span>${SETN[k] || 'Analyst ' + k}<i>${sets[k].summary.all.n} bets</i></span><small>${rec(sets[k])}</small></button>`).join('')}</div>${tierLine(sets[set])}</div>` : '';
   // Market filter (above Rules): All, Winner, Both score (soccer only), Over/Under. It filters the tiles, chart, rules, timing and bet lists.
   const MKS = [['all', 'All'], ['1x2', 'Winner'], ...(hockey ? [] : [['btts', 'Both score']]), ['ou', 'Over/Under']], mkOf = k => (k === 'O' || k === 'U' ? 'ou' : k === 'B' || k === 'N' ? 'btts' : '1x2');
   const mf = D.mk && MKS.some(m => m[0] === AN_MK) ? AN_MK : 'all';

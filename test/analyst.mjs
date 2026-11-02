@@ -1,6 +1,6 @@
 // The Analyst (src/analyst.js): its rules, one position per game and market, settling at the close and the result, the record,
 // benching, and storage through the price read in src/worker.js.
-import { view, RULES, decide, goalsSwap, setOf, SETS, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst, decideNhl, analystNhl, NHL_RULES } from '../src/analyst.js';
+import { view, RULES, decide, goalsSwap, setOf, SETS, tiers, tierOf, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst, decideNhl, analystNhl, NHL_RULES } from '../src/analyst.js';
 import { refreshOdds, analystShop, analystSharp, readSharpNote } from '../src/worker.js';
 import { bestPrices, fetchBest, sharpOf, fetchSharp } from '../src/btts.js';
 let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) bad++; };
@@ -142,6 +142,15 @@ globalThis.fetch = async () => new Response(JSON.stringify({ events: [] }));
 kv.set('day:2026-10-30', JSON.stringify({ date: '2026-10-30', cards: [card({ v2: { p: [50, 25, 25] }, kickoff: '2026-10-30T19:00:00Z' })] }));
 const ro = await refreshOdds(env, '2026-10-30', 'eng.1', new Date('2026-10-30T12:00:00Z'));
 ok('refreshOdds: the Analyst looks at the league after its price read', ro.games === 1 && ro.analyst && ro.analyst.placed === 4 && (await getAnalyst(env)).items.filter(x => x.date === '2026-10-30').length === 4, JSON.stringify(ro));
+
+// --- top divisions v second divisions (La Liga 2, 2. Bundesliga) ---
+{
+  const its = [{ league: 'eng.1', rule: 'follow', key: 'H', kickoff: KO, mins: 60, res: 'win', units: 1.1, clv: 1 }, { league: 'ger.2', rule: 'follow', key: 'A', kickoff: KO, mins: 60, res: 'loss', units: -1, clv: -2 },
+    { league: 'esp.2', rule: 'move', key: 'H', kickoff: KO, mins: 60, res: null, units: null, clv: null }];
+  const t = tiers(its, [['2026-09-01T15:00:00Z', 'follow', 'H', 60, 'win', 0.5, 1.5]]);
+  ok('tiers: second divisions are La Liga 2 and 2. Bundesliga; packed old rows count as top divisions', tierOf(its[1]) === 'second' && tierOf(its[0]) === 'top' && tierOf(['x', 'follow']) === 'top' && t.top.n === 2 && t.top.units === 1.6 && t.second.n === 2 && t.second.settled === 1 && t.second.units === -1, JSON.stringify(t));
+  ok('listAnalyst: each set carries its record split by division, adding up to the set', [1, 2].every(k => L.sets[k].tiers.top.n + L.sets[k].tiers.second.n === L.sets[k].summary.all.n));
+}
 
 // --- the cards' Analyst line (public/index.html anByGame / anLine), built from listAnalyst's sets ---
 {
