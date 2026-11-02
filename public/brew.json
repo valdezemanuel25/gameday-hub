@@ -1,6 +1,70 @@
 {
-  "updated": "2026-11-02T11:13:38Z",
+  "updated": "2026-11-02T22:00:23Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-02",
+      "title": "What the midterms mean for your portfolio",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,164",
+          "change": -1.07
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,542",
+          "change": -0.51
+        },
+        {
+          "label": "Dow",
+          "value": "51,984",
+          "change": 0.41
+        },
+        {
+          "label": "10-yr",
+          "value": "4.894%",
+          "change": -4,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$95.80",
+          "change": -7.99
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$76,744",
+          "change": -1.32
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "An early AI rebound faded and chips reversed, leaving the Nasdaq down 1.07% and S&P 500 down 0.51% while the Dow gained 0.41%."
+        },
+        {
+          "h": "Oil & yields",
+          "t": "Oil sank 7.99% to $95.80 on US-Iran talk hopes, pulling the 10-year yield down 4 bps to 4.894%."
+        },
+        {
+          "h": "Midterms",
+          "t": "With divided government likely, Morgan Stanley says the S&P 500 averaged a 23% gain in the year after midterms when Congress was split."
+        },
+        {
+          "h": "Marvell deal",
+          "t": "Marvell is buying Lumentum in an all-stock deal valued at $115B; Marvell fell 12.82% and Lumentum 18.66%."
+        },
+        {
+          "h": "Movers",
+          "t": "Oracle slid 8.85% on a $20B debt-and-stock raise, Intel fell 8.8%, while IDEXX jumped 21.85% and Rivian rose 8.47%."
+        },
+        {
+          "h": "Marriott",
+          "t": "Marriott beat estimates with $7B revenue, $3.02 adjusted EPS and raised 2026 RevPAR growth guidance to 4.5%-5%; shares rose 4.26%."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-11-02",
