@@ -15,7 +15,7 @@ import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeB
 import { addStrats } from './strats.js';
 import { analystLook, listAnalyst } from './analyst.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
-import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP } from './btts.js';
+import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP, SPORT } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { goalSeq, maxLead, earlyPaid } from './early.js';
 import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn } from './pinn.js';
@@ -511,6 +511,17 @@ export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) 
   if (!open.length) return { games: 0, priced: 0 };
   const need = open.filter(c => !(c.odds && c.odds.by != null)), have = open.length - need.length; // already-priced games cost no credit
   if (!need.length) return { games: open.length, priced: have, skipped: [], left: null };
+  // A league with no Odds API league (La Liga 2, 2. Bundesliga): Pinnacle's both-score price instead, no credit (Nov 2, 2026). It needs
+  // the game's ESPN price first (the Pinnacle read rides on it); games without one are listed as skipped.
+  if (!SPORT[slug]) {
+    if (!env.PINNODDS_KEY) return { games: open.length, priced: have, skipped: [], left: null, note: 'No both-score source for this league without Pinnacle' };
+    const withPx = need.filter(c => c.odds);
+    for (const c of withPx) if (c.odds.pat) delete c.odds.pat; // asked by hand: try Pinnacle now, not after the retry wait
+    let changed = await addPinn(env, withPx, now, f); changed += await addBtts(env, withPx, slug, now, f);
+    if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+    const got = need.filter(c => c.odds && c.odds.by != null);
+    return { games: open.length, priced: have + got.length, skipped: need.filter(c => !(c.odds && c.odds.by != null)).map(c => `${c.home} v ${c.away}${c.odds ? '' : ' (no ESPN price yet)'}`), left: null, source: 'pinnacle' };
+  }
   const r = await viaOddsKey(env, key => fetchBtts(key, slug, need, f), { now }); if (r.error) return { error: r.error };
   let changed = 0;
   for (const c of need) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn, bk: p.bk }; if (!c.odds.bf) c.odds.bf = { by: p.by, bn: p.bn }; changed++; } }

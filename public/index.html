@@ -2015,15 +2015,15 @@ document.addEventListener('click', async e => {
   const bt = e.target.closest('[data-btts]');
   if (bt) {
     const L = oddsLeagues(), out = $('#oddsraw'), dt = S.date; if (!L.length || !out) return;
-    bt.disabled = true; let games = 0, priced = 0, left = null, skipped = [];
+    bt.disabled = true; let games = 0, priced = 0, left = null, skipped = []; const fails = [];
     try {
       for (let i = 0; i < L.length; i++) {
         out.textContent = `Reading Both-score prices… ${i + 1} of ${L.length} leagues`;
-        const r = await post('/api/btts', { date: dt, league: L[i] }); if (r.error) throw new Error(r.error);
+        const r = await post('/api/btts', { date: dt, league: L[i] }); if (r.error) { fails.push(`${(cfg.leagues.find(l => l.slug === L[i]) || {}).name || L[i]}: ${r.error}`); continue; } // one league's problem must not stop the rest
         games += r.games || 0; priced += r.priced || 0; if (r.left != null) left = r.left; skipped = skipped.concat(r.skipped || []);
       }
       await loadDay(dt); render();
-      const o2 = $('#oddsraw'); if (o2) o2.textContent = `Both-score prices: ${priced} of ${games} games.${skipped.length ? ' No match for: ' + skipped.join(', ') + '.' : ''}${left != null ? ' Credits left this month: ' + left + '.' : ''}`;
+      const o2 = $('#oddsraw'); if (o2) o2.textContent = `Both-score prices: ${priced} of ${games} games.${skipped.length ? ' No match for: ' + skipped.join(', ') + '.' : ''}${left != null ? ' Credits left this month: ' + left + '.' : ''}${fails.length ? ' Not read: ' + fails.join('; ') + '.' : ''}`;
     } catch (er) { out.textContent = er.message; bt.disabled = false; }
     return;
   }
