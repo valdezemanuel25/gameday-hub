@@ -4,7 +4,7 @@
 //   * Analyst bets past kickoff with no closing price, or open long after the game,
 //   * the daily KV write budget, Odds API credits, the last sync problem per league,
 //   * each Analyst rule's record (the weekly check-in reads it), with how close it is to being benched.
-import { getAnalyst, summary, RULES, NHL_RULES, SINCE, NHL_SINCE, BENCH, setOf } from './analyst.js';
+import { getAnalyst, summary, RULES, NHL_RULES, SINCE, NHL_SINCE, BENCH, setOf, tiers } from './analyst.js';
 
 const HOUR = 3600000;
 const lbl = c => `${c.away && c.home ? `${c.home} v ${c.away}` : c.id} (${c.league || 'nhl'}, ${c.kickoff})`;
@@ -43,6 +43,9 @@ export function analystChecks(doc, now) {
     soccer: rec(items.filter(b => b.sport !== 'nhl'), old.filter(b => b[10] !== 'nhl'), RULES, SINCE),
     nhl: rec(items.filter(b => b.sport === 'nhl'), old.filter(b => b[10] === 'nhl'), NHL_RULES, NHL_SINCE),
     bench: BENCH,
+    // each soccer rule set's record split into top divisions and second divisions (La Liga 2, 2. Bundesliga)
+    tiers: Object.fromEntries([1, 2].map(n => { const its = items.filter(b => b.sport !== 'nhl' && setOf(b) === n), ol = old.filter(b => b[10] !== 'nhl' && setOf(b) === n), rs = RULES.filter(r => r.set === n);
+      return [n, Object.fromEntries(Object.entries(tiers(its, ol, rs)).map(([t, a]) => [t, { bets: a.n, settled: a.settled, hit: a.hit, units: a.units, roi: a.roi, clv: a.clv }]))]; })),
   };
 }
 

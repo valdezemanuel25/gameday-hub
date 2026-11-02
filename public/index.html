@@ -339,6 +339,7 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .anset button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:9px 12px 10px;border-radius:14px;border:1px solid var(--line);background:rgba(11,13,10,.72);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);color:var(--dim);font:inherit;font-size:13px;font-weight:650;cursor:pointer;text-align:left}
 .anset button i{font-style:normal;font-weight:500;color:var(--faint);margin-left:4px}
 .anset button small{font-size:11px;font-weight:500;line-height:1.35;color:var(--faint)}.anset button small b{font-weight:650}.anset button small .up{color:var(--grass)}.anset button small .dn{color:var(--miss)}
+.anset .tierl{margin:8px 0 0;padding:7px 12px;border-radius:12px;background:rgba(11,13,10,.72);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);font-size:11.5px;line-height:1.6;color:var(--faint)}.anset .tierl b{font-weight:650;color:var(--dim)}.anset .tierl .up{color:var(--grass)}.anset .tierl .dn{color:var(--miss)}.anset .tierl span{color:var(--faint)}
 .anset button.on{border-color:var(--acc-line);background:var(--pick-bg);color:var(--ink)}.anset button.on i,.anset button.on small{color:var(--dim)}
 .tcols{display:grid;gap:12px;margin:8px 0 0 4px}
 .tcol{min-width:0}
@@ -573,6 +574,8 @@ function topView(cs) {
 }
 /* ---------- assign tab: first-division games still waiting for a Forebet or SportsMole prediction ---------- */
 const FIRST = new Set(['eng.2', 'eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1', 'usa.1', 'mex.1', 'bra.1']);
+// leagues with a price on the board: the first divisions plus La Liga 2 and 2. Bundesliga (from Nov 2, 2026; src/data.js SECOND_PRICED)
+const PRICED_LG = new Set([...FIRST, 'esp.2', 'ger.2']);
 let asg = null;
 async function loadAssign() {
   const ds = [0, 1, 2].map(o => addDays(S.date, o)), days = [], items = [];
@@ -835,12 +838,12 @@ function headline(c) {
     const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key];
     const tags = [...L.by.map(n => `<span class="ag all">${esc(n)} agrees</span>`), ...L.no.map(n => `<span class="ag">${esc(n)} disagrees</span>`)].join(' ');
     const ag = `<span class="ag">Market pick (price, margin removed)${L.a ? '' : ' · no model has numbers yet'}</span>${tags ? ' ' + tags : ''}`;
-    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
   }
   if (L && L.src === 'v4') { // no price yet: v4 leads with its single strongest call, the other models counted as agree / disagree
     const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key], names = r => r.join(', ');
     const ag = L.k === 'solo' ? `<span class="ag">v4's pick · no other model has numbers yet</span>` : L.k === 'split' ? `<span class="ag">v4's pick · no majority across the models</span>` : L.no.length === 0 ? `<span class="ag all">v4's pick · all ${L.a} models agree</span>` : `<span class="ag">v4's pick · ${L.y} of ${L.a} back it (${names(L.by)}) · ${names(L.no)} disagree${L.no.length === 1 ? 's' : ''}</span>`;
-    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
   }
   const v = c.v2, v4 = c.v4 || {}, f = c.fb || {};
   const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
@@ -867,7 +870,7 @@ function headline(c) {
   }
   const names = r => r.map(m => m.n).join(', ');
   const ag = all ? `<span class="ag all">All ${best.a.length} models agree</span>` : `<span class="ag">${best.yes.length} of ${best.a.length} back it (${names(best.yes)}) · ${names(best.no)} disagree${best.no.length === 1 ? 's' : ''}</span>`;
-  return `<div class="xhl"><span class="k">${all && best.p != null && best.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${best.label}</b>${best.p != null ? `<span class="p">${best.p}%</span>` : ''}${ag}${FIRST.has(c.league) ? priceLine(c, c.lean && c.lean.key === best.key ? c.lean : { key: best.key, p: best.p }) : ''}${anLine(c)}</div>`;
+  return `<div class="xhl"><span class="k">${all && best.p != null && best.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${best.label}</b>${best.p != null ? `<span class="p">${best.p}%</span>` : ''}${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === best.key ? c.lean : { key: best.key, p: best.p }) : ''}${anLine(c)}</div>`;
 }
 // The likeliest exact score that agrees with the model's own pick, its Over 2.5 side and its both-score side, worked out from the
 // same expected goals the model used. (The single most common score can clash with those, e.g. 2-0 beside both-score 53%.)
@@ -1082,7 +1085,7 @@ function uncovered(list) {
 function tileBet(c) {
   const L = c.lean || (c.final ? null : leanPick(c)); if (!L) return '';
   let pr = '';
-  if (FIRST.has(c.league)) {
+  if (PRICED_LG.has(c.league)) {
     const m = L.price != null ? L.price : priceFor(c, L.key);
     if (m != null) pr = `<span class="tp">${fmtOdds(m)}</span>`; // the price only: Value / Fair / Not worth it tags were removed on Oct 26, 2026 (docs/odds-history-2026-10-26.md)
     else pr = '<span class="tp none">no price</span>';
@@ -1466,7 +1469,7 @@ function priceFor(c, key) { const o = c.odds; if (!o) return null; const m = ({ 
 // The model's chance that the game total goes over / under a book line (half lines only), from v4's expected goals (v2's when v4 has none).
 function pTotal(c, line, over) { const q = c.v4 && c.v4.lam ? c.v4 : c.v2, lam = q && q.lam ? q.lam[0] + q.lam[1] : null; if (lam == null || line % 1 !== 0.5) return null; let term = Math.exp(-lam), cdf = 0; for (let i = 0; i <= Math.floor(line); i++) { cdf += term; term *= lam / (i + 1); } return Math.round(100 * (over ? 1 - cdf : cdf)); }
 function priceLine(c, L) {
-  if (!FIRST.has(c.league)) return '';
+  if (!PRICED_LG.has(c.league)) return '';
   const m = L.price != null ? L.price : priceFor(c, L.key);
   if (m == null) {
     const o = c.odds;
@@ -1482,11 +1485,11 @@ function priceLine(c, L) {
   return `<small class="pr"><b>${fmtOdds(m)}</b> needs ${Math.round(needP(m))}%${L.p != null ? ` · model ${L.p}%` : ''}${sb}</small>`;
 }
 // "Refresh prices": one request per first-division league that has a model pick not yet started on this day. Nothing else is touched.
-function oddsLeagues() { const n = Date.now(); return [...new Set((day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > n).map(c => c.league))]; }
+function oddsLeagues() { const n = Date.now(); return [...new Set((day.cards || []).filter(c => PRICED_LG.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > n).map(c => c.league))]; }
 function oddsBar() {
-  const L = oddsLeagues(), n = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now()).length;
+  const L = oddsLeagues(), n = (day.cards || []).filter(c => PRICED_LG.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now()).length;
   if (!n) return '';
-  const priced = (day.cards || []).filter(c => FIRST.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now() && c.odds).length;
+  const priced = (day.cards || []).filter(c => PRICED_LG.has(c.league) && c.v2 && !c.final && new Date(c.kickoff).getTime() > Date.now() && c.odds).length;
   return `<div class="oddsbar"><button type="button" class="btn g" data-oddsrefresh="1">Refresh prices</button><small id="oddsmsg">${priced} of ${n} first-division picks have a price. Reads each first-division league (${L.length}) for this day only.</small></div><div style="margin:4px 18px 0"><button type="button" class="btn g" data-btts="1" style="width:auto;padding:6px 12px;font-size:12px">Get Both-score prices</button> <button type="button" class="btn g" data-oddsraw="1" style="width:auto;padding:6px 12px;font-size:12px">Check raw prices</button><pre id="oddsraw" style="white-space:pre-wrap;word-break:break-all;font-size:10.5px;color:var(--faint);margin:6px 0 0;max-height:420px;overflow:auto"></pre></div>`;
 }
 function mbetsToday() {
@@ -1595,8 +1598,11 @@ function analystView() {
   const hockey = AN_SP === 'nhl' && AN.nhl, sets = !hockey && AN.sets, set = sets && sets[AN_SET] ? AN_SET : '1', D = hockey ? AN.nhl : sets ? sets[set] : AN;
   // soccer: the two rule sets as a smaller choice inside Soccer, each button with its own record (Original rules = Analyst 1, New rules = Analyst 2)
   const SETN = { 1: 'Original rules', 2: 'New rules' };
+  // the picked set's record split by division: top divisions v second divisions (La Liga 2, 2. Bundesliga, priced from Nov 2, 2026)
+  const tierRec = (n, a) => `<b>${n}</b> ${a.n} bet${a.n === 1 ? '' : 's'}${a.settled ? ` · <span class="${a.units >= 0 ? 'up' : 'dn'}">${u2(a.units)}</span> · ROI ${sgn(a.roi)}% · close ${a.clv != null ? sgn(a.clv) + '%' : '–'}` : ''}`;
+  const tierLine = x => x && x.tiers ? `<div class="tierl">${tierRec('Top divisions', x.tiers.top)}<br>${tierRec('Second divisions', x.tiers.second)}${x.tiers.second.n ? '' : ' <span>(La Liga 2 and 2. Bundesliga, from Nov 2)</span>'}</div>` : '';
   const rec = x => { const a = x.summary.all; return a.settled ? `<b class="${a.units >= 0 ? 'up' : 'dn'}">${u2(a.units)}</b> · ROI ${sgn(a.roi)}% · close ${a.clv != null ? sgn(a.clv) + '%' : '–'}` : 'no results yet'; };
-  const setSw = sets ? `<div class="anset"><div class="lb">Soccer rule sets</div><div class="pl">${Object.keys(sets).map(k => `<button type="button" class="${set === k ? 'on' : ''}" data-anset="${k}"><span>${SETN[k] || 'Analyst ' + k}<i>${sets[k].summary.all.n} bets</i></span><small>${rec(sets[k])}</small></button>`).join('')}</div></div>` : '';
+  const setSw = sets ? `<div class="anset"><div class="lb">Soccer rule sets</div><div class="pl">${Object.keys(sets).map(k => `<button type="button" class="${set === k ? 'on' : ''}" data-anset="${k}"><span>${SETN[k] || 'Analyst ' + k}<i>${sets[k].summary.all.n} bets</i></span><small>${rec(sets[k])}</small></button>`).join('')}</div>${tierLine(sets[set])}</div>` : '';
   // Market filter (above Rules): All, Winner, Both score (soccer only), Over/Under. It filters the tiles, chart, rules, timing and bet lists.
   const MKS = [['all', 'All'], ['1x2', 'Winner'], ...(hockey ? [] : [['btts', 'Both score']]), ['ou', 'Over/Under']], mkOf = k => (k === 'O' || k === 'U' ? 'ou' : k === 'B' || k === 'N' ? 'btts' : '1x2');
   const mf = D.mk && MKS.some(m => m[0] === AN_MK) ? AN_MK : 'all';

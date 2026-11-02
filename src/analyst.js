@@ -24,6 +24,7 @@
 import { devig } from './v6core.js';
 import { leanHit, hockeyHit } from './pick.js';
 import { hockeyMove } from './moves.js';
+import { SECOND_PRICED } from './data.js';
 
 export const SINCE = '2026-10-27';
 export const STALE = { ev: 0.02, maxPrice: 400 }; // stale price: DraftKings pays 2%+ over the sharp fair price; nothing longer than +400
@@ -383,6 +384,13 @@ export async function analystNhl(env, date, cards, now = new Date()) {
     return { placed: fresh.length };
   } catch (e) { return { error: String(e && e.message || e).slice(0, 120) }; }
 }
+// Top divisions v second divisions (La Liga 2, 2. Bundesliga, priced from Nov 2, 2026): the same bets split by the game's league, for
+// the Analyst tab's line under the rule sets and the nightly health report. Packed old rows carry no league: they are all from before
+// second divisions were priced, so they count as top divisions. -> { top: {n, settled, units, roi, clv, ...}, second: {...} }
+export const tierOf = b => (!Array.isArray(b) && SECOND_PRICED.has(b.league) ? 'second' : 'top');
+export function tiers(items, old = [], rules = RULES) {
+  return Object.fromEntries(['top', 'second'].map(t => [t, summary(items.filter(b => tierOf(b) === t), old.filter(b => tierOf(b) === t), rules).all]));
+}
 // The Analyst tab: settle anything finished (one read per day it has open bets on), save only if something changed.
 export async function listAnalyst(env, now = new Date()) {
   const doc = await getAnalyst(env), open = doc.items.filter(b => !b.res);
@@ -397,7 +405,7 @@ export async function listAnalyst(env, now = new Date()) {
   const byMk = (items, old, rules, since, mks) => Object.fromEntries(mks.map(m => [m, summary(items.filter(b => MKT(b.key) === m), old.filter(b => MKT(b[2]) === m), rules.filter(r => r.mk.includes(m)), since)]));
   // Soccer, one block per rule set (the Analyst tab's Analyst 1 / Analyst 2 switch), each shaped like the whole: items, summary, mk, rules
   const si = soc(doc.items), so = soc(old, true);
-  const one = (items, old, rules) => ({ items: items.slice(0, 300), summary: summary(items, old, rules), mk: byMk(items, old, rules, SINCE, ['1x2', 'ou', 'btts']), rules: rules.map(r => ({ id: r.id, name: r.name, rule: r.rule })) });
+  const one = (items, old, rules) => ({ items: items.slice(0, 300), summary: summary(items, old, rules), tiers: tiers(items, old, rules), mk: byMk(items, old, rules, SINCE, ['1x2', 'ou', 'btts']), rules: rules.map(r => ({ id: r.id, name: r.name, rule: r.rule })) });
   const sets = Object.fromEntries(Object.keys(SETS).map(n => [n, { name: SETS[n], ...one(si.filter(b => setOf(b) === +n), so.filter(b => setOf(b) === +n), RULES.filter(r => r.set === +n)) }]));
   return { items: si.slice(0, 300), summary: summary(si, so), mk: byMk(si, so, RULES, SINCE, ['1x2', 'ou', 'btts']), rules: RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })), sets,
     nhl: { items: nhl(doc.items).slice(0, 300), summary: summary(nhl(doc.items), nhl(old, true), NHL_RULES, NHL_SINCE), mk: byMk(nhl(doc.items), nhl(old, true), NHL_RULES, NHL_SINCE, ['1x2', 'ou']), rules: NHL_RULES.map(r => ({ id: r.id, name: r.name, rule: r.rule })) } };

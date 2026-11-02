@@ -35,8 +35,11 @@ const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
 // Counts this request's KV writes so the Status tab can show how close the day is to the limit.
 // The count is saved with ONE extra write at the end, and only when something was written.
 // What a key's write is for, for the per-job breakdown (meta:writes.by): soccer day cards, hockey day cards, the Analyst, and so on.
+// bookkeeping split by record (Nov 2, 2026), so the sweep can see which one costs saves
+const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games' };
+const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
 export const writeKind = k => { const s = String(k); return s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
-  : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? 'bookkeeping' : 'other'; };
+  : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
 const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
 function counted(env) {
   const base = env.HUB; let n = 0, by = {};
@@ -54,7 +57,7 @@ function counted(env) {
     if (cache) { try { const r = await cache.match(ck); if (r) { const x = readPending(await r.text()); pending += x.n; pby = addBy(by, x.by); } } catch (e) { /* count from this run only */ } }
     if (cache && pending < 15) { try { await cache.put(ck, new Response(JSON.stringify({ n: pending, by: pby }), { headers: { 'cache-control': 'max-age=86400' } })); return; } catch (e) { /* fall through and save */ } }
     const c = (await base.get('meta:writes', 'json').catch(() => null)) || {}, same = c.d === d;
-    await base.put('meta:writes', JSON.stringify({ d, n: (same ? c.n : 0) + pending + 1, by: addBy(addBy(same ? c.by : {}, pby), { bookkeeping: 1 }) })).catch(() => {});
+    await base.put('meta:writes', JSON.stringify({ d, n: (same ? c.n : 0) + pending + 1, by: addBy(addBy(same ? c.by : {}, pby), { 'bookkeeping: write counter': 1 }) })).catch(() => {});
     if (cache) { try { await cache.delete(ck); } catch (e) { /* ignore */ } }
   } };
 }
@@ -438,7 +441,7 @@ export async function addPinn(env, cards, now = new Date(), f = fetch) {
 // After the final: ESPN's closing line on the finished game when it still lists one (cls = 'espn'). In between, ESPN's price may be an
 // in-play one, so it is not taken. One KV write.
 export async function refreshCardClose(env, date, slug, id, now = new Date(), f = fetch) {
-  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
+  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); const c = (day?.cards || []).find(x => x.id === id && x.league === slug);
   if (!c) return { error: 'That game is not saved for this day' };
   if (!c.odds) return { error: 'This game has no saved price to update' };
@@ -458,7 +461,7 @@ export async function refreshCardClose(env, date, slug, id, now = new Date(), f 
   return { ok: true, price: { h: c.odds.h, d: c.odds.d, a: c.odds.a, tl: c.odds.tl ?? null, to: c.odds.to ?? null, tu: c.odds.tu ?? null }, source: started ? 'espn-close' : 'now' };
 }
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
-  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
+  const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && priceOpen(c, now));
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
@@ -482,7 +485,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
 // Background: look at ONE first-division league per run (each at most every 6 hours, remembered in the free edge cache so it costs no
 // KV writes). Display only; no model reads a price.
 export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) {
-  if (!PRICED.has(slug)) return { error: 'Prices are only read for first divisions and the two European cups' };
+  if (!PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && new Date(c.kickoff).getTime() > now.getTime());
   if (!open.length) return { games: 0, priced: 0 };

@@ -32,6 +32,7 @@ ok('health: an open bet past kickoff with no closing price is flagged', a.noClos
 ok('health: a bet still open 2+ days after kickoff is flagged', a.stale.length === 1 && /E v F/.test(a.stale[0].bet));
 const fo = a.soccer.find(r => r.id === 'move');
 ok('health: each rule\'s record, with bets left before the bench check', fo.settled === 1 && fo.units === 1.1 && fo.toBench === a.bench.n - 1 && !a.soccer.find(r => r.id === 'totals').retired, JSON.stringify(fo));
+ok('health: each rule set\'s record split into top and second divisions', a.tiers && a.tiers[1].top && a.tiers[2].second && a.tiers[2].top.bets + a.tiers[2].second.bets === a.soccer.filter(r => r.set === 2).reduce((x, r) => x + r.bets, 0), JSON.stringify(a.tiers));
 ok('health: each soccer rule carries its set (Analyst 1 original, Analyst 2 new); hockey rules carry none', fo.set === 2 && a.soccer.find(r => r.id === 'follow').set === 1 && a.soccer.every(r => r.set === 1 || r.set === 2) && a.nhl.every(r => !('set' in r)));
 // the route: its own secret, read-only
 const kv = new Map(), puts = []; kv.set('analyst', JSON.stringify({ v: 1, items: [] }));
