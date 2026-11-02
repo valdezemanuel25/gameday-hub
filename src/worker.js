@@ -35,8 +35,11 @@ const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
 // Counts this request's KV writes so the Status tab can show how close the day is to the limit.
 // The count is saved with ONE extra write at the end, and only when something was written.
 // What a key's write is for, for the per-job breakdown (meta:writes.by): soccer day cards, hockey day cards, the Analyst, and so on.
+// bookkeeping split by record (Nov 2, 2026), so the sweep can see which one costs saves
+const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games' };
+const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
 export const writeKind = k => { const s = String(k); return s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
-  : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? 'bookkeeping' : 'other'; };
+  : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
 const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
 function counted(env) {
   const base = env.HUB; let n = 0, by = {};
@@ -54,7 +57,7 @@ function counted(env) {
     if (cache) { try { const r = await cache.match(ck); if (r) { const x = readPending(await r.text()); pending += x.n; pby = addBy(by, x.by); } } catch (e) { /* count from this run only */ } }
     if (cache && pending < 15) { try { await cache.put(ck, new Response(JSON.stringify({ n: pending, by: pby }), { headers: { 'cache-control': 'max-age=86400' } })); return; } catch (e) { /* fall through and save */ } }
     const c = (await base.get('meta:writes', 'json').catch(() => null)) || {}, same = c.d === d;
-    await base.put('meta:writes', JSON.stringify({ d, n: (same ? c.n : 0) + pending + 1, by: addBy(addBy(same ? c.by : {}, pby), { bookkeeping: 1 }) })).catch(() => {});
+    await base.put('meta:writes', JSON.stringify({ d, n: (same ? c.n : 0) + pending + 1, by: addBy(addBy(same ? c.by : {}, pby), { 'bookkeeping: write counter': 1 }) })).catch(() => {});
     if (cache) { try { await cache.delete(ck); } catch (e) { /* ignore */ } }
   } };
 }

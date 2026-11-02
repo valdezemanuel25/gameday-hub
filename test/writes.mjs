@@ -1,7 +1,7 @@
 // Write budget: which job wrote what (writeKind), today's count, and saver mode in the background job's slots.
 import { writeKind, writesToday, runSlot, oddsStep } from '../src/worker.js';
 let fail = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) fail++; };
-ok('writeKind: each key goes to its job', writeKind('day:2026-10-31') === 'soccer days' && writeKind('nhl:day:2026-10-31') === 'hockey' && writeKind('analyst') === 'analyst' && writeKind('res:eng.1') === 'results sync' && writeKind('meta:writes') === 'bookkeeping' && writeKind('rat:eng.1') === 'v4 ratings');
+ok('writeKind: each key goes to its job', writeKind('day:2026-10-31') === 'soccer days' && writeKind('nhl:day:2026-10-31') === 'hockey' && writeKind('analyst') === 'analyst' && writeKind('res:eng.1') === 'results sync' && writeKind('meta:writes') === 'bookkeeping: write counter' && writeKind('meta:synced') === 'bookkeeping: sync times' && writeKind('meta:errors') === 'bookkeeping: sync problems' && writeKind('meta:fb') === 'bookkeeping: forebet' && writeKind('meta:unm') === 'bookkeeping: unmatched games' && writeKind('meta:new') === 'bookkeeping: other' && writeKind('rat:eng.1') === 'v4 ratings');
 const kv = new Map(), env = (o = {}) => ({ HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv.set(k, v); }, list: async () => ({ keys: [] }) }, ...o });
 const now = new Date('2026-10-31T22:00:00Z');
 kv.set('meta:writes', JSON.stringify({ d: '2026-10-31', n: 812, by: { 'soccer days': 600, hockey: 150 } }));
