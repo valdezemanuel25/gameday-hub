@@ -48,7 +48,8 @@ const openTotal = odds => odds && (odds.opt || (odds.f && odds.f.tl != null ? od
 
 // What the Analyst sees on one card: the move since the opening price and v4 against the price now, for home / draw / away and Over 2.5.
 // v4: { p: [h, d, a] %, over % }; open / now: American prices { h, d, a, tl, to, tu }.
-export function view({ v4, open, now, openT, v2 = null }) {
+// pinBt: Pinnacle's both-score price may stand in for DraftKings' (second divisions, which have no Odds API league: lookCard)
+export function view({ v4, open, now, openT, v2 = null, pinBt = false }) {
   const a = hdaOf(open), b = hdaOf(now);
   if (!a || !b || !v4 || !Array.isArray(v4.p)) return null;
   const p0 = a.map(x => 100 * x), p1 = b.map(x => 100 * x);
@@ -56,9 +57,11 @@ export function view({ v4, open, now, openT, v2 = null }) {
   const x = ouOf(openT || open), y = ouOf(now);
   // the move needs an opening total (p0 / d are null without one); the price now is enough for the Under rule
   if (y && typeof v4.over === 'number') out.ou = { p0: x ? 100 * x[0] : null, p1: 100 * y[0], d: x ? 100 * (y[0] - x[0]) : null, e: v4.over - 100 * y[0], px: [now.to, now.tu], v2: v2 && typeof v2.over === 'number' ? v2.over : null };
-  // Both teams to score: only a DraftKings price (the card sometimes carries Pinnacle's or another book's when DraftKings has none)
-  const bt = Number.isFinite(now.by) && Number.isFinite(now.bn) && (!now.bk || now.bk === 'draftkings') ? devig(now.by, now.bn) : null;
-  if (bt && typeof v4.btts === 'number') out.bt = { p1: 100 * bt[0], v4: v4.btts, v2: v2 && typeof v2.btts === 'number' ? v2.btts : null, px: [now.by, now.bn] };
+  // Both teams to score: a DraftKings price (the card sometimes carries Pinnacle's or another book's when DraftKings has none); on second
+  // divisions Pinnacle's too (Nov 2, 2026), and the bet is then placed and closed at Pinnacle's price, tagged with the book (bk).
+  const btBook = !now.bk || now.bk === 'draftkings' ? 'draftkings' : pinBt && now.bk === 'pinnacle' ? 'pinnacle' : null;
+  const bt = Number.isFinite(now.by) && Number.isFinite(now.bn) && btBook ? devig(now.by, now.bn) : null;
+  if (bt && typeof v4.btts === 'number') out.bt = { p1: 100 * bt[0], v4: v4.btts, v2: v2 && typeof v2.btts === 'number' ? v2.btts : null, px: [now.by, now.bn], bk: btBook };
   return out;
 }
 const pickIdx = (vals, ok) => { let j = -1; vals.forEach((v, i) => { if (ok(i) && (j < 0 || v > vals[j])) j = i; }); return j; };
@@ -138,7 +141,7 @@ const BOOKN = { pinnacle: 'Pinnacle', betfair_ex_eu: 'Betfair', betfair_ex_uk: '
 // The Analyst only bets a card with a v4 number that is not the rough promoted-club stand-in, and with a price to read.
 export function lookCard(c) {
   if (!c || c.final || !c.odds || c.odds.src || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null; // src: a stand-in book, not DraftKings
-  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2 });
+  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2, pinBt: SECOND_PRICED.has(c.league) });
 }
 // One position per game per market (1X2, Over/Under, Both score) per rule set: the first rule to fire takes it, in RULES order, and later
 // reads never add to it or bet the other side. A benched rule places nothing. sharp: Map(cardId -> sharpOf) for the stale-price rule, or null.
@@ -181,7 +184,7 @@ export function decide(items, cards, date, now = new Date(), benched = new Set()
         const v4p = !v4ok ? null : i >= 0 ? c.v4.p[i] : bt ? (typeof c.v4.btts !== 'number' ? null : b.key === 'B' ? c.v4.btts : 100 - c.v4.btts) : typeof c.v4.over !== 'number' ? null : b.key === 'O' ? c.v4.over : 100 - c.v4.over;
         out.push({ id: `${now.getTime().toString(36)}${out.length.toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: now.toISOString(), date, league: c.league, gid: c.id,
           home: c.home, away: c.away, leagueName: c.leagueName || c.league, kickoff: c.kickoff, mins: Math.round((new Date(c.kickoff).getTime() - now.getTime()) / 60000),
-          rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: v4p == null ? null : r1(v4p), why: b.why, ...(b.sharp ? { sharp: b.sharp } : {}), ...(b.from ? { from: b.from } : {}), close: null, clv: null, res: null, units: null });
+          rule: r.id, key: b.key, price: b.price, mp: r1(mp), v4: v4p == null ? null : r1(v4p), why: b.why, ...(b.sharp ? { sharp: b.sharp } : {}), ...(b.from ? { from: b.from } : {}), ...(bt && V.bt.bk === 'pinnacle' ? { book: 'pinnacle' } : {}), close: null, clv: null, res: null, units: null });
       }
     }
   }
@@ -242,7 +245,8 @@ export function decideNhl(items, cards, date, now = new Date(), benched = new Se
 }
 
 // ---- settling: the closing price once the game has kicked off, the result once it is graded ----
-const closeOf = (odds, key) => { const dkB = odds && (!odds.bk || odds.bk === 'draftkings'); if (odds && odds.src && 'HDAOU'.includes(key)) return null; const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null, B: dkB ? odds.by : null, N: dkB ? odds.bn : null })[key]; return Number.isFinite(m) ? m : null; };
+// bk: the book the bet was placed at; a both-score bet closes only at that same book's price (DraftKings, or Pinnacle on second divisions)
+const closeOf = (odds, key, bk = 'draftkings') => { const dkB = odds && (odds.bk || 'draftkings') === (bk === 'pinnacle' ? 'pinnacle' : 'draftkings'); if (odds && odds.src && 'HDAOU'.includes(key)) return null; const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null, B: dkB ? odds.by : null, N: dkB ? odds.bn : null })[key]; return Number.isFinite(m) ? m : null; };
 const VOID_AFTER = 4 * 86400000; // a game with no result 4 days after kickoff (postponed, abandoned) is voided: the stake comes back
 const closeNhl = (px, b) => { const m = px && ({ H: px.h, A: px.a, O: px.tl === b.line ? px.to : null, U: px.tl === b.line ? px.tu : null })[b.key]; return Number.isFinite(m) ? m : null; };
 export function settle(b, c, now = new Date()) {
@@ -250,7 +254,7 @@ export function settle(b, c, now = new Date()) {
   if (b.sport === 'nhl') return settleNhl(b, c, now);
   let ch = false; const ko = new Date(b.kickoff).getTime();
   if (b.close == null && c && c.odds && now.getTime() >= ko) {
-    const m = closeOf(c.odds, b.key);
+    const m = closeOf(c.odds, b.key, b.bk);
     if (m != null) { b.close = m; b.clv = r1(100 * (dec(b.price) / dec(m) - 1)); if (b.dk != null) b.clvDk = r1(100 * (dec(b.dk) / dec(m) - 1)); ch = true; }
   }
   if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); if (b.dk != null) b.udk = +(hit ? dec(b.dk) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
@@ -359,6 +363,7 @@ export async function analystLook(env, date, cards, now = new Date(), shop = nul
       let best = null;
       if (shop) { try { const want = cards.filter(c => fresh.some(b => b.gid === c.id && b.key !== 'B' && b.key !== 'N')); best = want.length ? await shop(want) : null; } catch (e) { best = null; } }
       for (const b of fresh) {
+        if (b.book) { b.bk = b.book; delete b.book; continue; } // a Pinnacle both-score bet (second divisions): no DraftKings price to keep or shop
         b.dk = b.price; b.bk = 'draftkings';
         const x = best && best.get(b.gid) && best.get(b.gid)[b.key];
         if (x && dec(x.m) > dec(b.price)) { b.price = x.m; b.bk = x.bk; }

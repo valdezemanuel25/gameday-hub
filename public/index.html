@@ -828,7 +828,7 @@ const AN_SHORT = { H: g => strip(g.home), A: g => strip(g.away), D: () => 'Draw'
 function anLine(c) {
   const by = ANB && ANB.get(c.id); if (!by) return '';
   const one = (n, b) => { const res = b.res === 'win' ? ' <span class="w">✓</span>' : b.res === 'loss' ? ' <span class="l">✗</span>' : b.res === 'void' ? ' void' : '';
-    return `${n}: <b>${esc(AN_SHORT[b.key] ? AN_SHORT[b.key](c) : b.key)} ${fmtOdds(b.price)}</b>${res}`; };
+    return `${n}: <b>${esc(AN_SHORT[b.key] ? AN_SHORT[b.key](c) : b.key)} ${fmtOdds(b.price)}</b>${b.bk === 'pinnacle' ? ' (Pinnacle)' : ''}${res}`; };
   const parts = [['1', 'Original'], ['2', 'New']].flatMap(([k, n]) => (by[k] || []).map(b => one(n, b)));
   return parts.length ? `<span class="anl" data-anopen="${esc(by[1] && by[1].length ? '1' : '2')}"><span class="k">Analyst</span>${parts.join(' · ')}<span class="go">›</span></span>` : '';
 }
@@ -1576,7 +1576,7 @@ function anBet(b) {
   const st = !b.res ? `<span class="mbs">${new Date(b.kickoff).getTime() > Date.now() ? 'Open' : 'In play'}</span>` : b.res === 'void' ? '<span class="mbs">Void</span>' : `<span class="mbs ${b.res === 'win' ? 'hit' : 'miss'}">${b.res === 'win' ? 'Won' : 'Lost'} ${u2(b.units)}</span>`;
   const when = b.mins >= 120 ? `${Math.round(b.mins / 60)}h before` : `${b.mins}m before`, rule = ((b.sport === 'nhl' ? AN.nhl && AN.nhl.rules : AN.rules) || []).find(r => r.id === b.rule);
   const cl = b.close != null ? ` · close ${fmtOdds(b.close)} <span class="${b.clv > 0 ? 'up' : b.clv < 0 ? 'dn' : ''}">(${sgn(b.clv)}%)</span>` : '';
-  const bk = b.bk && b.bk !== 'draftkings' ? ` <small class="fnt">${esc(BOOK[b.bk] || b.bk)} (DK ${fmtOdds(b.dk)})</small>` : b.bk ? ' <small class="fnt">DK</small>' : '';
+  const bk = b.bk && b.bk !== 'draftkings' ? ` <small class="fnt">${esc(BOOK[b.bk] || (b.bk === 'pinnacle' ? 'Pinnacle' : b.bk))}${b.dk != null ? ` (DK ${fmtOdds(b.dk)})` : ''}</small>` : b.bk ? ' <small class="fnt">DK</small>' : '';
   const game = b.sport === 'nhl' ? `${esc(b.away)} at ${esc(b.home)}` : `${esc(b.home)} vs ${esc(b.away)}`;
   return `<div class="mbg"><div class="mbt"><b>${esc(anLabel(b))} ${fmtOdds(b.price)}${bk}</b>${st}</div><small>${game} · ${esc(b.leagueName)}${b.score ? ` · ${esc(b.score)}` : ''}</small><small>${esc(rule ? rule.name : b.rule)} · bet ${when}${cl}</small><small>${esc(b.why || '')}</small></div>`;
 }

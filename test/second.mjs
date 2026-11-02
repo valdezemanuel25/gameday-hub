@@ -17,4 +17,9 @@ ok('2. Bundesliga: the price read saves the DraftKings price from ESPN', r.price
 ok('2. Bundesliga: no Odds API call (no credits spent)', !urls.some(u => /the-odds-api/.test(u)), JSON.stringify(urls));
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 ok('page: La Liga 2 and 2. Bundesliga show their price on picks and in Refresh prices', /const PRICED_LG = new Set\(\[\.\.\.FIRST, 'esp\.2', 'ger\.2'\]\)/.test(html) && /PRICED_LG\.has\(c\.league\) \? priceLine\(/.test(html));
+import { same } from '../src/names.js';
+const names = [['Kaiserslautern', '1. FC Kaiserslautern'], ['VfL Osnabruck', 'Osnabrueck'], ['1. FC Nürnberg', '1. FC Nuernberg'], ['SV Darmstadt 98', 'Darmstadt 98'], ['Hertha Berlin', 'Hertha BSC'], ['SpVgg Greuther Fürth', 'Greuther Furth'],
+  ['Cádiz', 'Cadiz'], ['Córdoba', 'Cordoba'], ['Leganés', 'Leganes'], ['Albacete', 'Albacete Balompie'], ['Sporting Gijón', 'Sporting Gijon'], ['Deportivo La Coruña', 'Deportivo La Coruna'], ['Racing Santander', 'Racing de Santander'], ['Real Sociedad II', 'Real Sociedad B']];
+ok('Pinnacle names: second-division clubs match their usual spellings (accents, umlauts written out, II = B)', names.every(([a, b]) => same(a, b)), JSON.stringify(names.filter(([a, b]) => !same(a, b))));
+ok('Pinnacle names: different clubs still do not match', !same('Union Berlin', 'Hertha Berlin') && !same('Hamburg SV', 'Hannover 96') && !same('Real Sociedad', 'Real Betis'));
 console.log(bad ? `\n${bad} FAILED` : '\nAll second-division price checks passed'); process.exit(bad ? 1 : 0);
