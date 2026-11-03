@@ -32,8 +32,10 @@ ok('settle: both score No settles on the score and closes at the both-score pric
 {
   const cu = card({ id: 'u1', v2: { over: 50 }, v4: { p: [10, 10, 80], over: 50, btts: 70 }, odds: { op: { h: 900, d: 500, a: -400 }, h: 900, d: 500, a: -400, tl: 2.5, to: -150, tu: 120 } });
   const at = m => new Date(new Date(KO).getTime() - m * 60000);
+  const ub = rule('under').bench; delete rule('under').bench; // the timing logic, with the hand bench lifted for these two checks
   ok('under: no bet 4 hours before kickoff (not the lineup read yet)', !decide([], [cu], '2026-10-28', at(240)).some(b => b.rule === 'under'));
   ok('under: bets at the lineup read, 30 minutes before', (b => b && b.key === 'U' && b.price === 120 && b.mins === 30)(decide([], [cu], '2026-10-28', at(30)).find(b => b.rule === 'under')));
+  rule('under').bench = ub;
 }
 // the hand-removed early Under on Colorado v Chicago Fire: deleted once on read; a lineup-read bet on the same game is kept
 {
@@ -93,6 +95,9 @@ ok('decide: move bets a home win at +110 (short enough)', (b => b && b.rule === 
   ok('long shot: the price shortens to +140, and Analyst 2 still makes no winner bet on the game', !decide(g1, [short], '2026-10-28', T1).some(b => setOf(b) === 2 && 'HDA'.includes(b.key)));
 }
 
+// Nov 3, 2026: the Under rule is benched by hand: it places nothing, its record stays and shows as benched
+ok('under: benched by hand, so decide never places it', !!rule('under').bench && !decide([], [card({ id: 'u2', v2: { over: 50 }, v4: { p: [10, 10, 80], over: 50, btts: 70 }, odds: { op: { h: 900, d: 500, a: -400 }, h: 900, d: 500, a: -400, tl: 2.5, to: -150, tu: 120 } })], '2026-10-28', new Date(new Date(KO).getTime() - 30 * 60000)).some(b => b.rule === 'under'));
+ok('under: shows as benched in the record', summary([], []).rules.find(r => r.id === 'under').benched === true);
 // --- decide: one position per game and market ---
 const first = decide([], [card()], '2026-10-28', NOW);
 ok('decide: each set takes its own positions on the game (Analyst 1: follow H, totals O; Analyst 2: move H, Both score No)', first.length === 4 && first.filter(b => setOf(b) === 1).map(b => b.rule + b.key).join() === 'followH,totalsO' && first.filter(b => setOf(b) === 2).map(b => b.rule + b.key).join() === 'moveH,bttsNoN', JSON.stringify(first.map(b => [b.rule, b.key])));

@@ -105,7 +105,10 @@ export const RULES = [
       return { key: k, price: o.px[k === 'O' ? 0 : 1], why: `Over 2.5 ${r1(o.p0)}%→${r1(o.p1)}% (${o.d >= 0 ? '+' : ''}${r1(o.d)}), v4 ${r1(o.p1 + o.e)}%: goals money agrees with v4` }; } },
   // Front test from Oct 31, 2026. Backtest on the Hub's own games, Oct 13-31 at DraftKings' closing price (small samples: a live test only).
   // DraftKings' prices ran high on Yes and Over: Yes implied 59% and both scored 54%; Over implied 53% and 46% went over.
-  { id: 'under', set: 2, mk: ['ou'], late: true, name: 'Under: price too high on Over', rule: 'At the lineup read (30-20 minutes before kickoff), DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
+  // Benched by hand Nov 3, 2026 (no new bets, record kept): walk-forward v4 on 5,394 league games (7 European leagues, 2024-25 to
+  // Nov 2026, from data/football-data, refit weekly) at Bet365's closing price: Over priced 55%+ and v4 below it, bet Under: 1,179 bets, -9.2%
+  // (-0.5% 2024-25, -10.3% 2025-26, -28.4% this season). Every Under-side rule tested lost 9-19% on 2025-26 onward.
+  { id: 'under', set: 2, mk: ['ou'], late: true, bench: '2026-11-03', name: 'Under: price too high on Over', rule: 'At the lineup read (30-20 minutes before kickoff), DraftKings rates Over 2.5 at 55%+ (margin removed) and both v2 and v4 rate it lower: bet Under 2.5',
     // From Oct 31 it waits for the lineup read: the backtest picked its bets on the closing price, and the few games with an earlier
     // price went 2 of 5 (-14%) when checked early, so betting early had no support (and the price can move against it after).
     // 17 bets, 65% hit, +46% (first half +74%, second half +14%)
@@ -163,7 +166,7 @@ export function decide(items, cards, date, now = new Date(), benched = new Set()
       const H = held[set];
       let long = set === 2 && longGame.has(`${date}|${c.league}|${c.id}`); // a long-shot game (now or at an earlier read)
       for (const r0 of RULES) {
-        if (r0.set !== set || r0.swap || r0.retired || benched.has(r0.id) || (r0.sharp ? !S : !V)) continue;
+        if (r0.set !== set || r0.swap || r0.retired || r0.bench || benched.has(r0.id) || (r0.sharp ? !S : !V)) continue;
         if (long && SKIP_LONG.has(r0.id)) continue;
         if (r0.late && (new Date(c.kickoff).getTime() - now.getTime()) / 60000 > LATE) continue; // not yet the lineup read
         let r = r0, b = r0.pick(V, S); if (!b || !Number.isFinite(b.price)) continue;
@@ -306,7 +309,7 @@ export function summary(items0, old = [], rules0 = RULES, since = SINCE) {
     add(all, b); if (per[b.rule]) add(per[b.rule], b); add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
     if (b.res === 'win' || b.res === 'loss') { cum += b.units; curve.push([b.kickoff.slice(0, 10), +cum.toFixed(2)]); }
   }
-  const rules = rules0.map(r => { const s = done(per[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benched: !r.retired && isBenched(s), ...(r.retired ? { retired: r.retired } : {}) }; });
+  const rules = rules0.map(r => { const s = done(per[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benched: !r.retired && (!!r.bench || isBenched(s)), ...(r.bench ? { benchedOn: r.bench } : {}), ...(r.retired ? { retired: r.retired } : {}) }; });
   return { since, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou), btts: done(mk.btts) }, curve, verdict: verdict(done(all)) };
 }
 // The Analyst's own read of its record, in one line. CLV first: it settles in tens of bets, profit needs hundreds.
