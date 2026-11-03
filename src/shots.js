@@ -18,6 +18,14 @@ export const LEAGUES = new Set(['eng.1', 'eng.2', 'ger.1', 'esp.1', 'ita.1', 'fr
 // Brasileirão they made it worse, so it is left out. There are no past prices for these leagues, so the rule waits for a few hundred
 // priced games here to be refit on.
 export const WATCH = new Set(['usa.1', 'mex.1']);
+// Second divisions (Nov 3, 2026): La Liga 2 and 2. Bundesliga with their own weights. The top-league weights barely fired there
+// (5 bets in two seasons). Refit on football-data's SP2 / D2 games (shots, Bet365 closing Over/Under) for 2023-25, tested on 2025-26 to
+// Nov 2026 (923 games not used to fit): Over 3+ points above the price 230 bets +4.5%, 2+ 377 bets +8.6%, 5+ 50 bets +19.3%; every
+// Over in those games about -2%. Read beat the price on log-loss there (0.682 vs 0.685). More shots on target push Over up; recent
+// goals push it down (the price leans on goals the shooting does not back). Pinnacle check only 12 bets (6-6): mostly Bet365 evidence.
+export const SHOTS2 = { C: 0.072, M: 1.11, S: 0.131, G: -0.165, T: -0.038,
+  mean: { sot: 8.585, gl: 2.638, sh: 25.322 }, sd: { sot: 1.296, gl: 0.559, sh: 2.285 }, N: 8, MIN: 5, EDGE: 3 };
+export const LEAGUES2 = new Set(['esp.2', 'ger.2']);
 const r2 = x => Math.round(100 * x) / 100;
 
 // One club's averages over its last N league games with shots before iso. recent rows: [iso, gf, ga, shF, sotF, shA, sotA]
@@ -35,8 +43,9 @@ export function matchup(h, a) {
   return { sot: r2((h.sotF + a.sotA) / 2 + (a.sotF + h.sotA) / 2), gl: r2((h.gf + a.ga) / 2 + (a.gf + h.ga) / 2), sh: r2((h.shF + a.shA) / 2 + (a.shF + h.shA) / 2), n: Math.min(h.n, a.n) };
 }
 // The shots read on Over 2.5, in %, from the price's Over % (margin removed) and the game's numbers.
-export function shotsOver(priceOver, sx) {
-  const p = Math.min(99, Math.max(1, priceOver)) / 100, z = k => (sx[k] - SHOTS.mean[k]) / SHOTS.sd[k];
-  const x = SHOTS.C + SHOTS.M * Math.log(p / (1 - p)) + SHOTS.S * z('sot') + SHOTS.G * z('gl') + SHOTS.T * z('sh');
+// W: the weights (SHOTS for the top leagues, SHOTS2 for the second divisions).
+export function shotsOver(priceOver, sx, W = SHOTS) {
+  const p = Math.min(99, Math.max(1, priceOver)) / 100, z = k => (sx[k] - W.mean[k]) / W.sd[k];
+  const x = W.C + W.M * Math.log(p / (1 - p)) + W.S * z('sot') + W.G * z('gl') + W.T * z('sh');
   return 100 / (1 + Math.exp(-x));
 }

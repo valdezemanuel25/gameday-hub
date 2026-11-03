@@ -1041,10 +1041,11 @@ function alerts() {
 /* Games a fetch could not match by name: verify the pair, then assign it to this card. */
 // Shots read on Over 2.5 (Nov 3, 2026): the same read as the Analyst's Shots Over rule (src/shots.js; test/shotsover.mjs checks these
 // numbers match). Display only: it changes no model or pick.
-const SHOTS_C = {"C":-0.0442,"M":1.1388,"S":0.0483,"G":0.0188,"T":-0.1384,"mean":{"sot":8.626,"gl":2.787,"sh":24.84},"sd":{"sot":1.123,"gl":0.516,"sh":2.104},"N":8,"MIN":5,"EDGE":3,"leagues":["eng.1","eng.2","ger.1","esp.1","ita.1","fra.1","ned.1"],"watch":["usa.1","mex.1"]};
+const SHOTS_C = {"C":-0.0442,"M":1.1388,"S":0.0483,"G":0.0188,"T":-0.1384,"mean":{"sot":8.626,"gl":2.787,"sh":24.84},"sd":{"sot":1.123,"gl":0.516,"sh":2.104},"N":8,"MIN":5,"EDGE":3,"leagues":["eng.1","eng.2","ger.1","esp.1","ita.1","fra.1","ned.1"],"watch":["usa.1","mex.1"],"second":{"C":0.072,"M":1.11,"S":0.131,"G":-0.165,"T":-0.038,"mean":{"sot":8.585,"gl":2.638,"sh":25.322},"sd":{"sot":1.296,"gl":0.559,"sh":2.285},"N":8,"MIN":5,"EDGE":3,"leagues":["esp.2","ger.2"]}};
 function shotsBox(c) {
   const watch = SHOTS_C.watch.includes(c.league);
-  if (!SHOTS_C.leagues.includes(c.league) && !watch) return '';
+  const sec = SHOTS_C.second.leagues.includes(c.league), W = sec ? SHOTS_C.second : SHOTS_C; // second divisions use their own weights
+  if (!SHOTS_C.leagues.includes(c.league) && !sec && !watch) return '';
   const x = c.sx;
   // MLS and Liga MX: numbers saved for tracking only, no read (the weights were fitted on European prices) and no Analyst bet
   if (watch) return x ? `<div class="box f">Shots <span class="pv">tracking only</span><b style="font-size:12.5px;font-weight:500;color:var(--dim)">On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)</b><small>Saved with the DraftKings Over/Under price to test the Shots Over rule here once a few hundred games are in. No read or bet yet.</small></div>` : '';
@@ -1053,10 +1054,10 @@ function shotsBox(c) {
   const nums = `On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)`;
   if (!okPx) return `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">No DraftKings Over/Under 2.5 price yet</b><small>${esc(nums)}</small></div>`;
   const dv = m => (m > 0 ? 100 / (m + 100) : -m / (-m + 100)), pa = dv(o.to), pb = dv(o.tu), pr = 100 * pa / (pa + pb);
-  const p = Math.min(99, Math.max(1, pr)) / 100, z = k => (x[k] - SHOTS_C.mean[k]) / SHOTS_C.sd[k];
-  const q = 100 / (1 + Math.exp(-(SHOTS_C.C + SHOTS_C.M * Math.log(p / (1 - p)) + SHOTS_C.S * z('sot') + SHOTS_C.G * z('gl') + SHOTS_C.T * z('sh'))));
-  const gap = q - pr, r = v => Math.round(v), pick = gap >= SHOTS_C.EDGE;
-  return `<div class="box f">Shots read${pick ? ' <span class="pv val">Shots Over pick</span>' : ''}<b>Over 2.5 ${r(q)}% <span style="font-weight:500;color:var(--dim)">vs DraftKings ${r(pr)}% (${gap >= 0 ? '+' : ''}${r(gap)})</span></b><small>${esc(nums)}${pick ? '' : `. The Analyst bets Over at ${SHOTS_C.EDGE}+ points above the price`}</small></div>`;
+  const p = Math.min(99, Math.max(1, pr)) / 100, z = k => (x[k] - W.mean[k]) / W.sd[k];
+  const q = 100 / (1 + Math.exp(-(W.C + W.M * Math.log(p / (1 - p)) + W.S * z('sot') + W.G * z('gl') + W.T * z('sh'))));
+  const gap = q - pr, r = v => Math.round(v), pick = gap >= W.EDGE;
+  return `<div class="box f">Shots read${pick ? ' <span class="pv val">Shots Over pick</span>' : ''}<b>Over 2.5 ${r(q)}% <span style="font-weight:500;color:var(--dim)">vs DraftKings ${r(pr)}% (${gap >= 0 ? '+' : ''}${r(gap)})</span></b><small>${esc(nums)}${pick ? '' : `. The Analyst bets Over at ${W.EDGE}+ points above the price`}</small></div>`;
 }
 function candBox(c) {
   const list = cands.filter(i => i.cardId === c.id);
