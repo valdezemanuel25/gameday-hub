@@ -1041,6 +1041,15 @@ function alerts() {
 // Shots read on Over 2.5 (Nov 3, 2026): the same read as the Analyst's Shots Over rule (src/shots.js; test/shotsover.mjs checks these
 // numbers match). Display only: it changes no model or pick.
 const SHOTS_C = {"C":-0.0442,"M":1.1388,"S":0.0483,"G":0.0188,"T":-0.1384,"mean":{"sot":8.626,"gl":2.787,"sh":24.84},"sd":{"sot":1.123,"gl":0.516,"sh":2.104},"N":8,"MIN":5,"EDGE":3,"leagues":["eng.1","eng.2","ger.1","esp.1","ita.1","fra.1","ned.1"],"watch":["usa.1","mex.1"],"second":{"C":0.072,"M":1.11,"S":0.131,"G":-0.165,"T":-0.038,"mean":{"sot":8.585,"gl":2.638,"sh":25.322},"sd":{"sot":1.296,"gl":0.559,"sh":2.285},"N":8,"MIN":5,"EDGE":3,"leagues":["esp.2","ger.2"]}};
+// The shots read's Over 2.5 chance for a card at its current DraftKings price: { q, pr, W } or null (tracked-only leagues, no shots
+// numbers, or no DraftKings 2.5 price). Used by the card's Shots read box and the Movement card's Shots read row.
+function shotsReadOf(c) {
+  const sec = SHOTS_C.second.leagues.includes(c.league), W = sec ? SHOTS_C.second : SHOTS_C, x = c.sx, o = c.odds;
+  if ((!SHOTS_C.leagues.includes(c.league) && !sec) || !x || !o || o.src || o.tl !== 2.5 || !Number.isFinite(o.to) || !Number.isFinite(o.tu)) return null;
+  const dv = m => (m > 0 ? 100 / (m + 100) : -m / (-m + 100)), pa = dv(o.to), pb = dv(o.tu), pr = 100 * pa / (pa + pb);
+  const p = Math.min(99, Math.max(1, pr)) / 100, z = k => (x[k] - W.mean[k]) / W.sd[k];
+  return { q: 100 / (1 + Math.exp(-(W.C + W.M * Math.log(p / (1 - p)) + W.S * z('sot') + W.G * z('gl') + W.T * z('sh')))), pr, W };
+}
 function shotsBox(c) {
   const watch = SHOTS_C.watch.includes(c.league);
   const sec = SHOTS_C.second.leagues.includes(c.league), W = sec ? SHOTS_C.second : SHOTS_C; // second divisions use their own weights
@@ -1052,9 +1061,7 @@ function shotsBox(c) {
   const o = c.odds, okPx = o && !o.src && o.tl === 2.5 && Number.isFinite(o.to) && Number.isFinite(o.tu);
   const nums = `On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)`;
   if (!okPx) return `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">No DraftKings Over/Under 2.5 price yet</b><small>${esc(nums)}</small></div>`;
-  const dv = m => (m > 0 ? 100 / (m + 100) : -m / (-m + 100)), pa = dv(o.to), pb = dv(o.tu), pr = 100 * pa / (pa + pb);
-  const p = Math.min(99, Math.max(1, pr)) / 100, z = k => (x[k] - W.mean[k]) / W.sd[k];
-  const q = 100 / (1 + Math.exp(-(W.C + W.M * Math.log(p / (1 - p)) + W.S * z('sot') + W.G * z('gl') + W.T * z('sh'))));
+  const { q, pr } = shotsReadOf(c);
   const gap = q - pr, r = v => Math.round(v), pick = gap >= W.EDGE;
   return `<div class="box f">Shots read${pick ? ' <span class="pv val">Shots Over pick</span>' : ''}<b>Over 2.5 ${r(q)}% <span style="font-weight:500;color:var(--dim)">vs DraftKings ${r(pr)}% (${gap >= 0 ? '+' : ''}${r(gap)})</span></b><small>${esc(nums)}${pick ? '' : `. The Analyst bets Over at ${W.EDGE}+ points above the price`}</small></div>`;
 }
@@ -1268,7 +1275,7 @@ function movesView() {
     return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.odds.fa)}${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
-      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}</table>${ouNote}${o.src ? `<small class="mvn">${esc(BOOKS[o.src] || o.src)} prices: ESPN had no DraftKings price for this game, so the Hub tracks ${esc(BOOKS[o.src] || o.src)}'s (no opening price; the move is from the first one seen). The Analyst does not bet on them.</small>` : ''}
+      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}${(sr => sr ? `<tr class="shr"><td class="n">Shots read</td><td colspan="4" style="text-align:right">Over 2.5 <b>${Math.round(sr.q)}%</b></td></tr>` : '')(shotsReadOf(c))}</table>${ouNote}${o.src ? `<small class="mvn">${esc(BOOKS[o.src] || o.src)} prices: ESPN had no DraftKings price for this game, so the Hub tracks ${esc(BOOKS[o.src] || o.src)}'s (no opening price; the move is from the first one seen). The Analyst does not bet on them.</small>` : ''}
       ${btNote ? `<small class="mvn">${btNote}</small>` : ''}
       ${pinnNote(c, o)}
       ${o.ts ? `<small class="mvn">Price last changed ${tmCT(o.ts)}</small>` : ''}</div>`;
