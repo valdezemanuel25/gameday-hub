@@ -169,10 +169,6 @@ details.old{margin:8px 18px 0}details.old summary{cursor:pointer;font-size:12.5p
 .tod{float:right;margin-top:2px;font-size:12px;font-weight:650;padding:5px 11px;border-radius:20px;border:1px solid var(--acc-line);color:var(--ink)}
 .why{font-size:11.5px;color:var(--dim);margin-top:6px}
 .nt{color:var(--amber)}.you{color:#9ec5e8}
-.note textarea{width:100%;min-height:64px;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:9px 10px;font:inherit;font-size:13px;resize:vertical}
-.note .rw{display:flex;gap:8px;margin-top:8px;align-items:center}
-.note select{flex:1;min-width:0;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:9px 8px;font:inherit;font-size:13px}
-.note .sv{padding:9px 16px;border-radius:10px;background:var(--ink);color:#0B1210;font-weight:650;font-size:13px}
 .alert{margin:12px 18px 0;padding:10px 12px;border-radius:12px;background:rgba(240,181,74,.1);border:1px solid rgba(240,181,74,.35);font-size:12.5px;color:var(--ink);line-height:1.5}
 .alert b{color:var(--amber)}
 .pend.late{color:var(--amber);border-color:#6b5420}
@@ -484,7 +480,7 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 /* ===== Readability over the moving dots: brighter grey text, a soft dark outline on text, and a frosted backing on stat panels. The backdrop itself is unchanged. ===== */
 :root{--dim:rgba(238,243,230,.80);--faint:rgba(238,243,230,.62)}
 .wrap{text-shadow:0 0 2px rgba(0,0,0,.95),0 0 9px rgba(0,0,0,.8)}
-#hub-bar a.on,.btn,.day.on,.day.on b,.day.on small,.edg.proven,.mb .mgo,.note .sv,.pv.val,.xag.s,.zgo,.chip.on,.cf.s{text-shadow:none}
+#hub-bar a.on,.btn,.day.on,.day.on b,.day.on small,.edg.proven,.mb .mgo,.pv.val,.xag.s,.zgo,.chip.on,.cf.s{text-shadow:none}
 .mbx{background:rgba(4,5,4,.55);-webkit-backdrop-filter:blur(1.2px);backdrop-filter:blur(1.2px);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:2px 14px}
 .mbx>.mbr:first-child{border-top:0}
 .mvx th .fa{display:block;font-size:9.5px;font-weight:500;color:var(--faint);letter-spacing:0;text-transform:none;white-space:nowrap;margin-bottom:1px}
@@ -759,8 +755,6 @@ function expanded(c) {
     <div class="two"><div class="box" style="${done || !c.fb ? '' : 'grid-column:1/-1'}">Most likely exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b><small style="display:block;margin-top:4px;font-size:11px;color:var(--faint)">The score on the card is the best one that fits the pick, Over/Under and both-score lean.</small></div>${done || !c.fb ? fbBox(c) : ''}</div>
     ${shotsBox(c)}
     ${candBox(c)}
-    <div class="box f note">Your note<textarea id="note-${esc(c.id)}" maxlength="500" placeholder="Injuries, rotation, anything the model can't see">${esc(c.note || '')}</textarea>
-      <div class="rw"><select id="mine-${esc(c.id)}" aria-label="Your pick">${[['', 'No pick of my own'], ['H', c.home + ' win'], ['D', 'Draw'], ['A', c.away + ' win']].map(([v, l]) => `<option value="${v}" ${(c.mine || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><button type="button" class="sv" data-save="${esc(c.id)}">Save</button></div></div>
     <details class="how"><summary>More details</summary>
       <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
       <div class="box f">Form going in<b style="font-size:12.5px;font-weight:500;color:var(--dim)">${esc(c.home)}: ${esc(c.form.home)}.<br>${esc(c.away)}: ${esc(c.form.away)}.</b></div>
@@ -1017,7 +1011,7 @@ function game(c) {
   const fav = h >= d && h >= a ? 'h' : a >= d ? 'a' : 'd', cons = consensus(c);
   const rk = r => r ? `${ord(r)}` : '';
   return `<div class="m x ${open ? 'open' : ''} ${pending ? 'pn' : ''} ${allIn(c) ? 'all' : ''}"><button type="button" class="hd" data-id="${esc(c.id)}" aria-expanded="${open}">
-    <div class="xh"><span>${esc(c.leagueName)}${c.note ? ' · note' : ''}${c.mine ? ` · you: ${OUT[c.mine]}` : ''}</span><span class="cfx ${ccls}">${cl}</span></div>
+    <div class="xh"><span>${esc(c.leagueName)}</span><span class="cfx ${ccls}">${cl}</span></div>
     <div class="xt"><div class="xk">${xcrest(c.home, cons.strong && cons.side === 'H', c.hId)}<div><b>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away, cons.strong && cons.side === 'A', c.aId)}<div><b>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
     <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'H' ? 'cg' : ''}">${h}%</b></span><span class="mid"><b>Draw ${d}%</b></span><span class="${fav === 'a' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'A' ? 'cg' : ''}">${a}%</b></span></div>
       <div class="b"><i class="h ${fav === 'h' ? 'f' : ''}" style="flex:${h}"></i><i class="d ${fav === 'd' ? 'f' : ''}" style="flex:${d}"></i><i class="a ${fav === 'a' ? 'f' : ''}" style="flex:${a}"></i></div></div>
@@ -1334,11 +1328,10 @@ function marketView(t) {
   const blend = B && B.n ? `<div class="small" style="margin:8px 18px 0">Best mix: <b>${Math.round(100 * B.w)}% v4</b> + ${Math.round(100 * (1 - B.w))}% market (log loss ${f(B.ll)}; market alone ${f(B.llMarket)}, v4 alone ${f(B.llV4)}, ${B.n} games). ${B.w === 0 ? 'So far v4 adds nothing the price does not already know.' : B.n < 300 ? 'Too few games to trust the mix yet.' : ''}</div>` : '';
   const clv = `<div class="small" style="margin:6px 18px 0">Headline picks against the closing price: ${C.n ? `<b>${sg(C.avg)}</b> on average, ${C.beat} of ${C.n} beat it` : 'none yet (the first price is kept from Oct 26, 2026)'}. Beating the close is the quickest honest sign of an edge.</div>`;
   const val = `<div class="small" style="margin:6px 18px 0">Retired value rule (v4 5+ points over the price), kept for the record: ${V.n ? `${V.hits} of ${V.n} won, <b>${V.units > 0 ? '+' : ''}${V.units.toFixed(2)} units</b> (${sg(V.roi)})${V.clvN ? `, closing-line value ${sg(V.clv)} (${V.beat} of ${V.clvN} beat it)` : ''}` : 'none yet'}.</div>`;
-  const Mv = M.moves, Mi = M.mine, pct = (k, n) => n ? `${Math.round(100 * k / n)}%` : '–';
+  const Mv = M.moves, pct = (k, n) => n ? `${Math.round(100 * k / n)}%` : '–';
   const mvs = Mv && Mv.n ? `<div class="small" style="margin:6px 18px 0">Price moves (opening → close): results went the way of the biggest move in ${pct(Mv.follow, Mv.n)} of ${Mv.n} games; on big moves (5+ points) ${pct(Mv.bigFollow, Mv.big)} of ${Mv.big}${Mv.modelWith + Mv.modelAgainst ? ` (where v4 already leaned that way ${pct(Mv.modelWithFollow, Mv.modelWith)} of ${Mv.modelWith}; against v4 ${pct(Mv.modelAgainstFollow, Mv.modelAgainst)} of ${Mv.modelAgainst})` : ''}. On past seasons it was 56-57%.${Mv.btts && Mv.btts.n ? ` Both score went the way of its move in ${pct(Mv.btts.follow, Mv.btts.n)} of ${Mv.btts.n} games where it moved 1+ points${Mv.btts.book ? ` (${Mv.btts.book} on the book's own both-score price, the rest on the score card's chance)` : ''}.` : ''}</div>` : '';
-  const mine = `<div class="small" style="margin:6px 18px 0">Your own picks against the closing price: ${Mi && Mi.n ? `<b>${sg(Mi.avg)}</b> on average, ${Mi.beat} of ${Mi.n} beat it` : 'none yet (set "Your pick" on a priced card before kickoff)'}. Clearly positive over a few hundred picks would mean you see something the price does not.</div>`;
   return `<div class="sec" style="padding-top:20px">Models against the market<small>The sportsbook's home / draw / away price, margin removed, scored like a model on the same games. RPS: lower is better. Green is the better of the two.</small></div>
-  <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>Model</th><th>Market</th></tr>${rows}</table></div>${blend}${clv}${mine}${mvs}${val}`;
+  <div class="pair" style="padding-top:6px"><table class="lgt"><tr><th></th><th>Model</th><th>Market</th></tr>${rows}</table></div>${blend}${clv}${mvs}${val}`;
 }
 // Over 2.5 and Both-teams-to-score: what each model said, grouped by confidence, against how often it happened.
 function goalsCalibration(t) {
@@ -1360,8 +1353,7 @@ function calibrationView(t) {
     return `<div class="cal ${few ? 'few' : ''}"><div class="h2"><b style="font-weight:600">${b.label}</b><span>said ${Math.round(b.avg)}%, won ${act}% <span class="fnt">(${b.hits}/${b.n})</span></span></div>
       <div class="tr2"><i style="width:${Math.round(b.avg)}%;background:#5f746b"></i></div><div class="tr2"><i style="width:${act}%;background:var(--grass)"></i></div><small>${verdict}</small></div>`;
   }).join('');
-  const mine = t.mine && t.mine.n ? `<div class="small" style="margin-top:10px">Your own picks on ${t.mine.n} games: you got ${t.mine.mine}, the model got ${t.mine.model}.</div>` : '';
-  return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>v4's winner picks grouped by how sure it was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}${mine}</div>`;
+  return `<div class="sec" style="padding-top:20px">Are the percentages honest?<small>v4's winner picks grouped by how sure it was. Grey bar is what it said, green is how often it won.</small></div><div class="pair" style="padding-top:6px">${rows}</div>`;
 }
 const moe = (h, n) => (n >= 5 ? Math.round(196 * Math.sqrt((h / n) * (1 - h / n) / n)) : null); // 95% margin on a hit rate, in points
 const RB = { same: 'Same games', all: 'All games each model has' };
@@ -2079,15 +2071,6 @@ document.addEventListener('click', async e => {
       if (onAsg) { await loadAssign(); return render(); }
       await loadDay(); S.open = c.id; render(); }
     catch (er) { say(er.message); as.disabled = false; }
-    return;
-  }
-  const sv = e.target.closest('[data-save]');
-  if (sv) {
-    const id = sv.dataset.save, c = day.cards.find(x => x.id === id); if (!c) return;
-    const note = document.getElementById('note-' + id).value, mine = document.getElementById('mine-' + id).value;
-    sv.disabled = true;
-    try { const r = await post(`/api/note?league=${c.league}&date=${S.date}`, { id, note, mine }); if (r.error) throw new Error(r.error); c.note = r.note || undefined; c.mine = r.mine || undefined; delete counts[S.date]; tally = null; say('Note saved.', true); render(); }
-    catch (er) { say(er.message); sv.disabled = false; }
     return;
   }
   const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;

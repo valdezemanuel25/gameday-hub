@@ -235,8 +235,6 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     keepOdds(card, old, f, slug, now);
     setV6(card, old, now);
     if (old?.sm) card.sm = old.sm;
-    if (old?.note) card.note = old.note;
-    if (old?.mine) card.mine = old.mine;
     if (f.done && date <= LEGACY_THROUGH) { // old day: show the real result against the pre-kickoff prediction
       card.final = { h: f.home.score, a: f.away.score };
       card.grade = { v2: grade(toPred(card.v2), card.final) };
@@ -673,7 +671,7 @@ function fin(t) { return { ...t, brier: t.n ? +(t.brier / t.n).toFixed(3) : null
 async function tally(env) {
   const list = await env.HUB.list({ prefix: 'day:' });
   const promoV2 = blank(), promoV4 = blank(), v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
-  const live = [], mineT = { n: 0, mine: 0, model: 0 };
+  const live = [];
   // Model bets: every card's headline pick, locked when the game was graded. Counted by strength, by kind of pick and by how many models backed it.
   const TB = { strats: {}, base: { n: 0, home: 0, draw: 0, away: 0, over: 0, btts: 0 } };
   const LB = { n: 0, hits: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, draw: 0, away: 0, over: 0, btts: 0 }, recent: [] }, lbAdd = (o, k, hit, pk) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; if (pk) (x.ks || (x.ks = {}))[pk] = (x.ks[pk] || 0) + 1; }; // ks: which kinds of pick are inside, so the page can work out what chance alone would score
@@ -760,7 +758,6 @@ async function tally(env) {
         if (c.v4 && !promo) { calAdd('over', 'v4', c.v4.over, gs >= 3); calAdd('btts', 'v4', c.v4.btts, bs); }
         if (c.fb) { calAdd('over', 'fb', c.fb.over, gs >= 3); calAdd('btts', 'fb', c.fb.btts, bs); }
       }
-      if (c.mine && c.final) { mineT.n++; mineT.model += c.grade.v2.outcomeHit ? 1 : 0; mineT.mine += c.mine === (c.final.h > c.final.a ? 'H' : c.final.h === c.final.a ? 'D' : 'A') ? 1 : 0; }
       if (c.lean && c.final) {
         const L = c.lean; LB.n++; LB.hits += L.hit ? 1 : 0; lbAdd(LB.byKind, L.k, L.hit, L.key); lbAdd(LB.byKey, L.key, L.hit);
         // bet365 early payout (src/early.js): home / away picks whose goal order is known, as paid with the 2-goals-ahead rule.
@@ -830,7 +827,6 @@ async function tally(env) {
     v2: fin(v2All),
     forebet: { ...fbT, brier: fbT.n ? +(fbT.brier / fbT.n).toFixed(3) : null, any: fbT.n + fbT.nOu + fbT.nBtts, vs: Object.fromEntries(Object.entries(fbVs).map(([k, x]) => [k, { ...x, fbBrier: x.n ? +(x.fbBrier / x.n).toFixed(3) : null, brier: x.n ? +(x.brier / x.n).toFixed(3) : null }])) },
     calibration: CAL.map(b => ({ label: b.label, lo: b.lo, hi: b.hi, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null })), // v4's winner picks
-    mine: mineT,
     h2h: { v2: fin(h2hV2), v4: fin(h2hV4) },
     v4: fin(v4All),
     promo: { v2: fin(promoV2), v4: fin(promoV4) }, // v4 starting-rating games (newly promoted clubs), with v2 on the same games
@@ -893,17 +889,6 @@ export async function assignCandidate(date, slug, id, key, env, now = new Date()
   return { assigned: true, src: it.src, title: it.title };
 }
 
-// A note (and optional own pick) saved on one card. One small write.
-export async function noteCard(date, slug, id, note, mine, env) {
-  const day = await env.HUB.get(`day:${date}`, 'json');
-  const c = day?.cards?.find(x => x.league === slug && x.id === id);
-  if (!c) return { error: 'Game not found on that day' };
-  const t = String(note || '').trim().slice(0, 500);
-  if (t) c.note = t; else delete c.note;
-  if (['H', 'D', 'A'].includes(mine)) c.mine = mine; else delete c.mine;
-  await env.HUB.put(`day:${date}`, JSON.stringify(day));
-  return { saved: true, note: c.note || '', mine: c.mine || '' };
-}
 
 // ---------------------------------------------------------------------------------------------
 // Cron: runs every 5 minutes and does ONE small job per run, rotating:
@@ -1137,7 +1122,7 @@ const hub = {
       if (!target) return json({ error: 'Pass ?league=<slug> for a league that has v4 ratings (or cup for the Champions / Europa League ratings)' }, 400);
       try { return json({ ok: true, ...(await refreshRatings(env, new Date(), [target], { force: true })) }); } catch (e) { return json({ error: `${league ? league.name : "Cup"} (ratings): ${e && e.message ? e.message : e}` }, 500); }
     }
-    if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm', '/api/note', '/api/forebet'].includes(p)) {
+    if (req.method === 'POST' && ['/api/sync', '/api/analyze', '/api/grade', '/api/sm', '/api/forebet'].includes(p)) {
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
       try {
@@ -1150,7 +1135,6 @@ const hub = {
         }
         if (p === '/api/forebet') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ }
           if (b.fetch) { const kind = q('kind') || '1x2'; if (!FB_PAGES[league.slug]) return json({ error: `No Forebet page is set up for ${league.name}` }, 400); return json({ ok: true, ...(await forebetFetch(env, league.slug, kind, new Date())) }); } return json({ ok: true, ...(await forebetPaste(q('date'), league.slug, String(b.text || ''), env, new Date(), q('kind') || '1x2')) }); }
-        if (p === '/api/note') { let b = {}; try { b = await req.json(); } catch (e) { /* empty */ } return json({ ok: true, ...(await noteCard(q('date'), league.slug, String(b.id || ''), b.note, b.mine, env)) }); }
         if (p === '/api/sm') return json({ ok: true, ...(await smLeague(q('date') || today(), league.slug, env, new Date(), { force: true })) });
         return json({ ok: true, ...(await gradeLeague(q('date') || today(), league.slug, env, { force: true })) });
       } catch (e) {

@@ -31,7 +31,7 @@ const W = Array.from({ length: 21 }, (_, i) => i / 20);
 export function blankMarket() {
   return { n: 0, pairs: { v4: blankPair(), v5: blankPair(), v2: blankPair(), fb: blankPair() }, blend: W.map(() => 0), nBlend: 0,
     clv: { n: 0, sum: 0, beat: 0 }, value: { n: 0, hits: 0, units: 0, clvN: 0, clvSum: 0, beat: 0 },
-    mine: { n: 0, sum: 0, beat: 0 }, moves: { n: 0, follow: 0, big: 0, bigFollow: 0, modelWith: 0, modelWithFollow: 0, modelAgainst: 0, modelAgainstFollow: 0, btts: { n: 0, follow: 0 } } };
+    moves: { n: 0, follow: 0, big: 0, bigFollow: 0, modelWith: 0, modelWithFollow: 0, modelAgainst: 0, modelAgainstFollow: 0, btts: { n: 0, follow: 0 } } };
 }
 // Fold one graded card in. The closing price is the card's last price before kickoff; the first price is `f` (or ESPN's opening line).
 export function addMarket(M, c) {
@@ -51,7 +51,6 @@ export function addMarket(M, c) {
   const L = c.lean;
   if (first && L && ix(L.key) >= 0) { const i = ix(L.key), v = mk[i] / first[i] - 1; M.clv.n++; M.clv.sum += v; M.clv.beat += v > 0 ? 1 : 0; }
   // Your own pick ("Your pick" on the card): closing-line value from the first price the Hub saw.
-  if (first && c.mine && ix(c.mine) >= 0) { const i = ix(c.mine), v = mk[i] / first[i] - 1; M.mine.n++; M.mine.sum += v; M.mine.beat += v > 0 ? 1 : 0; }
   // Price moves from the opening price to the close: did the result go the way of the biggest move? On big moves, did v4 see it coming?
   const mv = moveOf(c.odds);
   if (mv && mv.size > 0) {
@@ -87,7 +86,6 @@ export function finishMarket(M) {
     pairs: Object.fromEntries(Object.entries(M.pairs).map(([k, t]) => [k, pair(t)])),
     blend: M.nBlend ? { n: M.nBlend, w: W[bi], ll: r4(M.blend[bi] / M.nBlend), llMarket: r4(M.blend[0] / M.nBlend), llV4: r4(M.blend[W.length - 1] / M.nBlend) } : { n: 0 },
     clv: { n: M.clv.n, avg: M.clv.n ? r3(100 * M.clv.sum / M.clv.n) : null, beat: M.clv.beat },
-    mine: { n: M.mine.n, avg: M.mine.n ? r3(100 * M.mine.sum / M.mine.n) : null, beat: M.mine.beat },
     moves: M.moves,
     value: { n: M.value.n, hits: M.value.hits, units: r3(M.value.units), roi: M.value.n ? r3(100 * M.value.units / M.value.n) : null, clv: M.value.clvN ? r3(100 * M.value.clvSum / M.value.clvN) : null, clvN: M.value.clvN, beat: M.value.beat },
   };

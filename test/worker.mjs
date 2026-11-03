@@ -268,18 +268,12 @@ ok('form excludes the match itself and later games', ff.n === 3 && ff.gf === 3 &
   ok('export: lists saved days', Array.isArray(days.days) && days.days.length >= 1, JSON.stringify(days.days));
 }
 
-// ---- notes, own pick, calibration ----
+// ---- calibration (notes and own picks removed Nov 3, 2026) ----
 {
   const day = JSON.parse(kv.get('day:2026-10-14'));
   const c0 = day.cards.find(c => c.v2);
   const post = (path, body) => worker.fetch(new Request('https://hub.test' + path, { method: 'POST', headers: { 'x-admin-token': 'secret' }, body: JSON.stringify(body) }), env).then(r => r.json());
-  const r = await post(`/api/note?league=${c0.league}&date=2026-10-14`, { id: c0.id, note: 'Key striker out', mine: 'D' });
-  ok('note saved on the card', r.saved && JSON.parse(kv.get('day:2026-10-14')).cards.find(c => c.id === c0.id).note === 'Key striker out');
-  const bad = await post(`/api/note?league=${c0.league}&date=2026-10-14`, { id: 'nope', note: 'x' });
-  ok('note on an unknown game is refused', !!bad.error);
-  await call(`/api/analyze?league=${c0.league}&date=2026-10-14`, 'POST', 'secret');
-  const after = JSON.parse(kv.get('day:2026-10-14')).cards.find(c => c.id === c0.id);
-  ok('note and own pick survive a re-analyze', after?.note === 'Key striker out' && after?.mine === 'D');
+  ok('notes and own picks are gone: /api/note is not a route', (await post(`/api/note?league=${c0.league}&date=2026-10-14`, { id: c0.id, note: 'x' }).catch(() => ({}))).saved !== true);
   const t = await (await worker.fetch(new Request('https://hub.test/api/tally', { headers: { 'x-admin-token': 'secret' } }), env)).json();
   const tot = t.calibration.reduce((a, b) => a + b.n, 0);
   ok('calibration groups cover every graded v4 winner pick (v2 is retired)', t.calibration.length === 4 && tot === t.v4.n && tot > 0, `${tot} vs ${t.v4.n}`);
