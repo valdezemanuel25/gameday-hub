@@ -487,10 +487,15 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && priceOpen(c, now));
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
   const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
+  // Shots numbers (src/shots.js) for a card made before they existed, or before its clubs had 5 games with shots: filled in here from the
+  // league's context, so the card's Shots read and the Analyst's Shots Over rules see them by the lineup read. One context read a league.
+  const shotsLg = SHOTS_LEAGUES.has(slug) || SHOTS_LEAGUES2.has(slug) || SHOTS_WATCH.has(slug);
+  const ctx = shotsLg && open.some(c => !c.sx && c.hId && c.aId) ? await getContext(lg, env, new Map()) : null;
   let changed = 0, priced = 0;
   for (const c of open) {
     const o = byId.get(c.id)?.odds; if (o) priced++;
     let ch = false;
+    if (ctx && !c.sx && c.hId && c.aId) { const h = ctx.teams?.[c.hId], a = ctx.teams?.[c.aId]; const sx = h && a ? shotsMatchup(shotsAt(h, c.kickoff), shotsAt(a, c.kickoff)) : null; if (sx) { c.sx = sx; ch = true; } }
     if (o) { const n = withOdds(c.odds, o, now); if (sameJson(n, c.odds) === false) { n.ts = now.toISOString(); c.odds = n; ch = true; } }
     // The read inside the lineup window (LINEUP_READ to PRICE_LOCK minutes before kickoff) is the closing price: note when it was taken.
     if (o && c.odds && !c.odds.cl && new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000) { c.odds.cl = now.toISOString(); ch = true; }

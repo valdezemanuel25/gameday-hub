@@ -1049,7 +1049,7 @@ function shotsBox(c) {
   const x = c.sx;
   // MLS and Liga MX: numbers saved for tracking only, no read (the weights were fitted on European prices) and no Analyst bet
   if (watch) return x ? `<div class="box f">Shots <span class="pv">tracking only</span><b style="font-size:12.5px;font-weight:500;color:var(--dim)">On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)</b><small>Saved with the DraftKings Over/Under price to test the Shots Over rule here once a few hundred games are in. No read or bet yet.</small></div>` : '';
-  if (!x) return c.final ? '' : `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">Not enough recent shots data for one or both clubs (5 of the last 8 league games needed).</b></div>`;
+  if (!x) return c.final ? '' : `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">No shots read yet. It fills in at the card's next price check, once both clubs have 5 of their last 8 league games with shots.</b></div>`;
   const o = c.odds, okPx = o && !o.src && o.tl === 2.5 && Number.isFinite(o.to) && Number.isFinite(o.tu);
   const nums = `On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)`;
   if (!okPx) return `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">No DraftKings Over/Under 2.5 price yet</b><small>${esc(nums)}</small></div>`;

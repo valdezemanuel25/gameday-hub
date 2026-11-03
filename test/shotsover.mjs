@@ -61,5 +61,18 @@ ok('tracking only: MLS and Liga MX keep their shots numbers but the Analyst neve
   const m = html.match(/const SHOTS_C = (\{.*\});/), C = m && JSON.parse(m[1]);
   ok('card: the Shots read box uses the same weights, scaling, edge and leagues as the rule', C && JSON.stringify({ ...SHOTS, leagues: [...LEAGUES], watch: [...WATCH], second: { ...SHOTS2, leagues: [...LEAGUES2] } }) === JSON.stringify(C));
 }
+// --- a card made before shots existed gets them at its next price read (src/worker.js refreshOdds) ---
+{
+  const { refreshOdds } = await import('../src/worker.js');
+  globalThis.fetch = async () => new Response(JSON.stringify({ events: [] }));
+  const m = new Map(), env = { HUB: { get: async (k, t) => { const x = m.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { m.set(k, x); }, list: async () => ({ keys: [] }) } };
+  const rows = [0, 1, 2, 3, 4, 5, 6, 7].map(i => row(i, 2, 1, 10, 5, 12, 3));
+  m.set('ctx:eng.2', JSON.stringify({ v: 4, slug: 'eng.2', leagueAvg: 1.4, teams: { '10': { recent: rows }, '20': { recent: rows }, '30': { recent: rows.slice(0, 3) } } }));
+  const ko = new Date(Date.UTC(2026, 10, 10, 15)).toISOString(), base = { league: 'eng.2', leagueName: 'Championship', kickoff: ko, v2: { p: [40, 30, 30], over: 55 }, v4: { p: [40, 30, 30], over: 55, btts: 55 }, odds: { h: 150, d: 230, a: 190, tl: 2.5, to: -135, tu: 110 } };
+  m.set('day:2026-11-10', JSON.stringify({ date: '2026-11-10', cards: [{ ...base, id: 'd1', home: 'Derby', away: 'Norwich', hId: '10', aId: '20' }, { ...base, id: 'd2', home: 'A', away: 'B', hId: '10', aId: '30' }] }));
+  await refreshOdds(env, '2026-11-10', 'eng.2', new Date(Date.UTC(2026, 10, 10, 9)));
+  const cs = JSON.parse(m.get('day:2026-11-10')).cards;
+  ok('price read: a card with no shots numbers gets them from the league context; a club with too few games still gets none', cs[0].sx && cs[0].sx.sot === 8 && cs[0].sx.n === 8 && !cs[1].sx, JSON.stringify(cs.map(c => c.sx)));
+}
 console.log(bad ? `\n${bad} FAILED` : '\nAll Shots Over checks passed');
 if (bad) process.exit(1);
