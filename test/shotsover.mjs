@@ -1,6 +1,6 @@
 // Shots Over (src/shots.js, rule 'shotsOver' in src/analyst.js): club shots form before kickoff, the game's numbers, the read on Over 2.5,
 // the rule at the lineup read, and shots carried from the results store into each club's recent games (src/data.js buildContext).
-import { shotsAt, matchup, shotsOver, SHOTS, LEAGUES } from '../src/shots.js';
+import { shotsAt, matchup, shotsOver, SHOTS, LEAGUES, WATCH } from '../src/shots.js';
 import { RULES, view, decide } from '../src/analyst.js';
 import { buildContext } from '../src/data.js';
 let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) bad++; };
@@ -34,6 +34,7 @@ const KO = '2026-11-08T15:00:00Z', at = m => new Date(new Date(KO).getTime() - m
 const card = { id: 's1', league: 'eng.1', leagueName: 'Premier League', home: 'A', away: 'B', kickoff: KO, v2: { over: 55 }, v4: { p: [40, 30, 30], over: 55, btts: 55 }, odds, sx: { sot: 8.4, gl: 3, sh: 21, n: 8 } };
 ok('shotsOver: waits for the lineup read', !decide([], [card], '2026-11-08', at(240)).some(b => b.rule === 'shotsOver'));
 ok('shotsOver: Analyst 2 bets it at the lineup read', (b => b && b.key === 'O' && b.price === -135)(decide([], [card], '2026-11-08', at(30)).find(b => b.rule === 'shotsOver')));
+ok('tracking only: MLS and Liga MX keep their shots numbers but the Analyst never bets them; the Brasileirão is not tracked', WATCH.has('usa.1') && WATCH.has('mex.1') && !WATCH.has('bra.1') && !decide([], [{ ...card, id: 's2', league: 'usa.1', leagueName: 'MLS' }], '2026-11-08', at(30)).some(b => b.rule === 'shotsOver'));
 
 // --- shots into the clubs' recent games ---
 {
@@ -50,7 +51,7 @@ ok('shotsOver: Analyst 2 bets it at the lineup read', (b => b && b.key === 'O' &
 {
   const fs = await import('node:fs'), html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const m = html.match(/const SHOTS_C = (\{.*\});/), C = m && JSON.parse(m[1]);
-  ok('card: the Shots read box uses the same weights, scaling, edge and leagues as the rule', C && JSON.stringify({ ...SHOTS, leagues: [...LEAGUES] }) === JSON.stringify(C));
+  ok('card: the Shots read box uses the same weights, scaling, edge and leagues as the rule', C && JSON.stringify({ ...SHOTS, leagues: [...LEAGUES], watch: [...WATCH] }) === JSON.stringify(C));
 }
 console.log(bad ? `\n${bad} FAILED` : '\nAll Shots Over checks passed');
 if (bad) process.exit(1);

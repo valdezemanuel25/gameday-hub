@@ -12,6 +12,12 @@
 export const SHOTS = { C: -0.0442, M: 1.1388, S: 0.0483, G: 0.0188, T: -0.1384,
   mean: { sot: 8.626, gl: 2.787, sh: 24.84 }, sd: { sot: 1.123, gl: 0.516, sh: 2.104 }, N: 8, MIN: 5, EDGE: 3 };
 export const LEAGUES = new Set(['eng.1', 'eng.2', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1']);
+// Tracking only (Nov 3, 2026): the shots numbers are saved on these cards next to DraftKings' Over/Under price, but no read is shown and
+// the Analyst never bets them. In an ESPN backtest (2023 to Nov 2026, fit before 2025, tested after) shots helped predict Over 2.5 in
+// MLS (shots pushing Over up 3+ points: 72% went Over vs 60% expected, 166 games) and a little in Liga MX (56% vs 53%); in the
+// Brasileirão they made it worse, so it is left out. There are no past prices for these leagues, so the rule waits for a few hundred
+// priced games here to be refit on.
+export const WATCH = new Set(['usa.1', 'mex.1']);
 const r2 = x => Math.round(100 * x) / 100;
 
 // One club's averages over its last N league games with shots before iso. recent rows: [iso, gf, ga, shF, sotF, shA, sotA]

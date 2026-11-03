@@ -1047,10 +1047,13 @@ function alerts() {
 /* Games a fetch could not match by name: verify the pair, then assign it to this card. */
 // Shots read on Over 2.5 (Nov 3, 2026): the same read as the Analyst's Shots Over rule (src/shots.js; test/shotsover.mjs checks these
 // numbers match). Display only: it changes no model or pick.
-const SHOTS_C = {"C":-0.0442,"M":1.1388,"S":0.0483,"G":0.0188,"T":-0.1384,"mean":{"sot":8.626,"gl":2.787,"sh":24.84},"sd":{"sot":1.123,"gl":0.516,"sh":2.104},"N":8,"MIN":5,"EDGE":3,"leagues":["eng.1","eng.2","ger.1","esp.1","ita.1","fra.1","ned.1"]};
+const SHOTS_C = {"C":-0.0442,"M":1.1388,"S":0.0483,"G":0.0188,"T":-0.1384,"mean":{"sot":8.626,"gl":2.787,"sh":24.84},"sd":{"sot":1.123,"gl":0.516,"sh":2.104},"N":8,"MIN":5,"EDGE":3,"leagues":["eng.1","eng.2","ger.1","esp.1","ita.1","fra.1","ned.1"],"watch":["usa.1","mex.1"]};
 function shotsBox(c) {
-  if (!SHOTS_C.leagues.includes(c.league)) return '';
+  const watch = SHOTS_C.watch.includes(c.league);
+  if (!SHOTS_C.leagues.includes(c.league) && !watch) return '';
   const x = c.sx;
+  // MLS and Liga MX: numbers saved for tracking only, no read (the weights were fitted on European prices) and no Analyst bet
+  if (watch) return x ? `<div class="box f">Shots <span class="pv">tracking only</span><b style="font-size:12.5px;font-weight:500;color:var(--dim)">On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)</b><small>Saved with the DraftKings Over/Under price to test the Shots Over rule here once a few hundred games are in. No read or bet yet.</small></div>` : '';
   if (!x) return c.final ? '' : `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">Not enough recent shots data for one or both clubs (5 of the last 8 league games needed).</b></div>`;
   const o = c.odds, okPx = o && !o.src && o.tl === 2.5 && Number.isFinite(o.to) && Number.isFinite(o.tu);
   const nums = `On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)`;

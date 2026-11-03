@@ -22,7 +22,7 @@
 //   closing price none of these rules made money; see the numbers in the comments on RULES. The live test is whether betting at
 //   earlier reads, before a move has finished, does better than the close.
 import { devig } from './v6core.js';
-import { shotsOver, SHOTS } from './shots.js';
+import { shotsOver, SHOTS, LEAGUES as SHOTS_LEAGUES } from './shots.js';
 import { leanHit, hockeyHit } from './pick.js';
 import { hockeyMove } from './moves.js';
 import { SECOND_PRICED } from './data.js';
@@ -152,7 +152,7 @@ const BOOKN = { pinnacle: 'Pinnacle', betfair_ex_eu: 'Betfair', betfair_ex_uk: '
 // The Analyst only bets a card with a v4 number that is not the rough promoted-club stand-in, and with a price to read.
 export function lookCard(c) {
   if (!c || c.final || !c.odds || c.odds.src || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null; // src: a stand-in book, not DraftKings
-  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2, pinBt: SECOND_PRICED.has(c.league), sx: c.sx || null });
+  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2, pinBt: SECOND_PRICED.has(c.league), sx: SHOTS_LEAGUES.has(c.league) ? c.sx || null : null }); // tracking-only leagues never bet
 }
 // One position per game per market (1X2, Over/Under, Both score) per rule set: the first rule to fire takes it, in RULES order, and later
 // reads never add to it or bet the other side. A benched rule places nothing. sharp: Map(cardId -> sharpOf) for the stale-price rule, or null.

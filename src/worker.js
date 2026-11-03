@@ -14,7 +14,7 @@ import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { addStrats } from './strats.js';
 import { analystLook, listAnalyst } from './analyst.js';
-import { shotsAt, matchup as shotsMatchup, LEAGUES as SHOTS_LEAGUES } from './shots.js';
+import { shotsAt, matchup as shotsMatchup, LEAGUES as SHOTS_LEAGUES, WATCH as SHOTS_WATCH } from './shots.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP, SPORT } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
@@ -209,8 +209,8 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     }
     const r2 = v2(h.team.form, a.team.form);
     card.v2 = slim(r2);
-    // Shots Over (src/shots.js): the game's shots-on-target numbers for the Analyst, leagues it was tested on only
-    if (!f.done && SHOTS_LEAGUES.has(slug)) { const sx = shotsMatchup(shotsAt(h.team, f.date), shotsAt(a.team, f.date)); if (sx) card.sx = sx; }
+    // Shots Over (src/shots.js): the game's shots numbers, for the Analyst (tested leagues) and saved for tracking (WATCH: MLS, Liga MX)
+    if (!f.done && (SHOTS_LEAGUES.has(slug) || SHOTS_WATCH.has(slug))) { const sx = shotsMatchup(shotsAt(h.team, f.date), shotsAt(a.team, f.date)); if (sx) card.sx = sx; }
     // v4 shadow: only for league games that haven't been played yet, and only when both clubs have enough history.
     // (null = v4 has nothing to say: cup game, club not found, or too little history.)
     let r4 = null, r5 = null, why = null; // why = the plain-words reason a game has no v4 (shown on the card)
