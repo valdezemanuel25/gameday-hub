@@ -1345,6 +1345,27 @@ function goalsCalibration(t) {
   }).join('');
   return `<div class="sec" style="padding-top:20px">Are the goals percentages honest?<small>Each row groups games by how likely a model said the outcome was, then shows how often it happened (bold) and the average it said. Red means it happens less than it says, blue more. Faded rows have under 15 games.</small></div>${blocks}`;
 }
+// Shots read against the results (Nov 3, 2026): src/worker.js tally, field shots. Calibration first: for each band of the Over chance,
+// how often the game went Over when the shots read said it and when DraftKings' price (margin removed) said it. Then accuracy, and how
+// the games went by how far the read sat from the price.
+function shotsResults(t) {
+  const S = t.shots; if (!S) return '';
+  const G = [['top', 'Top leagues', 'Premier League, Championship, Bundesliga, La Liga, Serie A, Ligue 1, Eredivisie'], ['second', 'Second divisions', 'La Liga 2 and 2. Bundesliga, own weights'], ['watch', 'MLS and Liga MX (tracking only)', 'read with the top-league weights; no bets']];
+  const cell = x => { if (!x || !x.n) return `<td class="na">–</td>`; const act = Math.round(100 * x.hits / x.n), gap = act - x.avg, cls = x.n < 15 ? 'few' : gap <= -8 ? 'over' : gap >= 8 ? 'under' : 'ok';
+    return `<td class="${cls}"><b>${act}%</b><small>said ${Math.round(x.avg)} · ${x.n}</small></td>`; };
+  const pc = (h, n) => (n ? `${Math.round(100 * h / n)}%` : '–');
+  const block = ([k, name, sub]) => {
+    const T = S[k]; if (!T || !T.n) return `<div class="pair" style="padding-top:6px"><div class="lab"><b style="font-weight:600">${name}</b><span>${sub}</span></div><div class="small">No finished games with a shots read yet.</div></div>`;
+    const cal = T.cal.filter(b => b.read.n || b.price.n).map(b => `<tr><td class="n">${b.label}</td>${cell(b.read)}${cell(b.price)}</tr>`).join('');
+    const better = T.ll.read < T.ll.price ? 'the read' : T.ll.read > T.ll.price ? 'DraftKings' : 'neither';
+    const acc = `<div class="small" style="margin:6px 4px 0">Log loss on ${T.n} games (lower is better): shots read <b>${T.ll.read.toFixed(3)}</b>, DraftKings <b>${T.ll.price.toFixed(3)}</b>, so <b>${better}</b> ${better === 'neither' ? 'is ahead' : 'was closer'}. Brier: read ${T.brier.read.toFixed(3)}, DraftKings ${T.brier.price.toFixed(3)}. Over hit ${pc(T.over, T.n)}.${T.n < 100 ? ' Fewer than 100 games: too early to read much into it.' : ''}</div>`;
+    const gap = T.gap.filter(g => g.n).map(g => `<tr><td class="n">${g.label}</td><td>${g.n}</td><td><b>${pc(g.hits, g.n)}</b></td><td>${Math.round(g.price)}%</td></tr>`).join('');
+    return `<div class="pair" style="padding-top:6px"><div class="lab"><b style="font-weight:600">${name}</b><span>${sub}</span></div>
+      <table class="lgt cg"><tr><th>Over chance</th><th>Shots read</th><th>DraftKings</th></tr>${cal}</table>${acc}
+      <table class="lgt" style="margin-top:6px"><tr><th>Read vs price</th><th>Games</th><th>Went Over</th><th>Price said</th></tr>${gap}</table></div>`;
+  };
+  return `<div class="sec" style="padding-top:20px">Shots read vs results<small>Every finished game with a shots read and a DraftKings Over/Under 2.5 price, scored at the closing price. In the calibration table each row groups games by the Over chance the shots read gave (left) and DraftKings gave (right), then shows how often they went Over (bold) with the average chance given and the number of games. Green means close, red means Over happened less than said, blue more. Below it: when the read sat 3+ points above the price, Over should beat what the price said; when 3+ below, fall short of it.</small></div>${G.map(block).join('')}`;
+}
 function calibrationView(t) {
   if (!t.calibration) return '';
   const rows = t.calibration.filter(b => b.n).map(b => {
@@ -1688,7 +1709,7 @@ function results() {
   const old = t.earlier.map(r => `<div class="li"><div class="a"><span>${esc(r.match)}</span><span>${esc(r.actual)}</span></div>
     <div class="b"><span>Winner <b class="${r.outcomeHit ? 'ok' : 'no'}">${r.outcomeHit ? '✓' : '✗'}</b></span><span>O/U <b class="${r.ouHit ? 'ok' : 'no'}">${r.ouHit ? '✓' : '✗'}</b></span><span>Both <b class="${r.bttsHit ? 'ok' : 'no'}">${r.bttsHit ? '✓' : '✗'}</b></span></div></div>`).join('');
   return `<div class="banner">${t.importedMatches} matches carried over from the old Hub plus ${t.newlyGraded} graded here since.</div>` +
-    boardBlock(t) + v6View(t) + v5View(t) + leagueScorecards(t) + marketView(t) + calibrationView(t) + goalsCalibration(t) +
+    boardBlock(t) + v6View(t) + v5View(t) + leagueScorecards(t) + marketView(t) + calibrationView(t) + goalsCalibration(t) + shotsResults(t) +
     (t.promo && t.promo.v4 && t.promo.v4.n ? `<details class="old"><summary>v4 on newly promoted clubs (${t.promo.v4.n} games, own line)</summary><div class="small" style="margin:6px 4px">v4 starts these clubs from a weaker-than-average rating that fades as they play. These games are kept out of every v4 total above.</div>` +
       resultsBlock('v4, starting rating', t.promo.v4).replace('<div class="sec">', '<div class="sec" style="padding-top:6px">') + `</details>` : '') +
     (t.v2 && t.v2.n ? `<details class="old"><summary>Retired v2 record (official model until Oct 25, 2026)</summary><div class="small" style="margin:6px 4px">v2 was retired on Oct 26, 2026: on the tracked games it scored worse than always guessing the base rates. It still stands in on a game v4 has no numbers for.</div>` +

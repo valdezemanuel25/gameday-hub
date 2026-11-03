@@ -100,5 +100,21 @@ ok('tracking only: MLS and Liga MX keep their shots numbers but the Analyst neve
   ok('backfill: the context is rebuilt, so the clubs now have shots on their recent games', ctx.teams['1'].recent.filter(x => x.length === 7).length >= 5, JSON.stringify(ctx.teams['1'].recent));
   ok('backfill: nothing left is a no-op', (await backfillShots(lg, env, now)).backfilled === 0);
 }
+// --- the Results tab: the shots read scored against the results (src/worker.js tally, field shots) ---
+{
+  const worker = (await import('../src/worker.js')).default;
+  const m = new Map(), env = { ADMIN_TOKEN: 'secret', ASSETS: { fetch: () => new Response('') }, HUB: { get: async (k, t) => { const x = m.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { m.set(k, x); }, list: async ({ prefix }) => ({ keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })) }) } };
+  const odds = { h: 150, d: 230, a: 190, tl: 2.5, to: -135, tu: 110 }, sx = { sot: 8.4, gl: 3, sh: 21, n: 8 };
+  const mkc = (id, league, f, o = odds) => ({ id, league, leagueName: league, home: 'A' + id, away: 'B' + id, kickoff: '2026-11-08T15:00:00Z', odds: o, sx, final: f });
+  m.set('day:2026-11-08', JSON.stringify({ date: '2026-11-08', cards: [
+    mkc('t1', 'eng.1', { h: 2, a: 1 }), mkc('t2', 'eng.1', { h: 0, a: 0 }), mkc('s1', 'esp.2', { h: 3, a: 1 }), mkc('w1', 'usa.1', { h: 1, a: 0 }),
+    mkc('x1', 'bra.1', { h: 2, a: 2 }), mkc('n1', 'eng.1', { h: 2, a: 2 }, { ...odds, tl: 3.5 }), mkc('p1', 'eng.1', { h: 2, a: 2 }, { ...odds, src: 'bet365' }) ] }));
+  const T = await (await worker.fetch(new Request('https://hub.test/api/tally', { headers: { 'x-admin-token': 'secret' } }), env)).json();
+  const S = T.shots || {};
+  ok('results: finished games with a shots read and a DraftKings 2.5 price are scored by group (not the Brasileirão, another line or a stand-in book)',
+    S.top && S.top.n === 2 && S.top.over === 1 && S.second.n === 1 && S.watch.n === 1, JSON.stringify(S && { top: S.top && S.top.n, second: S.second && S.second.n, watch: S.watch && S.watch.n }));
+  const band = S.top && S.top.cal.find(b => b.read.n), gapRow = S.top && S.top.gap.find(g => g.n);
+  ok('results: calibration bands for the read and the price, log loss for both, and the read-vs-price rows', band && S.top.cal.reduce((s, b) => s + b.price.n, 0) === 2 && S.top.ll.read > 0 && S.top.ll.price > 0 && gapRow && gapRow.label === '3+ above the price' && gapRow.n === 2, JSON.stringify(S.top));
+}
 console.log(bad ? `\n${bad} FAILED` : '\nAll Shots Over checks passed');
 if (bad) process.exit(1);

@@ -14,7 +14,7 @@ import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
 import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
 import { addStrats } from './strats.js';
 import { analystLook, listAnalyst } from './analyst.js';
-import { shotsAt, matchup as shotsMatchup, LEAGUES as SHOTS_LEAGUES, WATCH as SHOTS_WATCH, LEAGUES2 as SHOTS_LEAGUES2 } from './shots.js';
+import { shotsAt, matchup as shotsMatchup, shotsOver, SHOTS, SHOTS2, LEAGUES as SHOTS_LEAGUES, WATCH as SHOTS_WATCH, LEAGUES2 as SHOTS_LEAGUES2 } from './shots.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP, SPORT } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
@@ -677,6 +677,27 @@ async function tally(env) {
   const list = await env.HUB.list({ prefix: 'day:' });
   const promoV2 = blank(), promoV4 = blank(), v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [];
+  // Shots read against the results (Nov 3, 2026): every finished card with shots numbers and a DraftKings Over/Under 2.5 price, scored at
+  // the card's last (closing) price. Groups: top leagues and second divisions with their own weights, MLS / Liga MX tracking only (read
+  // with the top-league weights). Second divisions count here although they are left out of the model records.
+  const SHB = [['Under 40%', 0, 40], ['40 to 45%', 40, 45], ['45 to 50%', 45, 50], ['50 to 55%', 50, 55], ['55 to 60%', 55, 60], ['60 to 65%', 60, 65], ['65% and up', 65, 101]];
+  const SHG = [['3+ above the price', 3, 101], ['0 to 3 above', 0, 3], ['0 to 3 below', -3, 0], ['3+ below the price', -101, -3]];
+  const shBlank = () => ({ n: 0, over: 0, llR: 0, llP: 0, brR: 0, brP: 0, cal: SHB.map(([label, lo, hi]) => ({ label, lo, hi, read: { n: 0, hits: 0, sum: 0 }, price: { n: 0, hits: 0, sum: 0 } })),
+    gap: SHG.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, price: 0, read: 0 })) });
+  const SHT = { top: shBlank(), second: shBlank(), watch: shBlank() };
+  const shAdd = c => {
+    const grp = SHOTS_LEAGUES.has(c.league) ? 'top' : SHOTS_LEAGUES2.has(c.league) ? 'second' : SHOTS_WATCH.has(c.league) ? 'watch' : null;
+    const o = c.odds, x = c.sx;
+    if (!grp || !c.final || !x || !o || o.src || o.tl !== 2.5 || !Number.isFinite(o.to) || !Number.isFinite(o.tu)) return;
+    const dv = m => (m > 0 ? 100 / (m + 100) : -m / (-m + 100)), pr = 100 * dv(o.to) / (dv(o.to) + dv(o.tu)), q = shotsOver(pr, x, grp === 'second' ? SHOTS2 : SHOTS);
+    const y = c.final.h + c.final.a >= 3 ? 1 : 0, T = SHT[grp], cl = v => Math.min(0.99, Math.max(0.01, v / 100));
+    T.n++; T.over += y; T.llR -= Math.log(y ? cl(q) : 1 - cl(q)); T.llP -= Math.log(y ? cl(pr) : 1 - cl(pr)); T.brR += (q / 100 - y) ** 2; T.brP += (pr / 100 - y) ** 2;
+    for (const [k, v] of [['read', q], ['price', pr]]) { const b = T.cal.find(z => v >= z.lo && v < z.hi); if (b) { b[k].n++; b[k].hits += y; b[k].sum += v; } }
+    const g = T.gap.find(z => q - pr >= z.lo && q - pr < z.hi); if (g) { g.n++; g.hits += y; g.price += pr; g.read += q; }
+  };
+  const shFin = T => ({ n: T.n, over: T.over, ll: T.n ? { read: +(T.llR / T.n).toFixed(4), price: +(T.llP / T.n).toFixed(4) } : null, brier: T.n ? { read: +(T.brR / T.n).toFixed(4), price: +(T.brP / T.n).toFixed(4) } : null,
+    cal: T.cal.map(b => ({ label: b.label, read: { n: b.read.n, hits: b.read.hits, avg: b.read.n ? +(b.read.sum / b.read.n).toFixed(1) : null }, price: { n: b.price.n, hits: b.price.hits, avg: b.price.n ? +(b.price.sum / b.price.n).toFixed(1) : null } })),
+    gap: T.gap.map(g => ({ label: g.label, n: g.n, hits: g.hits, price: g.n ? +(g.price / g.n).toFixed(1) : null, read: g.n ? +(g.read / g.n).toFixed(1) : null })) });
   // Model bets: every card's headline pick, locked when the game was graded. Counted by strength, by kind of pick and by how many models backed it.
   const TB = { strats: {}, base: { n: 0, home: 0, draw: 0, away: 0, over: 0, btts: 0 } };
   const LB = { n: 0, hits: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, draw: 0, away: 0, over: 0, btts: 0 }, recent: [] }, lbAdd = (o, k, hit, pk) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; if (pk) (x.ks || (x.ks = {}))[pk] = (x.ks[pk] || 0) + 1; }; // ks: which kinds of pick are inside, so the page can work out what chance alone would score
@@ -716,6 +737,7 @@ async function tally(env) {
   for (const k of list.keys) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
+      if (c.sx && c.final) shAdd(c); // before the counted-league check: second divisions are scored here too
       if (!c.grade || day.date <= LEGACY_THROUGH || !isCounted(c.league, day.date)) continue;
       addMarket(MKT, c); // model vs market: every counted game with a price, v4-only cup games included
       // v4 on a newly promoted club (starting rating) is its own line: it stays out of every v4 total below.
@@ -823,6 +845,7 @@ async function tally(env) {
   const v5test = { all: { v4: fin5(V5T.all.v4), v5: fin5(V5T.all.v5) }, fb: { v4: fin5(V5T.fb.v4), v5: fin5(V5T.fb.v5), fb: fin5(V5T.fb.fb) } };
   const calGoals = Object.fromEntries(Object.entries(calG).map(([m, o]) => [m, Object.fromEntries(Object.entries(o).map(([k, bs]) => [k, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]))]));
   return {
+    shots: { top: shFin(SHT.top), second: shFin(SHT.second), watch: shFin(SHT.watch) },
     board, last30, top: topT, tracked: TB, market: finishMarket(MKT), v5test, v6test, leans: { ...LB, recent: LB.recent.sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || '')).slice(0, 40) }, leagues, calGoals,
     smCompare: {
       ...smT, importedMatches: legacySm.length, newMatches: smLive.length,
