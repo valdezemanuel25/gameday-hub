@@ -753,7 +753,6 @@ function expanded(c) {
   return `<div class="ex"><div class="in"><div class="in">
     ${done ? `<div class="two">${mdl}${sm}</div>` : c.sm ? '' : `<div class="two">${sm}</div>`}
     <div class="two"><div class="box" style="${done || !c.fb ? '' : 'grid-column:1/-1'}">Most likely exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b><small style="display:block;margin-top:4px;font-size:11px;color:var(--faint)">The score on the card is the best one that fits the pick, Over/Under and both-score lean.</small></div>${done || !c.fb ? fbBox(c) : ''}</div>
-    ${shotsBox(c)}
     ${candBox(c)}
     <details class="how"><summary>More details</summary>
       <div class="kv"><div class="box">${ou[0]}<b>${ou[1]}%</b><small>${ou[2]} ${ou[3]}%</small></div><div class="box">${bt[0]}<b>${bt[1]}%</b><small>${bt[2]} ${bt[3]}%</small></div></div>
@@ -1015,7 +1014,7 @@ function game(c) {
     <div class="xt"><div class="xk">${xcrest(c.home, cons.strong && cons.side === 'H', c.hId)}<div><b>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away, cons.strong && cons.side === 'A', c.aId)}<div><b>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
     <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'H' ? 'cg' : ''}">${h}%</b></span><span class="mid"><b>Draw ${d}%</b></span><span class="${fav === 'a' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'A' ? 'cg' : ''}">${a}%</b></span></div>
       <div class="b"><i class="h ${fav === 'h' ? 'f' : ''}" style="flex:${h}"></i><i class="d ${fav === 'd' ? 'f' : ''}" style="flex:${d}"></i><i class="a ${fav === 'a' ? 'f' : ''}" style="flex:${a}"></i></div></div>
-    ${S.top ? topBox(c) : headline(c)}${chips(c)}${scoreCard(c)}</button>${open ? expanded(c) : ''}</div>`;
+    ${S.top ? topBox(c) : headline(c)}${chips(c)}${shotsBox(c)}${scoreCard(c)}</button>${open ? expanded(c) : ''}</div>`;
 }
 
 /* ---------- alerts ---------- */
