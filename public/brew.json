@@ -1,6 +1,70 @@
 {
-  "updated": "2026-11-03T11:10:26Z",
+  "updated": "2026-11-03T22:09:52Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-03",
+      "title": "Apple gets Siri-ous",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,377",
+          "change": 0.84
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,568",
+          "change": 0.35
+        },
+        {
+          "label": "Dow",
+          "value": "51,747",
+          "change": -0.46
+        },
+        {
+          "label": "10-yr",
+          "value": "4.952%",
+          "change": 6,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$96.66",
+          "change": 0.21
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$77,676",
+          "change": 1.35
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "Chip stocks rebounded, lifting the Nasdaq 0.84% and S&P 500 0.35% while the Dow slipped 0.46%."
+        },
+        {
+          "h": "Yields",
+          "t": "The 10-year yield rose 6 bps to 4.952% as investors waited on midterm election results."
+        },
+        {
+          "h": "Apple",
+          "t": "Apple posted record revenue of $114.5B (+12%) and $2.10 EPS, but fell 1.90% after warning memory-chip costs will cut gross margin to 45%-46%."
+        },
+        {
+          "h": "Palantir",
+          "t": "Palantir revenue jumped 96% to $2.31B and US commercial sales topped government for the first time, yet shares lost 1.65% on slower bookings."
+        },
+        {
+          "h": "Shopify",
+          "t": "Shopify fell 8.74% after $3.74B revenue missed estimates, even as AI-referred orders grew 3.3x."
+        },
+        {
+          "h": "Movers",
+          "t": "Fiserv surged 12.46% and Eaton gained 7.03%, while Gartner tumbled 13.28% and Dynatrace sank 14.74%."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-11-03",
