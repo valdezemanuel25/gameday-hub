@@ -7,6 +7,7 @@
 // Storage: nhl:state (ratings, one write per batch of finished games), nhl:day:<date> (cards), nhl:fbmeta.
 import SEED from './nhlseed.js';
 import GK from './nhlgk.js';
+import { getShots, saveShots, readOf, addGame } from './nhlshots.js';
 import { hockeyPick, hockeyHit } from './pick.js';
 import { fbHeaders, FB_HV } from './forebetpage.js';
 import { hockeyMove } from './moves.js';
@@ -308,6 +309,10 @@ export function leadFromSummary(j, final) {
   const so = final.last === 'SO' ? (final.h > final.a ? [1, 0] : [0, 1]) : [0, 0]; // the shootout winner's goal is in the final score
   return maxLead(goalSeq(plays, String(h.team?.id ?? h.id), String(a.team?.id ?? a.id), final.h - so[0], final.a - so[1]));
 }
+// The game summary itself (for the lead and the shots + goalie read's goalie numbers): one read, null when it fails.
+export async function fetchSummary(fetchFn, id) {
+  try { const r = await fetchFn(SUMMARY(id), { headers: { 'user-agent': 'gameday-hub/1.0' } }); return r.ok ? await r.json() : null; } catch (e) { return null; }
+}
 export async function fetchLead(fetchFn, id, final) {
   try { const r = await fetchFn(SUMMARY(id), { headers: { 'user-agent': 'gameday-hub/1.0' } }); return r.ok ? leadFromSummary(await r.json(), final) : null; } catch (e) { return null; }
 }
@@ -392,12 +397,30 @@ export async function nhlCardClose(env, date, id, now = new Date(), fetchFn = fe
     if (e.done) return { error: 'ESPN lists this game as finished' };
     if (!e.px) return { error: 'ESPN has no price for this game right now' };
     setPrice(c, e.px, now, true); await updateStarters(env, c, e, date, fetchFn, { S5: null, cache: {}, budget: { n: 8 } });
+    setSg(await getShots(env), c, now, new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000);
   } else if (e.done) {
     if (c.px.cl) return { error: 'This game already has its closing price' };
     if (!e.pxDone || !espnClose(c, e.pxDone)) return { error: "ESPN no longer lists a closing line for this finished game, so the last price stands as the close" };
   } else return { error: "The game has started: ESPN's price may be an in-play one, so the Hub will not take it as the close. Try again after the final." };
   await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now);
   return { ok: true, closed: !!c.px.cl, source: e.done ? 'espn-close' : 'now' };
+}
+// Shots + goalie read (src/nhlshots.js, tracking only) on an unstarted card: re-made when it changes. atClose: taken at the lineup read
+// (the goalies as the teams named them), which is the read kept for testing against the closing price.
+export function setSg(SH, c, now, atClose = false) {
+  if (!SH || !c || c.final || c.skipped) return false;
+  const r = readOf(SH, c.hAbbr, c.aAbbr, c.gk && c.gk.h && c.gk.h.id, c.gk && c.gk.a && c.gk.a.id); if (!r) return false;
+  const st = c.gk ? [c.gk.h ? c.gk.h.st : null, c.gk.a ? c.gk.a.st : null] : [null, null];
+  const next = { ...r, gs: st, at: now.toISOString(), ...(atClose || (c.sg && c.sg.cl) ? { cl: 1 } : {}) };
+  if (c.sg && JSON.stringify({ ...c.sg, at: 0 }) === JSON.stringify({ ...next, at: 0 })) return false;
+  c.sg = next; return true;
+}
+// Add a graded game to the shots + goalie numbers from its summary j. Marks the card done (sgd) when added or when the game is already in
+// the seed; otherwise counts a try (sgt, 3 at most). -> true when the numbers changed
+function shotsFrom(SH, c, e, j) {
+  const added = !!j && addGame(SH, e.id, c.kickoff, e.hc, e.ac, e.hs, e.as, j);
+  if (added || (c.kickoff && c.kickoff <= SH.last) || SH.applied.includes(e.id)) { c.final.sgd = 1; delete c.final.sgt; } else c.final.sgt = (c.final.sgt || 0) + 1;
+  return added;
 }
 export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
   const t = localDate(now.toISOString()), out = [];
@@ -412,6 +435,7 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
       if (setPrice(c, e.px, now)) { dirty = true; out.push(c.id); }
       // The starting goalie, as the team names him: v5 is re-made from it (v2 and v4 do not read it).
       if (await updateStarters(env, c, e, date, fetchFn, st)) { dirty = true; if (!out.includes(c.id)) out.push(c.id); }
+      st.SH = st.SH || await getShots(env); if (setSg(st.SH, c, now, true)) dirty = true; // the read with the goalies as named at the lineup read
     }
     if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); }
   }
@@ -422,6 +446,7 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
 export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = false } = {}) {
   const debug = [], t = localDate(now.toISOString());
   let S = (await env.HUB.get('nhl:state', 'json')) || freshState(), stateDirty = withGk(S);
+  let SH = await getShots(env), shDirty = false; // shots + goalie read (src/nhlshots.js), tracking only
   const dates = [addDays(t, -1), t, addDays(t, 1)];
   const boards = await Promise.all(dates.map(d => scoreboard(d, fetchFn, debug)));
   // Rest: which teams played on which days. The three boards just read, plus the saved days before them. A day that is not known
@@ -455,8 +480,16 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         }
         if (c && espnClose(c, e.pxDone)) { dirty = true; out.closed = (out.closed || 0) + 1; } // missed the lineup read: ESPN's close
         // Leads for early payout: one summary read per finished game, at most 6 a run, 3 tries a game.
-        if (c && c.final && !c.final.lead && (c.final.ldt || 0) < 3 && leadBudget.n > 0) {
-          leadBudget.n--; const ld = await fetchLead(fetchFn, e.id, c.final);
+        // One summary read serves both the lead and the shots + goalie read (src/nhlshots.js: each goalie's shots faced and goals against).
+        const needLead = c && c.final && !c.final.lead && (c.final.ldt || 0) < 3, needSh = c && c.final && !c.final.sgd && (c.final.sgt || 0) < 3;
+        if (needSh && !needLead && leadBudget.n > 0) {
+          leadBudget.n--; const j = await fetchSummary(fetchFn, e.id); SH = SH || await getShots(env);
+          if (shotsFrom(SH, c, e, j)) shDirty = true;
+          dirty = true;
+        }
+        if (needLead && leadBudget.n > 0) {
+          leadBudget.n--; const j = await fetchSummary(fetchFn, e.id); let ld = null; try { ld = j ? leadFromSummary(j, c.final) : null; } catch (er) { ld = null; }
+          if (needSh) { SH = SH || await getShots(env); if (shotsFrom(SH, c, e, j)) shDirty = true; }
           if (ld) { c.final.lead = ld; delete c.final.ldt; if (c.lean) { const ep = earlyPaid(c.lean.key, c.lean.hit, ld, 'nhl'); if (ep != null) c.lean.ep = ep; } } else c.final.ldt = (c.final.ldt || 0) + 1;
           dirty = true; out.leads = (out.leads || 0) + (ld ? 1 : 0);
         }
@@ -485,12 +518,14 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         if (c.ver !== S.ver || moved || ctxMoved || (pr.v5 && !c.v5)) { // ratings moved since this card was made, or the line did
           c.v2 = pr.v2; c.v4 = pr.v4; c.lam = pr.lam; c.ver = S.ver; if (pr.v5) c.v5 = pr.v5; dirty = true; out.refreshed++;
         }
+        if (setSg(SH, c, now)) dirty = true; // shots + goalie read with the listed goalies (tracking only)
       }
     }
     if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); } // the Analyst reads the same prices and finals
   }
   if (S.applied.length > 400) S.applied = S.applied.slice(-400);
   if (stateDirty) await env.HUB.put('nhl:state', JSON.stringify(S));
+  if (shDirty) await saveShots(env, SH);
 
   // Forebet: one page read, at most once per 3 hours (6 after a failure), only when a game still lacks its numbers.
   let fb = null;
