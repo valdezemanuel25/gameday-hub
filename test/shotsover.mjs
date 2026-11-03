@@ -74,5 +74,31 @@ ok('tracking only: MLS and Liga MX keep their shots numbers but the Analyst neve
   const cs = JSON.parse(m.get('day:2026-11-10')).cards;
   ok('price read: a card with no shots numbers gets them from the league context; a club with too few games still gets none', cs[0].sx && cs[0].sx.sot === 8 && cs[0].sx.n === 8 && !cs[1].sx, JSON.stringify(cs.map(c => c.sx)));
 }
+// --- one-time shots fill for stored games saved before shots were recorded (src/data.js backfillShots) ---
+{
+  const { backfillShots } = await import('../src/data.js');
+  const m = new Map(), env = { HUB: { get: async (k, t) => { const x = m.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { m.set(k, x); } } };
+  const iso = i => new Date(Date.UTC(2026, 8, 1 + 3 * i, 15)).toISOString();
+  // 8 old games (no 9th element), 1 game already checked
+  const games = [0, 1, 2, 3, 4, 5, 6, 7].map(i => [`g${i}`, iso(i), '1', '2', 2, 1, 'Home FC', 'Away FC']).concat([['g9', iso(9), '1', '2', 1, 1, 'Home FC', 'Away FC', [9, 4, 7, 2]]]);
+  m.set('res:eng.2', JSON.stringify({ v: 1, through: iso(10), games }));
+  m.set('std3:eng.2:2026', JSON.stringify({})); m.set('std3:eng.2:2025', JSON.stringify({}));
+  const stat = (t, o) => [{ name: 'totalShots', displayValue: String(t) }, { name: 'shotsOnTarget', displayValue: String(o) }];
+  globalThis.fetch = async (u) => { const d = String(u).match(/dates=(\d{8})/)[1], evs = games.filter(g => g[1].slice(0, 10).replace(/-/g, '') === d && g[0] !== 'g3')
+    .map(g => ({ id: g[0], date: g[1], competitions: [{ status: { type: { completed: true } }, competitors: [
+      { homeAway: 'home', score: String(g[4]), team: { id: g[2], displayName: g[6] }, statistics: stat(12, 6) },
+      { homeAway: 'away', score: String(g[5]), team: { id: g[3], displayName: g[7] }, statistics: stat(8, 2) }] }] }));
+    return new Response(JSON.stringify({ events: evs })); };
+  const lg = { slug: 'eng.2' }, now = new Date(Date.UTC(2026, 9, 10));
+  const r1 = await backfillShots(lg, env, now);
+  ok('backfill: fills the oldest 12 days (4 games), leaves the rest for the next call', r1.backfilled === 4 && r1.remaining === 4, JSON.stringify(r1));
+  let r = r1; for (let i = 0; i < 5 && r.remaining; i++) r = await backfillShots(lg, env, now);
+  const st = JSON.parse(m.get('res:eng.2')), g3 = st.games.find(g => g[0] === 'g3'), g0 = st.games.find(g => g[0] === 'g0');
+  ok('backfill: walks to the end; a game ESPN has no shots for is marked null (not asked again); a checked game is untouched',
+    r.remaining === 0 && g0[8].join() === '12,6,8,2' && g3.length === 9 && g3[8] === null && st.games.find(g => g[0] === 'g9')[8].join() === '9,4,7,2', JSON.stringify(st.games.map(g => g[8])));
+  const ctx = JSON.parse(m.get('ctx:eng.2'));
+  ok('backfill: the context is rebuilt, so the clubs now have shots on their recent games', ctx.teams['1'].recent.filter(x => x.length === 7).length >= 5, JSON.stringify(ctx.teams['1'].recent));
+  ok('backfill: nothing left is a no-op', (await backfillShots(lg, env, now)).backfilled === 0);
+}
 console.log(bad ? `\n${bad} FAILED` : '\nAll Shots Over checks passed');
 if (bad) process.exit(1);

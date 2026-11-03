@@ -200,6 +200,34 @@ export async function syncLeague(league, env, now = new Date(), debug) {
   return { caughtUp, games: st.games.length, context: !!ctx };
 }
 
+// One-time fill of shots for stored games saved before shots were recorded (Nov 3, 2026): a stored game with only 8 elements has never
+// been checked. Each call looks at the 12 days starting from the oldest unchecked game, writes the shots found (or null, meaning ESPN
+// had none, so the game is not asked again), and rebuilds the league's context so the shots reach the cards. Call it until remaining is
+// 0 (POST /api/sync?league=<slug>&backfill=1). 13 requests to ESPN a call, one store write and one context write.
+const ymdIso = d => d.toISOString().slice(0, 10);
+export async function backfillShots(league, env, now = new Date(), debug) {
+  const key = `res:${league.slug}`, st = await env.HUB.get(key, 'json');
+  if (!st || !st.games?.length) return { backfilled: 0, remaining: 0 };
+  const todo = st.games.filter(g => g.length < 9);
+  if (!todo.length) return { backfilled: 0, remaining: 0 };
+  const from = new Date(todo.map(g => g[1]).sort()[0]), to = new Date(Math.min(now.getTime(), from.getTime() + 11 * DAY));
+  const dbg = debug || [], evs = await scoreboard(league.slug, new Date(from.getTime() - DAY), to, dbg); // a day early: ESPN files late US kickoffs under the local date
+  if (dbg.length) return { backfilled: 0, remaining: todo.length, error: dbg.join('; ') };
+  const shots = new Map(evs.filter(e => e.done).map(e => [e.id, e.shots || null]));
+  let n = 0;
+  for (const g of st.games) {
+    if (g.length >= 9) continue;
+    // found in what was fetched: keep its shots; not found but its day was fetched: ESPN has none (null); otherwise wait for a later call
+    const d = String(g[1]).slice(0, 10);
+    if (shots.has(g[0])) g[8] = shots.get(g[0]); else if (d >= ymdIso(from) && d <= ymdIso(to)) g[8] = null; else continue;
+    n++;
+  }
+  await env.HUB.put(key, JSON.stringify(st));
+  const left = st.games.filter(g => g.length < 9).length;
+  if (!league.cup) await buildContext(league, env, now, debug);
+  return { backfilled: n, withShots: [...shots.values()].filter(Boolean).length, remaining: left, through: to.toISOString().slice(0, 10) };
+}
+
 async function touchSynced(slug, env, now) {
   const m = (await env.HUB.get('meta:synced', 'json')) || {};
   m[slug] = now.toISOString();

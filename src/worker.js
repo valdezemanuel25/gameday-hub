@@ -4,7 +4,7 @@ import { scoreCard } from './v6core.js';
 import { usualOverSide, supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
   TZ, LEAGUES, UNTRACKED, isCounted, FIRST_DIV, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
-  findTeam, getContext, missingContexts, fixturesForLeague, rawOdds, oddsWhy, shotsCoverage, PRICED,
+  findTeam, getContext, missingContexts, backfillShots, fixturesForLeague, rawOdds, oddsWhy, shotsCoverage, PRICED,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
 import { forebetStep, forebetFetch, FB_PAGES, matchRows, is as isName } from './forebetpage.js';
@@ -1131,6 +1131,7 @@ const hub = {
       const league = leagueBySlug(q('league'));
       if (!league) return json({ error: 'Pass ?league=<slug>, one league per request' }, 400);
       try {
+        if (p === '/api/sync' && q('backfill') === '1') return json({ ok: true, ...(await backfillShots(league, env)) }); // one-time shots fill (src/data.js)
         if (p === '/api/sync') { const r = await syncLeague(league, env); await syncNote(env, league, r); return json({ ok: true, ...r }); }
         if (p === '/api/analyze') {
           const r = await analyzeLeague(q('date') || addDays(today(), 1), league.slug, env, new Date(), { partial: q('partial') === '1', leftover: q('leftover') === '1' });
