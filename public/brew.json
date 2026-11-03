@@ -1,6 +1,71 @@
 {
-  "updated": "2026-11-02T22:00:23Z",
+  "updated": "2026-11-03T11:10:26Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-03",
+      "title": "Putting it to a vote",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,164",
+          "change": -1.07
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,541",
+          "change": -0.51
+        },
+        {
+          "label": "Dow",
+          "value": "51,984",
+          "change": 0.41
+        },
+        {
+          "label": "10-yr",
+          "value": "4.894%",
+          "change": -4,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$76,829",
+          "change": -1.13
+        },
+        {
+          "label": "Sherwin-Williams",
+          "value": "$352.37",
+          "change": 5.94
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Midterms",
+          "t": "Today decides control of Congress, with Republicans holding a 218-214 House edge and a 53-47 Senate edge; polls suggest Democrats may flip the House while the Senate is closer to a tossup."
+        },
+        {
+          "h": "On the ballot",
+          "t": "36 governorships are up, plus 40+ data-center measures nationwide and California's Prop 40, a one-time 5% tax on billionaires' wealth."
+        },
+        {
+          "h": "Marvell-Lumentum",
+          "t": "Marvell will buy optical maker Lumentum for $115 billion including debt, the second-largest tech deal ever; Marvell fell 13% and Lumentum 19%."
+        },
+        {
+          "h": "Palantir",
+          "t": "Q3 revenue of $2.31 billion nearly doubled, US commercial jumped 148% to $984 million versus $953 million from government, and 2026 guidance rose to $8.53 billion."
+        },
+        {
+          "h": "Fridge hacks",
+          "t": "Hackers pushed supermarket fridges in seven European countries into defrost mode, with temperatures hitting 122F; over 20 refrigeration attacks have occurred this year."
+        },
+        {
+          "h": "Worker engagement",
+          "t": "Gallup found engagement fell to 29%, a 15-year low, with 18% actively disengaged and only 46% clear on what is expected of them."
+        }
+      ],
+      "note": "Market numbers are the Nov 2 close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-02",
@@ -64,39 +129,6 @@
           "t": "Marriott beat estimates with $7B revenue, $3.02 adjusted EPS and raised 2026 RevPAR growth guidance to 4.5%-5%; shares rose 4.26%."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-02",
-      "title": "More mustard",
-      "markets": [],
-      "takeaways": [
-        {
-          "h": "ACA premiums",
-          "t": "2027 open enrollment runs through Dec 15, and a 40-year-old on a bronze plan pays $511 a month versus $385 in 2025, up 34%."
-        },
-        {
-          "h": "Insurer exits",
-          "t": "11 insurers are fully or partly leaving ACA marketplaces, including Cigna in all 11 of its states (350,000+ enrollees); state hikes range from 3% in Vermont to 28% in Arizona."
-        },
-        {
-          "h": "In-N-Out",
-          "t": "The chain, at 445 restaurants in 10 states, is weighing Arkansas, Mississippi and Oklahoma, with New Mexico planned next year; sales grew about 10% last year."
-        },
-        {
-          "h": "Earnings week",
-          "t": "Apple (John Ternus's first call as CEO) and Palantir report today, with AMD, Shopify and Pfizer tomorrow, then Arm, Qualcomm, McDonald's and Uber on Wednesday."
-        },
-        {
-          "h": "Clorox",
-          "t": "Clorox reports today after naming Unilever exec Fabian Garcia CEO from January; the stock is down 8.29% year to date at about $88."
-        },
-        {
-          "h": "Macro",
-          "t": "Midterms are tomorrow, September inflation was 3.7%, and Friday's October jobs report follows September's weak 29,000 gain."
-        }
-      ],
-      "note": "Newsletter lists only year-to-date market moves today (S&P 500 +10.73%, Nasdaq +9.44%, 10-year 4.929%, Bitcoin $78,490); daily closes are in Brew Markets."
     },
     {
       "source": "Brew Markets",
@@ -557,7 +589,7 @@
         {
           "label": "Nasdaq",
           "value": "25,437",
-          "change": -2.0
+          "change": -2
         },
         {
           "label": "Russell 2000",
