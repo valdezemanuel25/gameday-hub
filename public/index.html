@@ -1250,7 +1250,7 @@ function movesView() {
     const why = now >= ko || c.final ? 'No price was read before kickoff.' : urgent ? 'Under an hour to kickoff and still no price, so the Analyst can\'t bet this game.' : 'ESPN hasn\'t posted a DraftKings price yet. The Hub checks every 6 hours, then hourly in the last 3.';
     const w = NPW[c.id]; // the "No price" check: busy, or its answer
     const res = w ? (w.busy ? '<small class="mvn npw">Checking ESPN…</small>' : `<small class="mvn npw ${esc(w.kind)}"><b>${esc(w.title)}.</b> ${esc(w.detail)}</small>`) : '<small class="mvn nph">Tap No price to check why.</small>';
-    return `<div class="mvg np${urgent ? ' np2' : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Open this game on the Board"><b>${esc(c.home)} v ${esc(c.away)}</b></button><button type="button" class="cs nop act" data-npwhy="${esc(c.id)}" data-lg="${esc(c.league)}"${w && w.busy ? ' disabled' : ''}>● No price ›</button></div>
+    return `<div class="mvg np${urgent ? ' np2' : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Show this game card"><b>${esc(c.home)} v ${esc(c.away)}</b></button><button type="button" class="cs nop act" data-npwhy="${esc(c.id)}" data-lg="${esc(c.league)}"${w && w.busy ? ' disabled' : ''}>● No price ›</button></div>
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${c.final ? ` · final ${c.final.h}–${c.final.a}` : ''}</small><small class="mvn npr">${why}</small>${res}</div>`;
   };
   const card = ({ c, mv, st, np }) => {
@@ -1272,7 +1272,7 @@ function movesView() {
       : btRow ? 'Both score has no price of its own here: its chance is read off the score card at each price.' : '';
     const follow = fin ? (mv.size < 2 ? 'the price barely moved' : mv.d[out] > 0 ? 'the result went the way of the move' : 'the result went against the move') : '';
     const fl = socFlags(c, mv, pinnMove(o), st);
-    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Open this game on the Board"><b>${esc(c.home)} v ${esc(c.away)}</b></button>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
+    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Show this game card"><b>${esc(c.home)} v ${esc(c.away)}</b></button>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.odds.fa)}${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
       ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}${(sr => sr ? `<tr class="shr"><td class="n">Shots read${sr.watch ? ' (untested)' : ''}</td><td colspan="4" style="text-align:right">Over 2.5 <b>${Math.round(sr.q)}%</b></td></tr>` : '')(shotsReadOf(c))}</table>${ouNote}${o.src ? `<small class="mvn">${esc(BOOKS[o.src] || o.src)} prices: ESPN had no DraftKings price for this game, so the Hub tracks ${esc(BOOKS[o.src] || o.src)}'s (no opening price; the move is from the first one seen). The Analyst does not bet on them.</small>` : ''}
@@ -2136,12 +2136,11 @@ document.addEventListener('click', async e => {
   if (t.dataset.af) { S.af = t.dataset.af; return render(); }
   if (t.dataset.tm) { S.tm = t.dataset.tm; keepFilter(); return render(); }
   if (t.dataset.more) { S.more[t.dataset.more] = !S.more[t.dataset.more]; return render(); }
-  // Movement card title: back to that game's card on the Board (open, and scrolled to). A finished game is in the Finished list.
+  // Movement card title: the game's Board card pops up over the Movement tab in a spotlight card (public/spotlight.js); you stay here.
   if (t.dataset.goboard) {
-    const id = t.dataset.goboard; S.tab = 'board'; S.league = 'all'; S.top = false; S.sel = id; S.open = id; S.back = null; saveView(); render();
-    if (!document.getElementById('sdt')) { S.sel = null; S.fin = true; render(); }
-    requestAnimationFrame(() => { const d = document.getElementById('sdt') || document.querySelector(`button.hd[data-id="${CSS.escape(id)}"]`); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); else window.scrollTo(0, 0); });
-    return; }
+    const id = t.dataset.goboard, c = (day.cards || []).find(x => x.id === id); if (!c || !window.Spotlight) return;
+    const was = S.open; S.open = id; const html = game(c); S.open = was; // the card as it sits on the Board, opened
+    Spotlight.open(html, t); return; }
   if (t.dataset.ssel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
     const g = document.getElementById('sgrid'), x = g ? g.scrollLeft : 0, closing = S.sel === t.dataset.ssel;
     if (closing) S.sel = null; else { if (!S.sel) S.back = window.scrollY; S.sel = t.dataset.ssel; }
@@ -2179,5 +2178,6 @@ try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js
 </script>
 <script src="/waves.js" data-color="#C8FF2E" data-opacity="0.55" defer></script>
 <script src="/sweep.js" defer></script>
+<script src="/spotlight.js" defer></script>
 </body>
 </html>

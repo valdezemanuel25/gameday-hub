@@ -469,7 +469,7 @@ function movesView() {
       + (px.tl != null && c.sg && c.sg.p && c.sg.p[String(px.tl)] != null ? `<tr class="shr"><td class="n">Shots + goalie</td><td colspan="4" style="text-align:right">Over ${px.tl} <b>${Math.round(c.sg.p[String(px.tl)])}%</b></td></tr>` : '');
     const follow = fin && ml ? (Math.abs(ml.d) < 2 ? 'moneyline barely moved' : (ml.d > 0) === hw ? 'winner went the way of the move' : 'winner went against the move') : '';
     const fl = cardFlags(c, hm);
-    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Open this game on the Board"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b></button>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}${gkRestTags(c)}
+    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Show this game card"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b></button>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}${gkRestTags(c)}
       <small>${esc(c.away)} at ${esc(c.home)} · ${esc(c.ko || '')}${fin ? ` · final ${fin.a}–${fin.h}${fin.last !== 'REG' ? ' ' + esc(fin.last) : ''}${follow ? ' · ' + follow : ''}` : ''}${hm.big ? ` · <span class="mvf">big move: ${esc(mvWord(c, hm))}</span>` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.px.fa)}${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
       ${px.ts ? `<small class="mvn">Price last changed ${tmCT(px.ts)}</small>` : ''}</div>`;
@@ -769,12 +769,10 @@ document.addEventListener('click', async e => {
   if (t.dataset.mvf) { S.mvf = t.dataset.mvf; return render(); }
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.push) return pushAct(t.dataset.push);
-  // Movement card title: back to that game's card on the Board (open, and scrolled to). A finished game is in the Finished list.
+  // Movement card title: the game's Board card pops up over the Movement tab in a spotlight card (public/spotlight.js); you stay here.
   if (t.dataset.goboard) {
-    const id = t.dataset.goboard; S.tab = 'board'; S.sel = id; S.ln = null; S.back = null; render();
-    if (!document.getElementById('dt')) { S.sel = null; S.fin = true; render(); }
-    requestAnimationFrame(() => { const d = document.getElementById('dt') || document.getElementById('fc-' + id); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); else window.scrollTo(0, 0); });
-    return; }
+    const id = t.dataset.goboard, c = ((day && day.cards) || []).find(x => x.id === id); if (!c || !window.Spotlight) return;
+    Spotlight.open(card(c), t); return; }
   if (t.dataset.sel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
     const sc = document.getElementById('bgrid'), x = sc ? sc.scrollLeft : 0, closing = S.sel === t.dataset.sel;
     if (closing) { S.sel = null; S.ln = null; } else { if (!S.sel) S.back = window.scrollY; S.sel = t.dataset.sel; S.ln = null; }
@@ -812,5 +810,6 @@ try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js
 </script>
 <script src="/waves.js" data-color="#FF4D57" data-opacity="0.55" defer></script>
 <script src="/sweep.js" defer></script>
+<script src="/spotlight.js" defer></script>
 </body>
 </html>
