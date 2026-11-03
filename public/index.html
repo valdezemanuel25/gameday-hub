@@ -1044,25 +1044,25 @@ const SHOTS_C = {"C":-0.0442,"M":1.1388,"S":0.0483,"G":0.0188,"T":-0.1384,"mean"
 // The shots read's Over 2.5 chance for a card at its current DraftKings price: { q, pr, W } or null (tracked-only leagues, no shots
 // numbers, or no DraftKings 2.5 price). Used by the card's Shots read box and the Movement card's Shots read row.
 function shotsReadOf(c) {
-  const sec = SHOTS_C.second.leagues.includes(c.league), W = sec ? SHOTS_C.second : SHOTS_C, x = c.sx, o = c.odds;
-  if ((!SHOTS_C.leagues.includes(c.league) && !sec) || !x || !o || o.src || o.tl !== 2.5 || !Number.isFinite(o.to) || !Number.isFinite(o.tu)) return null;
+  // MLS and Liga MX (watch): read with the top-league weights, display only and marked untested there (no Analyst bet)
+  const sec = SHOTS_C.second.leagues.includes(c.league), watch = SHOTS_C.watch.includes(c.league), W = sec ? SHOTS_C.second : SHOTS_C, x = c.sx, o = c.odds;
+  if ((!SHOTS_C.leagues.includes(c.league) && !sec && !watch) || !x || !o || o.src || o.tl !== 2.5 || !Number.isFinite(o.to) || !Number.isFinite(o.tu)) return null;
   const dv = m => (m > 0 ? 100 / (m + 100) : -m / (-m + 100)), pa = dv(o.to), pb = dv(o.tu), pr = 100 * pa / (pa + pb);
   const p = Math.min(99, Math.max(1, pr)) / 100, z = k => (x[k] - W.mean[k]) / W.sd[k];
-  return { q: 100 / (1 + Math.exp(-(W.C + W.M * Math.log(p / (1 - p)) + W.S * z('sot') + W.G * z('gl') + W.T * z('sh')))), pr, W };
+  return { q: 100 / (1 + Math.exp(-(W.C + W.M * Math.log(p / (1 - p)) + W.S * z('sot') + W.G * z('gl') + W.T * z('sh')))), pr, W, watch };
 }
 function shotsBox(c) {
   const watch = SHOTS_C.watch.includes(c.league);
   const sec = SHOTS_C.second.leagues.includes(c.league), W = sec ? SHOTS_C.second : SHOTS_C; // second divisions use their own weights
   if (!SHOTS_C.leagues.includes(c.league) && !sec && !watch) return '';
   const x = c.sx;
-  // MLS and Liga MX: numbers saved for tracking only, no read (the weights were fitted on European prices) and no Analyst bet
-  if (watch) return x ? `<div class="box f">Shots <span class="pv">tracking only</span><b style="font-size:12.5px;font-weight:500;color:var(--dim)">On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)</b><small>Saved with the DraftKings Over/Under price to test the Shots Over rule here once a few hundred games are in. No read or bet yet.</small></div>` : '';
   if (!x) return c.final ? '' : `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">No shots read yet. It fills in at the card's next price check, once both clubs have 5 of their last 8 league games with shots.</b></div>`;
   const o = c.odds, okPx = o && !o.src && o.tl === 2.5 && Number.isFinite(o.to) && Number.isFinite(o.tu);
   const nums = `On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)`;
   if (!okPx) return `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">No DraftKings Over/Under 2.5 price yet</b><small>${esc(nums)}</small></div>`;
   const { q, pr } = shotsReadOf(c);
-  const gap = q - pr, r = v => Math.round(v), pick = gap >= W.EDGE;
+  const gap = q - pr, r = v => Math.round(v), pick = !watch && gap >= W.EDGE; // MLS / Liga MX: never a pick, the Analyst does not bet them
+  if (watch) return `<div class="box f">Shots read <span class="pv">untested in this league</span><b>Over 2.5 ${r(q)}% <span style="font-weight:500;color:var(--dim)">vs DraftKings ${r(pr)}% (${gap >= 0 ? '+' : ''}${r(gap)})</span></b><small>${esc(nums)}. Read with the top-league weights: display only, no Analyst bets here until it is tested on this league's prices.</small></div>`;
   return `<div class="box f">Shots read${pick ? ' <span class="pv val">Shots Over pick</span>' : ''}<b>Over 2.5 ${r(q)}% <span style="font-weight:500;color:var(--dim)">vs DraftKings ${r(pr)}% (${gap >= 0 ? '+' : ''}${r(gap)})</span></b><small>${esc(nums)}${pick ? '' : `. The Analyst bets Over at ${W.EDGE}+ points above the price`}</small></div>`;
 }
 function candBox(c) {
@@ -1275,7 +1275,7 @@ function movesView() {
     return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.odds.fa)}${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
-      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}${(sr => sr ? `<tr class="shr"><td class="n">Shots read</td><td colspan="4" style="text-align:right">Over 2.5 <b>${Math.round(sr.q)}%</b></td></tr>` : '')(shotsReadOf(c))}</table>${ouNote}${o.src ? `<small class="mvn">${esc(BOOKS[o.src] || o.src)} prices: ESPN had no DraftKings price for this game, so the Hub tracks ${esc(BOOKS[o.src] || o.src)}'s (no opening price; the move is from the first one seen). The Analyst does not bet on them.</small>` : ''}
+      ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}${(sr => sr ? `<tr class="shr"><td class="n">Shots read${sr.watch ? ' (untested)' : ''}</td><td colspan="4" style="text-align:right">Over 2.5 <b>${Math.round(sr.q)}%</b></td></tr>` : '')(shotsReadOf(c))}</table>${ouNote}${o.src ? `<small class="mvn">${esc(BOOKS[o.src] || o.src)} prices: ESPN had no DraftKings price for this game, so the Hub tracks ${esc(BOOKS[o.src] || o.src)}'s (no opening price; the move is from the first one seen). The Analyst does not bet on them.</small>` : ''}
       ${btNote ? `<small class="mvn">${btNote}</small>` : ''}
       ${pinnNote(c, o)}
       ${o.ts ? `<small class="mvn">Price last changed ${tmCT(o.ts)}</small>` : ''}</div>`;
