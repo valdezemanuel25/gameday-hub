@@ -757,6 +757,7 @@ function expanded(c) {
   return `<div class="ex"><div class="in"><div class="in">
     ${done ? `<div class="two">${mdl}${sm}</div>` : c.sm ? '' : `<div class="two">${sm}</div>`}
     <div class="two"><div class="box" style="${done || !c.fb ? '' : 'grid-column:1/-1'}">Most likely exact scores<b style="font-size:12.5px">${v.scores.slice(0, 3).map(s => `${esc(s[0])} <span class="fnt" style="font-weight:500">${s[1]}%</span>`).join(' &nbsp; ')}</b><small style="display:block;margin-top:4px;font-size:11px;color:var(--faint)">The score on the card is the best one that fits the pick, Over/Under and both-score lean.</small></div>${done || !c.fb ? fbBox(c) : ''}</div>
+    ${shotsBox(c)}
     ${candBox(c)}
     <div class="box f note">Your note<textarea id="note-${esc(c.id)}" maxlength="500" placeholder="Injuries, rotation, anything the model can't see">${esc(c.note || '')}</textarea>
       <div class="rw"><select id="mine-${esc(c.id)}" aria-label="Your pick">${[['', 'No pick of my own'], ['H', c.home + ' win'], ['D', 'Draw'], ['A', c.away + ' win']].map(([v, l]) => `<option value="${v}" ${(c.mine || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><button type="button" class="sv" data-save="${esc(c.id)}">Save</button></div></div>
@@ -1044,6 +1045,22 @@ function alerts() {
 // v4 line for a game with no full card (a club's league results are missing, but the v4 cup model had a prediction)
 // Forebet picks entered by hand. Recorded and graded only; no model reads them.
 /* Games a fetch could not match by name: verify the pair, then assign it to this card. */
+// Shots read on Over 2.5 (Nov 3, 2026): the same read as the Analyst's Shots Over rule (src/shots.js; test/shotsover.mjs checks these
+// numbers match). Display only: it changes no model or pick.
+const SHOTS_C = {"C":-0.0442,"M":1.1388,"S":0.0483,"G":0.0188,"T":-0.1384,"mean":{"sot":8.626,"gl":2.787,"sh":24.84},"sd":{"sot":1.123,"gl":0.516,"sh":2.104},"N":8,"MIN":5,"EDGE":3,"leagues":["eng.1","eng.2","ger.1","esp.1","ita.1","fra.1","ned.1"]};
+function shotsBox(c) {
+  if (!SHOTS_C.leagues.includes(c.league)) return '';
+  const x = c.sx;
+  if (!x) return c.final ? '' : `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">Not enough recent shots data for one or both clubs (5 of the last 8 league games needed).</b></div>`;
+  const o = c.odds, okPx = o && !o.src && o.tl === 2.5 && Number.isFinite(o.to) && Number.isFinite(o.tu);
+  const nums = `On target ${x.sot} · shots ${x.sh} · goals ${x.gl} a game, both clubs together (up to their last 8 league games)`;
+  if (!okPx) return `<div class="box f">Shots read<b style="font-size:12.5px;font-weight:500;color:var(--dim)">No DraftKings Over/Under 2.5 price yet</b><small>${esc(nums)}</small></div>`;
+  const dv = m => (m > 0 ? 100 / (m + 100) : -m / (-m + 100)), pa = dv(o.to), pb = dv(o.tu), pr = 100 * pa / (pa + pb);
+  const p = Math.min(99, Math.max(1, pr)) / 100, z = k => (x[k] - SHOTS_C.mean[k]) / SHOTS_C.sd[k];
+  const q = 100 / (1 + Math.exp(-(SHOTS_C.C + SHOTS_C.M * Math.log(p / (1 - p)) + SHOTS_C.S * z('sot') + SHOTS_C.G * z('gl') + SHOTS_C.T * z('sh'))));
+  const gap = q - pr, r = v => Math.round(v), pick = gap >= SHOTS_C.EDGE;
+  return `<div class="box f">Shots read${pick ? ' <span class="pv val">Shots Over pick</span>' : ''}<b>Over 2.5 ${r(q)}% <span style="font-weight:500;color:var(--dim)">vs DraftKings ${r(pr)}% (${gap >= 0 ? '+' : ''}${r(gap)})</span></b><small>${esc(nums)}${pick ? '' : `. The Analyst bets Over at ${SHOTS_C.EDGE}+ points above the price`}</small></div>`;
+}
 function candBox(c) {
   const list = cands.filter(i => i.cardId === c.id);
   if (!list.length || c.final || new Date(c.kickoff).getTime() <= Date.now()) return '';

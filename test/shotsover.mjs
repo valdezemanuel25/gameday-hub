@@ -46,5 +46,11 @@ ok('shotsOver: Analyst 2 bets it at the lineup read', (b => b && b.key === 'O' &
   ok('buildContext: shots kept on each club\'s recent games, the right way round; a game without shots stays plain',
     h && a && h.recent[0].join() === [day(0), 2, 1, 12, 6, 8, 2].join() && a.recent[0].join() === [day(0), 1, 2, 8, 2, 12, 6].join() && h.recent[5].length === 3, JSON.stringify(h && h.recent));
 }
+// --- the card's Shots read box (public/index.html) uses the same numbers and leagues ---
+{
+  const fs = await import('node:fs'), html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const m = html.match(/const SHOTS_C = (\{.*\});/), C = m && JSON.parse(m[1]);
+  ok('card: the Shots read box uses the same weights, scaling, edge and leagues as the rule', C && JSON.stringify({ ...SHOTS, leagues: [...LEAGUES] }) === JSON.stringify(C));
+}
 console.log(bad ? `\n${bad} FAILED` : '\nAll Shots Over checks passed');
 if (bad) process.exit(1);
