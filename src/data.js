@@ -246,8 +246,10 @@ export async function buildContext(league, env, now = new Date(), debug) {
   const games = st.games.slice().sort((a, b) => new Date(a[1]) - new Date(b[1]));
   const recent = new Map(), names = {};
   let curIso = '';
-  const push = (id, gf, ga) => { if (!recent.has(id)) recent.set(id, []); recent.get(id).push({ gf, ga, t: curIso }); };
-  for (const [, iso, h, a, hs, as, hn, an] of games) { curIso = iso; push(h, hs, as); push(a, as, hs); names[h] = hn; names[a] = an; }
+  // sh: [shots, on target, shots against, on target against] when ESPN gave the game's shots (src/shots.js reads them)
+  const push = (id, gf, ga, sh) => { if (!recent.has(id)) recent.set(id, []); recent.get(id).push({ gf, ga, t: curIso, sh }); };
+  for (const [, iso, h, a, hs, as, hn, an, sx] of games) { curIso = iso; const ok = Array.isArray(sx) && sx.length === 4 && sx.every(Number.isFinite);
+    push(h, hs, as, ok ? [sx[0], sx[1], sx[2], sx[3]] : null); push(a, as, hs, ok ? [sx[2], sx[3], sx[0], sx[1]] : null); names[h] = hn; names[a] = an; }
 
   const haveStd = Object.keys(cur).length > 0;
   if (!haveStd) debug?.push(`no standings for ${league.slug} ${season}: season totals approximated from last ~50 days`);
@@ -275,7 +277,8 @@ export async function buildContext(league, env, now = new Date(), debug) {
       last: p ? { gf: p.gf, ga: p.ga, gp: p.gp } : { gf: leagueAvg * 0.85 * 20, ga: leagueAvg * 1.15 * 20, gp: 20 },
       form: { gf: last5.reduce((x, g) => x + g.gf, 0), ga: last5.reduce((x, g) => x + g.ga, 0), n: last5.length },
       // dated history so a card can use only games played BEFORE its kickoff
-      recent: (recent.get(id) || []).slice(-8).map(g => [g.t, g.gf, g.ga]),
+      // with shots when known: [iso, gf, ga, shots, on target, shots against, on target against]
+      recent: (recent.get(id) || []).slice(-8).map(g => (g.sh ? [g.t, g.gf, g.ga, ...g.sh] : [g.t, g.gf, g.ga])),
       rank: cur[id]?.rank ?? null,
     };
   }

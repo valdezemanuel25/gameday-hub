@@ -22,6 +22,7 @@
 //   closing price none of these rules made money; see the numbers in the comments on RULES. The live test is whether betting at
 //   earlier reads, before a move has finished, does better than the close.
 import { devig } from './v6core.js';
+import { shotsOver, SHOTS } from './shots.js';
 import { leanHit, hockeyHit } from './pick.js';
 import { hockeyMove } from './moves.js';
 import { SECOND_PRICED } from './data.js';
@@ -49,7 +50,7 @@ const openTotal = odds => odds && (odds.opt || (odds.f && odds.f.tl != null ? od
 // What the Analyst sees on one card: the move since the opening price and v4 against the price now, for home / draw / away and Over 2.5.
 // v4: { p: [h, d, a] %, over % }; open / now: American prices { h, d, a, tl, to, tu }.
 // pinBt: Pinnacle's both-score price may stand in for DraftKings' (second divisions, which have no Odds API league: lookCard)
-export function view({ v4, open, now, openT, v2 = null, pinBt = false }) {
+export function view({ v4, open, now, openT, v2 = null, pinBt = false, sx = null }) {
   const a = hdaOf(open), b = hdaOf(now);
   if (!a || !b || !v4 || !Array.isArray(v4.p)) return null;
   const p0 = a.map(x => 100 * x), p1 = b.map(x => 100 * x);
@@ -62,6 +63,7 @@ export function view({ v4, open, now, openT, v2 = null, pinBt = false }) {
   const btBook = !now.bk || now.bk === 'draftkings' ? 'draftkings' : pinBt && now.bk === 'pinnacle' ? 'pinnacle' : null;
   const bt = Number.isFinite(now.by) && Number.isFinite(now.bn) && btBook ? devig(now.by, now.bn) : null;
   if (bt && typeof v4.btts === 'number') out.bt = { p1: 100 * bt[0], v4: v4.btts, v2: v2 && typeof v2.btts === 'number' ? v2.btts : null, px: [now.by, now.bn], bk: btBook };
+  if (sx && Number.isFinite(sx.sot) && Number.isFinite(sx.gl) && Number.isFinite(sx.sh)) out.sx = sx; // shots numbers (src/shots.js), Shots Over only
   return out;
 }
 const pickIdx = (vals, ok) => { let j = -1; vals.forEach((v, i) => { if (ok(i) && (j < 0 || v > vals[j])) j = i; }); return j; };
@@ -114,6 +116,12 @@ export const RULES = [
     // 17 bets, 65% hit, +46% (first half +74%, second half +14%)
     pick: V => { const o = V.ou; if (!o || o.v2 == null || o.p1 < 55 || !(o.p1 + o.e < o.p1) || !(o.v2 < o.p1)) return null;
       return { key: 'U', price: o.px[1], why: `Over 2.5 priced ${r1(o.p1)}%, v4 ${r1(o.p1 + o.e)}%, v2 ${r1(o.v2)}%: the price leans Over more than both models` }; } },
+  // Nov 3, 2026, paper test: the shots-on-target read (src/shots.js) on Over 2.5. Walk-forward at Bet365's closing price, 7 European
+  // leagues: fitted on 2024-25 (128 bets +6.5%), then 2025-26 to Nov 2026 58 bets +7.0%. At the lineup read, like the price it was
+  // tested on. Only cards with shots numbers (card.sx: the 7 leagues, 5+ recent games with shots for both clubs).
+  { id: 'shotsOver', set: 2, mk: ['ou'], late: true, name: 'Shots Over: shots on target say more goals than the price', rule: 'At the lineup read: the shots read (last 8 league games: shots on target, goals and total shots for and against, starting from DraftKings\' Over chance) rates Over 2.5 3+ points above DraftKings\' price (margin removed): bet Over 2.5. Premier League, Championship, Bundesliga, La Liga, Serie A, Ligue 1, Eredivisie',
+    pick: V => { const o = V.ou, x = V.sx; if (!o || !x) return null; const q = shotsOver(o.p1, x); if (q - o.p1 < SHOTS.EDGE) return null;
+      return { key: 'O', price: o.px[0], why: `Over 2.5 priced ${r1(o.p1)}%, shots read ${r1(q)}% (on target ${x.sot}, shots ${x.sh}, goals ${x.gl} a game): shots point to more goals` }; } },
   { id: 'bttsNo', set: 2, mk: ['btts'], name: 'Both score No: price too high on Yes', rule: 'DraftKings rates both teams to score Yes at 58%+ (margin removed) and v4 rates it lower: bet No',
     // 67 bets, 46% hit, +26% (first half +24%, second half +29%); also needing v2 below the price: 41 bets, +25%
     pick: V => { const t = V.bt; if (!t || t.p1 < 58 || !(t.v4 < t.p1)) return null;
@@ -144,7 +152,7 @@ const BOOKN = { pinnacle: 'Pinnacle', betfair_ex_eu: 'Betfair', betfair_ex_uk: '
 // The Analyst only bets a card with a v4 number that is not the rough promoted-club stand-in, and with a price to read.
 export function lookCard(c) {
   if (!c || c.final || !c.odds || c.odds.src || !c.v4 || !Array.isArray(c.v4.p) || c.v4.promo) return null; // src: a stand-in book, not DraftKings
-  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2, pinBt: SECOND_PRICED.has(c.league) });
+  return view({ v4: c.v4, open: openOf(c.odds), now: c.odds, openT: openTotal(c.odds), v2: c.v2, pinBt: SECOND_PRICED.has(c.league), sx: c.sx || null });
 }
 // One position per game per market (1X2, Over/Under, Both score) per rule set: the first rule to fire takes it, in RULES order, and later
 // reads never add to it or bet the other side. A benched rule places nothing. sharp: Map(cardId -> sharpOf) for the stale-price rule, or null.
