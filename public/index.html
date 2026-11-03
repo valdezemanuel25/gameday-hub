@@ -239,7 +239,7 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 /* Movement: a game in a priced league with no price (red outline, "No price" signal; brighter under an hour to kickoff) */
 .mvg.np{border-color:rgba(255,107,122,.5);box-shadow:inset 3px 0 0 rgba(255,107,122,.85)}.mvg.np2{border-color:rgba(255,107,122,.95);box-shadow:inset 3px 0 0 #FF6B7A,0 0 16px rgba(255,107,122,.25)}
 .cs.nop{background:rgba(255,107,122,.15);color:#FF8A96;border:0;font:inherit;font-size:11px;font-weight:650;cursor:pointer}.cs.nop:disabled{opacity:.6}.mvg .nph{display:block;margin-top:4px;color:var(--faint)}.mvg .npw{display:block;margin-top:6px;padding:7px 9px;border-radius:9px;background:rgba(255,107,122,.08);color:var(--ink)}.mvg .npw.saved{background:rgba(var(--acc-rgb),.12)}.mvg .npw b{font-weight:650}.mvg .npr{display:block;margin-top:5px;color:#FFB3BB}.tseg button i b.np{color:#FF8A96;font-weight:650}.tseg button.on i b.np{color:#C62F43}
-.mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
+.mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}.mvg .mvgo{all:unset;cursor:pointer;text-align:left}.mvg .mvgo:hover b,.mvg .mvgo:focus-visible b{text-decoration:underline}
 .mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--dim)}.cs.due{background:rgba(240,181,74,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
 .mvg.lv-r{border-color:rgba(var(--acc-rgb),.6);box-shadow:inset 3px 0 0 rgb(var(--acc-rgb)),0 0 14px rgba(var(--acc-rgb),.16)}.mvg.lv-a{border-color:rgba(var(--acc-rgb),.26);box-shadow:inset 3px 0 0 rgba(var(--acc-rgb),.42)}
 .mvfl{margin:5px 0 1px}.fl{display:inline-block;font-size:10.5px;font-weight:700;margin:2px 10px 0 0;color:var(--dim)}.fl.r{color:rgb(var(--acc-rgb));text-shadow:0 0 8px rgba(var(--acc-rgb),.4)}.fl.a{color:rgba(var(--acc-rgb),.7)}.fl.g{color:var(--ink)}
@@ -1250,7 +1250,7 @@ function movesView() {
     const why = now >= ko || c.final ? 'No price was read before kickoff.' : urgent ? 'Under an hour to kickoff and still no price, so the Analyst can\'t bet this game.' : 'ESPN hasn\'t posted a DraftKings price yet. The Hub checks every 6 hours, then hourly in the last 3.';
     const w = NPW[c.id]; // the "No price" check: busy, or its answer
     const res = w ? (w.busy ? '<small class="mvn npw">Checking ESPN…</small>' : `<small class="mvn npw ${esc(w.kind)}"><b>${esc(w.title)}.</b> ${esc(w.detail)}</small>`) : '<small class="mvn nph">Tap No price to check why.</small>';
-    return `<div class="mvg np${urgent ? ' np2' : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b><button type="button" class="cs nop act" data-npwhy="${esc(c.id)}" data-lg="${esc(c.league)}"${w && w.busy ? ' disabled' : ''}>● No price ›</button></div>
+    return `<div class="mvg np${urgent ? ' np2' : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Open this game on the Board"><b>${esc(c.home)} v ${esc(c.away)}</b></button><button type="button" class="cs nop act" data-npwhy="${esc(c.id)}" data-lg="${esc(c.league)}"${w && w.busy ? ' disabled' : ''}>● No price ›</button></div>
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${c.final ? ` · final ${c.final.h}–${c.final.a}` : ''}</small><small class="mvn npr">${why}</small>${res}</div>`;
   };
   const card = ({ c, mv, st, np }) => {
@@ -1272,7 +1272,7 @@ function movesView() {
       : btRow ? 'Both score has no price of its own here: its chance is read off the score card at each price.' : '';
     const follow = fin ? (mv.size < 2 ? 'the price barely moved' : mv.d[out] > 0 ? 'the result went the way of the move' : 'the result went against the move') : '';
     const fl = socFlags(c, mv, pinnMove(o), st);
-    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.home)} v ${esc(c.away)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
+    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Open this game on the Board"><b>${esc(c.home)} v ${esc(c.away)}</b></button>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}" data-lg="${esc(c.league)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}
       <small>${esc(c.leagueName || '')} · ${esc(c.ko || '')}${fin ? ` · final ${fin.h}–${fin.a} · ${follow}` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.odds.fa)}${mv.from === 'open' ? 'Opening' : 'First seen'}</th><th>${locked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>
       ${[0, 1, 2].map(i => row(esc(sideOf(c, i)), [op.h, op.d, op.a][i], [o.h, o.d, o.a][i], mv.p0[i], mv.p1[i], mv.d[i], out === i)).join('')}${ouRow}${btRow}${(sr => sr ? `<tr class="shr"><td class="n">Shots read${sr.watch ? ' (untested)' : ''}</td><td colspan="4" style="text-align:right">Over 2.5 <b>${Math.round(sr.q)}%</b></td></tr>` : '')(shotsReadOf(c))}</table>${ouNote}${o.src ? `<small class="mvn">${esc(BOOKS[o.src] || o.src)} prices: ESPN had no DraftKings price for this game, so the Hub tracks ${esc(BOOKS[o.src] || o.src)}'s (no opening price; the move is from the first one seen). The Analyst does not bet on them.</small>` : ''}
@@ -2101,7 +2101,7 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); as.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;
+  const t = e.target.closest('[data-goboard],[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;
   if (t.dataset.ansp) { AN_SP = t.dataset.ansp; return render(); }
   if (t.dataset.anopen) { S.tab = 'analyst'; S.open = null; AN_SP = 'soccer'; AN_SET = t.dataset.anopen; AN_MK = 'all'; saveView(); render(); window.scrollTo(0, 0); return; } // the card's Analyst line
   if (t.dataset.anset) { const y = window.scrollY; AN_SET = t.dataset.anset; render(); window.scrollTo(0, y); return; }
@@ -2136,6 +2136,12 @@ document.addEventListener('click', async e => {
   if (t.dataset.af) { S.af = t.dataset.af; return render(); }
   if (t.dataset.tm) { S.tm = t.dataset.tm; keepFilter(); return render(); }
   if (t.dataset.more) { S.more[t.dataset.more] = !S.more[t.dataset.more]; return render(); }
+  // Movement card title: back to that game's card on the Board (open, and scrolled to). A finished game is in the Finished list.
+  if (t.dataset.goboard) {
+    const id = t.dataset.goboard; S.tab = 'board'; S.league = 'all'; S.top = false; S.sel = id; S.open = id; S.back = null; saveView(); render();
+    if (!document.getElementById('sdt')) { S.sel = null; S.fin = true; render(); }
+    requestAnimationFrame(() => { const d = document.getElementById('sdt') || document.querySelector(`button.hd[data-id="${CSS.escape(id)}"]`); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); else window.scrollTo(0, 0); });
+    return; }
   if (t.dataset.ssel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
     const g = document.getElementById('sgrid'), x = g ? g.scrollLeft : 0, closing = S.sel === t.dataset.ssel;
     if (closing) S.sel = null; else { if (!S.sel) S.back = window.scrollY; S.sel = t.dataset.ssel; }

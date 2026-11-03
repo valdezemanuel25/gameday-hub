@@ -107,7 +107,7 @@ h4{margin:20px 18px 6px;font-size:14px}
 .ag.mv{background:rgba(201,168,255,.14);color:#d9c4ff}
 .pxl{font-size:11.5px;color:var(--mut);margin-top:6px;line-height:1.45}.pxl b{color:var(--ink);font-weight:650}
 .mvg{background:var(--s);border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin:10px 18px 0;font-size:12px;color:var(--mut)}
-.mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}
+.mvg .mvt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.mvg .mvt b{color:var(--ink);font-size:13.5px;font-weight:650}.mvg .mvgo{all:unset;cursor:pointer;text-align:left}.mvg .mvgo:hover b,.mvg .mvgo:focus-visible b{text-decoration:underline}
 .mvgk{text-align:right;margin:2px 0 2px}.mvgk .gc{margin:3px 0 0 4px}
 .mvg button.cs.act{font:inherit;font-size:11px;font-weight:650;border:1px solid currentColor;cursor:pointer}.mvg .cs{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;white-space:nowrap}.cs.ok{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.cs.pend{background:rgba(255,255,255,.06);color:var(--mut)}.cs.due{background:rgba(240,195,90,.14);color:var(--amber)}.cs.miss{background:rgba(255,157,132,.12);color:#ff9d84}
 .mvg .mvf{color:#d9c4ff;font-weight:600}.mvg .mvn{display:block;margin-top:4px;color:var(--faint);font-size:10.5px}
@@ -469,7 +469,7 @@ function movesView() {
       + (px.tl != null && c.sg && c.sg.p && c.sg.p[String(px.tl)] != null ? `<tr class="shr"><td class="n">Shots + goalie</td><td colspan="4" style="text-align:right">Over ${px.tl} <b>${Math.round(c.sg.p[String(px.tl)])}%</b></td></tr>` : '');
     const follow = fin && ml ? (Math.abs(ml.d) < 2 ? 'moneyline barely moved' : (ml.d > 0) === hw ? 'winner went the way of the move' : 'winner went against the move') : '';
     const fl = cardFlags(c, hm);
-    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}${gkRestTags(c)}
+    return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Open this game on the Board"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b></button>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}${gkRestTags(c)}
       <small>${esc(c.away)} at ${esc(c.home)} · ${esc(c.ko || '')}${fin ? ` · final ${fin.a}–${fin.h}${fin.last !== 'REG' ? ' ' + esc(fin.last) : ''}${follow ? ' · ' + follow : ''}` : ''}${hm.big ? ` · <span class="mvf">big move: ${esc(mvWord(c, hm))}</span>` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.px.fa)}${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
       ${px.ts ? `<small class="mvn">Price last changed ${tmCT(px.ts)}</small>` : ''}</div>`;
@@ -546,7 +546,7 @@ function board() {
   const cols = Math.ceil(list.length / 4);
   const frow = c => { const f = c.final, g = c.grade || {};
     return `<div class="fr"><b>${esc(c.aAbbr)} ${f ? `${f.a}–${f.h}` : '@'} ${esc(c.hAbbr)}</b>${f && f.last && f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : ''}${!f ? '<i class="pend">result pending</i>' : g.v2 ? `<i class="${g.v2.win ? 'ok' : 'no'}">v2 ${g.v2.win ? '✓' : '✗'}</i>` : ''}</div>`; };
-  const fin = done.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${!!S.fin}">Finished <b>${done.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? done.map(c => `<div class="fcard">${card(c)}</div>`).join('') : done.map(frow).join('')}</div>` : '';
+  const fin = done.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${!!S.fin}">Finished <b>${done.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? done.map(c => `<div class="fcard" id="fc-${esc(c.id)}">${card(c)}</div>`).join('') : done.map(frow).join('')}</div>` : '';
   return `${movesBox([...list, ...done])}<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}${fin}`;
 }
 function cell(m, key, other) {
@@ -759,7 +759,7 @@ async function load() {
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel],[data-mvf],[data-getclose],[data-fin]'); if (!t) return;
+  const t = e.target.closest('[data-goboard],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel],[data-mvf],[data-getclose],[data-fin]'); if (!t) return;
   if (t.dataset.getclose) {
     if (t.disabled) return; const t0 = t.textContent; t.disabled = true; t.textContent = 'Reading the price…';
     try { const r = await (await fetch('/api/nhl/close', { method: 'POST', body: JSON.stringify({ date: S.date, id: t.dataset.getclose }) })).json(); if (r.error) throw new Error(r.error); await load(); }
@@ -769,6 +769,12 @@ document.addEventListener('click', async e => {
   if (t.dataset.mvf) { S.mvf = t.dataset.mvf; return render(); }
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.push) return pushAct(t.dataset.push);
+  // Movement card title: back to that game's card on the Board (open, and scrolled to). A finished game is in the Finished list.
+  if (t.dataset.goboard) {
+    const id = t.dataset.goboard; S.tab = 'board'; S.sel = id; S.ln = null; S.back = null; render();
+    if (!document.getElementById('dt')) { S.sel = null; S.fin = true; render(); }
+    requestAnimationFrame(() => { const d = document.getElementById('dt') || document.getElementById('fc-' + id); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); else window.scrollTo(0, 0); });
+    return; }
   if (t.dataset.sel) { // tap a game: its card opens below and the page scrolls to it; tap it again to close and go back where you were
     const sc = document.getElementById('bgrid'), x = sc ? sc.scrollLeft : 0, closing = S.sel === t.dataset.sel;
     if (closing) { S.sel = null; S.ln = null; } else { if (!S.sel) S.back = window.scrollY; S.sel = t.dataset.sel; S.ln = null; }
