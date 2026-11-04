@@ -116,5 +116,20 @@ ok('tracking only: MLS and Liga MX keep their shots numbers but the Analyst neve
   const band = S.top && S.top.cal.find(b => b.read.n), gapRow = S.top && S.top.gap.find(g => g.n);
   ok('results: calibration bands for the read and the price, log loss for both, and the read-vs-price rows', band && S.top.cal.reduce((s, b) => s + b.price.n, 0) === 2 && S.top.ll.read > 0 && S.top.ll.price > 0 && gapRow && gapRow.label === '3+ above the price' && gapRow.n === 2, JSON.stringify(S.top));
 }
+
+// --- the read at the line DraftKings offers (3.5, 1.5...): converted through the goals average, display only ---
+{
+  const fs = await import('node:fs'), h = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const a = h.indexOf('const SHOTS_C'), b = h.indexOf('function pOverAt'), e = h.indexOf('function shotsBox');
+  const F = new Function(h.slice(a, h.indexOf('\n', a)) + '\n' + h.slice(b, e) + '; return { shotsReadOf, pOverAt, lamFor };')();
+  const am = p => (p >= 50 ? -Math.round(100 * p / (100 - p)) : Math.round(100 * (100 - p) / p));
+  const sx = { sot: 8.6, sh: 24.8, gl: 2.8 }, p35 = 100 * F.pOverAt(F.lamFor(0.55, 2.5), 3.5);
+  const d = F.shotsReadOf({ league: 'eng.1', sx, odds: { tl: 2.5, to: am(55), tu: am(45) } }), v = F.shotsReadOf({ league: 'eng.1', sx, odds: { tl: 3.5, to: am(p35), tu: am(100 - p35) } });
+  ok('a 2.5 price reads directly', d.line === 2.5 && !d.conv);
+  ok(`the same market at 3.5 gives the same Over 2.5 read (${v.q25.toFixed(1)} v ${d.q.toFixed(1)})`, v.line === 3.5 && v.conv && Math.abs(v.q25 - d.q) < 1);
+  ok('and carries it to the 3.5 line', Math.abs(v.q - (100 * F.pOverAt(F.lamFor(d.q / 100, 2.5), 3.5))) < 0.5 && v.q < v.q25);
+  ok('a quarter line (2.75) is not read', F.shotsReadOf({ league: 'eng.1', sx, odds: { tl: 2.75, to: -110, tu: -110 } }) === null);
+  ok('Poisson Over 2.5', Math.abs(F.pOverAt(2.7, 2.5) - (1 - Math.exp(-2.7) * (1 + 2.7 + 2.7 * 2.7 / 2))) < 1e-9);
+}
 console.log(bad ? `\n${bad} FAILED` : '\nAll Shots Over checks passed');
 if (bad) process.exit(1);
