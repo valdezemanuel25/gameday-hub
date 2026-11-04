@@ -1,6 +1,71 @@
 {
-  "updated": "2026-11-03T22:09:52Z",
+  "updated": "2026-11-04T11:09:16Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-04",
+      "title": "Blue tsunami",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,372",
+          "change": 0.82
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,569",
+          "change": 0.36
+        },
+        {
+          "label": "Dow",
+          "value": "51,787",
+          "change": -0.38
+        },
+        {
+          "label": "10-yr",
+          "value": "4.952%",
+          "change": 6,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$77,819",
+          "change": 1.46
+        },
+        {
+          "label": "Shopify",
+          "value": "$142.57",
+          "change": -8.74
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Midterms",
+          "t": "Democrats flipped both chambers and were on track for 228 House seats and 54 Senate seats as of 5am ET."
+        },
+        {
+          "h": "Voter mood",
+          "t": "Voters named the economy their top issue, and gas topped a $4 national average on Election Day for the first time ever."
+        },
+        {
+          "h": "Markets",
+          "t": "Chip stocks rebounded, lifting the Nasdaq 0.82% and S&P 500 0.36%, while the Dow slipped 0.38% and the 10-year yield rose 6 bps to 4.952%."
+        },
+        {
+          "h": "Shopify",
+          "t": "Shares fell 8.74% after the company missed revenue targets for the first time in four years."
+        },
+        {
+          "h": "Rivian",
+          "t": "Stock is up 16% after Q3 revenue rose 38% to $2.2 billion on 19,248 deliveries, led by the cheaper R2 SUV."
+        },
+        {
+          "h": "Deals and legal",
+          "t": "3M agreed to a $7.4 billion settlement over forever-chemicals injuries, and Disney is reportedly planning thousands more layoffs."
+        }
+      ],
+      "note": "Market numbers are the Nov 3 close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-03",
@@ -64,71 +129,6 @@
           "t": "Fiserv surged 12.46% and Eaton gained 7.03%, while Gartner tumbled 13.28% and Dynatrace sank 14.74%."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-03",
-      "title": "Putting it to a vote",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,164",
-          "change": -1.07
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,541",
-          "change": -0.51
-        },
-        {
-          "label": "Dow",
-          "value": "51,984",
-          "change": 0.41
-        },
-        {
-          "label": "10-yr",
-          "value": "4.894%",
-          "change": -4,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$76,829",
-          "change": -1.13
-        },
-        {
-          "label": "Sherwin-Williams",
-          "value": "$352.37",
-          "change": 5.94
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Midterms",
-          "t": "Today decides control of Congress, with Republicans holding a 218-214 House edge and a 53-47 Senate edge; polls suggest Democrats may flip the House while the Senate is closer to a tossup."
-        },
-        {
-          "h": "On the ballot",
-          "t": "36 governorships are up, plus 40+ data-center measures nationwide and California's Prop 40, a one-time 5% tax on billionaires' wealth."
-        },
-        {
-          "h": "Marvell-Lumentum",
-          "t": "Marvell will buy optical maker Lumentum for $115 billion including debt, the second-largest tech deal ever; Marvell fell 13% and Lumentum 19%."
-        },
-        {
-          "h": "Palantir",
-          "t": "Q3 revenue of $2.31 billion nearly doubled, US commercial jumped 148% to $984 million versus $953 million from government, and 2026 guidance rose to $8.53 billion."
-        },
-        {
-          "h": "Fridge hacks",
-          "t": "Hackers pushed supermarket fridges in seven European countries into defrost mode, with temperatures hitting 122F; over 20 refrigeration attacks have occurred this year."
-        },
-        {
-          "h": "Worker engagement",
-          "t": "Gallup found engagement fell to 29%, a 15-year low, with 18% actively disengaged and only 46% clear on what is expected of them."
-        }
-      ],
-      "note": "Market numbers are the Nov 2 close."
     },
     {
       "source": "Brew Markets",
