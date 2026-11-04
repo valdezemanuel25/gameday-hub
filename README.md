@@ -138,6 +138,22 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * **Backtest** (`node tools/backtest-analyst.mjs`: walk-forward v4 against Bet365 opening and closing prices, 1,929 league games): at the closing price every rule lost money (−5% to −10%; backing every closing favourite lost −3.9%). So the live question is whether betting at earlier reads, before a move finishes, beats the close. Until the tab shows a positive closing-line value over a few hundred bets, treat the rules as unproven.
 * **Storage and cost:** one KV document (`analyst`), written only when a bet is placed or settles. Settling happens when a league is graded and when the tab is opened.
 
+## Scout (free-rein analyst, Nov 4, 2026)
+
+Scout is a scheduled Claude session (twice a day, Central time), not code in the Worker. It has no rules. Its one requirement is to start
+every look at the Hub's own models. It reads `GET /api/scout/board?k=<HEALTH_TOKEN>`, which covers the next 36 hours of priced soccer and
+hockey games: every model, DraftKings now and at the open, margin-free chances, the shots reads, goalies, the Analyst's bets, and Scout's
+own record. It may then check outside sources to confirm or change its thesis, and logs paper bets in `public/scout.json`. That file is
+the only one it commits, the same way the Brew pollers commit `brew.json`. Each bet records what it took (market, DraftKings price at
+the board read, stake 0.5-3 units), why, the Hub reads behind it, the Hub model it started from (`lead`), and the outside sources with
+what each said.
+
+The Worker grades Scout on read with the Analyst's `settle()` (closing price, result, void after 4 days) and saves nothing to KV. The
+honesty checks live in `src/scout.js`, not in the log. A bet logged inside 20 minutes of kickoff is not counted. Only markets the Hub can
+grade are counted. Stakes are held to 0.5-3 units. The mascot (`public/scout.js`, bottom right on Home, Soccer and Hockey) shows the
+record, where the edge is coming from (by `lead`), and the open and settled bets with their reasons. `node test/scout.mjs` checks the log
+before every commit. All bets are paper only.
+
 ## Score card (v6)
 
 * Every card has a Score card panel: winner, Over/Under 2.5, both-score, the likeliest scores and fair odds, all read off one score grid. With a sportsbook price the grid is fitted to that price, margin removed (`src/v6core.js`, tracked as v6 on the Results tab); without one it shows v4's numbers. See `docs/v6-score-card.md`.

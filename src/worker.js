@@ -24,6 +24,8 @@ import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { homeSummary } from './home.js';
 import { hubHealth } from './health.js';
+import { board as scoutBoardOf, grade as scoutGrade, record as scoutRecord, daysToRead as scoutDays, cardsFrom as scoutCards, validLog as scoutValid } from './scout.js';
+import { getAnalyst } from './analyst.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -141,6 +143,30 @@ async function authed(req, env) {
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
 const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT });
+// Scout (src/scout.js): its log is public/scout.json (Scout commits it); graded on read from the saved days, no KV writes.
+async function scoutLog(env, origin) {
+  try { const r = await env.ASSETS.fetch(new Request(new URL('/scout.json', origin))); const j = r.ok ? await r.json() : null; return j && j.v === 1 && Array.isArray(j.bets) ? { ...j, runs: Array.isArray(j.runs) ? j.runs : [] } : { v: 1, bets: [], runs: [] }; } catch (e) { return { v: 1, bets: [], runs: [] }; }
+}
+async function scoutGraded(env, log, now) {
+  const names = scoutDays(log.bets), docs = await Promise.all(names.map(n => env.HUB.get(n, 'json')));
+  return scoutGrade(log.bets, scoutCards(names, docs), now);
+}
+// What Scout reads at the start of a run: the games, its record, its open bets, and results to copy back into its log.
+async function scoutBoard(env, origin, now = new Date()) {
+  const log = await scoutLog(env, origin), d0 = today(), dates = [d0, addDays(d0, 1), addDays(d0, 2)];
+  const [sd, nd, an, graded] = await Promise.all([Promise.all(dates.map(d => env.HUB.get(`day:${d}`, 'json'))), Promise.all(dates.map(d => env.HUB.get(`nhl:day:${d}`, 'json'))), getAnalyst(env, { readOnly: true }).catch(() => ({ items: [] })), scoutGraded(env, log, now)]);
+  const days = { soccer: Object.fromEntries(dates.map((d, i) => [d, sd[i]?.cards || []])), nhl: Object.fromEntries(dates.map((d, i) => [d, nd[i]?.cards || []])) };
+  const anItems = (an.items || []).filter(b => !b.res);
+  const copyBack = graded.filter(b => (b.status === 'settled' || b.status === 'void') && !log.bets.find(x => x.id === b.id).res).map(b => ({ id: b.id, res: b.res, units: b.units, close: b.close, clv: b.clv, score: b.score || null }));
+  const lean = b => ({ id: b.id, sport: b.sport, game: `${b.home} v ${b.away}`, kickoff: b.kickoff, bet: b.key + (b.line ? ' ' + b.line : ''), price: b.price, stake: b.stake, lead: b.lead, status: b.status, res: b.res || null, units: b.units, clv: b.clv, why: b.why });
+  return { now: now.toISOString(), today: d0, windowHours: 36, games: scoutBoardOf(days, now, anItems, log.bets), record: scoutRecord(graded), open: graded.filter(b => b.status === 'open').map(lean),
+    copyBack, recentSettled: graded.filter(b => b.status === 'settled').sort((a, b) => (a.kickoff < b.kickoff ? 1 : -1)).slice(0, 20).map(lean),
+    notCounted: graded.filter(b => b.status === 'late' || b.status === 'bad').map(b => ({ id: b.id, why: b.note })), logProblems: scoutValid(log), lastRuns: log.runs.slice(0, 5) };
+}
+async function scoutView(env, origin, now = new Date()) {
+  const log = await scoutLog(env, origin), graded = await scoutGraded(env, log, now);
+  return { record: scoutRecord(graded), bets: graded.sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 200), runs: log.runs.slice(0, 20), updated: log.updated || null };
+}
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/home');
 
 // ---------------------------------------------------------------------------------------------
@@ -1017,6 +1043,8 @@ const hub = {
 
     // Hub health for the nightly sweep: read-only, with its own secret (HEALTH_TOKEN) so the scheduled task never holds the password
     if (req.method === 'GET' && p === '/api/health' && env.HEALTH_TOKEN && same(String(q('k') || req.headers.get('x-health-token') || ''), env.HEALTH_TOKEN)) return json(await health(env));
+    // Scout's board: the same read-only token; Scout reads it first on every run (src/scout.js)
+    if (req.method === 'GET' && p === '/api/scout/board' && env.HEALTH_TOKEN && same(String(q('k') || req.headers.get('x-health-token') || ''), env.HEALTH_TOKEN)) return json(await scoutBoard(env, url.origin));
     // Whole site is private: page and data both need the password.
     if (!(await authed(req, env))) {
       if (p.startsWith('/api/')) return json({ error: 'Bad or missing admin token' }, 401);
@@ -1057,6 +1085,8 @@ const hub = {
       try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; return json({ updated: j && j.updated || null, issues: Array.isArray(j && j.issues) ? j.issues : [] }); } catch (e) { return json({ updated: null, issues: [] }); }
     }
     if (p === '/api/health') return json(await health(env)); // signed in: the same read
+    if (p === '/api/scout/board') return json(await scoutBoard(env, url.origin)); // signed in: the same board Scout reads
+    if (p === '/api/scout') return json(await scoutView(env, url.origin)); // Scout's mascot panel
     if (p === '/api/home') { // home screen carousel: today's counts and Best picks (display only)
       const d = today(), [sd, nd] = await Promise.all([env.HUB.get(`day:${d}`, 'json'), env.HUB.get(`nhl:day:${d}`, 'json')]);
       let issues = []; try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; issues = Array.isArray(j && j.issues) ? j.issues : []; } catch (e) {}
