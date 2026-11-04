@@ -165,7 +165,10 @@ async function scoutBoard(env, origin, now = new Date()) {
 }
 async function scoutView(env, origin, now = new Date()) {
   const log = await scoutLog(env), graded = await scoutGraded(env, log, now);
-  return { record: scoutRecord(graded), bets: graded.sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 200), runs: log.runs.slice(0, 20), updated: log.updated || null };
+  // Scout against the baseline (every code-found edge at 1 unit) and the bets the critic dropped
+  const sh = log.shadow || [], names = scoutDays(sh), docs = await Promise.all(names.map(n => env.HUB.get(n, 'json'))), gs = scoutGrade(sh, scoutCards(names, docs), now);
+  const compare = { scout: scoutRecord(graded).all, baseline: scoutRecord(gs.filter(b => b.kind === 'baseline')).all, dropped: scoutRecord(gs.filter(b => b.kind === 'dropped')).all };
+  return { record: scoutRecord(graded), compare, bets: graded.sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 200), runs: log.runs.slice(0, 20), updated: log.updated || null };
 }
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/home');
 
@@ -1087,7 +1090,7 @@ const hub = {
     if (p === '/api/health') return json(await health(env)); // signed in: the same read
     if (p === '/api/scout/board') return json(await scoutBoard(env, url.origin)); // signed in: the same board Scout reads
     if (p === '/api/scout') return json(await scoutView(env, url.origin)); // Scout's mascot panel
-    if (req.method === 'POST' && p === '/api/scout/run') return json(await scoutStep(env, new Date(), fetch, { force: true })); // the panel's "Look now" button
+    if (req.method === 'POST' && p === '/api/scout/run') return json(await scoutStep(env, new Date(), fetch, { force: true, alert: m => sendAll(env, m) })); // the panel's "Look now" button
     if (p === '/api/home') { // home screen carousel: today's counts and Best picks (display only)
       const d = today(), [sd, nd] = await Promise.all([env.HUB.get(`day:${d}`, 'json'), env.HUB.get(`nhl:day:${d}`, 'json')]);
       let issues = []; try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; issues = Array.isArray(j && j.issues) ? j.issues : []; } catch (e) {}
@@ -1207,7 +1210,7 @@ const hub = {
   async scheduled(event, env0, ctx) {
     const c = counted(env0);
     // Scout's own cron: this run does only Scout (two AI calls and a few ESPN reads), nothing else
-    if (event && event.cron === SCOUT_CRON) { ctx.waitUntil((async () => { try { await scoutStep(c.env); } finally { await c.flush(); } })()); return; }
+    if (event && event.cron === SCOUT_CRON) { ctx.waitUntil((async () => { try { await scoutStep(c.env, new Date(), fetch, { alert: m => sendAll(c.env, m) }); } finally { await c.flush(); } })()); return; }
     ctx.waitUntil((async () => {
       try { c.env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit

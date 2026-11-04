@@ -824,7 +824,8 @@ function splitText(c) {
 // then New, each with the bet, the price taken and, once settled, ✓ / ✗. Nothing when neither set bet the game. Tap: the Analyst tab.
 let ANB = null;
 const AN_SHORT = { H: g => strip(g.home), A: g => strip(g.away), D: () => 'Draw', O: () => 'Over 2.5', U: () => 'Under 2.5', B: () => 'Both score', N: () => 'Not both score' };
-function anLine(c) {
+function anLine(c) { return anLine0(c) + (typeof window !== 'undefined' && window.scoutLine ? window.scoutLine(c, 'soccer') : ''); } // + Scout's bets (public/scout.js)
+function anLine0(c) {
   const by = ANB && ANB.get(c.id); if (!by) return '';
   const one = (n, b) => { const res = b.res === 'win' ? ' <span class="w">✓</span>' : b.res === 'loss' ? ' <span class="l">✗</span>' : b.res === 'void' ? ' void' : '';
     return `${n}: <b>${esc(AN_SHORT[b.key] ? AN_SHORT[b.key](c) : b.key)} ${fmtOdds(b.price)}</b>${b.bk === 'pinnacle' ? ' (Pinnacle)' : ''}${res}`; };
@@ -1605,6 +1606,7 @@ function edgesView() {
 }
 /* ---------- Analyst: a paper bettor that bets its own rules off price moves and v4 (src/analyst.js) ---------- */
 let AN = null;
+document.addEventListener('scout:bets', () => { try { render(); } catch (e) { /* not ready */ } });
 async function loadAnalyst() { try { AN = await api('/api/analyst'); } catch (e) { AN = { error: e.message }; } ANB = anByGame(AN); }
 // game id -> { '1': [bets], '2': [bets] } from the soccer rule sets, for the Analyst line on the cards (anLine)
 function anByGame(A) { if (!A || !A.sets) return null; const m = new Map(); for (const k of Object.keys(A.sets)) for (const b of A.sets[k].items || []) { const g = m.get(b.gid) || {}; (g[k] = g[k] || []).push(b); m.set(b.gid, g); } return m; }

@@ -1,7 +1,7 @@
 // Scout, the free-rein analyst's mascot (src/scout.js has the whole idea). He sits bottom right on Home, Soccer and Hockey, across from
 // Sweep. Tap him for his book: the record, where his edge is coming from (the Hub model each thesis started from), his open bets and
 // settled ones, each with what he took and why, the models he read and the outside sources that confirmed or changed it.
-// Display only: reads /api/scout, never saves. Add ?scout=up / ?scout=down / ?scout=scan to see a mood.
+// Display only: reads /api/scout, never saves. Add ?scout=up / ?scout=down / ?scout=scan to see a mood; ?scout=1 opens his book (the bet alert links there).
 (function () {
   var busy = false, said = '', q = (location.search.match(/[?&]scout=(\w+)/) || [])[1], el = null, panel = null, D = null, tab = 'open', mood = 'scan';
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
@@ -61,6 +61,7 @@
     + '#scout-panel .scx-why{margin:6px 0 2px;color:#dbe8ec}#scout-panel .scx-meta{color:#8ea3ab;font-size:11.5px;margin:3px 0}#scout-panel a{color:' + C + '}'
     + '#scout-panel ul{margin:2px 0;padding-left:16px}#scout-panel li{margin:2px 0;font-size:12px}#scout-panel .scx-tag{display:inline-block;padding:0 6px;border-radius:6px;background:#10252d;color:' + C + ';font-size:10.5px;font-weight:700;margin-right:4px}'
     + '#scout-panel .scx-go{display:block;width:100%;margin:12px 0 4px;padding:10px;border-radius:12px;border:0;background:' + C + ';color:#061014;font:700 13px "DM Sans",system-ui,sans-serif;cursor:pointer}#scout-panel .scx-go[disabled]{opacity:.6}'
+    + '.anl.scl .k{color:' + C + '!important;border-color:rgba(62,232,255,.45)!important}.scl{cursor:pointer}'
     + '#scout-panel .scx-n{color:#8ea3ab;font-size:11.5px;margin-top:10px}';
   var signed = function (x, d) { return x == null ? '–' : (x > 0 ? '+' : '') + (d != null ? x.toFixed(d) : x); };
   var am = function (m) { return m > 0 ? '+' + m : String(m); };
@@ -85,6 +86,11 @@
       + '<p class="scx-meta">' + (b.lead ? '<span class="scx-tag">' + esc(b.lead) + '</span>' : '') + (b.outsideCheck ? '<span class="scx-tag">' + esc(b.outsideCheck) + '</span>' : '') + (b.conf ? 'confidence ' + esc(b.conf) + '/5' : '') + (b.clv != null ? ' · vs close ' + signed(b.clv) + '%' : '') + (b.note ? ' · ' + esc(b.note) : '') + '</p>'
       + '<p class="scx-why">' + esc(b.why) + '</p>' + thesis(b) + (mods ? '<p class="scx-meta">What the Hub said</p>' + mods : '') + (src ? '<p class="scx-meta">Outside check</p><ul>' + src + '</ul>' : '') + '</details>';
   }
+  function compareTable() {
+    var C = D && D.compare; if (!C || !(C.scout.settled || C.baseline.settled || C.dropped.settled)) return '';
+    var row = function (n, s) { return '<tr><td>' + n + '</td><td>' + s.settled + '</td><td class="' + (s.units > 0 ? 'scx-up' : s.units < 0 ? 'scx-dn' : '') + '">' + signed(s.units, 2) + '</td><td>' + (s.roi == null ? '–' : signed(s.roi) + '%') + '</td><td>' + (s.clv == null ? '–' : signed(s.clv) + '%') + '</td></tr>'; };
+    return '<h4>Scout v the code</h4><table><tr><th></th><th>bets</th><th>units</th><th>ROI</th><th>vs close</th></tr>' + row('Scout', C.scout) + row('Every code edge, 1u', C.baseline) + row('Critic dropped', C.dropped) + '</table>';
+  }
   function body() {
     if (!D) return '<p class="scx-n">Loading his book…</p>';
     var a = D.record.all, open = D.bets.filter(function (b) { return b.status === 'open'; }), done = D.bets.filter(function (b) { return b.status !== 'open'; });
@@ -93,6 +99,7 @@
     return '<div class="scx-rec"><div><small>settled</small><b>' + a.wins + '-' + (a.settled - a.wins) + '</b></div><div><small>units</small><b class="' + (a.units > 0 ? 'scx-up' : a.units < 0 ? 'scx-dn' : '') + '">' + signed(a.units, 2) + '</b></div>'
       + '<div><small>ROI</small><b>' + (a.roi == null ? '–' : signed(a.roi) + '%') + '</b></div><div><small>vs close</small><b>' + (a.clv == null ? '–' : signed(a.clv) + '%') + '</b></div></div>'
       + (leads.length ? '<h4>Where the edge is coming from</h4><table><tr><th>Started from</th><th>bets</th><th>units</th><th>vs close</th></tr>' + leads.map(function (x) { var s = x[1]; return '<tr><td>' + esc(x[0]) + '</td><td>' + s.settled + '</td><td class="' + (s.units > 0 ? 'scx-up' : s.units < 0 ? 'scx-dn' : '') + '">' + signed(s.units, 2) + '</td><td>' + (s.clv == null ? '–' : signed(s.clv) + '%') + '</td></tr>'; }).join('') + '</table>' : '')
+      + compareTable()
       + '<div class="scx-tabs"><button type="button" data-t="open" class="' + (tab === 'open' ? 'on' : '') + '">Open (' + open.length + ')</button><button type="button" data-t="done" class="' + (tab === 'done' ? 'on' : '') + '">Settled (' + done.length + ')</button></div>'
       + ((tab === 'open' ? open : done).map(betRow).join('') || '<p class="scx-n">' + (tab === 'open' ? 'No open bets right now.' : 'Nothing settled yet.') + '</p>')
       + (run ? '<h4>Last look · ' + when(run.at) + '</h4><p class="scx-meta">' + esc(run.note) + '</p>' : '')
@@ -128,9 +135,19 @@
     var n = D ? D.bets.filter(function (b) { return b.status === 'open'; }).length : 0;
     if (el) el.innerHTML = svg(mood) + (n ? '<span class="badge">' + n + '</span>' : '');
   }
+  // His bets by game, for the tag on the game cards (window.scoutLine, called by the Soccer and Hockey pages)
+  window.ScoutBets = null; var lastSig = '[]';
+  window.scoutLine = function (c, sport) {
+    var L = window.ScoutBets && window.ScoutBets.get(sport + '|' + c.id); if (!L || !L.length) return '';
+    var one = function (b) { var r = b.res === 'win' ? ' <span class="w">✓</span>' : b.res === 'loss' ? ' <span class="l">✗</span>' : b.res === 'void' ? ' void' : '';
+      return '<b>' + esc(pickName(b)) + ' ' + am(b.price) + '</b>' + (b.stake !== 1 ? ' ' + b.stake + 'u' : '') + r; };
+    return '<span class="anl scl" data-scoutopen="1"><span class="k">Scout</span>' + L.map(one).join(' · ') + '<span class="go">›</span></span>';
+  };
   function load() {
     fetch('/api/scout', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-      if (j && j.record) { D = j; D.runs = D.runs || []; D.bets = D.bets || []; }
+      if (j && j.record) { D = j; D.runs = D.runs || []; D.bets = D.bets || [];
+        var m = new Map(); D.bets.forEach(function (b) { if (b.status === 'late' || b.status === 'bad') return; var k = b.sport + '|' + b.gid; (m.get(k) || m.set(k, []).get(k)).push(b); });
+        var sig = JSON.stringify(D.bets.map(function (b) { return [b.id, b.res || '']; })); window.ScoutBets = m; if (sig !== lastSig) { lastSig = sig; if (m.size) document.dispatchEvent(new CustomEvent('scout:bets')); } }
       setMood(); render(); if (panel) panel.querySelector('.scx-h small').textContent = D && D.runs[0] ? 'last look ' + when(D.runs[0].at) : 'free rein · paper bets';
     }).catch(function () {});
   }
@@ -138,7 +155,9 @@
     var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
     el = document.createElement('button'); el.id = 'scout'; el.type = 'button'; el.setAttribute('aria-label', "Scout, the free-rein analyst: open his book");
     el.addEventListener('click', function () { if (panel) { panel.remove(); panel = null; return; } openPanel(); });
-    document.body.appendChild(el); setMood(); place(); load(); requestAnimationFrame(function () { el.className = 'in'; });
+    document.body.appendChild(el); setMood(); place(); load();
+    document.addEventListener('click', function (e) { var t = e.target.closest && e.target.closest('[data-scoutopen]'); if (!t) return; e.preventDefault(); e.stopPropagation(); if (!panel) openPanel(); }, true);
+    if (q === '1') openPanel(); requestAnimationFrame(function () { el.className = 'in'; });
     window.addEventListener('resize', place);
     setInterval(load, 10 * 60000);
   }

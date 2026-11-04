@@ -95,13 +95,30 @@ const r = await scoutStep({ HUB: kv2, AI }, t0, espn);
 const sd = JSON.parse(store.get('scout'));
 ok(r.ok && r.took === 1 && sd.bets.length === 1 && sd.bets[0].key === 'O' && sd.bets[0].price === -115 && sd.bets[0].outside.length === 1 && sd.runs[0].note === 'Took the Over.', 'a run: edges, outside check, one bet at the board price ' + JSON.stringify(r));
 const b0 = sd.bets[0];
+ok(b0.model && /llama/.test(b0.model), 'the model is on the bet');
+ok(sd.shadow.length >= 1 && sd.shadow.every(x => x.kind === 'baseline' && x.stake === 1 && x.price != null) && sd.shadow.some(x => x.key === 'O' && x.gid === '1'), 'baseline: every code edge logged at 1 unit ' + sd.shadow.map(x => x.key));
 ok(b0.thesis && b0.thesis.edge && b0.thesis.risk && b0.critic && /Edge is wide/.test(b0.critic), 'the bet keeps its thesis parts and the critic\'s reason');
 ok(b0.models.DraftKings && /fair/.test(b0.models.DraftKings) && b0.models.v4 === `58% (+${Math.round(10 * (58 - b0.models.DraftKings.match(/[\d.]+/)[0])) / 10})` && /shots/.test(Object.keys(b0.models).join()), 'the models on the bet come from the numbers, not the model\'s words: ' + JSON.stringify(b0.models));
 ok(calls.length === 2 && /Candidate Over at -115/.test(calls[0].messages[1].content) && /Hub evidence: Shots read 3\+/.test(calls[0].messages[1].content) && /ESPN last five/.test(calls[0].messages[1].content) && /^You are the critic/.test(calls[1].messages[0].content), 'one call for the bets (with edges, evidence and ESPN), one for the critic');
 // the critic can drop a bet
 { criticKeeps = false; const st2 = new Map([...store].filter(([k]) => k !== 'scout')); const kv3 = { ...kv2, get: async (k, t) => { const v = st2.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { st2.set(k, v); } };
   const r3 = await scoutStep({ HUB: kv3, AI }, t0, espn); const d3 = JSON.parse(st2.get('scout'));
+  ok(d3.shadow.some(x => x.kind === 'dropped' && x.key === 'O' && x.stake === 1.5), 'a dropped bet goes to the shadow log at its stake');
   ok(r3.took === 0 && d3.bets.length === 0 && /critic dropped: Over Arsenal v Chelsea \(Thin edge/.test(d3.runs[0].note), 'a bet the critic rejects is not taken, and the run says why: ' + d3.runs[0].note); criticKeeps = true; }
+// alerts: one push per run that took bets, never one that took none
+{ const st4 = new Map([...store].filter(([k]) => k !== 'scout')), sent = []; const kv4 = { ...kv2, get: async (k, t) => { const v = st4.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { st4.set(k, v); } };
+  await scoutStep({ HUB: kv4, AI }, t0, espn, { alert: async m => sent.push(m) });
+  ok(sent.length === 1 && /Scout: 1 new bet/.test(sent[0].title) && /Over Arsenal v Chelsea -115, 1.5u/.test(sent[0].body) && sent[0].url === '/home?scout=1', 'alert: ' + JSON.stringify(sent[0]));
+  const st5 = new Map([...store].filter(([k]) => k !== 'scout')), sent5 = []; const kv5 = { ...kv2, get: async (k, t) => { const v = st5.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { st5.set(k, v); } };
+  await scoutStep({ HUB: kv5, AI: { run: async () => ({ response: { bets: [], note: 'passed', verdicts: [] } }) } }, t0, espn, { alert: async m => sent5.push(m) });
+  ok(sent5.length === 0, 'no alert when no bets'); }
+// health: Scout's checks for the nightly sweep
+const { scoutChecks } = await import('../src/health.js');
+const T = Date.parse('2026-11-08T06:37:00Z');
+ok(scoutChecks(null, T).problems.length === 0, 'health: before the first run, nothing to flag');
+ok(scoutChecks({ runs: [{ at: '2026-11-07T21:43:00Z', took: 1 }], bets: [] }, T).problems.length === 0, 'health: last run 9 hours ago is fine');
+ok(/no run for 33 hours/.test(scoutChecks({ runs: [{ at: '2026-11-06T21:43:00Z' }], bets: [] }, T).problems[0]), 'health: a missed run');
+ok(scoutChecks({ runs: [{ at: '2026-11-07T21:43:00Z', error: true, note: 'The run failed: 3040 out of capacity' }, { at: '2026-11-07T11:43:00Z', error: true, note: 'x' }], bets: [] }, T).problems.length === 2, 'health: failed runs');
 const n0 = calls.length, again = await scoutStep({ HUB: kv2, AI }, new Date('2026-11-07T11:50:00Z'), espn);
 ok(again.skipped && calls.length === n0, 'no second run within 3 hours');
 ok((await scoutStep({ HUB: kv2, AI }, new Date('2026-11-07T13:43:00Z'), espn)).skipped === 'not a run time', 'other hours: nothing');

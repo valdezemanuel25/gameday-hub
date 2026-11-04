@@ -20,7 +20,7 @@ import { getAnalyst } from './analyst.js';
 export const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 export const KEY = 'scout';
 export const RUN_HOURS = [5, 15]; // Central; the cron fires at :43 of the UTC hours that can be these (standard and daylight time)
-const KEEP_RUNS = 120, KEEP_BETS = 1500;
+const KEEP_RUNS = 120, KEEP_BETS = 1500, KEEP_SHADOW = 2500;
 const LEADS = ['v4', 'v5', 'v6', 'v2', 'move', 'shots', 'shotsGoalie', 'forebet', 'sportsmole', 'consensus', 'analyst', 'goalies', 'combo'];
 const CHECKS = ['confirmed', 'strengthened', 'weakened', 'flipped', 'none'];
 const am = m => (m > 0 ? '+' + m : String(m));
@@ -28,7 +28,7 @@ const ct = iso => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago'
 const hourCT = now => +new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' }).format(now);
 export const isRunTime = now => RUN_HOURS.includes(hourCT(now));
 
-export async function getScout(env) { const d = await env.HUB.get(KEY, 'json'); return d && d.v === 1 && Array.isArray(d.bets) ? { ...d, runs: d.runs || [] } : { v: 1, bets: [], runs: [] }; }
+export async function getScout(env) { const d = await env.HUB.get(KEY, 'json'); return d && d.v === 1 && Array.isArray(d.bets) ? { ...d, runs: d.runs || [], shadow: d.shadow || [] } : { v: 1, bets: [], runs: [], shadow: [] }; }
 
 // One game as one line of text for the model (short: a busy Saturday has 60+ games)
 export function line(g, n) {
@@ -196,17 +196,27 @@ export function makeBet(x, g, srcs, now) {
   return problem(b) ? null : b;
 }
 
+// The shadow log: the baseline (every code-found edge at 1 unit) and the bets the critic dropped, graded like Scout's own. Slim: only
+// what grading needs. A game-market already in the shadow log for that kind is not added again.
+export function shadowOf(g, key, kind, now, lead) {
+  return { id: `${kind}-${g.date}-${g.sport}-${g.gid}-${key}`, kind, at: now.toISOString(), sport: g.sport, date: g.date, league: g.league, gid: String(g.gid), home: g.home, away: g.away, kickoff: g.kickoff, key,
+    ...(g.sport === 'nhl' && (key === 'O' || key === 'U') ? { line: g.price.line } : {}), price: g.price[key], ...(key === 'B' || key === 'N' ? { bttsBook: g.bttsBook || 'draftkings' } : {}), stake: 1, lead: lead || 'combo', why: kind };
+}
+const shadowAdd = (doc, b) => { if (b && b.price != null && !doc.shadow.some(x => x.id === b.id)) doc.shadow.unshift(b); };
+
 // The run. opts.force: run now whatever the hour (the "Run Scout now" button). Never throws.
-export async function scoutStep(env, now = new Date(), fetchFn = fetch, { force = false } = {}) {
+export async function scoutStep(env, now = new Date(), fetchFn = fetch, { force = false, alert = null } = {}) {
   if (!force && !isRunTime(now)) return { skipped: 'not a run time' };
   if (!env.AI) return { error: 'Workers AI is not bound (wrangler.toml [ai] binding = "AI")' };
   const doc = await getScout(env);
   try {
     if (!force && doc.runs[0] && !doc.runs[0].error && now.getTime() - new Date(doc.runs[0].at).getTime() < 3 * 3600000) return { skipped: 'ran in the last 3 hours' };
     // 1. results into the log
-    const names = daysToRead(doc.bets), docs = await Promise.all(names.map(n => env.HUB.get(n, 'json')));
-    const G = grade(doc.bets, cardsFrom(names, docs), now), byId = new Map(G.map(b => [b.id, b]));
+    const names = daysToRead([...doc.bets, ...doc.shadow]), docs = await Promise.all(names.map(n => env.HUB.get(n, 'json'))), cards = cardsFrom(names, docs);
+    const G = grade(doc.bets, cards, now), byId = new Map(G.map(b => [b.id, b]));
     for (const b of doc.bets) { const x = byId.get(b.id); if (!b.res && x && x.res) Object.assign(b, { res: x.res, units: x.units, close: x.close, clv: x.clv, ...(x.score ? { score: x.score } : {}) }); }
+    const GS = grade(doc.shadow, cards, now), sById = new Map(GS.map(b => [b.id, b]));
+    for (const b of doc.shadow) { const x = sById.get(b.id); if (!b.res && x && x.res) Object.assign(b, { res: x.res, units: x.units, clv: x.clv }); }
     const R = record(G), settled = G.filter(b => b.status === 'settled').sort((a, b) => (a.kickoff < b.kickoff ? 1 : -1));
     // 2. the board
     const d0 = localDay(now), dates = [d0, addDay(d0, 1), addDay(d0, 2)];
@@ -218,6 +228,8 @@ export async function scoutStep(env, now = new Date(), fetchFn = fetch, { force 
     else {
       // 3. the edges, in code
       const C = candidates(games), gis = [...new Set(C.map(c => c.gi))];
+      // the baseline: every code-found edge taken at 1 unit, graded beside Scout (does the model's judgment add anything?)
+      for (const c of C) shadowAdd(doc, shadowOf(games[c.gi], c.key, 'baseline', now, c.models.reduce((a, m) => (m[1] - c.fair > a[1] - c.fair ? m : a))[0]));
       if (!C.length) note = "Read the board: no market had the Hub's models 2+ points above the price.";
       else {
         // 4. outside check
@@ -235,17 +247,20 @@ export async function scoutStep(env, now = new Date(), fetchFn = fetch, { force 
             return `[${i}] ${b.home} v ${b.away}: ${LABEL[b.key]}${b.line ? ' ' + b.line : ''} at ${am(b.price)}, stake ${b.stake}\n  the numbers: ${c ? candText(g, c).trim() : Object.entries(b.models).map(([k, v]) => k + ' ' + v).join(', ')}\n  thesis: ${TH.filter(t => b.thesis[t]).map(t => t + ': ' + b.thesis[t]).join(' | ')}\n  outside: ${b.outside.map(o => o.note).join(' | ') || 'none'}`; }).join('\n\n')}\n\nFor each bet [i]: keep (true or false) and reason (one or two sentences). Return {"verdicts":[...]}.`, S3, 900, CRITIC); } catch (e) { V = null; }
           const vs = new Map(((V && V.verdicts) || []).map(v => [Number(v.i), v]));
           const dropped = [];
-          prop.forEach((b, i) => { const v = vs.get(i); if (v && v.keep === false) { dropped.push(`${LABEL[b.key]} ${b.home} v ${b.away} (${String(v.reason || '').slice(0, 120)})`); return; } if (v) b.critic = String(v.reason || '').slice(0, 300); else b.critic = V ? 'no verdict' : 'the critic did not answer'; took.push(b); });
+          prop.forEach((b, i) => { const v = vs.get(i); if (v && v.keep === false) { shadowAdd(doc, { ...shadowOf(games.find(g => String(g.gid) === b.gid && g.sport === b.sport), b.key, 'dropped', now, b.lead), stake: b.stake }); dropped.push(`${LABEL[b.key]} ${b.home} v ${b.away} (${String(v.reason || '').slice(0, 120)})`); return; } if (v) b.critic = String(v.reason || '').slice(0, 300); else b.critic = V ? 'no verdict' : 'the critic did not answer'; took.push(b); });
           if (dropped.length) note = (note ? note + ' ' : '') + 'The critic dropped: ' + dropped.join('; ') + '.';
         }
         if (!note) note = took.length ? '' : 'Checked the edges and passed.';
       }
     }
     // 7. save
+    for (const b of took) b.model = env.SCOUT_MODEL || MODEL;
     doc.bets = [...took, ...doc.bets].slice(0, KEEP_BETS);
+    doc.shadow = doc.shadow.slice(0, KEEP_SHADOW);
     doc.runs = [{ at: now.toISOString(), looked: games.length, took: took.length, note, model: env.SCOUT_MODEL || MODEL }, ...doc.runs].slice(0, KEEP_RUNS);
     doc.updated = now.toISOString();
     await env.HUB.put(KEY, JSON.stringify(doc));
+    if (took.length && alert) { try { await alert({ title: `Scout: ${took.length} new bet${took.length > 1 ? 's' : ''}`, body: took.map(b => `${LABEL[b.key]}${b.line ? ' ' + b.line : ''} ${b.home} v ${b.away} ${am(b.price)}, ${b.stake}u`).join(' · ').slice(0, 220), tag: 'scout', url: '/home?scout=1' }); } catch (e) { /* the bet stands; the alert is a bonus */ } }
     return { ok: true, looked: games.length, took: took.length, bets: took.map(b => `${b.home} v ${b.away}: ${LABEL[b.key]}${b.line ? ' ' + b.line : ''} ${am(b.price)} x${b.stake}`) };
   } catch (e) {
     const msg = String(e && e.message || e).slice(0, 160);

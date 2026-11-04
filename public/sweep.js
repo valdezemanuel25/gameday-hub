@@ -82,6 +82,7 @@
     if (st) out.push(st + ' Analyst bet' + (st > 1 ? 's' : '') + ' open 2+ days');
     if (sp) out.push('a sync problem in ' + Object.keys(h.syncProblems).join(', '));
     if (h.writes && h.writes.limit && h.writes.used > 0.7 * h.writes.limit) out.push('storage writes at ' + h.writes.used + ' of ' + h.writes.limit);
+    if (h.scout && h.scout.problems && h.scout.problems.length) out.push('Scout: ' + h.scout.problems.join('; '));
     if (h.oddsApiCredits && h.oddsApiCredits.left != null && h.oddsApiCredits.left < 50) out.push('Odds API credits low (' + h.oddsApiCredits.left + ' left)');
     return out;
   }

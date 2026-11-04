@@ -160,7 +160,17 @@ the Hub's models. Each run goes:
 The model never sets a price: each bet takes DraftKings' price from the board. Markets, stakes, duplicates and timing are checked in
 code (`src/scout.js` `problem`). Bets are graded on read with the Analyst's `settle()`. The mascot (`public/scout.js`, bottom right)
 shows the record, where the edge is coming from, the bets with their reasons, and a "Look now" button (`POST /api/scout/run`).
-`GET /api/scout/board?k=<HEALTH_TOKEN>` returns the same board for checking. All bets are paper only.
+`GET /api/scout/board?k=<HEALTH_TOKEN>` returns the same board for checking.
+
+Five more pieces:
+- Every bet records the model that placed it.
+- A shadow log beside Scout (KV `scout`, `shadow`) holds two things, graded the same way: every code-found edge at 1 unit (the
+  baseline) and the bets the critic dropped. The panel's "Scout v the code" table answers whether the model's judgment and the critic
+  add anything.
+- A phone alert goes out when Scout bets, through the Hub's existing alerts.
+- His bets are tagged on the game cards, next to the Analyst's.
+- The nightly health report (`scout`, `src/health.js` `scoutChecks`) flags a gap of more than 15 hours between runs or a failed run,
+  so Sweep reports it. All bets are paper only.
 
 ## Score card (v6)
 
