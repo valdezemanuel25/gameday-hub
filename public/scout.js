@@ -71,6 +71,11 @@
   };
   var when = function (iso) { return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)); };
   var host = function (u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+  var TH = [['edge', 'Edge'], ['agree', 'For it'], ['against', 'Against it'], ['move', 'Price move'], ['outsideSaid', 'ESPN'], ['risk', 'What would make it wrong']];
+  function thesis(b) {
+    var t = b.thesis || {}, rows = TH.filter(function (x) { return t[x[0]]; }).map(function (x) { return '<li><b>' + x[1] + '</b> ' + esc(t[x[0]]) + '</li>'; }).join('');
+    return (rows ? '<ul class="scx-th">' + rows + '</ul>' : '') + (b.critic ? '<p class="scx-meta"><b>Critic</b> ' + esc(b.critic) + '</p>' : '');
+  }
   function betRow(b) {
     var u = b.status === 'open' ? '<span class="scx-u">open</span>' : b.status === 'late' || b.status === 'bad' ? '<span class="scx-u scx-dn">not counted</span>' : b.res === 'void' ? '<span class="scx-u">void</span>'
       : '<span class="scx-u ' + (b.units > 0 ? 'scx-up' : 'scx-dn') + '">' + signed(b.units, 2) + 'u</span>';
@@ -78,7 +83,7 @@
     var mods = b.models ? (typeof b.models === 'string' ? '<p class="scx-meta">' + esc(b.models) + '</p>' : '<ul>' + Object.keys(b.models).map(function (k) { return '<li><b>' + esc(k) + '</b> ' + esc(b.models[k]) + '</li>'; }).join('') + '</ul>') : '';
     return '<details><summary><span class="scx-g"><b>' + esc(pickName(b)) + ' ' + am(b.price) + (b.stake !== 1 ? ' · ' + b.stake + 'u' : '') + '</b><small>' + esc(b.home) + ' v ' + esc(b.away) + ' · ' + (b.sport === 'nhl' ? 'NHL' : esc(b.leagueName || b.league)) + ' · ' + when(b.kickoff) + (b.score ? ' · ' + esc(b.score) : '') + '</small></span>' + u + '</summary>'
       + '<p class="scx-meta">' + (b.lead ? '<span class="scx-tag">' + esc(b.lead) + '</span>' : '') + (b.outsideCheck ? '<span class="scx-tag">' + esc(b.outsideCheck) + '</span>' : '') + (b.conf ? 'confidence ' + esc(b.conf) + '/5' : '') + (b.clv != null ? ' · vs close ' + signed(b.clv) + '%' : '') + (b.note ? ' · ' + esc(b.note) : '') + '</p>'
-      + '<p class="scx-why">' + esc(b.why) + '</p>' + (mods ? '<p class="scx-meta">What the Hub said</p>' + mods : '') + (src ? '<p class="scx-meta">Outside check</p><ul>' + src + '</ul>' : '') + '</details>';
+      + '<p class="scx-why">' + esc(b.why) + '</p>' + thesis(b) + (mods ? '<p class="scx-meta">What the Hub said</p>' + mods : '') + (src ? '<p class="scx-meta">Outside check</p><ul>' + src + '</ul>' : '') + '</details>';
   }
   function body() {
     if (!D) return '<p class="scx-n">Loading his book…</p>';
@@ -92,7 +97,7 @@
       + ((tab === 'open' ? open : done).map(betRow).join('') || '<p class="scx-n">' + (tab === 'open' ? 'No open bets right now.' : 'Nothing settled yet.') + '</p>')
       + (run ? '<h4>Last look · ' + when(run.at) + '</h4><p class="scx-meta">' + esc(run.note) + '</p>' : '')
       + '<button type="button" class="scx-go"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Scout is looking…' : 'Look now') + '</button>' + (said ? '<p class="scx-meta">' + esc(said) + '</p>' : '')
-      + '<p class="scx-n">Paper bets only, no real money. Scout has no rules: he starts from the Hub\'s models, checks ESPN for injuries, lineups and news, and the Hub grades him at DraftKings\' price. He looks on his own at 5:43 AM and 3:43 PM, on Cloudflare\'s AI.</p>';
+      + '<p class="scx-n">Paper bets only, no real money. Scout has no rules: he starts from the Hub\'s models, checks ESPN for injuries, lineups and news, writes each bet as a thesis, and a critic tries to talk him out of it. The Hub grades him at DraftKings\' price. He looks on his own at 5:43 AM and 3:43 PM, on Cloudflare\'s AI.</p>';
   }
   function render() { if (!panel) return; panel.querySelector('.scx-b').innerHTML = body(); }
   function head() {

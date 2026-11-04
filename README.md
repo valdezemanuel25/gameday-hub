@@ -148,13 +148,14 @@ the Hub's models. Each run goes:
 1. Grade its open bets and write the results into its log.
 2. Build the board (`src/scout.js` `board`): the next 36 hours of priced games with every model, DraftKings now and at the open,
    margin-free chances, the shots reads, goalies and the Analyst's bets.
-3. Ask the model for a shortlist of up to 6 games where the numbers point to an edge.
-4. Read ESPN's game summary for each one: injuries, the lineup once posted, the last five results, and headlines naming a club.
-   This is the outside check.
-5. Ask the model for the bets: any market the Hub prices, any number including none, stakes of 0.5-3 units. Each bet records why,
-   what each model said, which Hub signal it started from (`lead`), the ESPN notes it used, and whether they confirmed,
-   strengthened, weakened or flipped the idea.
-6. Save the log to KV `scout`, one write a run.
+3. Find the edges in code (`candidates`). For every market on every game it compares each Hub model's chance with DraftKings'
+   margin-free chance, counts how many models are above the price, and checks the move since the open. The best 10 go on, at most 2 a
+   game, each with what the Hub's own tests say about that kind of bet (`evidence`). The model does no arithmetic.
+4. Read ESPN's game summary for those games: injuries, the lineup once posted, the last five results, and headlines naming a club.
+5. Ask the model for the bets: any market on those games, any number including none, stakes of 0.5-3 units. Each bet is a thesis in
+   set parts: the edge, the models for and against, the price move, what ESPN said, and what would make it wrong.
+6. A critic call argues against each bet. Only bets that survive are taken, and the critic's reason is kept on the bet.
+7. Save the log to KV `scout`, one write a run.
 
 The model never sets a price: each bet takes DraftKings' price from the board. Markets, stakes, duplicates and timing are checked in
 code (`src/scout.js` `problem`). Bets are graded on read with the Analyst's `settle()`. The mascot (`public/scout.js`, bottom right)
