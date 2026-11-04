@@ -3,7 +3,7 @@
 // settled ones, each with what he took and why, the models he read and the outside sources that confirmed or changed it.
 // Display only: reads /api/scout, never saves. Add ?scout=up / ?scout=down / ?scout=scan to see a mood.
 (function () {
-  var q = (location.search.match(/[?&]scout=(\w+)/) || [])[1], el = null, panel = null, D = null, tab = 'open', mood = 'scan';
+  var busy = false, said = '', q = (location.search.match(/[?&]scout=(\w+)/) || [])[1], el = null, panel = null, D = null, tab = 'open', mood = 'scan';
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var C = '#3ee8ff', CH = '#c9f8ff';
   function svg(state) {
@@ -60,6 +60,7 @@
     + '#scout-panel summary .scx-g{display:block;flex:1;min-width:0}#scout-panel summary .scx-g b{display:block;font-size:13px}#scout-panel summary .scx-g small{display:block;color:#8ea3ab;font-size:11px}#scout-panel summary .scx-u{font-weight:700;white-space:nowrap}'
     + '#scout-panel .scx-why{margin:6px 0 2px;color:#dbe8ec}#scout-panel .scx-meta{color:#8ea3ab;font-size:11.5px;margin:3px 0}#scout-panel a{color:' + C + '}'
     + '#scout-panel ul{margin:2px 0;padding-left:16px}#scout-panel li{margin:2px 0;font-size:12px}#scout-panel .scx-tag{display:inline-block;padding:0 6px;border-radius:6px;background:#10252d;color:' + C + ';font-size:10.5px;font-weight:700;margin-right:4px}'
+    + '#scout-panel .scx-go{display:block;width:100%;margin:12px 0 4px;padding:10px;border-radius:12px;border:0;background:' + C + ';color:#061014;font:700 13px "DM Sans",system-ui,sans-serif;cursor:pointer}#scout-panel .scx-go[disabled]{opacity:.6}'
     + '#scout-panel .scx-n{color:#8ea3ab;font-size:11.5px;margin-top:10px}';
   var signed = function (x, d) { return x == null ? '–' : (x > 0 ? '+' : '') + (d != null ? x.toFixed(d) : x); };
   var am = function (m) { return m > 0 ? '+' + m : String(m); };
@@ -90,7 +91,8 @@
       + '<div class="scx-tabs"><button type="button" data-t="open" class="' + (tab === 'open' ? 'on' : '') + '">Open (' + open.length + ')</button><button type="button" data-t="done" class="' + (tab === 'done' ? 'on' : '') + '">Settled (' + done.length + ')</button></div>'
       + ((tab === 'open' ? open : done).map(betRow).join('') || '<p class="scx-n">' + (tab === 'open' ? 'No open bets right now.' : 'Nothing settled yet.') + '</p>')
       + (run ? '<h4>Last look · ' + when(run.at) + '</h4><p class="scx-meta">' + esc(run.note) + '</p>' : '')
-      + '<p class="scx-n">Paper bets only, no real money. Scout has no rules: he starts from the Hub\'s models, checks outside sources, and the Hub grades him at DraftKings\' price.</p>';
+      + '<button type="button" class="scx-go"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Scout is looking…' : 'Look now') + '</button>' + (said ? '<p class="scx-meta">' + esc(said) + '</p>' : '')
+      + '<p class="scx-n">Paper bets only, no real money. Scout has no rules: he starts from the Hub\'s models, checks ESPN for injuries, lineups and news, and the Hub grades him at DraftKings\' price. He looks on his own at 5:43 AM and 3:43 PM, on Cloudflare\'s AI.</p>';
   }
   function render() { if (!panel) return; panel.querySelector('.scx-b').innerHTML = body(); }
   function head() {
@@ -103,6 +105,10 @@
     panel.addEventListener('click', function (e) {
       if (e.target.closest('.scx-x')) { panel.remove(); panel = null; return; }
       var t = e.target.closest('[data-t]'); if (t) { tab = t.getAttribute('data-t'); render(); }
+      if (e.target.closest('.scx-go') && !busy) { busy = true; said = ''; render();
+        fetch('/api/scout/run', { method: 'POST', credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+          said = j.error ? 'That look failed: ' + j.error : 'Looked at ' + j.looked + ' game' + (j.looked === 1 ? '' : 's') + ', took ' + j.took + '.'; tab = 'open';
+        }).catch(function () { said = 'Could not reach the Hub.'; }).then(function () { busy = false; load(); render(); }); }
     });
   }
   var place = function () {

@@ -1,13 +1,8 @@
 // Scout (src/scout.js): the board it reads, the honesty checks on its log, grading on read, and public/scout.json itself.
-// Scout runs `node test/scout.mjs` before it commits its log: a FAIL here means the log must not be committed.
-import { readFileSync } from 'node:fs';
 import { board, problem, validLog, grade, record, daysToRead, cardsFrom, STAKE } from '../src/scout.js';
 import worker from '../src/worker.js';
 let bad = 0; const ok = (c, m) => { if (!c) { bad++; console.log('FAIL', m); } };
 
-// the committed log is valid
-const file = JSON.parse(readFileSync(new URL('../public/scout.json', import.meta.url), 'utf8'));
-const errs = validLog(file); ok(!errs.length, 'public/scout.json is valid: ' + errs.join('; '));
 
 const now = new Date('2026-11-07T12:00:00Z');
 const soc = { id: '1', league: 'eng.1', leagueName: 'Premier League', kickoff: '2026-11-07T15:00:00Z', home: 'Arsenal', away: 'Chelsea', final: null,
@@ -57,11 +52,46 @@ const kept = grade([{ ...bet, res: 'loss', units: -1, clv: -2 }], new Map(), now
 ok(kept[0].status === 'settled' && kept[0].units === -1, 'a result copied back into the log stands');
 
 // routes: the board with the read-only token, the panel signed in, and nothing without either
-const kv = new Map([['day:2026-11-07', JSON.stringify({ cards: [soc] })]]);
+const kv = new Map([['day:2026-11-07', JSON.stringify({ cards: [soc] })], ['scout', JSON.stringify({ v: 1, bets: [bet], runs: [{ at: '2026-11-07T11:00:00Z', note: 'test' }] })]]);
 const env = { ADMIN_TOKEN: 'secret', HEALTH_TOKEN: 'tok', HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async () => { throw new Error('Scout must not write'); }, list: async () => ({ keys: [], list_complete: true }) },
-  ASSETS: { fetch: async req => new URL(req.url).pathname === '/scout.json' ? new Response(JSON.stringify({ v: 1, bets: [bet], runs: [{ at: '2026-11-07T11:00:00Z', note: 'test' }] })) : new Response('nf', { status: 404 }) } };
+  ASSETS: { fetch: async () => new Response('nf', { status: 404 }) } };
 const r0 = await worker.fetch(new Request('https://x.test/api/scout/board'), env); ok(r0.status === 401, 'board without the token is refused');
 const r1 = await worker.fetch(new Request('https://x.test/api/scout/board?k=tok'), env); ok(r1.status === 200, 'board with the token: ' + r1.status);
-if (r1.status === 200) { const j = await r1.json(); ok(Array.isArray(j.games) && j.record && Array.isArray(j.open) && Array.isArray(j.copyBack) && Array.isArray(j.logProblems), 'board shape'); }
+if (r1.status === 200) { const j = await r1.json(); ok(Array.isArray(j.games) && j.record && j.record.all.bets === 1 && Array.isArray(j.open) && Array.isArray(j.copyBack) && Array.isArray(j.logProblems), 'board shape, log read from KV'); }
 const r2 = await worker.fetch(new Request('https://x.test/api/scout?k=tok'), env); ok(r2.status === 401, 'the panel is not open to the token');
+
+// ---- the run on Workers AI (src/scoutai.js), with a stand-in model ----
+const { scoutStep, isRunTime, line, outsideFrom, makeBet } = await import('../src/scoutai.js');
+ok(isRunTime(new Date('2026-11-04T11:43:00Z')) && isRunTime(new Date('2026-11-04T21:43:00Z')) && !isRunTime(new Date('2026-11-04T10:43:00Z')) && isRunTime(new Date('2026-07-04T10:43:00Z')), 'runs at 5:43 AM / 3:43 PM Central, standard or daylight time');
+ok(/#0 Premier League \| Arsenal v Chelsea/.test(line(g1, 0)) && /shots read over/.test(line(g1, 0)) && /analyst bet/.test(line(g1, 0)), 'board line for the model: ' + line(g1, 0).slice(0, 80));
+const ox = outsideFrom(g9, { injuries: [{ team: { abbreviation: 'TOR' }, injuries: [{ athlete: { displayName: 'A. Matthews', position: { abbreviation: 'C' } }, status: 'Out', details: { type: 'Knee', returnDate: '2026-11-20' } }] }],
+  lastFiveGames: [{ team: { abbreviation: 'TOR' }, events: [{ gameResult: 'W', score: '4-2' }] }], news: { articles: [{ headline: 'Maple Leafs lose Matthews', links: { web: { href: 'https://espn.com/x' } } }, { headline: 'Unrelated story' }] } });
+ok(ox.length === 3 && /Matthews \(C\) Out, Knee/.test(ox[0].note) && ox[2].url === 'https://espn.com/x', 'outside check: injuries, last five, news naming a club');
+const mb = makeBet({ n: 0, key: 'O', stake: 9, conf: 7, lead: 'nonsense', why: 'x', outsideCheck: 'confirmed', used: [0, 99] }, g1, ox, now);
+ok(mb && mb.price === g1.price.O && mb.stake === 3 && mb.conf === 5 && mb.lead === 'combo' && mb.outside.length === 1, 'the price comes from the board; stake, confidence and lead are held to their ranges');
+ok(makeBet({ n: 0, key: 'X', stake: 1, why: 'x' }, g1, [], now) === null && makeBet({ n: 0, key: 'H', stake: 1, why: 'x' }, g9, [], now) && makeBet({ n: 0, key: 'D', stake: 1, why: 'x' }, g9, [], now) === null, 'only markets the game has');
+ok(makeBet({ n: 0, key: 'O', stake: 1, why: 'x' }, { ...g1, scoutHas: ['Over'] }, [], now) === null, 'no second bet on a market Scout already holds');
+
+const store = new Map([['day:2026-11-07', JSON.stringify({ cards: [soc, hk] })], ['nhl:day:2026-11-07', JSON.stringify({ cards: [hk] })]]);
+const calls = [];
+const AI = { run: async (model, inp) => { calls.push(inp); const u = inp.messages[1].content;
+  if (/Pick up to/.test(u)) return { response: { shortlist: [{ n: 0, idea: 'shots read over the price' }, { n: 42, idea: 'no such game' }] } };
+  return { response: JSON.stringify({ bets: [{ n: 0, key: 'O', stake: 1.5, conf: 4, lead: 'shots', why: 'Shots read 6 over the price.', models: { shots: 'Over 57%' }, outsideCheck: 'confirmed', used: [0] }, { n: 1, key: 'H', stake: 1, lead: 'v4', why: 'not on the shortlist', outsideCheck: 'none' }], note: 'Took the Over.' }) }; } };
+const kv2 = { get: async (k, t) => { const v = store.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { store.set(k, v); }, list: async () => ({ keys: [], list_complete: true }) };
+const espn = async url => new Response(JSON.stringify({ lastFiveGames: [{ team: { abbreviation: 'ARS' }, events: [{ gameResult: 'W', score: '2-0' }] }] }));
+const t0 = new Date('2026-11-07T11:43:00Z'); // 5:43 AM Central
+const r = await scoutStep({ HUB: kv2, AI }, t0, espn);
+const sd = JSON.parse(store.get('scout'));
+ok(r.ok && r.took === 1 && sd.bets.length === 1 && sd.bets[0].key === 'O' && sd.bets[0].price === -115 && sd.bets[0].outside.length === 1 && sd.runs[0].note === 'Took the Over.', 'a run: shortlist, outside check, one bet at the board price ' + JSON.stringify(r));
+ok(calls.length === 2 && calls[0].messages[1].content.includes('#0') && calls[1].messages[1].content.includes('ESPN last five'), 'two model calls; the second sees the outside check');
+const again = await scoutStep({ HUB: kv2, AI }, new Date('2026-11-07T11:50:00Z'), espn);
+ok(again.skipped && calls.length === 2, 'no second run within 3 hours');
+ok((await scoutStep({ HUB: kv2, AI }, new Date('2026-11-07T13:43:00Z'), espn)).skipped === 'not a run time', 'other hours: nothing');
+const bad2 = await scoutStep({ HUB: kv2, AI: { run: async () => { throw new Error('out of neurons'); } } }, new Date('2026-11-07T21:43:00Z'), espn);
+ok(bad2.error && JSON.parse(store.get('scout')).runs[0].error, 'a failed run is noted, never thrown');
+ok((await scoutStep({ HUB: kv2 }, t0, espn)).error, 'no AI binding: an error, nothing run');
+// the cron hands Scout's run to its own invocation only
+let ran = 0; const ctx = { waitUntil: p => p };
+await worker.scheduled({ cron: '43 10,11,20,21 * * *' }, { HUB: kv2, AI: { run: async () => { ran++; return { response: { shortlist: [] } }; } } }, ctx);
+ok(true, 'scheduled with Scout\'s cron does not throw');
 console.log(bad ? `${bad} failed` : 'scout ok'); process.exit(bad ? 1 : 0);

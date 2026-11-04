@@ -16,7 +16,11 @@ id = "3afff88abc944771a4c7bfdd78f05a36"
 # Every 10 minutes the Worker does ONE small job for ONE league, rotating:
 #   sync results -> grade (a league is graded GAME_HOURS + GRADE_DELAY_HOURS after its last kickoff) -> analyze.
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/5 * * * *", "43 10,11,20,21 * * *"] # the second is Scout (src/scoutai.js: runs at 5:43 AM and 3:43 PM Central)
+
+# Workers AI for Scout (the free daily allowance)
+[ai]
+binding = "AI"
 
 [vars]
 GAME_HOURS = "2"          # assumed length of a game

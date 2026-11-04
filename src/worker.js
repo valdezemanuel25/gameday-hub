@@ -26,6 +26,8 @@ import { homeSummary } from './home.js';
 import { hubHealth } from './health.js';
 import { board as scoutBoardOf, grade as scoutGrade, record as scoutRecord, daysToRead as scoutDays, cardsFrom as scoutCards, validLog as scoutValid } from './scout.js';
 import { getAnalyst } from './analyst.js';
+import { scoutStep, getScout } from './scoutai.js';
+const SCOUT_CRON = '43 10,11,20,21 * * *'; // wrangler.toml: Scout's own cron (5:43 AM and 3:43 PM Central, standard or daylight time)
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -41,7 +43,7 @@ const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
 // bookkeeping split by record (Nov 2, 2026), so the sweep can see which one costs saves
 const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games' };
 const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
-export const writeKind = k => { const s = String(k); return s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
+export const writeKind = k => { const s = String(k); return s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst' : s === 'scout' ? 'scout'
   : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
 const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
 function counted(env) {
@@ -143,17 +145,15 @@ async function authed(req, env) {
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
 const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT });
-// Scout (src/scout.js): its log is public/scout.json (Scout commits it); graded on read from the saved days, no KV writes.
-async function scoutLog(env, origin) {
-  try { const r = await env.ASSETS.fetch(new Request(new URL('/scout.json', origin))); const j = r.ok ? await r.json() : null; return j && j.v === 1 && Array.isArray(j.bets) ? { ...j, runs: Array.isArray(j.runs) ? j.runs : [] } : { v: 1, bets: [], runs: [] }; } catch (e) { return { v: 1, bets: [], runs: [] }; }
-}
+// Scout (src/scout.js, src/scoutai.js): runs in the Worker on Workers AI; its log is KV 'scout', graded on read here.
+const scoutLog = env => getScout(env);
 async function scoutGraded(env, log, now) {
   const names = scoutDays(log.bets), docs = await Promise.all(names.map(n => env.HUB.get(n, 'json')));
   return scoutGrade(log.bets, scoutCards(names, docs), now);
 }
 // What Scout reads at the start of a run: the games, its record, its open bets, and results to copy back into its log.
 async function scoutBoard(env, origin, now = new Date()) {
-  const log = await scoutLog(env, origin), d0 = today(), dates = [d0, addDays(d0, 1), addDays(d0, 2)];
+  const log = await scoutLog(env), d0 = today(), dates = [d0, addDays(d0, 1), addDays(d0, 2)];
   const [sd, nd, an, graded] = await Promise.all([Promise.all(dates.map(d => env.HUB.get(`day:${d}`, 'json'))), Promise.all(dates.map(d => env.HUB.get(`nhl:day:${d}`, 'json'))), getAnalyst(env, { readOnly: true }).catch(() => ({ items: [] })), scoutGraded(env, log, now)]);
   const days = { soccer: Object.fromEntries(dates.map((d, i) => [d, sd[i]?.cards || []])), nhl: Object.fromEntries(dates.map((d, i) => [d, nd[i]?.cards || []])) };
   const anItems = (an.items || []).filter(b => !b.res);
@@ -164,7 +164,7 @@ async function scoutBoard(env, origin, now = new Date()) {
     notCounted: graded.filter(b => b.status === 'late' || b.status === 'bad').map(b => ({ id: b.id, why: b.note })), logProblems: scoutValid(log), lastRuns: log.runs.slice(0, 5) };
 }
 async function scoutView(env, origin, now = new Date()) {
-  const log = await scoutLog(env, origin), graded = await scoutGraded(env, log, now);
+  const log = await scoutLog(env), graded = await scoutGraded(env, log, now);
   return { record: scoutRecord(graded), bets: graded.sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 200), runs: log.runs.slice(0, 20), updated: log.updated || null };
 }
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/home');
@@ -1087,6 +1087,7 @@ const hub = {
     if (p === '/api/health') return json(await health(env)); // signed in: the same read
     if (p === '/api/scout/board') return json(await scoutBoard(env, url.origin)); // signed in: the same board Scout reads
     if (p === '/api/scout') return json(await scoutView(env, url.origin)); // Scout's mascot panel
+    if (req.method === 'POST' && p === '/api/scout/run') return json(await scoutStep(env, new Date(), fetch, { force: true })); // the panel's "Look now" button
     if (p === '/api/home') { // home screen carousel: today's counts and Best picks (display only)
       const d = today(), [sd, nd] = await Promise.all([env.HUB.get(`day:${d}`, 'json'), env.HUB.get(`nhl:day:${d}`, 'json')]);
       let issues = []; try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; issues = Array.isArray(j && j.issues) ? j.issues : []; } catch (e) {}
@@ -1205,6 +1206,8 @@ const hub = {
 
   async scheduled(event, env0, ctx) {
     const c = counted(env0);
+    // Scout's own cron: this run does only Scout (two AI calls and a few ESPN reads), nothing else
+    if (event && event.cron === SCOUT_CRON) { ctx.waitUntil((async () => { try { await scoutStep(c.env); } finally { await c.flush(); } })()); return; }
     ctx.waitUntil((async () => {
       try { c.env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit

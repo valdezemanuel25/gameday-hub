@@ -140,19 +140,26 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 
 ## Scout (free-rein analyst, Nov 4, 2026)
 
-Scout is a scheduled Claude session (twice a day, Central time), not code in the Worker. It has no rules. Its one requirement is to start
-every look at the Hub's own models. It reads `GET /api/scout/board?k=<HEALTH_TOKEN>`, which covers the next 36 hours of priced soccer and
-hockey games: every model, DraftKings now and at the open, margin-free chances, the shots reads, goalies, the Analyst's bets, and Scout's
-own record. It may then check outside sources to confirm or change its thesis, and logs paper bets in `public/scout.json`. That file is
-the only one it commits, the same way the Brew pollers commit `brew.json`. Each bet records what it took (market, DraftKings price at
-the board read, stake 0.5-3 units), why, the Hub reads behind it, the Hub model it started from (`lead`), and the outside sources with
-what each said.
+Scout runs inside the Worker on Workers AI (`src/scoutai.js`, model `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, or the `SCOUT_MODEL` var).
+It uses Cloudflare's free daily AI allowance, so it costs no Claude usage. It has its own cron (`43 10,11,20,21 * * *`, run only at
+5:43 AM and 3:43 PM Central) and does nothing else in that run. It has no rules on what to take. Its one requirement is to start from
+the Hub's models. Each run goes:
 
-The Worker grades Scout on read with the Analyst's `settle()` (closing price, result, void after 4 days) and saves nothing to KV. The
-honesty checks live in `src/scout.js`, not in the log. A bet logged inside 20 minutes of kickoff is not counted. Only markets the Hub can
-grade are counted. Stakes are held to 0.5-3 units. The mascot (`public/scout.js`, bottom right on Home, Soccer and Hockey) shows the
-record, where the edge is coming from (by `lead`), and the open and settled bets with their reasons. `node test/scout.mjs` checks the log
-before every commit. All bets are paper only.
+1. Grade its open bets and write the results into its log.
+2. Build the board (`src/scout.js` `board`): the next 36 hours of priced games with every model, DraftKings now and at the open,
+   margin-free chances, the shots reads, goalies and the Analyst's bets.
+3. Ask the model for a shortlist of up to 6 games where the numbers point to an edge.
+4. Read ESPN's game summary for each one: injuries, the lineup once posted, the last five results, and headlines naming a club.
+   This is the outside check.
+5. Ask the model for the bets: any market the Hub prices, any number including none, stakes of 0.5-3 units. Each bet records why,
+   what each model said, which Hub signal it started from (`lead`), the ESPN notes it used, and whether they confirmed,
+   strengthened, weakened or flipped the idea.
+6. Save the log to KV `scout`, one write a run.
+
+The model never sets a price: each bet takes DraftKings' price from the board. Markets, stakes, duplicates and timing are checked in
+code (`src/scout.js` `problem`). Bets are graded on read with the Analyst's `settle()`. The mascot (`public/scout.js`, bottom right)
+shows the record, where the edge is coming from, the bets with their reasons, and a "Look now" button (`POST /api/scout/run`).
+`GET /api/scout/board?k=<HEALTH_TOKEN>` returns the same board for checking. All bets are paper only.
 
 ## Score card (v6)
 
