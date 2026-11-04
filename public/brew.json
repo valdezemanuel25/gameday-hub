@@ -1,6 +1,70 @@
 {
-  "updated": "2026-11-04T11:09:16Z",
+  "updated": "2026-11-04T21:10:22Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-04",
+      "title": "Blue wave, green markets",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,737",
+          "change": 1.44
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,689",
+          "change": 1.58
+        },
+        {
+          "label": "Dow",
+          "value": "53,356",
+          "change": 3.03
+        },
+        {
+          "label": "10-yr",
+          "value": "4.894%",
+          "change": -6,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$88.74",
+          "change": -7.65
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$80,191",
+          "change": 3.07
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "Stocks surged after Democrats swept the midterms, with the Dow up 3.03% (over 1,500 points), the S&P 500 up 1.58% and the Nasdaq up 1.44%."
+        },
+        {
+          "h": "Yields",
+          "t": "The 10-year yield slipped 6 bps to 4.894% as investors bet a divided Washington will curb spending and borrowing."
+        },
+        {
+          "h": "Oil",
+          "t": "Oil tumbled 7.65% to $88.74 as fears of a US attack on Iran eased."
+        },
+        {
+          "h": "CVS",
+          "t": "CVS will split its retail pharmacies from Aetna and Caremark by early 2028; despite $108.4B in revenue (+5.4%) and a raised outlook, shares fell 12.53%."
+        },
+        {
+          "h": "Movers",
+          "t": "Duolingo jumped 25.99% and Block 15.32% on earnings, while Amdocs dropped 30.07% and Trump Media 24.54%."
+        },
+        {
+          "h": "Gridlock risk",
+          "t": "The US is projected to hit its $41.1T debt ceiling by summer 2027, and BNY expects at least one shutdown next year."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-11-04",
