@@ -434,7 +434,9 @@ async function cacheGet(k) { try { const r = typeof caches !== 'undefined' ? awa
 async function cachePut(k, v, secs) { try { if (typeof caches !== 'undefined') await caches.default.put(k, new Response(JSON.stringify(v), { headers: { 'cache-control': `max-age=${secs}` } })); } catch (e) { /* ignore */ } }
 export const readSharpNote = () => cacheGet(SHARP_NOTE);
 export function analystSharp(env, slug, f = fetch, now = new Date()) {
-  if (!oddsKeys(env).length) return null;
+  // a league with no Odds API source (La Liga 2, 2. Bundesliga) never looks: a look there would use one of the day's looks and the
+  // league's gap, then find nothing and overwrite the tab's last-look note with "No price source for this league"
+  if (!oddsKeys(env).length || !SPORT[slug]) return null;
   return async cards => {
     const day = now.toISOString().slice(0, 10), gapK = `https://hub.local/sharp/${slug}`, dayK = `https://hub.local/sharp-day/${day}`;
     if (await cacheGet(gapK)) return null;
@@ -505,6 +507,9 @@ export async function priceWhy(env, date, slug, id, now = new Date(), why = odds
     const px = `${[r.parsed.h, r.parsed.d, r.parsed.a].map(m => (m > 0 ? '+' : '') + m).join(' / ')}${r.parsed.src ? ` (${r.parsed.src === 'bet365' ? 'Bet365' : r.parsed.src} stand-in)` : ''}`;
     if (!priceOpen(c, now)) return { kind: 'locked', title: 'Price came too late', detail: `ESPN has a price now (${px}), but prices lock 20 minutes before kickoff, so it was not taken for this game.` };
     const s = await refreshOdds(env, date, slug, now);
+    // "saved" only when the card really has a home / draw / away price now: the second ESPN read can fail or miss the game
+    const d2 = await env.HUB.get(`day:${date}`, 'json'), c2 = (d2?.cards || []).find(x => x.id === id && x.league === slug), o2 = c2 && c2.odds;
+    if (!(o2 && [o2.h, o2.d, o2.a].every(Number.isFinite))) return { kind: 'error', title: 'Price seen but not saved', detail: `ESPN showed a price (${px}), but the Hub's read of the league ${s && s.error ? `failed (${String(s.error).slice(0, 80)})` : 'did not pick it up'}, so nothing was saved. Try again in a minute.` };
     return { kind: 'saved', title: 'Price found and saved', detail: `ESPN has a price now (${px}). It was missing at the Hub's last read; it is saved now${s && s.analyst && s.analyst.placed ? ` and the Analyst placed ${s.analyst.placed} bet${s.analyst.placed === 1 ? '' : 's'}` : ''}.` };
   }
   if (!bk) return { kind: 'none', title: 'No book on ESPN yet', detail: "ESPN lists the game but no sportsbook has a price on it in ESPN's feed yet. Smaller leagues often get theirs a day or two before kickoff. The Hub keeps checking: every 6 hours, then hourly in the last 3." };

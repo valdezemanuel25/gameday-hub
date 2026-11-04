@@ -248,6 +248,7 @@ ok('analystSharp: notes the last look for the tab', (await readSharpNote()).shar
 const cap = analystSharp({ ODDS_API_KEY: 'k', SHARP_PER_DAY: '1' }, 'ger.1', countSharp, NOW);
 ok('analystSharp: stops at the daily limit', (await cap([card()])) === null && sc === 1);
 ok('analystSharp: no key, no look', analystSharp({}, 'eng.1', countSharp) === null);
+ok('analystSharp: no look for a league with no Odds API source (La Liga 2, 2. Bundesliga), so the day\'s looks and the last-look note are left alone', analystSharp({ ODDS_API_KEY: 'k' }, 'ger.2', countSharp, NOW) === null && analystSharp({ ODDS_API_KEY: 'k' }, 'esp.2', countSharp, NOW) === null && sc === 1 && (await readSharpNote()).league !== 'ger.2');
 const kv3 = new Map(), env3 = { HUB: { get: async (k, t) => { const x = kv3.get(k); return x == null ? null : t === 'json' ? JSON.parse(x) : x; }, put: async (k, x) => { kv3.set(k, x); } } };
 await analystLook(env3, '2026-10-28', [card({ v4: null })], NOW, null, async () => smap);
 const st = (await getAnalyst(env3)).items;

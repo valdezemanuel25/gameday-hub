@@ -20,6 +20,15 @@ const ev = { id: '9', date: KO, status: { type: { name: 'STATUS_SCHEDULED' } }, 
 globalThis.fetch = async u => new Response(JSON.stringify(/espn/.test(String(u)) && /20261107/.test(String(u)) ? { events: [ev] } : { events: [] }));
 const s1 = mkEnv([card]), sv = await priceWhy(s1.env, D, 'ger.2', '9', NOW);
 ok('why: ESPN has a price now, so it is saved straight away', sv.kind === 'saved' && JSON.parse(s1.kv.get(`day:${D}`)).cards[0].odds.h === 160, JSON.stringify(sv));
+// the check saw a price but the league read that follows missed the game (ESPN's second answer was empty): not "saved"
+const evFetch = globalThis.fetch;
+globalThis.fetch = async u => new Response(JSON.stringify({ events: [] }));
+const s2 = mkEnv([card]), sv2 = await priceWhy(s2.env, D, 'ger.2', '9', NOW, why({ found: true, books: ['DraftKings'], parsed: { h: 160, d: 260, a: 140 }, missing: [] }));
+ok('why: a price seen but not saved by the league read is an error, not "saved"', sv2.kind === 'error' && /not saved/.test(sv2.title) && !JSON.parse(s2.kv.get(`day:${D}`)).cards[0].odds, JSON.stringify(sv2));
+globalThis.fetch = async u => { throw new Error('network down'); };
+const sv3 = await priceWhy(mkEnv([card]).env, D, 'ger.2', '9', NOW, why({ found: true, books: ['DraftKings'], parsed: { h: 160, d: 260, a: 140 }, missing: [] }));
+ok('why: the league read failing is an error too', sv3.kind === 'error', JSON.stringify(sv3));
+globalThis.fetch = evFetch;
 // oddsWhy reads the feed: a Bet365-only game is a stand-in price, a DraftKings entry missing the draw is partial
 const w1 = await oddsWhy('ger.2', D, '9');
 ok('oddsWhy: finds the game and reads the DraftKings price', w1.found && w1.books.join() === 'DraftKings' && w1.parsed.h === 160 && !w1.missing.length, JSON.stringify(w1));
