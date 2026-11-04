@@ -21,6 +21,7 @@ export const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 export const KEY = 'scout';
 export const RUN_HOURS = [5, 15]; // Central; the cron fires at :43 of the UTC hours that can be these (standard and daylight time)
 const KEEP_RUNS = 120, KEEP_BETS = 1500, KEEP_SHADOW = 2500;
+export const COOLDOWN_MIN = 30; // the panel's "Look now" button: at most one forced run per 30 minutes after a good run
 const LEADS = ['v4', 'v5', 'v6', 'v2', 'move', 'shots', 'shotsGoalie', 'forebet', 'sportsmole', 'consensus', 'analyst', 'goalies', 'combo'];
 const CHECKS = ['confirmed', 'strengthened', 'weakened', 'flipped', 'none'];
 const am = m => (m > 0 ? '+' + m : String(m));
@@ -210,7 +211,10 @@ export async function scoutStep(env, now = new Date(), fetchFn = fetch, { force 
   if (!env.AI) return { error: 'Workers AI is not bound (wrangler.toml [ai] binding = "AI")' };
   const doc = await getScout(env);
   try {
-    if (!force && doc.runs[0] && !doc.runs[0].error && now.getTime() - new Date(doc.runs[0].at).getTime() < 3 * 3600000) return { skipped: 'ran in the last 3 hours' };
+    const since = doc.runs[0] && !doc.runs[0].error ? now.getTime() - new Date(doc.runs[0].at).getTime() : Infinity;
+    if (!force && since < 3 * 3600000) return { skipped: 'ran in the last 3 hours' };
+    // the "Look now" button: one forced look per COOLDOWN_MIN after a good run, so repeated taps spend no AI calls or saves
+    if (force && since < COOLDOWN_MIN * 60000) { const wait = Math.ceil((COOLDOWN_MIN * 60000 - since) / 60000); return { skipped: 'cooldown', wait, note: `Scout looked ${Math.floor(since / 60000)} minutes ago; try again in ${wait} minute${wait === 1 ? '' : 's'}.` }; }
     // 1. results into the log
     const names = daysToRead([...doc.bets, ...doc.shadow]), docs = await Promise.all(names.map(n => env.HUB.get(n, 'json'))), cards = cardsFrom(names, docs);
     const G = grade(doc.bets, cards, now), byId = new Map(G.map(b => [b.id, b]));

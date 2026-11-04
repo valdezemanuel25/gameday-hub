@@ -119,7 +119,7 @@
       var t = e.target.closest('[data-t]'); if (t) { tab = t.getAttribute('data-t'); render(); }
       if (e.target.closest('.scx-go') && !busy) { busy = true; said = ''; render();
         fetch('/api/scout/run', { method: 'POST', credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
-          said = j.error ? 'That look failed: ' + j.error : 'Looked at ' + j.looked + ' game' + (j.looked === 1 ? '' : 's') + ', took ' + j.took + '.'; tab = 'open';
+          said = j.error ? 'That look failed: ' + j.error : j.skipped === 'cooldown' ? j.note : 'Looked at ' + j.looked + ' game' + (j.looked === 1 ? '' : 's') + ', took ' + j.took + '.'; tab = 'open';
         }).catch(function () { said = 'Could not reach the Hub.'; }).then(function () { busy = false; load(); render(); }); }
     });
   }

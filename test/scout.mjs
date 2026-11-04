@@ -126,7 +126,26 @@ const bad2 = await scoutStep({ HUB: kv2, AI: { run: async () => { throw new Erro
 ok(bad2.error && JSON.parse(store.get('scout')).runs[0].error, 'a failed run is noted, never thrown');
 ok((await scoutStep({ HUB: kv2 }, t0, espn)).error, 'no AI binding: an error, nothing run');
 // the cron hands Scout's run to its own invocation only
-let ran = 0; const ctx = { waitUntil: p => p };
-await worker.scheduled({ cron: '43 10,11,20,21 * * *' }, { HUB: kv2, AI: { run: async () => { ran++; return { response: { shortlist: [] } }; } } }, ctx);
-ok(true, 'scheduled with Scout\'s cron does not throw');
+{ const cronRun = async (iso, st) => { const puts = [], aiCalls = [], jobs = []; const kvC = { get: async (k, t) => { const v = st.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { puts.push(k); st.set(k, v); }, list: async () => ({ keys: [], list_complete: true }) };
+    const realFetch = globalThis.fetch; globalThis.fetch = espn;
+    try { await worker.scheduled({ cron: '43 10,11,20,21 * * *', scheduledTime: Date.parse(iso) }, { HUB: kvC, AI: { run: async (m, inp) => { aiCalls.push(inp); return AI.run(m, inp); } } }, { waitUntil: p => jobs.push(p) }); await Promise.all(jobs); }
+    finally { globalThis.fetch = realFetch; }
+    return { puts, ai: aiCalls.length }; };
+  const fresh = () => new Map([...store].filter(([k]) => k !== 'scout'));
+  const off = await cronRun('2026-11-07T10:43:00Z', fresh()); // 4:43 AM Central (standard time): not Scout's hour
+  ok(off.ai === 0 && off.puts.length === 0, 'cron at an off hour: no AI call and no save ' + JSON.stringify(off));
+  const on = await cronRun('2026-11-07T11:43:00Z', fresh()); // 5:43 AM Central
+  ok(on.ai === 2 && on.puts.includes('scout') && on.puts.every(k => k === 'scout' || k === 'meta:writes'), 'cron at 5:43 AM: Scout runs (2 AI calls) and saves only its log, no 5-minute job ' + JSON.stringify(on)); }
+// the "Look now" button: a forced run inside 30 minutes of a good run is skipped (no AI call, no save)
+{ const { COOLDOWN_MIN } = await import('../src/scoutai.js'); const st6 = new Map([...store].filter(([k]) => k !== 'scout')), puts6 = []; let ai6 = 0;
+  const kv6 = { ...kv2, get: async (k, t) => { const v = st6.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { puts6.push(k); st6.set(k, v); } };
+  const AI6 = { run: async (m, inp) => { ai6++; return AI.run(m, inp); } };
+  await scoutStep({ HUB: kv6, AI: AI6 }, t0, espn, { force: true }); const a0 = ai6, p0 = puts6.length;
+  const cd = await scoutStep({ HUB: kv6, AI: AI6 }, new Date(t0.getTime() + 10 * 60000), espn, { force: true });
+  ok(COOLDOWN_MIN === 30 && cd.skipped === 'cooldown' && cd.wait === 20 && /try again in 20 minutes/.test(cd.note) && ai6 === a0 && puts6.length === p0, 'Look now 10 minutes after a run: skipped, no AI call, no save ' + JSON.stringify(cd));
+  const ok2 = await scoutStep({ HUB: kv6, AI: AI6 }, new Date(t0.getTime() + 31 * 60000), espn, { force: true });
+  ok(!ok2.skipped && ai6 > a0, 'Look now after 31 minutes runs ' + JSON.stringify(ok2));
+  const st7 = new Map([...store].filter(([k]) => k !== 'scout')); st7.set('scout', JSON.stringify({ v: 1, bets: [], runs: [{ at: t0.toISOString(), error: true, note: 'The run failed: x' }], shadow: [] }));
+  const kv7 = { ...kv2, get: async (k, t) => { const v = st7.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { st7.set(k, v); } };
+  ok(!(await scoutStep({ HUB: kv7, AI }, new Date(t0.getTime() + 5 * 60000), espn, { force: true })).skipped, 'Look now right after a failed run is allowed'); }
 console.log(bad ? `${bad} failed` : 'scout ok'); process.exit(bad ? 1 : 0);

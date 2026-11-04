@@ -1210,7 +1210,8 @@ const hub = {
   async scheduled(event, env0, ctx) {
     const c = counted(env0);
     // Scout's own cron: this run does only Scout (two AI calls and a few ESPN reads), nothing else
-    if (event && event.cron === SCOUT_CRON) { ctx.waitUntil((async () => { try { await scoutStep(c.env, new Date(), fetch, { alert: m => sendAll(c.env, m) }); } finally { await c.flush(); } })()); return; }
+    // the run's time is the scheduled time (not the moment the Worker woke), so a late start never misses its 5 or 15 o'clock hour
+    if (event && event.cron === SCOUT_CRON) { const at = new Date(Number.isFinite(event.scheduledTime) ? event.scheduledTime : Date.now()); ctx.waitUntil((async () => { try { await scoutStep(c.env, at, fetch, { alert: m => sendAll(c.env, m) }); } finally { await c.flush(); } })()); return; }
     ctx.waitUntil((async () => {
       try { c.env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit
