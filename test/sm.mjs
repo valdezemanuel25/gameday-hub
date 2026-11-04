@@ -56,7 +56,8 @@ const { getListing } = await import('../src/sportsmole.js');
 const realFetch = globalThis.fetch;
 globalThis.fetch = async url => String(url).endsWith('/football/preview/') ? new Response('<html>no previews today</html>') : realFetch(url);
 kv.delete('sm:list');
-const kept = await getListing(env, Date.now() + 25 * 60000);
+// a fixed clock near the test's own date (not today's): the saved copy is kept 14 days, so Date.now() made this fail after Nov 3
+const kept = await getListing(env, new Date('2026-10-20T12:30:00Z').getTime() + 25 * 60000);
 ok('a preview that disappeared from the list is still matched (kept 14 days)', matchLink('Arsenal', 'Lille', kept)?.id === '606658', String(kept.length));
 globalThis.fetch = realFetch;
 const t = await (await worker.fetch(new Request('https://x/api/tally', { headers: { authorization: 'Basic ' + btoa('me:s') } }), env)).json();
