@@ -128,6 +128,7 @@ table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mv
 .mvx td.m3 b{color:var(--amber);font-weight:750}.gc.x{border-style:dashed}
 .gc.c{color:var(--good);border-color:rgba(94,224,143,.45)}.gc.e{color:var(--amber);border-color:rgba(240,195,90,.5)}.gc.b{color:var(--bad);border-color:rgba(255,123,107,.5)}
 .sgr{border-color:rgba(120,190,255,.5)!important}
+.sghot,.sghot b{color:#3ee8ff!important;text-shadow:0 0 8px rgba(62,232,255,.75),0 0 18px rgba(62,232,255,.35)}
 .v5r{margin-top:9px;border:1px dashed rgba(240,195,90,.55);border-radius:10px;padding:7px 9px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:12px;color:var(--mut)}
 .v5r .lb{font-size:10.5px;font-weight:700;color:var(--amber);letter-spacing:.02em}.v5r b{font-size:14px;color:var(--ink);font-weight:700}.v5r .df{margin-left:auto;font-size:11px;color:var(--faint)}
 .mt{background:var(--chip);border-radius:10px;padding:7px 8px 8px;min-width:0}
@@ -363,7 +364,9 @@ function sgRow(c) {
   const p = s.p && s.p[String(line)]; if (p == null) return '';
   const dv = m => (m > 0 ? 100 / (m + 100) : -m / (-m + 100)), dk = Number.isFinite(px.to) && Number.isFinite(px.tu) ? 100 * dv(px.to) / (dv(px.to) + dv(px.tu)) : null;
   const gs = (s.gs || []).filter(Boolean), gw = !gs.length ? 'goalies not listed: league-average goalies' : gs.every(x => x === 'c') ? 'confirmed goalies' : 'expected goalies';
-  return `<div class="v5r sgr"><span class="lb">Shots + goalie · tracking only</span><b>Over ${line} ${Math.round(p)}%</b>${dk != null ? `<span>DraftKings ${Math.round(dk)}%</span>` : ''}<span class="df">${gw}${s.cl ? ' · lineup read' : ''}</span></div>`;
+  // neon blue when the read rates Over at or above DraftKings' current (or closing) price, both rounded as shown
+  const hot = dk != null && Math.round(p) >= Math.round(dk);
+  return `<div class="v5r sgr"><span class="lb">Shots + goalie · tracking only</span><b${hot ? ' class="sghot" title="Shots + goalie rates Over at or above DraftKings"' : ''}>Over ${line} ${Math.round(p)}%</b>${dk != null ? `<span>DraftKings ${Math.round(dk)}%</span>` : ''}<span class="df">${gw}${s.cl ? ' · lineup read' : ''}</span></div>`;
 }
 function card(c) {
   const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
@@ -466,7 +469,7 @@ function movesView() {
     const rowsHtml = (px.h != null ? row(`${esc(c.aAbbr)} win`, op.a, px.a, ml ? 100 - ml.p0 : null, ml ? 100 - ml.p1 : null, ml ? -ml.d : null, hw === false) + row(`${esc(c.hAbbr)} win`, op.h, px.h, ml ? ml.p0 : null, ml ? ml.p1 : null, ml ? ml.d : null, hw === true) : '')
       + (px.tl != null ? row(`Over ${px.tl}`, ot.tl === px.tl ? ot.to : null, px.to, ou ? ou.p0 : null, ou ? ou.p1 : null, ou ? ou.d : null, over === true) + row(`Under ${px.tl}`, ot.tl === px.tl ? ot.tu : null, px.tu, ou ? 100 - ou.p0 : null, ou ? 100 - ou.p1 : null, ou ? -ou.d : null, over === false && fin.total !== px.tl) : '')
       // Shots + goalie read (tracking only) at the game's line, like the soccer Movement card's Shots read row
-      + (px.tl != null && c.sg && c.sg.p && c.sg.p[String(px.tl)] != null ? `<tr class="shr"><td class="n">Shots + goalie</td><td colspan="4" style="text-align:right">Over ${px.tl} <b>${Math.round(c.sg.p[String(px.tl)])}%</b></td></tr>` : '');
+      + (px.tl != null && c.sg && c.sg.p && c.sg.p[String(px.tl)] != null ? `<tr class="shr"><td class="n">Shots + goalie</td><td colspan="4" style="text-align:right"><span${ou && Math.round(c.sg.p[String(px.tl)]) >= Math.round(ou.p1) ? ' class="sghot"' : ''}>Over ${px.tl} <b>${Math.round(c.sg.p[String(px.tl)])}%</b></span></td></tr>` : '');
     const follow = fin && ml ? (Math.abs(ml.d) < 2 ? 'moneyline barely moved' : (ml.d > 0) === hw ? 'winner went the way of the move' : 'winner went against the move') : '';
     const fl = cardFlags(c, hm);
     return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Show this game card"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b></button>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}${gkRestTags(c)}
