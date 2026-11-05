@@ -148,4 +148,7 @@ ok((await scoutStep({ HUB: kv2 }, t0, espn)).error, 'no AI binding: an error, no
   const st7 = new Map([...store].filter(([k]) => k !== 'scout')); st7.set('scout', JSON.stringify({ v: 1, bets: [], runs: [{ at: t0.toISOString(), error: true, note: 'The run failed: x' }], shadow: [] }));
   const kv7 = { ...kv2, get: async (k, t) => { const v = st7.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { st7.set(k, v); } };
   ok(!(await scoutStep({ HUB: kv7, AI }, new Date(t0.getTime() + 5 * 60000), espn, { force: true })).skipped, 'Look now right after a failed run is allowed'); }
+// the panel's bet list: four columns (Bet, Stake, ROI, vs close); tapping a bet opens its reasoning; the last look's note folds away
+{ const pj = (await import('node:fs')).readFileSync(new URL('../public/scout.js', import.meta.url), 'utf8');
+  ok(/<span>Bet<\/span><span>Stake<\/span><span>ROI<\/span><span>vs close<\/span>/.test(pj) && /<details><summary class="scx-r">/.test(pj) && /scx-in"><p class="scx-meta">/.test(pj) && /<details class="scx-last">/.test(pj), 'panel: Bet / Stake / ROI / vs close rows, reasoning behind a tap'); }
 console.log(bad ? `${bad} failed` : 'scout ok'); process.exit(bad ? 1 : 0);

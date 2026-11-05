@@ -47,7 +47,7 @@
     + '@keyframes scn{0%,100%{transform:translateX(-12px)}45%,55%{transform:translateX(12px)}}@keyframes scg{0%,100%{transform:rotate(0)}50%{transform:rotate(-6deg)}}'
     + '@keyframes sco{0%,100%{transform:scale(.9)}50%{transform:scale(1.08) translateY(-3px)}}@keyframes scr{0%{opacity:0;transform:translateY(-4px)}30%{opacity:1}100%{opacity:0;transform:translateY(14px)}}'
     + '@media (prefers-reduced-motion:reduce){.sc *{animation:none!important}}'
-    + '#scout-panel{position:fixed;right:max(10px,env(safe-area-inset-right,0px));z-index:902;width:min(380px,calc(100vw - 20px));max-height:min(74vh,620px);overflow:auto;overscroll-behavior:contain;background:#081014;color:#e3eef2;border:1px solid rgba(62,232,255,.45);border-radius:16px;padding:12px 14px 14px;font:500 13px/1.45 "DM Sans",system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.7),0 0 24px rgba(62,232,255,.12)}'
+    + '#scout-panel{box-sizing:border-box;position:fixed;right:max(10px,env(safe-area-inset-right,0px));z-index:902;width:min(380px,calc(100vw - 20px));max-height:min(74vh,620px);overflow:auto;overscroll-behavior:contain;background:#081014;color:#e3eef2;border:1px solid rgba(62,232,255,.45);border-radius:16px;padding:12px 14px 14px;font:500 13px/1.45 "DM Sans",system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.7),0 0 24px rgba(62,232,255,.12)}'
     + '#scout-panel .scx-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}#scout-panel .scx-h b{display:block;font-size:15px}#scout-panel .scx-h small{color:#8ea3ab;font-size:11.5px}'
     + '#scout-panel .scx-x{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.14);background:none;color:#e3eef2;font-size:17px;cursor:pointer;flex:none}'
     + '#scout-panel .scx-rec{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:4px 0 8px}#scout-panel .scx-rec div{background:#0d1a20;border-radius:10px;padding:6px 4px;text-align:center}'
@@ -58,6 +58,8 @@
     + '#scout-panel .scx-tabs button.on{background:' + C + ';color:#061014;border-color:' + C + '}'
     + '#scout-panel details{border-top:1px solid #15252c;padding:7px 0}#scout-panel summary{list-style:none;cursor:pointer;display:flex;gap:8px;align-items:baseline}#scout-panel summary::-webkit-details-marker{display:none}'
     + '#scout-panel summary .scx-g{display:block;flex:1;min-width:0}#scout-panel summary .scx-g b{display:block;font-size:13px}#scout-panel summary .scx-g small{display:block;color:#8ea3ab;font-size:11px}#scout-panel summary .scx-u{font-weight:700;white-space:nowrap}'
+    + '#scout-panel .scx-cols,#scout-panel summary.scx-r{display:grid;grid-template-columns:minmax(0,1fr) 44px 58px 62px;gap:4px;align-items:baseline}#scout-panel .scx-cols{color:#8ea3ab;font-size:11px;padding:2px 0 4px}#scout-panel .scx-cols span:not(:first-child),#scout-panel summary.scx-r .scx-c{text-align:right;white-space:nowrap;font-size:12.5px}'
+    + '#scout-panel summary.scx-r .scx-g b::after{content:" ›";color:#8ea3ab;font-weight:500}#scout-panel details[open] summary.scx-r .scx-g b::after{content:" ˅"}#scout-panel details .scx-in{padding:4px 0 2px}'
     + '#scout-panel .scx-why{margin:6px 0 2px;color:#dbe8ec}#scout-panel .scx-meta{color:#8ea3ab;font-size:11.5px;margin:3px 0}#scout-panel a{color:' + C + '}'
     + '#scout-panel ul{margin:2px 0;padding-left:16px}#scout-panel li{margin:2px 0;font-size:12px}#scout-panel .scx-tag{display:inline-block;padding:0 6px;border-radius:6px;background:#10252d;color:' + C + ';font-size:10.5px;font-weight:700;margin-right:4px}'
     + '#scout-panel .scx-go{display:block;width:100%;margin:12px 0 4px;padding:10px;border-radius:12px;border:0;background:' + C + ';color:#061014;font:700 13px "DM Sans",system-ui,sans-serif;cursor:pointer}#scout-panel .scx-go[disabled]{opacity:.6}'
@@ -78,13 +80,15 @@
     return (rows ? '<ul class="scx-th">' + rows + '</ul>' : '') + (b.critic ? '<p class="scx-meta"><b>Critic</b> ' + esc(b.critic) + '</p>' : '');
   }
   function betRow(b) {
-    var u = b.status === 'open' ? '<span class="scx-u">open</span>' : b.status === 'late' || b.status === 'bad' ? '<span class="scx-u scx-dn">not counted</span>' : b.res === 'void' ? '<span class="scx-u">void</span>'
-      : '<span class="scx-u ' + (b.units > 0 ? 'scx-up' : 'scx-dn') + '">' + signed(b.units, 2) + 'u</span>';
+    // ROI on this one bet: units won or lost per unit staked (settled bets only)
+    var roi = b.status === 'open' ? 'open' : b.status === 'late' || b.status === 'bad' ? 'not counted' : b.res === 'void' ? 'void' : b.units == null || !b.stake ? '–' : signed(Math.round(100 * b.units / b.stake)) + '%';
+    var roiCls = b.units > 0 && b.status === 'settled' ? 'scx-up' : b.units < 0 && b.status === 'settled' ? 'scx-dn' : '';
     var src = (b.outside || []).map(function (o) { return '<li>' + esc(o.note || o.said || '') + (o.url ? ' · <a href="' + esc(o.url) + '" target="_blank" rel="noopener">' + esc(o.src || host(o.url)) + '</a>' : o.src ? ' · ' + esc(o.src) : '') + '</li>'; }).join('');
     var mods = b.models ? (typeof b.models === 'string' ? '<p class="scx-meta">' + esc(b.models) + '</p>' : '<ul>' + Object.keys(b.models).map(function (k) { return '<li><b>' + esc(k) + '</b> ' + esc(b.models[k]) + '</li>'; }).join('') + '</ul>') : '';
-    return '<details><summary><span class="scx-g"><b>' + esc(pickName(b)) + ' ' + am(b.price) + (b.stake !== 1 ? ' · ' + b.stake + 'u' : '') + '</b><small>' + esc(b.home) + ' v ' + esc(b.away) + ' · ' + (b.sport === 'nhl' ? 'NHL' : esc(b.leagueName || b.league)) + ' · ' + when(b.kickoff) + (b.score ? ' · ' + esc(b.score) : '') + '</small></span>' + u + '</summary>'
-      + '<p class="scx-meta">' + (b.lead ? '<span class="scx-tag">' + esc(b.lead) + '</span>' : '') + (b.outsideCheck ? '<span class="scx-tag">' + esc(b.outsideCheck) + '</span>' : '') + (b.conf ? 'confidence ' + esc(b.conf) + '/5' : '') + (b.clv != null ? ' · vs close ' + signed(b.clv) + '%' : '') + (b.note ? ' · ' + esc(b.note) : '') + '</p>'
-      + '<p class="scx-why">' + esc(b.why) + '</p>' + thesis(b) + (mods ? '<p class="scx-meta">What the Hub said</p>' + mods : '') + (src ? '<p class="scx-meta">Outside check</p><ul>' + src + '</ul>' : '') + '</details>';
+    return '<details><summary class="scx-r"><span class="scx-g"><b>' + esc(pickName(b)) + ' ' + am(b.price) + '</b><small>' + esc(b.home) + ' v ' + esc(b.away) + ' · ' + when(b.kickoff) + (b.score ? ' · ' + esc(b.score) : '') + '</small></span>'
+      + '<span class="scx-c">' + esc(b.stake) + 'u</span><span class="scx-c ' + roiCls + '">' + roi + '</span><span class="scx-c">' + (b.clv == null ? '–' : signed(b.clv) + '%') + '</span></summary>'
+      + '<div class="scx-in"><p class="scx-meta">' + (b.sport === 'nhl' ? 'NHL' : esc(b.leagueName || b.league)) + (b.lead ? ' · <span class="scx-tag">' + esc(b.lead) + '</span>' : '') + (b.outsideCheck ? '<span class="scx-tag">' + esc(b.outsideCheck) + '</span>' : '') + (b.conf ? 'confidence ' + esc(b.conf) + '/5' : '') + (b.units != null && b.status === 'settled' ? ' · ' + signed(b.units, 2) + 'u' : '') + (b.note ? ' · ' + esc(b.note) : '') + '</p>'
+      + '<p class="scx-why">' + esc(b.why) + '</p>' + thesis(b) + (mods ? '<p class="scx-meta">What the Hub said</p>' + mods : '') + (src ? '<p class="scx-meta">Outside check</p><ul>' + src + '</ul>' : '') + '</div></details>';
   }
   function compareTable() {
     var C = D && D.compare; if (!C || !(C.scout.settled || C.baseline.settled || C.dropped.settled)) return '';
@@ -101,8 +105,8 @@
       + (leads.length ? '<h4>Where the edge is coming from</h4><table><tr><th>Started from</th><th>bets</th><th>units</th><th>vs close</th></tr>' + leads.map(function (x) { var s = x[1]; return '<tr><td>' + esc(x[0]) + '</td><td>' + s.settled + '</td><td class="' + (s.units > 0 ? 'scx-up' : s.units < 0 ? 'scx-dn' : '') + '">' + signed(s.units, 2) + '</td><td>' + (s.clv == null ? '–' : signed(s.clv) + '%') + '</td></tr>'; }).join('') + '</table>' : '')
       + compareTable()
       + '<div class="scx-tabs"><button type="button" data-t="open" class="' + (tab === 'open' ? 'on' : '') + '">Open (' + open.length + ')</button><button type="button" data-t="done" class="' + (tab === 'done' ? 'on' : '') + '">Settled (' + done.length + ')</button></div>'
-      + ((tab === 'open' ? open : done).map(betRow).join('') || '<p class="scx-n">' + (tab === 'open' ? 'No open bets right now.' : 'Nothing settled yet.') + '</p>')
-      + (run ? '<h4>Last look · ' + when(run.at) + '</h4><p class="scx-meta">' + esc(run.note) + '</p>' : '')
+      + ((tab === 'open' ? open : done).length ? '<div class="scx-cols"><span>Bet</span><span>Stake</span><span>ROI</span><span>vs close</span></div>' + (tab === 'open' ? open : done).map(betRow).join('') : '<p class="scx-n">' + (tab === 'open' ? 'No open bets right now.' : 'Nothing settled yet.') + '</p>')
+      + (run ? '<details class="scx-last"><summary><h4 style="margin:0">Last look · ' + when(run.at) + ' · took ' + (run.took || 0) + ' ›</h4></summary><p class="scx-meta">' + esc(run.note) + '</p></details>' : '')
       + '<button type="button" class="scx-go"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Scout is looking…' : 'Look now') + '</button>' + (said ? '<p class="scx-meta">' + esc(said) + '</p>' : '')
       + '<p class="scx-n">Paper bets only, no real money. Scout has no rules: he starts from the Hub\'s models, checks ESPN for injuries, lineups and news, writes each bet as a thesis, and a critic tries to talk him out of it. The Hub grades him at DraftKings\' price. He looks on his own at 5:43 AM and 3:43 PM, on Cloudflare\'s AI.</p>';
   }
