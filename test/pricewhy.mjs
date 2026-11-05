@@ -43,5 +43,6 @@ ok('oddsWhy: the game is not in the feed', (await oddsWhy('ger.2', D, '9')).foun
 // the page: red cards only for priced leagues, and the No price signal is a button that asks /api/price-why
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 ok('page: no-price cards and the count at the top only for leagues the Hub prices (no card for Portugal)', /const np = day\.cards\.filter\(c => PRICED_LG\.has\(c\.league\)/.test(html) && /unpriced = day\.cards\.filter\(c => PRICED_LG\.has\(c\.league\)/.test(html) && !/PRICED_LG = new Set\(\[[^\]]*por\.1/.test(html));
+ok('page: Refresh prices and Get Both-score prices are on the Movement tab too, and say why when a day has nothing left to price', /return oddsBar\(\) \+ seg \+ head/.test(html) && /if \(!n\) return `<div class="small"[^`]*Pick a later day above/.test(html));
 ok('page: the No price signal is a button that asks the Hub why', /data-npwhy="\$\{esc\(c\.id\)\}"/.test(html) && /post\('\/api\/price-why'/.test(html));
 console.log(bad ? `\n${bad} FAILED` : '\nAll no-price checks passed'); process.exit(bad ? 1 : 0);
