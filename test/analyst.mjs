@@ -1,6 +1,6 @@
 // The Analyst (src/analyst.js): its rules, one position per game and market, settling at the close and the result, the record,
 // benching, and storage through the price read in src/worker.js.
-import { view, RULES, decide, goalsSwap, setOf, SETS, tiers, tierOf, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst, decideNhl, analystNhl, NHL_RULES } from '../src/analyst.js';
+import { pinFair, cvOf, view, RULES, decide, goalsSwap, setOf, SETS, tiers, tierOf, settle, summary, isBenched, BENCH, analystLook, listAnalyst, getAnalyst, decideNhl, analystNhl, NHL_RULES } from '../src/analyst.js';
 import { refreshOdds, analystShop, analystSharp, readSharpNote } from '../src/worker.js';
 import { bestPrices, fetchBest, sharpOf, fetchSharp } from '../src/btts.js';
 let bad = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) bad++; };
@@ -125,6 +125,34 @@ const sv = s.rules.find(r => r.id === 'under'), sf = s.rules.find(r => r.id === 
 ok('summary: per-rule units, ROI and closing-line value', sv.settled === BENCH.n && sv.units === -BENCH.n && sv.roi === -100 && sv.clv === -2);
 ok('summary: a rule losing on price and profit after enough bets is benched', sv.benched && !sf.benched && isBenched(sv));
 ok('summary: compact old rows still count', sf.settled === 2 && sf.wins === 2);
+
+// --- Nov 5, 2026: the bench check judges on close value (Pinnacle first), one game at a time, top divisions only ---
+{ const pn = { h: 120, d: 250, a: 230, tl: 2.5, to: -110, tu: -110, bty: -120, btn: 100 };
+  ok('pinFair: only a Pinnacle price read at the lineup window counts as its close', pinFair({ pn }, 'H') === null && Math.abs(pinFair({ pn, pcl: 'x' }, 'O') - 0.5) < 1e-9 && pinFair({ pn: { ...pn, tl: 3 }, pcl: 'x' }, 'O') === null && pinFair({ pn, pcl: 'x' }, 'B') > 0.5);
+  const bb = { id: 'p1', rule: 'move', key: 'H', price: 130, kickoff: '2026-11-05T15:00:00Z', mins: 200, date: '2026-11-05', gid: 'g1', league: 'eng.1' };
+  settle(bb, { odds: { h: 120, d: 250, a: 230, pn, pcl: '2026-11-05T14:35:00Z' } }, new Date('2026-11-05T15:01:00Z'));
+  const q = pinFair({ pn, pcl: 'x' }, 'H');
+  ok('settle: close value against Pinnacle\'s fair close is kept next to DraftKings\' close', bb.clv != null && Math.abs(bb.clvPin - Math.round(1000 * (q * 2.3 - 1)) / 10) < 0.11 && cvOf(bb) === bb.clvPin, JSON.stringify(bb));
+  const mk = (i, o) => ({ id: 'q' + i, rule: 'follow', key: 'H', price: 110, kickoff: '2026-10-20T15:00:00Z', mins: 200, date: '2026-10-20', gid: 'g' + i, league: 'eng.1', res: 'win', units: 1.1, clv: -1, ...o });
+  // 40 games, winning money but losing to the close: benched (profit no longer saves it)
+  const win40 = Array.from({ length: 40 }, (_, i) => mk(i));
+  const r1 = summary(win40).rules.find(r => r.id === 'follow');
+  ok('bench: 40 top-division games behind the close are benched even while winning money', r1.benched && r1.units > 0 && r1.benchCheck.games === 40 && r1.benchCheck.cv === -1, JSON.stringify(r1.benchCheck));
+  // losing money but beating the close: not benched
+  const r2 = summary(Array.from({ length: 40 }, (_, i) => mk(i, { res: 'loss', units: -1, clv: 2 }))).rules.find(r => r.id === 'follow');
+  ok('bench: losing money but beating the close is not benched', !r2.benched && r2.units < 0);
+  // two bets on one game count once: 39 games with an extra bet on one are not yet 40
+  const r3 = summary(Array.from({ length: 39 }, (_, i) => mk(i)).concat([mk(0, { id: 'q0b', key: 'O' })])).rules.find(r => r.id === 'follow');
+  ok('bench: two bets on one game count as one game', r3.settled === 40 && r3.games === 39 && !r3.benched);
+  // a game's two bets are averaged before the games are: +4 and -2 on one game and -1 on another give (1 + -1) / 2 = 0
+  const r4 = summary([mk(1, { clv: 4 }), mk(1, { id: 'q1b', key: 'O', clv: -2 }), mk(2, { clv: -1 })]).rules.find(r => r.id === 'follow');
+  ok('close value is averaged a game at a time', r4.cv === 0 && r4.cvN === 2, JSON.stringify([r4.cv, r4.cvN]));
+  // second divisions stay out of the bench check
+  const r5 = summary(Array.from({ length: 40 }, (_, i) => mk(i, { league: 'ger.2' }))).rules.find(r => r.id === 'follow');
+  ok('bench: second-division games do not count toward it', !r5.benched && r5.benchCheck.games === 0 && r5.games === 40);
+  // the packed rows kept for old bets carry Pinnacle's close value, the game and the league
+  const old = summary([], [['2026-09-01T15:00:00Z', 'follow', 'H', 60, 'win', 0.5, 1.5, 120, null, null, null, -3, '2026-09-01|g9', 'ger.2']]).rules.find(r => r.id === 'follow');
+  ok('old rows: Pinnacle close value, the game and the division are kept', old.cv === -3 && old.pinN === 1 && old.benchCheck.games === 0 && tierOf(['', '', '', '', '', '', '', '', '', '', '', '', '', 'ger.2']) === 'second'); }
 ok('summary: early and late bets kept apart', s.when.find(w => w.id === 'late').settled === 1 && s.when.find(w => w.id === 'early').settled === BENCH.n + 1);
 ok('summary: running units curve in kickoff order', s.curve.length === BENCH.n + 2 && s.curve[0][0] === '2026-09-01');
 ok('summary: the verdict waits for profit when there are few bets', /200\+/.test(s.verdict), s.verdict);

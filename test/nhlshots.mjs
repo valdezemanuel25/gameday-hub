@@ -35,5 +35,18 @@ ok('card: nothing changed, nothing written', setSg(S, c, new Date('2026-11-07T19
 c.gk.h.st = 'c'; c.gk.a.st = 'c';
 ok('card: at the lineup read with confirmed goalies the read is marked as the closing one', setSg(S, c, new Date('2026-11-07T23:35:00Z'), true) && c.sg.cl === 1 && c.sg.gs.join() === 'c,c');
 ok('card: a finished game is left alone', setSg(S, { ...c, final: { h: 1, a: 2 } }, now) === false);
+// --- the read at any total line (Nov 5, 2026): page-side, estimated through the goals average ---
+{ const h = (await import('node:fs')).readFileSync(new URL('../public/nhl.html', import.meta.url), 'utf8');
+  const a = h.indexOf('function pTot('), b = h.indexOf('function sgRow(');
+  const F = new Function(h.slice(a, b) + '; return { pTot, lamAt, sgAt };')();
+  const pois = (lam, k) => { let t = Math.exp(-lam), c = t; for (let i = 1; i <= k; i++) { t *= lam / i; c += t; } return c; };
+  ok('totals: Poisson Over 5.5', Math.abs(F.pTot(6, 5.5) - (1 - pois(6, 5))) < 1e-12);
+  ok('totals: a whole line leaves the push out', Math.abs(F.pTot(6, 6) - (1 - pois(6, 6)) / (1 - (pois(6, 6) - pois(6, 5)))) < 1e-12);
+  const s = { p: { '5.5': 55, '6.5': 38 } };
+  ok('totals: the fitted lines are read as they are', F.sgAt(s, 5.5).p === 55 && !F.sgAt(s, 5.5).est && F.sgAt(s, '6.5').p === 38);
+  const s6 = F.sgAt(s, 6), s75 = F.sgAt(s, 7.5), s45 = F.sgAt(s, 4.5);
+  ok('totals: other lines are estimated and fall in order (4.5 > 5.5 > 6 > 6.5 > 7.5)', s6.est && s45.p > 55 && 55 > s6.p && s6.p > 38 && 38 > s75.p, JSON.stringify([s45.p, s6.p, s75.p]));
+  ok('totals: a read carried back to its own line gives itself', Math.abs(100 * F.pTot(F.lamAt(0.55, 5.5), 5.5) - 55) < 0.01);
+  ok('totals: nothing to read, nothing shown', F.sgAt(null, 6) === null && F.sgAt({ p: {} }, 6) === null); }
 console.log(bad ? `\n${bad} FAILED` : '\nAll hockey shots checks passed');
 if (bad) process.exit(1);

@@ -249,5 +249,17 @@ import { ctxFor, isBackup, gkKey, gkResolve, withGk, adj5, B2B_OWN, B2B_OPP, BAC
   ok('Results: with no v5 cards graded there is no v5 block', (await nhlTally({ HUB: { list: async () => ({ keys: [] }), get: async () => null } })).v5 === null);
 }
 
+// --- rest against the price (Nov 5, 2026): is the back-to-back already in DraftKings' moneyline? ---
+{ const { restAdd, restFinish, REST_MIN } = await import('../src/nhl.js');
+  const R = { n: 0, llP: 0, llA: 0, d: 0, d2: 0, won: 0, exp: 0 };
+  const g = (i, won) => ({ v5: { in: { b2b: [0, 1], bk: [0, 0] } }, px: { h: -110, a: -110 }, final: won ? { h: 3, a: 1 } : { h: 1, a: 3 } });
+  ok('rest: a game with nobody on a back-to-back, or both, is left out', !restAdd(R, { ...g(0, true), v5: { in: { b2b: [0, 0] } } }) && !restAdd(R, { ...g(0, true), v5: { in: { b2b: [1, 1] } } }) && !restAdd(R, { ...g(0, true), px: null }));
+  // the rested home team wins 70% of even-priced games: the price is missing rest
+  for (let i = 0; i < 100; i++) restAdd(R, g(i, i % 10 < 7));
+  const F = restFinish(R);
+  ok('rest: the rested side winning far more than an even price expects says the price is missing it', F.n === 100 && F.won === 70 && F.expected === 50 && F.verdict === 'missing' && F.llRest < F.llPrice, JSON.stringify(F));
+  const R2 = { n: 0, llP: 0, llA: 0, d: 0, d2: 0, won: 0, exp: 0 }; for (let i = 0; i < 100; i++) restAdd(R2, g(i, i % 2 === 0));
+  ok('rest: winning half of even games over 100 is no difference yet (the shift is small next to the noise)', restFinish(R2).verdict === 'priced' && restFinish(R2).diff > 0);
+  const R3 = { n: 0, llP: 0, llA: 0, d: 0, d2: 0, won: 0, exp: 0 }; for (let i = 0; i < REST_MIN - 1; i++) restAdd(R3, g(i, true)); ok('rest: too few games is too early', restFinish(R3).verdict === 'early'); }
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);

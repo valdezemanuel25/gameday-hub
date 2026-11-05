@@ -13,7 +13,12 @@
 //   both: units at the best price and units had every bet gone on at DraftKings. clvDk is DraftKings' own price against its close: the
 //   rule's skill on its own, without the shopping gain (clv includes it). Without the API key, or with few credits left, it
 //   bets at DraftKings. The rule never reads the other books: a better price only changes what the bet pays.
-//   A rule that is losing on both after BENCH.n bets is benched (no new bets) until a later look says otherwise; it is never deleted.
+//   Bench check (Nov 5, 2026): closing-price value first. A rule is benched (no new bets, never deleted) once it has BENCH.n settled
+//   GAMES in the top divisions and its average close value is at or below BENCH.clv, whatever its profit: profit needs hundreds of
+//   bets, the close settles in tens. Close value is measured against Pinnacle's closing price with its margin removed when the card has
+//   one (clvPin: what the bet paid over Pinnacle's fair chance), else DraftKings' closing price (clv). Bets on the same game count as
+//   one game (an Over 2.5 and a Both score Yes on one game mostly win or lose together). Second divisions (La Liga 2, 2. Bundesliga)
+//   are kept on the record but left out of the bench check: thinner markets, and they have not shown they beat the close yet.
 //   Stale price (rule 'stale', first in RULES): DraftKings' price against a sharp book's price at the same moment (Pinnacle, else the
 //   Betfair or Matchbook exchange, src/btts.js fetchSharp), margin removed. When DraftKings pays STALE.ev or more above the sharp book's
 //   fair chance, DraftKings has not caught up with the market: bet DraftKings. No model is read. It needs the ODDS_API_KEY secret and
@@ -31,7 +36,7 @@ export const SINCE = '2026-10-27';
 export const STALE = { ev: 0.02, maxPrice: 400 }; // stale price: DraftKings pays 2%+ over the sharp fair price; nothing longer than +400
 // late rules bet only at the lineup read (30-20 minutes before kickoff, src/worker.js LINEUP_READ / PRICE_LOCK); 35 allows for a slow read
 export const LATE = 35;
-export const BENCH = { n: 40, clv: 0, roi: 0 }; // benched when, after n settled bets, average closing-line value and ROI are both <= these
+export const BENCH = { n: 40, clv: 0 }; // benched when, after n settled top-division games, the average close value (Pinnacle first) is <= clv
 // Long shots (Nov 1, 2026): no winner bet (home / draw / away) priced longer than LONG. When a winner rule fires on a longer price, the
 // Analyst bets that game's goals instead (goalsSwap): Over 2.5, or Both score Yes when Over 2.5 has no price or is already held, if
 // DraftKings rates it SWAP.min%+ (margin removed) and v4 no more than SWAP.give points below the price. Never Under or Both score No,
@@ -264,6 +269,16 @@ export function decideNhl(items, cards, date, now = new Date(), benched = new Se
 // ---- settling: the closing price once the game has kicked off, the result once it is graded ----
 // bk: the book the bet was placed at; a both-score bet closes only at that same book's price (DraftKings, or Pinnacle on second divisions)
 const closeOf = (odds, key, bk = 'draftkings') => { const dkB = odds && (odds.bk || 'draftkings') === (bk === 'pinnacle' ? 'pinnacle' : 'draftkings'); if (odds && odds.src && 'HDAOU'.includes(key)) return null; const m = odds && ({ H: odds.h, D: odds.d, A: odds.a, O: odds.tl === 2.5 ? odds.to : null, U: odds.tl === 2.5 ? odds.tu : null, B: dkB ? odds.by : null, N: dkB ? odds.bn : null })[key]; return Number.isFinite(m) ? m : null; };
+// Pinnacle's closing chance for a bet's side, margin removed: only when the card's Pinnacle price was read at the lineup window (odds.pcl),
+// so it is the close and not a price from hours before. Result: power method over home / draw / away; Over/Under 2.5 and both score: the
+// two sides. -> 0-1 | null
+export function pinFair(odds, key) {
+  const q = odds && odds.pcl && odds.pn; if (!q) return null;
+  if ('HDA'.includes(key)) { const p = devig(q.h, q.d, q.a); return p ? p['HDA'.indexOf(key)] : null; }
+  if (key === 'O' || key === 'U') { if (q.tl !== 2.5) return null; const p = devig(q.to, q.tu); return p ? p[key === 'O' ? 0 : 1] : null; }
+  if (key === 'B' || key === 'N') { const p = devig(q.bty, q.btn); return p ? p[key === 'B' ? 0 : 1] : null; }
+  return null;
+}
 const VOID_AFTER = 4 * 86400000; // a game with no result 4 days after kickoff (postponed, abandoned) is voided: the stake comes back
 const closeNhl = (px, b) => { const m = px && ({ H: px.h, A: px.a, O: px.tl === b.line ? px.to : null, U: px.tl === b.line ? px.tu : null })[b.key]; return Number.isFinite(m) ? m : null; };
 export function settle(b, c, now = new Date()) {
@@ -274,6 +289,7 @@ export function settle(b, c, now = new Date()) {
     const m = closeOf(c.odds, b.key, b.bk);
     if (m != null) { b.close = m; b.clv = r1(100 * (dec(b.price) / dec(m) - 1)); if (b.dk != null) b.clvDk = r1(100 * (dec(b.dk) / dec(m) - 1)); ch = true; }
   }
+  if (b.clvPin == null && c && c.odds && now.getTime() >= ko) { const q = pinFair(c.odds, b.key); if (q != null) { b.pinFair = r1(100 * q); b.clvPin = r1(100 * (q * dec(b.price) - 1)); ch = true; } }
   if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); if (b.dk != null) b.udk = +(hit ? dec(b.dk) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
   else if (now.getTime() - ko > VOID_AFTER) { b.res = 'void'; b.units = 0; ch = true; }
   return ch;
@@ -297,42 +313,54 @@ function settleNhl(b, c, now) {
 }
 
 // ---- the record ----
-const blank = () => ({ n: 0, open: 0, settled: 0, wins: 0, units: 0, clvN: 0, clvSum: 0, beat: 0, shopN: 0, better: 0, gain: 0, dkN: 0, udk: 0, cdN: 0, cd: 0 });
+const blank = () => ({ n: 0, open: 0, settled: 0, wins: 0, units: 0, clvN: 0, clvSum: 0, beat: 0, shopN: 0, better: 0, gain: 0, dkN: 0, udk: 0, cdN: 0, cd: 0,
+  cvN: 0, cvSum: 0, cvBeat: 0, pinN: 0, pinSum: 0, games: new Set(), cvGames: new Map() });
+// One game = one position: bets on the same game (any market) count once for the bench check; units still add up bet by bet.
+let anon = 0;
+export const gameOf = b => (b.gid ? `${b.sport || 'soccer'}|${b.date || ''}|${b.gid}` : `bet${++anon}`);
+// close value of one bet: Pinnacle's fair close first, else DraftKings' close
+export const cvOf = b => (b.clvPin != null ? b.clvPin : b.clv != null ? b.clv : null);
 function add(t, b) {
   t.n++;
   if (b.clv != null) { t.clvN++; t.clvSum += b.clv; t.beat += b.clv > 0 ? 1 : 0; }
+  if (b.clvPin != null) { t.pinN++; t.pinSum += b.clvPin; }
+  const cv = cvOf(b);
+  if (cv != null) { t.cvN++; t.cvSum += cv; t.cvBeat += cv > 0 ? 1 : 0; const g = gameOf(b), x = t.cvGames.get(g) || [0, 0]; x[0] += cv; x[1]++; t.cvGames.set(g, x); }
   if (b.dk != null) { t.shopN++; const g = dec(b.price) / dec(b.dk) - 1; t.gain += g; t.better += g > 0 ? 1 : 0; }
   if (b.udk != null) { t.dkN++; t.udk += b.udk; }
   if (b.clvDk != null) { t.cdN++; t.cd += b.clvDk; }
   if (!b.res) { t.open++; return; }
   if (b.res === 'void') return;
-  t.settled++; t.wins += b.res === 'win' ? 1 : 0; t.units += b.units;
+  t.settled++; t.wins += b.res === 'win' ? 1 : 0; t.units += b.units; t.games.add(gameOf(b));
 }
-const done = t => ({ n: t.n, open: t.open, settled: t.settled, wins: t.wins, hit: t.settled ? r1(100 * t.wins / t.settled) : null, units: +t.units.toFixed(2),
+// cv: average close value per GAME (a game's bets averaged first, so two linked bets do not count double); cvN: games with a close
+const cvGame = t => { const v = [...t.cvGames.values()].map(([s, n]) => s / n); return v.length ? +(v.reduce((a, x) => a + x, 0) / v.length).toFixed(2) : null; };
+const done = t => ({ n: t.n, open: t.open, settled: t.settled, games: t.games.size, wins: t.wins, hit: t.settled ? r1(100 * t.wins / t.settled) : null, units: +t.units.toFixed(2),
+  cv: cvGame(t), cvN: t.cvGames.size, pinN: t.pinN, clvPin: t.pinN ? +(t.pinSum / t.pinN).toFixed(2) : null,
   roi: t.settled ? r1(100 * t.units / t.settled) : null, clv: t.clvN ? +(t.clvSum / t.clvN).toFixed(2) : null, clvN: t.clvN, beat: t.clvN ? r1(100 * t.beat / t.clvN) : null,
   // price shopping: how many bets found a better price than DraftKings, the average gain in payout, and units had they all gone on at DraftKings
   shop: t.shopN ? { n: t.shopN, better: t.better, gain: +(100 * t.gain / t.shopN).toFixed(2), dkN: t.dkN, unitsDk: +t.udk.toFixed(2), clvDk: t.cdN ? +(t.cd / t.cdN).toFixed(2) : null } : null });
-export const isBenched = s => s.settled >= BENCH.n && s.clv != null && s.clv <= BENCH.clv && s.roi <= BENCH.roi;
+export const isBenched = s => s.games >= BENCH.n && s.cv != null && s.cv <= BENCH.clv; // s: a rule's TOP-division record (summary's bench)
 // When the bet was placed: the early reads are where an edge over the close could come from.
 const WHEN = [['early', '3+ hours before kickoff', m => m >= 180], ['late', 'last 3 hours (incl. the lineup read)', m => m < 180]];
 export function summary(items0, old = [], rules0 = RULES, since = SINCE) {
   const items = [...items0, ...old.map(unpack)];
-  const all = blank(), per = Object.fromEntries(rules0.map(r => [r.id, blank()])), when = Object.fromEntries(WHEN.map(w => [w[0], blank()])), mk = { '1x2': blank(), ou: blank(), btts: blank() };
+  const all = blank(), per = Object.fromEntries(rules0.map(r => [r.id, blank()])), top = Object.fromEntries(rules0.map(r => [r.id, blank()])), when = Object.fromEntries(WHEN.map(w => [w[0], blank()])), mk = { '1x2': blank(), ou: blank(), btts: blank() };
   const curve = []; let cum = 0;
   for (const b of [...items].sort((x, y) => (x.kickoff < y.kickoff ? -1 : 1))) {
-    add(all, b); if (per[b.rule]) add(per[b.rule], b); add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
+    add(all, b); if (per[b.rule]) add(per[b.rule], b); if (top[b.rule] && tierOf(b) === 'top') add(top[b.rule], b); add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
     if (b.res === 'win' || b.res === 'loss') { cum += b.units; curve.push([b.kickoff.slice(0, 10), +cum.toFixed(2)]); }
   }
-  const rules = rules0.map(r => { const s = done(per[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benched: !r.retired && (!!r.bench || isBenched(s)), ...(r.bench ? { benchedOn: r.bench } : {}), ...(r.retired ? { retired: r.retired } : {}) }; });
+  const rules = rules0.map(r => { const s = done(per[r.id]), t = done(top[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benchCheck: { games: t.games, cv: t.cv, cvN: t.cvN }, benched: !r.retired && (!!r.bench || isBenched(t)), ...(r.bench ? { benchedOn: r.bench } : {}), ...(r.retired ? { retired: r.retired } : {}) }; });
   return { since, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou), btts: done(mk.btts) }, curve, verdict: verdict(done(all)) };
 }
 // The Analyst's own read of its record, in one line. CLV first: it settles in tens of bets, profit needs hundreds.
 export function verdict(s) {
   if (!s.n) return 'No bets yet. The Analyst bets as prices are read, when one of its rules fires.';
-  if (s.clvN < 30) return `Too early to say: ${s.clvN} bet${s.clvN === 1 ? '' : 's'} with a closing price so far (30+ needed for the first read on closing-line value).`;
-  const edge = s.clv > 0 ? `beating the closing price by ${s.clv}% a bet on average` : `losing ${-s.clv}% a bet to the closing price on average`;
-  if (s.settled < 200) return `${s.clv > 0 ? 'Promising' : 'No edge yet'}: ${edge} (${s.beat}% of bets beat the close). Profit (${s.units >= 0 ? '+' : ''}${s.units}u over ${s.settled}) needs 200+ settled bets before it means much.`;
-  return s.clv > 0 && s.roi > 0 ? `Edge holding: ${edge}, ${s.roi}% ROI over ${s.settled} bets.` : `No proven edge: ${edge}, ${s.roi}% ROI over ${s.settled} bets. Do not stake real money on these rules.`;
+  if (s.cvN < 30) return `Too early to say: ${s.cvN} game${s.cvN === 1 ? '' : 's'} with a closing price so far (30+ needed for the first read on closing-line value).`;
+  const edge = s.cv > 0 ? `beating the closing price by ${s.cv}% a game on average` : `losing ${-s.cv}% a game to the closing price on average`;
+  if (s.settled < 200) return `${s.cv > 0 ? 'Promising' : 'No edge yet'}: ${edge}${s.pinN ? ` (${s.pinN} bet${s.pinN === 1 ? '' : 's'} against Pinnacle's fair close)` : ''}. Profit (${s.units >= 0 ? '+' : ''}${s.units}u over ${s.settled}) needs 200+ settled bets before it means much.`;
+  return s.cv > 0 && s.roi > 0 ? `Edge holding: ${edge}, ${s.roi}% ROI over ${s.settled} bets.` : `No proven edge: ${edge}, ${s.roi}% ROI over ${s.settled} bets. Do not stake real money on these rules.`;
 }
 
 // ---- storage: one document ('analyst'), written only when a bet is placed or settles ----
@@ -352,8 +380,9 @@ export async function getAnalyst(env, { readOnly = false } = {}) {
   return doc;
 }
 // Past KEEP bets, settled ones are kept only as a short row for the record (the page lists the latest 300 in full).
-const pack = b => [b.kickoff, b.rule, b.key, b.mins, b.res, b.units, b.clv, b.price, b.dk, b.udk, b.sport || null],
-  unpack = ([kickoff, rule, key, mins, res, units, clv, price, dk, udk, sport]) => ({ kickoff, rule, key, mins, res, units, clv, ...(dk != null ? { price, dk, udk } : {}), ...(sport ? { sport } : {}) });
+const pack = b => [b.kickoff, b.rule, b.key, b.mins, b.res, b.units, b.clv, b.price, b.dk, b.udk, b.sport || null, b.clvPin ?? null, b.gid ? `${b.date}|${b.gid}` : null, b.league || null],
+  unpack = ([kickoff, rule, key, mins, res, units, clv, price, dk, udk, sport, clvPin, g, league]) => ({ kickoff, rule, key, mins, res, units, clv, ...(dk != null ? { price, dk, udk } : {}), ...(sport ? { sport } : {}),
+    ...(clvPin != null ? { clvPin } : {}), ...(g ? { date: g.split('|')[0], gid: g.split('|')[1] } : {}), ...(league ? { league } : {}) });
 const save = (env, doc) => {
   const extra = doc.items.slice(KEEP); doc.items = doc.items.slice(0, KEEP).concat(extra.filter(b => !b.res));
   if (extra.length) doc.old = (doc.old || []).concat(extra.filter(b => b.res).map(pack));
@@ -409,7 +438,7 @@ export async function analystNhl(env, date, cards, now = new Date()) {
 // Top divisions v second divisions (La Liga 2, 2. Bundesliga, priced from Nov 2, 2026): the same bets split by the game's league, for
 // the Analyst tab's line under the rule sets and the nightly health report. Packed old rows carry no league: they are all from before
 // second divisions were priced, so they count as top divisions. -> { top: {n, settled, units, roi, clv, ...}, second: {...} }
-export const tierOf = b => (!Array.isArray(b) && SECOND_PRICED.has(b.league) ? 'second' : 'top');
+export const tierOf = b => (SECOND_PRICED.has(Array.isArray(b) ? b[13] : b.league) ? 'second' : 'top'); // packed rows carry the league at [13] (older ones: none, so top)
 export function tiers(items, old = [], rules = RULES) {
   return Object.fromEntries(['top', 'second'].map(t => [t, summary(items.filter(b => tierOf(b) === t), old.filter(b => tierOf(b) === t), rules).all]));
 }

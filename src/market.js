@@ -9,6 +9,39 @@
 //   first price was kept (Oct 26, 2026) uses its closing price instead, and has no closing-line value.
 import { devig as devigPrices } from './v6core.js';
 import { moveOf, bttsMove } from './moves.js';
+import { shotsOver, SHOTS, SHOTS2, LEAGUES as SX1, LEAGUES2 as SX2 } from './shots.js';
+
+// ---- the model scoreboard (Nov 5, 2026): every model against the closing price, per market ----
+// Each model is scored only on games where it and the closing price both exist, by log loss (lower is better), paired game by game,
+// so the difference has a standard error: verdict 'beats' / 'worse' when the whole 95% range (2 standard errors) is on one side,
+// 'level' otherwise, 'early' under BOARD_MIN games. A model that never beats the price adds nothing a bettor does not already have.
+export const BOARD_MIN = 50;
+export const BOARD_MODELS = { '1x2': ['v2', 'v4', 'v5', 'fb'], ou: ['v2', 'v4', 'v5', 'v6', 'fb', 'shots'], btts: ['v2', 'v4', 'v5', 'v6', 'fb'] };
+const bBlank = () => Object.fromEntries(Object.entries(BOARD_MODELS).map(([m, ks]) => [m, Object.fromEntries(ks.map(k => [k, { n: 0, ll: 0, llP: 0, d: 0, d2: 0 }]))]));
+const LLo = (q, y) => -Math.log(Math.max(1e-6, y ? q : 1 - q));
+const bAdd = (t, llM, llP) => { const d = llM - llP; t.n++; t.ll += llM; t.llP += llP; t.d += d; t.d2 += d * d; };
+// one model's chance of the market's first side (home / draw / away as a 0-1 triple, or Over / Yes as 0-1), or null
+function modelSide(c, k, m, fairOver) {
+  if (k === 'shots') { if (m !== 'ou' || !c.sx || fairOver == null) return null; const W = SX1.has(c.league) ? SHOTS : SX2.has(c.league) ? SHOTS2 : null; return W ? shotsOver(100 * fairOver, c.sx, W) / 100 : null; }
+  const x = c[k]; if (!x || (k === 'v4' && x.promo)) return null;
+  if (m === '1x2') return Array.isArray(x.p) && x.p.length === 3 ? norm(x.p) : null;
+  const v = m === 'ou' ? x.over : x.btts; return Number.isFinite(v) ? v / 100 : null;
+}
+export function addBoard(B, c) {
+  if (!c || !c.final || !c.odds || c.odds.src) return;
+  const o = c.odds, r = resOf(c.final), goals = c.final.h + c.final.a;
+  const mk = devig(o);
+  if (mk) for (const k of BOARD_MODELS['1x2']) { const p = modelSide(c, k, '1x2'); if (p) bAdd(B['1x2'][k], -Math.log(Math.max(1e-6, p[r])), -Math.log(Math.max(1e-6, mk[r]))); }
+  const ou = o.tl === 2.5 ? devigPrices(o.to, o.tu) : null;
+  if (ou) for (const k of BOARD_MODELS.ou) { const p = modelSide(c, k, 'ou', ou[0]); if (p != null) bAdd(B.ou[k], LLo(p, goals >= 3), LLo(ou[0], goals >= 3)); }
+  const bt = devigPrices(o.by, o.bn);
+  if (bt) for (const k of BOARD_MODELS.btts) { const p = modelSide(c, k, 'btts'); if (p != null) { const y = c.final.h > 0 && c.final.a > 0; bAdd(B.btts[k], LLo(p, y), LLo(bt[0], y)); } }
+}
+export function finishBoard(B) {
+  const one = t => { if (!t.n) return { n: 0 }; const d = t.d / t.n, sd = t.n > 1 ? Math.sqrt(Math.max(0, (t.d2 - t.n * d * d) / (t.n - 1))) : 0, se = sd / Math.sqrt(t.n);
+    return { n: t.n, ll: +(t.ll / t.n).toFixed(4), llPrice: +(t.llP / t.n).toFixed(4), diff: +d.toFixed(4), se: +se.toFixed(4), verdict: t.n < BOARD_MIN ? 'early' : d + 2 * se < 0 ? 'beats' : d - 2 * se > 0 ? 'worse' : 'level' }; };
+  return Object.fromEntries(Object.entries(B).map(([m, o]) => [m, Object.fromEntries(Object.entries(o).map(([k, t]) => [k, one(t)]))]));
+}
 
 const ix = k => 'HDA'.indexOf(k);
 const dec = m => (m > 0 ? 1 + m / 100 : 1 + 100 / -m);
@@ -29,13 +62,14 @@ export function scoreOne(p0, r) {
 const blankPair = () => ({ n: 0, model: { rps: 0, ll: 0, brier: 0 }, market: { rps: 0, ll: 0, brier: 0 } });
 const W = Array.from({ length: 21 }, (_, i) => i / 20);
 export function blankMarket() {
-  return { n: 0, pairs: { v4: blankPair(), v5: blankPair(), v2: blankPair(), fb: blankPair() }, blend: W.map(() => 0), nBlend: 0,
+  return { n: 0, board: bBlank(), pairs: { v4: blankPair(), v5: blankPair(), v2: blankPair(), fb: blankPair() }, blend: W.map(() => 0), nBlend: 0,
     clv: { n: 0, sum: 0, beat: 0 }, value: { n: 0, hits: 0, units: 0, clvN: 0, clvSum: 0, beat: 0 },
     moves: { n: 0, follow: 0, big: 0, bigFollow: 0, modelWith: 0, modelWithFollow: 0, modelAgainst: 0, modelAgainstFollow: 0, btts: { n: 0, follow: 0 } } };
 }
 // Fold one graded card in. The closing price is the card's last price before kickoff; the first price is `f` (or ESPN's opening line).
 export function addMarket(M, c) {
   if (!c || !c.final || !c.odds) return;
+  if (M.board) addBoard(M.board, c);
   const mk = devig(c.odds); if (!mk) return;
   const r = resOf(c.final), sm = scoreOne(mk, r);
   M.n++;
@@ -83,6 +117,7 @@ export function finishMarket(M) {
   let bi = 0; M.blend.forEach((v, i) => { if (v < M.blend[bi]) bi = i; });
   return {
     n: M.n,
+    board: M.board ? finishBoard(M.board) : null,
     pairs: Object.fromEntries(Object.entries(M.pairs).map(([k, t]) => [k, pair(t)])),
     blend: M.nBlend ? { n: M.nBlend, w: W[bi], ll: r4(M.blend[bi] / M.nBlend), llMarket: r4(M.blend[0] / M.nBlend), llV4: r4(M.blend[W.length - 1] / M.nBlend) } : { n: 0 },
     clv: { n: M.clv.n, avg: M.clv.n ? r3(100 * M.clv.sum / M.clv.n) : null, beat: M.clv.beat },

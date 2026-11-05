@@ -13,6 +13,27 @@ import { fbHeaders, FB_HV } from './forebetpage.js';
 import { hockeyMove } from './moves.js';
 import { analystNhl } from './analyst.js';
 import { goalSeq, maxLead, earlyPaid } from './early.js';
+import { devig } from './v6core.js';
+
+// Rest against the price (Nov 5, 2026): v5 already carries the measured back-to-back effect; the open question is whether DraftKings'
+// moneyline already has it. On every graded game where exactly one side was on the second night of a back-to-back (v5's flags), the
+// closing moneyline (margin removed) is scored by log loss as it is, and again with the back-to-back shift (B2B_LOGIT) added. If the
+// shifted price scores better over enough games, the price is missing rest and a rule could use it; if not, the price already has it.
+export const REST_MIN = 40;
+export function restAdd(R, c) {
+  const I = c && c.v5 && c.v5.in, b = I && I.b2b, px = c && c.px; if (!b || !c.final || !px || (b[0] === 1) === (b[1] === 1) || b.some(x => x == null)) return false;
+  const q = devig(px.h, px.a); if (!q) return false;
+  const p = q[0], L = b[1] === 1 ? B2B_LOGIT : -B2B_LOGIT, pa = 1 / (1 + Math.exp(-(Math.log(p / (1 - p)) + L))), y = c.final.h > c.final.a;
+  const ll = x => -Math.log(Math.max(1e-6, y ? x : 1 - x)), d = ll(pa) - ll(p), restedHome = b[1] === 1;
+  R.n++; R.llP += ll(p); R.llA += ll(pa); R.d += d; R.d2 += d * d; R.won += (restedHome ? y : !y) ? 1 : 0; R.exp += restedHome ? p : 1 - p;
+  return true;
+}
+export function restFinish(R) {
+  if (!R.n) return { n: 0 };
+  const d = R.d / R.n, sd = R.n > 1 ? Math.sqrt(Math.max(0, (R.d2 - R.n * d * d) / (R.n - 1))) : 0, se = sd / Math.sqrt(R.n);
+  return { n: R.n, won: R.won, expected: +R.exp.toFixed(1), llPrice: +(R.llP / R.n).toFixed(4), llRest: +(R.llA / R.n).toFixed(4), diff: +d.toFixed(4), se: +se.toFixed(4),
+    verdict: R.n < REST_MIN ? 'early' : d + 2 * se < 0 ? 'missing' : d - 2 * se > 0 ? 'overdone' : 'priced' };
+}
 
 const TZ = 'America/Chicago';
 export const LINE = 5.5;
@@ -593,6 +614,7 @@ export async function nhlTally(env) {
   // Calibration: winner picks grouped by how sure the model was, against how often they won.
   const BANDS = [['50 to 54%', 50, 55], ['55 to 59%', 55, 60], ['60 to 64%', 60, 65], ['65% and up', 65, 101]], cal = { v2: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })), v4: BANDS.map(([label, lo, hi]) => ({ label, lo, hi, n: 0, hits: 0, sum: 0 })) };
   let graded = 0, lined = 0;
+  const REST = { n: 0, llP: 0, llA: 0, d: 0, d2: 0, won: 0, exp: 0 };
   const MV = { ml: { n: 0, follow: 0, big: 0, bigFollow: 0 }, ou: { n: 0, follow: 0, big: 0, bigFollow: 0 } };
   // Model bets: every card's headline pick, locked when the game was graded. A total exactly on the line is a push (no result).
   const LB = { n: 0, hits: 0, push: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, over: 0, overN: 0 }, recent: [] }, lbAdd = (o, k, hit, pk) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; if (pk) (x.ks || (x.ks = {}))[pk] = (x.ks[pk] || 0) + 1; }; // ks: which kinds of pick are inside, so the page can work out what chance alone would score
@@ -602,6 +624,7 @@ export async function nhlTally(env) {
       const hm = hockeyMove(c.px);
       if (hm && hm.ml && hm.ml.d !== 0) { const fol = (hm.ml.d > 0) === (c.final.h > c.final.a); MV.ml.n++; MV.ml.follow += fol ? 1 : 0; if (Math.abs(hm.ml.d) >= 5) { MV.ml.big++; MV.ml.bigFollow += fol ? 1 : 0; } }
       if (hm && hm.ou && hm.ou.d !== 0 && c.final.total !== hm.ou.line) { const fol = (hm.ou.d > 0) === (c.final.total > hm.ou.line); MV.ou.n++; MV.ou.follow += fol ? 1 : 0; if (Math.abs(hm.ou.d) >= 5) { MV.ou.big++; MV.ou.bigFollow += fol ? 1 : 0; } }
+      restAdd(REST, c);
       graded++; const real = !!(c.ln && c.grade.line === c.ln.v); if (real) lined++; // Over/Under only counts at a real sportsbook line
       let g = c.grade;
       if (g.fb && g.fb.ou == null) { const o = fbOu(c.fb, c.final, c.ln ? c.ln.v : LINE); if (o != null) g = { ...g, fb: { ...g.fb, ou: o } }; } // games graded before Forebet O/U existed
@@ -642,7 +665,7 @@ export async function nhlTally(env) {
   const fix = b => ({ ...b, brier: { n: b.brier.n, v2: b.brier.n ? +(b.brier.v2 / b.brier.n).toFixed(3) : null, v4: b.brier.n ? +(b.brier.v4 / b.brier.n).toFixed(3) : null } });
   const calOut = Object.fromEntries(Object.entries(cal).map(([m, bs]) => [m, bs.map(b => ({ label: b.label, n: b.n, hits: b.hits, avg: b.n ? +(b.sum / b.n).toFixed(1) : null }))]));
   const v5 = V5.n ? { ...V5, brier: Object.fromEntries(['v2', 'v4', 'v5'].map(m => [m, V5.win[m].n ? +(V5.brier[m] / V5.win[m].n).toFixed(3) : null])) } : null;
-  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent, leans: LB, moves: MV, v5 };
+  return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent, leans: LB, moves: MV, v5, rest: restFinish(REST) };
 }
 export async function nhlStatus(env) {
   const [S, fb] = await Promise.all([env.HUB.get('nhl:state', 'json'), env.HUB.get('nhl:fbmeta', 'json')]);

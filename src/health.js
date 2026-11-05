@@ -36,8 +36,9 @@ export function analystChecks(doc, now) {
     if (now - ko > 30 * 60000 && b.close == null) noClose.push({ bet: `${b.rule} ${b.key} ${b.home} v ${b.away}`, kickoff: b.kickoff });
     if (now - ko > 2 * 86400000) stale.push({ bet: `${b.rule} ${b.key} ${b.home} v ${b.away}`, kickoff: b.kickoff });
   }
-  const rec = (its, ol, rules, since) => summary(its, ol, rules, since).rules.map(r => ({ id: r.id, ...(rules === RULES ? { set: setOf({ rule: r.id }) } : {}), name: r.name, bets: r.n, settled: r.settled, hit: r.hit, units: r.units, roi: r.roi, clv: r.clv,
-    benched: r.benched, retired: r.retired || null, toBench: r.retired || r.benched ? null : Math.max(0, BENCH.n - r.settled) }));
+  const rec = (its, ol, rules, since) => summary(its, ol, rules, since).rules.map(r => ({ id: r.id, ...(rules === RULES ? { set: setOf({ rule: r.id }) } : {}), name: r.name, bets: r.n, settled: r.settled, games: r.games, hit: r.hit, units: r.units, roi: r.roi, clv: r.clv, cv: r.cv, cvN: r.cvN, clvPin: r.clvPin, pinN: r.pinN,
+    // the bench check counts top-division games (one per game) and judges on close value (Pinnacle's fair close first): src/analyst.js isBenched
+    benched: r.benched, retired: r.retired || null, benchCheck: r.benchCheck, toBench: r.retired || r.benched ? null : Math.max(0, BENCH.n - r.benchCheck.games) }));
   return {
     noClose, stale,
     soccer: rec(items.filter(b => b.sport !== 'nhl'), old.filter(b => b[10] !== 'nhl'), RULES, SINCE),
@@ -45,7 +46,7 @@ export function analystChecks(doc, now) {
     bench: BENCH,
     // each soccer rule set's record split into top divisions and second divisions (La Liga 2, 2. Bundesliga)
     tiers: Object.fromEntries([1, 2].map(n => { const its = items.filter(b => b.sport !== 'nhl' && setOf(b) === n), ol = old.filter(b => b[10] !== 'nhl' && setOf(b) === n), rs = RULES.filter(r => r.set === n);
-      return [n, Object.fromEntries(Object.entries(tiers(its, ol, rs)).map(([t, a]) => [t, { bets: a.n, settled: a.settled, hit: a.hit, units: a.units, roi: a.roi, clv: a.clv }]))]; })),
+      return [n, Object.fromEntries(Object.entries(tiers(its, ol, rs)).map(([t, a]) => [t, { bets: a.n, settled: a.settled, games: a.games, hit: a.hit, units: a.units, roi: a.roi, clv: a.clv, cv: a.cv, cvN: a.cvN }]))]; })),
   };
 }
 
