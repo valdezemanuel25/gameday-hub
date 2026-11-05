@@ -55,4 +55,10 @@ ok('route: sync problems older than 3 days are left out', (j2 => Object.keys(j2.
 r = await go('/api/config?k=hk', env({ HEALTH_TOKEN: 'hk' }));
 ok('route: the health key opens nothing else', r.status === 401);
 ok('route: reading health writes nothing', puts.length === 0, puts.join());
+// Scout's old log is deleted once by the cron, then left alone; after the cut-off date nothing is read
+{ const { dropScout } = await import('../src/worker.js'); const m = new Map([['scout', '{}'], ['analyst', '{}']]); let reads = 0;
+  const kvd = { get: async k => { reads++; return m.has(k) ? m.get(k) : null; }, delete: async k => { m.delete(k); } };
+  const d1 = await dropScout(kvd, new Date('2026-11-05T12:00:00Z')), d2 = await dropScout(kvd, new Date('2026-11-05T12:05:00Z'));
+  const r0 = reads, d3 = await dropScout({ ...kvd, get: async () => { reads++; return '{}'; } }, new Date('2026-11-12T00:00:00Z'));
+  ok('Scout clean-up: deletes only the scout log, once; stops after the cut-off', d1 === true && d2 === false && !m.has('scout') && m.has('analyst') && d3 === false && reads === r0); }
 console.log(fail ? `\n${fail} health check(s) FAILED` : '\nAll health checks passed'); process.exit(fail ? 1 : 0);

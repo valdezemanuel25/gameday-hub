@@ -141,6 +141,13 @@ async function authed(req, env) {
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
 const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT });
+// Scout was removed (Nov 5, 2026): its old log (KV 'scout') is deleted by the first cron run that finds it. A delete is not a write, so
+// it costs nothing from the write budget; after DROP_SCOUT_UNTIL the check stops (not even a read), and this can be taken out.
+export const DROP_SCOUT_UNTIL = '2026-11-12';
+export async function dropScout(kv, now = new Date()) {
+  if (now.toISOString().slice(0, 10) >= DROP_SCOUT_UNTIL) return false;
+  try { if ((await kv.get('scout')) === null) return false; await kv.delete('scout'); return true; } catch (e) { return false; }
+}
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/home');
 
 // ---------------------------------------------------------------------------------------------
@@ -1187,6 +1194,7 @@ const hub = {
   async scheduled(event, env0, ctx) {
     const c = counted(env0);
     ctx.waitUntil((async () => {
+      await dropScout(env0.HUB); // one-time clean-up of the removed Scout's log (stops itself after DROP_SCOUT_UNTIL)
       try { c.env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit
       // (a heavy soccer job) used to drop them. The rotating job runs after.
