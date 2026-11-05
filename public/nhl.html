@@ -128,7 +128,6 @@ table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mv
 .mvx td.m3 b{color:var(--amber);font-weight:750}.gc.x{border-style:dashed}
 .gc.c{color:var(--good);border-color:rgba(94,224,143,.45)}.gc.e{color:var(--amber);border-color:rgba(240,195,90,.5)}.gc.b{color:var(--bad);border-color:rgba(255,123,107,.5)}
 .sgr{border-color:rgba(120,190,255,.5)!important}
-.scrow:empty{display:none}.scrow{margin-top:8px;font-size:11.5px;color:var(--dim,#9aa093)}.scrow .anl{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}.scrow b{color:#e8eee0;font-weight:650}.scrow .k{font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:10.5px;padding:1px 6px;border:1px solid;border-radius:6px}.scrow .w{color:#3ee8ff}.scrow .l{color:#FF4D57}
 .sghot,.sghot b{color:#3ee8ff!important;text-shadow:0 0 8px rgba(62,232,255,.75),0 0 18px rgba(62,232,255,.35)}
 .v5r{margin-top:9px;border:1px dashed rgba(240,195,90,.55);border-radius:10px;padding:7px 9px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:12px;color:var(--mut)}
 .v5r .lb{font-size:10.5px;font-weight:700;color:var(--amber);letter-spacing:.02em}.v5r b{font-size:14px;color:var(--ink);font-weight:700}.v5r .df{margin-left:auto;font-size:11px;color:var(--faint)}
@@ -383,7 +382,7 @@ function card(c) {
   const lnrow = pre && S.ln === c.id ? `<div class="lnrow"><label>Total line</label><input type="number" inputmode="decimal" step="0.5" min="3.5" max="9.5" id="ln-${esc(c.id)}" value="${ln}"><button type="button" class="btn sm" data-saveln="${esc(c.id)}">Save</button>${c.ln && c.ln.how === 'manual' ? `<button type="button" class="btn sm ghost" data-clrln="${esc(c.id)}">Use ESPN</button>` : ''}<button type="button" class="btn sm ghost" data-setln="">Cancel</button></div>` : '';
   return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
   ${split}${(hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${goalsPill(c)}${pxLine(c)}
-  <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>${gkStrip(c)}${v5Row(c, g.v5)}${sgRow(c)}${typeof window !== "undefined" && window.scoutLine ? `<div class="scrow">${window.scoutLine(c, 'nhl')}</div>` : ''}
+  <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>${gkStrip(c)}${v5Row(c, g.v5)}${sgRow(c)}
   <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Winner pick, Over/Under ${ln}${c.ln ? '' : ' (the default until a line is known)'}, then the single likeliest final score (score shown away–home; Forebet: its predicted score). Blue marks a confident pick.`}</div></div>`;
 }
 // Top: only games where every model agrees. Winner: v2, v4 and Forebet all take the same side. Over/Under: v2, v4 and
@@ -755,7 +754,6 @@ function renderDays() {
 function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
   document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'bgrid') updDots(); }, true);
-document.addEventListener('scout:bets', () => { try { render(); } catch (e) { /* not ready */ } });
 function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
@@ -815,7 +813,6 @@ try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js
 </script>
 <script src="/waves.js" data-color="#FF4D57" data-opacity="0.55" defer></script>
 <script src="/sweep.js" defer></script>
-<script src="/scout.js" defer></script>
 <script src="/spotlight.js" defer></script>
 </body>
 </html>

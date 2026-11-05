@@ -82,7 +82,6 @@
     if (st) out.push(st + ' Analyst bet' + (st > 1 ? 's' : '') + ' open 2+ days');
     if (sp) out.push('a sync problem in ' + Object.keys(h.syncProblems).join(', '));
     if (h.writes && h.writes.limit && h.writes.used > 0.7 * h.writes.limit) out.push('storage writes at ' + h.writes.used + ' of ' + h.writes.limit);
-    if (h.scout && h.scout.problems && h.scout.problems.length) out.push('Scout: ' + h.scout.problems.join('; '));
     // low only when the backup key (ODDS_API_KEY_2) cannot take over either; an unread backup counts as unknown, not low
     var c1 = h.oddsApiCredits && h.oddsApiCredits.left, c2 = h.oddsApiCredits2 && h.oddsApiCredits2.left, low = function (x) { return x != null && x < 50; };
     if (low(c1) && (h.oddsApiCredits2 === undefined || h.oddsApiCredits2 === null || low(c2))) out.push('Odds API credits low (' + c1 + ' left' + (c2 != null ? ', backup ' + c2 : '') + ')');

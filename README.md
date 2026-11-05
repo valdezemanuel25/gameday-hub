@@ -138,40 +138,6 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * **Backtest** (`node tools/backtest-analyst.mjs`: walk-forward v4 against Bet365 opening and closing prices, 1,929 league games): at the closing price every rule lost money (−5% to −10%; backing every closing favourite lost −3.9%). So the live question is whether betting at earlier reads, before a move finishes, beats the close. Until the tab shows a positive closing-line value over a few hundred bets, treat the rules as unproven.
 * **Storage and cost:** one KV document (`analyst`), written only when a bet is placed or settles. Settling happens when a league is graded and when the tab is opened.
 
-## Scout (free-rein analyst, Nov 4, 2026)
-
-Scout runs inside the Worker on Workers AI (`src/scoutai.js`, model `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, or the `SCOUT_MODEL` var).
-It uses Cloudflare's free daily AI allowance, so it costs no Claude usage. It has its own cron (`43 10,11,20,21 * * *`, run only at
-5:43 AM and 3:43 PM Central) and does nothing else in that run. It has no rules on what to take. Its one requirement is to start from
-the Hub's models. Each run goes:
-
-1. Grade its open bets and write the results into its log.
-2. Build the board (`src/scout.js` `board`): the next 36 hours of priced games with every model, DraftKings now and at the open,
-   margin-free chances, the shots reads, goalies and the Analyst's bets.
-3. Find the edges in code (`candidates`). For every market on every game it compares each Hub model's chance with DraftKings'
-   margin-free chance, counts how many models are above the price, and checks the move since the open. The best 10 go on, at most 2 a
-   game, each with what the Hub's own tests say about that kind of bet (`evidence`). The model does no arithmetic.
-4. Read ESPN's game summary for those games: injuries, the lineup once posted, the last five results, and headlines naming a club.
-5. Ask the model for the bets: any market on those games, any number including none, stakes of 0.5-3 units. Each bet is a thesis in
-   set parts: the edge, the models for and against, the price move, what ESPN said, and what would make it wrong.
-6. A critic call argues against each bet. Only bets that survive are taken, and the critic's reason is kept on the bet.
-7. Save the log to KV `scout`, one write a run.
-
-The model never sets a price: each bet takes DraftKings' price from the board. Markets, stakes, duplicates and timing are checked in
-code (`src/scout.js` `problem`). Bets are graded on read with the Analyst's `settle()`. The mascot (`public/scout.js`, bottom right)
-shows the record, where the edge is coming from, the bets with their reasons, and a "Look now" button (`POST /api/scout/run`).
-`GET /api/scout/board?k=<HEALTH_TOKEN>` returns the same board for checking.
-
-Five more pieces:
-- Every bet records the model that placed it.
-- A shadow log beside Scout (KV `scout`, `shadow`) holds two things, graded the same way: every code-found edge at 1 unit (the
-  baseline) and the bets the critic dropped. The panel's "Scout v the code" table answers whether the model's judgment and the critic
-  add anything.
-- A phone alert goes out when Scout bets, through the Hub's existing alerts.
-- His bets are tagged on the game cards, next to the Analyst's.
-- The nightly health report (`scout`, `src/health.js` `scoutChecks`) flags a gap of more than 15 hours between runs or a failed run,
-  so Sweep reports it. All bets are paper only.
-
 ## Score card (v6)
 
 * Every card has a Score card panel: winner, Over/Under 2.5, both-score, the likeliest scores and fair odds, all read off one score grid. With a sportsbook price the grid is fitted to that price, margin removed (`src/v6core.js`, tracked as v6 on the Results tab); without one it shows v4's numbers. See `docs/v6-score-card.md`.

@@ -49,25 +49,11 @@ export function analystChecks(doc, now) {
   };
 }
 
-// Scout (src/scoutai.js) runs at 5:43 AM and 3:43 PM Central: a gap of more than 15 hours between runs, or a failed last run, is a problem.
-// Before his first run there is nothing to check.
-export function scoutChecks(doc, now) {
-  const runs = (doc && doc.runs) || [], last = runs[0], problems = [];
-  if (!last) return { lastRun: null, problems };
-  const age = (now - Date.parse(last.at)) / 3600000;
-  if (age > 15) problems.push(`no run for ${Math.round(age)} hours (last ${last.at})`);
-  if (last.error) problems.push(`the last run failed: ${String(last.note).replace(/^The run failed: /, '')}`);
-  const fails = runs.filter(r => r.error && now - Date.parse(r.at) <= 2 * 86400000).length;
-  if (fails > 1) problems.push(`${fails} failed runs in the last 2 days`);
-  return { lastRun: last.at, took: last.took ?? null, bets: ((doc && doc.bets) || []).length, open: ((doc && doc.bets) || []).filter(b => !b.res).length, problems };
-}
-
 export async function hubHealth(env, { today, addDays, priced, readCredits, writesToday, writeLimit, saverAt }, now = Date.now()) {
   const t = today(), ds = [addDays(t, -1), t, addDays(t, 1)];
   const [sd, nd, errs, wt, doc] = await Promise.all([
     Promise.all(ds.map(d => env.HUB.get(`day:${d}`, 'json'))), Promise.all(ds.map(d => env.HUB.get(`nhl:day:${d}`, 'json'))),
     env.HUB.get('meta:errors', 'json'), writesToday(env.HUB, new Date(now)), getAnalyst(env, { readOnly: true })]);
-  const sc = await env.HUB.get('scout', 'json').catch(() => null);
   const soc = Object.fromEntries(ds.map((d, i) => [d, sd[i]?.cards || []])), hk = Object.fromEntries(ds.map((d, i) => [d, nd[i]?.cards || []]));
   return {
     at: new Date(now).toISOString(), today: t,
@@ -77,7 +63,6 @@ export async function hubHealth(env, { today, addDays, priced, readCredits, writ
     writes: { used: wt.used, limit: writeLimit, by: wt.by, saver: wt.used >= saverAt * writeLimit }, // by = which job wrote what today; saver = background job skipping low-priority saves
     oddsApiCredits: await readCredits(0),
     oddsApiCredits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, // the backup key (ODDS_API_KEY_2); null when it is not set
-    scout: scoutChecks(sc, now),
     // only problems from the last 3 days: older entries are leagues ESPN stopped answering for long ago, not news
     syncProblems: Object.fromEntries(Object.entries(errs || {}).filter(([, e]) => e && e.at && now - Date.parse(e.at) <= 3 * 86400000)),
   };
