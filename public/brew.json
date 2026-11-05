@@ -1,6 +1,70 @@
 {
-  "updated": "2026-11-04T21:10:22Z",
+  "updated": "2026-11-05T22:09:16Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-05",
+      "title": "Making sense of the market plunge",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "24,368",
+          "change": -5.32
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,367",
+          "change": -4.18
+        },
+        {
+          "label": "Dow",
+          "value": "51,578",
+          "change": -3.33
+        },
+        {
+          "label": "10-yr",
+          "value": "4.837%",
+          "change": -6,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$90.71",
+          "change": 2.94
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$76,038",
+          "change": -5.0
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "An AI-driven selloff pushed the Nasdaq down 5.32% into correction territory, the S&P 500 down 4.18% and the Dow down 3.33% (over 1,700 points)."
+        },
+        {
+          "h": "AI trade",
+          "t": "Fears of tighter data-center rules after the midterms hit chipmakers: Sandisk fell 22.26%, AMD 17.26%, Nvidia 9.26%, and the VIX jumped over 60%."
+        },
+        {
+          "h": "Yields",
+          "t": "Treasurys rallied as the 10-year yield fell 6 bps to 4.837%, its lowest since early September; Bitcoin dropped 5% to $76,038."
+        },
+        {
+          "h": "Oil",
+          "t": "Oil rose 2.94% to $90.71 on renewed uncertainty over the Iran war."
+        },
+        {
+          "h": "Gaming",
+          "t": "Memory-chip costs hurt Nintendo, whose profit fell 16% as Switch 2 sales dropped 41%, while Sony's profit rose 45% and its stock gained 6.19%."
+        },
+        {
+          "h": "Movers",
+          "t": "AppLovin jumped 31.04% and Warby Parker 22.59% on earnings, while Dutch Bros sank 21.41% and Snap 14.02%."
+        }
+      ]
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-04",
