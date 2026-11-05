@@ -76,6 +76,7 @@ export async function hubHealth(env, { today, addDays, priced, readCredits, writ
     analyst: analystChecks(doc, now),
     writes: { used: wt.used, limit: writeLimit, by: wt.by, saver: wt.used >= saverAt * writeLimit }, // by = which job wrote what today; saver = background job skipping low-priority saves
     oddsApiCredits: await readCredits(0),
+    oddsApiCredits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, // the backup key (ODDS_API_KEY_2); null when it is not set
     scout: scoutChecks(sc, now),
     // only problems from the last 3 days: older entries are leagues ESPN stopped answering for long ago, not news
     syncProblems: Object.fromEntries(Object.entries(errs || {}).filter(([, e]) => e && e.at && now - Date.parse(e.at) <= 3 * 86400000)),

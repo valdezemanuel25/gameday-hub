@@ -45,6 +45,8 @@ ok('route: no HEALTH_TOKEN set, the key does nothing', r.status === 401);
 r = await go('/api/health?k=hk', env({ HEALTH_TOKEN: 'hk' }));
 const j = r.status === 200 ? await r.json() : null;
 ok('route: the right key reads the health report', j && j.soccer && j.nhl && j.analyst && j.writes && j.writes.limit === 1000, String(r.status));
+ok('route: no backup Odds API key, no backup credits line', j && j.oddsApiCredits2 === null);
+{ const r2 = await go('/api/health?k=hk', env({ HEALTH_TOKEN: 'hk', ODDS_API_KEY_2: 'b' })), j2 = await r2.json(); ok('route: the backup key\'s credits are listed when it is set', 'oddsApiCredits2' in j2 && j2.oddsApiCredits2 !== undefined); }
 r = await go('/api/health', env({ HEALTH_TOKEN: 'hk' }), { 'x-health-token': 'hk' });
 ok('route: the key also works as a header', r.status === 200);
 kv.set('meta:errors', JSON.stringify({ 'ukr.1': { kind: 'sync', msg: 'old', at: '2020-01-01T00:00:00Z' }, 'eng.1': { kind: 'sync', msg: 'new', at: new Date().toISOString() } }));

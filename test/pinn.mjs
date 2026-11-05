@@ -45,6 +45,18 @@ const now = new Date('2026-10-30T15:00:00Z'), cards = () => [{ id: '1', home: 'G
   ok('the lineup read updates the price, notes the close and keeps the first price', cs[0].odds.pn.h === 110 && cs[0].odds.pf.h === 130 && cs[0].odds.pcl === close.toISOString(), JSON.stringify(cs[0].odds));
   const log5 = []; await addPinn({ PINNODDS_KEY: 'K' }, cs, new Date(close.getTime() + 60000), mk(log5));
   ok('once the close is read: no more requests for it', log5.length === 0); }
+// both score: a game Pinnacle priced before it posted its both-score price is read again every 3 hours until it has one
+{ const bt = { event_id: 99, parent_id: 1, league_name: 'Brazil - Serie A', home: 'Gremio', away: 'Athletico Paranaense', starts: T1, special: 'Both Teams To Score?', special_markets: { num_0: [{ prices: [{ name: 'Yes', price: 1.9 }, { name: 'No', price: 1.95 }] }] } };
+  const cs = [cards()[0]], l1 = []; await addPinn({ PINNODDS_KEY: 'K' }, cs, now, mk(l1));
+  ok('both score: first read with no both-score price notes the try', cs[0].odds.pf && cs[0].odds.pn.bty == null && cs[0].odds.pbt === now.toISOString(), JSON.stringify(cs[0].odds));
+  const l2 = []; await addPinn({ PINNODDS_KEY: 'K' }, cs, new Date(now.getTime() + 3600e3), mk(l2));
+  ok('both score: not asked again within 3 hours', l2.length === 0);
+  fixtures.events.push(bt); const t3 = new Date(now.getTime() + 3 * 3600e3), l3 = [], n3 = await addPinn({ PINNODDS_KEY: 'K' }, cs, t3, mk(l3)); fixtures.events.pop();
+  ok('both score: asked again after 3 hours and picks it up (no Odds API credit), the first price kept', l3.length === 1 && n3 === 1 && cs[0].odds.pn.bty === -111 && cs[0].odds.pf.bty == null && cs[0].odds.pbt === undefined, JSON.stringify(cs[0].odds));
+  const l4 = []; await addPinn({ PINNODDS_KEY: 'K' }, cs, new Date(t3.getTime() + 3 * 3600e3), mk(l4));
+  ok('both score: once it has one, no more early reads', l4.length === 0);
+  const cb = [{ ...cards()[0], odds: { h: 125, d: 240, a: 205, pf: { h: 130 }, pn: { h: 130 }, bf: { by: -110, bn: -110 } } }], l5 = [];
+  await addPinn({ PINNODDS_KEY: 'K' }, cb, now, mk(l5)); ok('both score: a game that already has one from another book is not re-read', l5.length === 0); }
 ok('no key: nothing runs', (await addPinn({}, cards(), now, mk([]))) === 0);
 { const log = [], cs = cards(); const n = await addPinn({ PINNODDS_KEY: 'K' }, cs, now, mk(log, { status: 401 })); ok('a failed read changes nothing and does not throw', n === 0 && !cs[0].odds.pn); }
 ok('a fresh ESPN price keeps the Pinnacle prices', (n => n.pn && n.pf && n.pcl === 'x' && n.pat === 'y')(withOdds({ h: 1, d: 2, a: 3, pn: { h: 1 }, pf: { h: 2 }, pcl: 'x', pat: 'y' }, { h: 4, d: 5, a: 6 })));

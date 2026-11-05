@@ -322,7 +322,7 @@ export function withOdds(old, fresh, now = new Date()) {
   if (fresh && fresh.src && old && old.h != null && !old.src) fresh = Object.fromEntries(PX.filter(k => old[k] != null).map(k => [k, old[k]]));
   if (fresh && !fresh.src && old && old.src) { old = { ...old }; for (const k of [...PX, 'f', 'fa', 'src']) delete old[k]; if (!Object.keys(old).length) old = null; }
   const n = { ...fresh, ...(old && old.by != null ? { by: old.by, bn: old.bn } : {}), ...(old && old.ts ? { ts: old.ts } : {}), ...(old && old.cl ? { cl: old.cl } : {}) };
-  for (const k of ['bf', 'bk', 'bcl', 'bfk', 'pn', 'pf', 'pcl', 'pat', 'cby', 'cls']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
+  for (const k of ['bf', 'bk', 'bcl', 'bfk', 'pn', 'pf', 'pcl', 'pat', 'pbt', 'cby', 'cls']) if (old && old[k] != null) n[k] = old[k]; // both-score: first price, book, when the close was read
   const snap = o => ({ h: o.h, d: o.d, a: o.a, ...(o.tl != null && o.to != null && o.tu != null ? { tl: o.tl, to: o.to, tu: o.tu } : {}) });
   const f = old && old.f ? old.f : old && old.h != null && old.d != null && old.a != null ? snap(old) : fresh.h != null && fresh.d != null && fresh.a != null ? snap(fresh) : null;
   if (f) n.f = f;
@@ -452,19 +452,25 @@ export function analystSharp(env, slug, f = fetch, now = new Date()) {
 // Pinnacle (src/pinn.js), only with the Worker secret PINNODDS_KEY: the first price seen (odds.pf) and the close at the lineup read
 // (odds.pcl), on the same schedule as the ESPN price. One request prices every league (the trimmed list is shared for 10 minutes), a game
 // it cannot match is tried again after PN_RETRY_OPEN_H hours (PN_RETRY_CLOSE_MIN minutes in the closing window). Returns cards changed.
+// Both score (Nov 5, 2026): Pinnacle often posts its both-score price hours after the match price, so a game with no both-score price
+// yet from any book (no odds.bf) is read again every PN_RETRY_OPEN_H hours (odds.pbt = the last such try) until Pinnacle has one. Free:
+// the reads share the one fixture list, and no Odds API credit is used.
 export const PN_RETRY_OPEN_H = 3, PN_RETRY_CLOSE_MIN = 10;
 export async function addPinn(env, cards, now = new Date(), f = fetch) {
   if (!env.PINNODDS_KEY) return 0;
   const inWin = c => new Date(c.kickoff).getTime() - now.getTime() <= LINEUP_READ * 60000;
   const close = c => inWin(c) && !c.odds.pcl, open = c => !c.odds.pf;
-  const due = cards.filter(c => { if (!c.odds || !(close(c) || open(c))) return false; const t = c.odds.pat ? now.getTime() - new Date(c.odds.pat).getTime() : Infinity; return t >= (close(c) ? PN_RETRY_CLOSE_MIN * 60000 : PN_RETRY_OPEN_H * 3600000); });
+  const ago = t => (t ? now.getTime() - new Date(t).getTime() : Infinity);
+  const bttsDue = c => c.odds.pf && !c.odds.bf && !(c.odds.pn && c.odds.pn.bty != null) && ago(c.odds.pbt) >= PN_RETRY_OPEN_H * 3600000;
+  const due = cards.filter(c => { if (!c.odds) return false; if (!(close(c) || open(c))) return bttsDue(c); return ago(c.odds.pat) >= (close(c) ? PN_RETRY_CLOSE_MIN * 60000 : PN_RETRY_OPEN_H * 3600000); });
   if (!due.length) return 0;
   const r = await pinnEvents(env, f, now); if (r.error) return 0;
   let changed = 0;
   for (const c of due) {
-    const e = matchPinn(c, r.events), o = c.odds, was = JSON.stringify([o.pn, o.pf, o.pcl, o.pat]);
+    const e = matchPinn(c, r.events), o = c.odds, was = JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]);
     if (e) { o.pn = pinnPrice(e); if (!o.pf) o.pf = pinnPrice(e); if (inWin(c)) o.pcl = now.toISOString(); delete o.pat; } else o.pat = now.toISOString();
-    if (JSON.stringify([o.pn, o.pf, o.pcl, o.pat]) !== was) changed++;
+    if (o.bf || (o.pn && o.pn.bty != null)) delete o.pbt; else if (e) o.pbt = now.toISOString(); // no both-score price yet: try again later
+    if (JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]) !== was) changed++;
   }
   return changed;
 }
