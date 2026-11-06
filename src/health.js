@@ -34,9 +34,10 @@ export function analystChecks(doc, now) {
     const ko = new Date(b.kickoff).getTime();
     // Nov 6, 2026: the bench check reads Pinnacle's fair close first and falls back to DraftKings' close quietly. A top-division soccer bet
     // from the last 3 days with a DraftKings close but no Pinnacle one is listed, so a run of fallbacks (Pinnacle out, rate limited,
-    // no lineup read) shows up here instead of hiding in the bench numbers.
-    if (b.sport !== 'nhl' && tierOf(b) === 'top' && now - ko > 30 * 60000 && now - ko <= 3 * 86400000 && b.close != null && b.clvPin == null)
-      noPinClose.push({ bet: `${b.rule} ${b.key} ${b.home} v ${b.away}`, kickoff: b.kickoff });
+    // no lineup read) shows up here instead of hiding in the bench numbers. Bets that can never have one are left out (src/analyst.js settle
+    // pinNo): an Over/Under 2.5 bet in a game Pinnacle lines at another total, a both-score bet in a game Pinnacle never priced for it.
+    if (b.sport !== 'nhl' && tierOf(b) === 'top' && now - ko > 30 * 60000 && now - ko <= 3 * 86400000 && b.close != null && b.clvPin == null && b.pinNo !== 'line' && b.pinNo !== 'btts')
+      noPinClose.push({ bet: `${b.rule} ${b.key} ${b.home} v ${b.away}`, kickoff: b.kickoff, why: b.pinNo || null });
     if (b.res) continue;
     if (now - ko > 30 * 60000 && b.close == null) noClose.push({ bet: `${b.rule} ${b.key} ${b.home} v ${b.away}`, kickoff: b.kickoff });
     if (now - ko > 2 * 86400000) stale.push({ bet: `${b.rule} ${b.key} ${b.home} v ${b.away}`, kickoff: b.kickoff });
@@ -76,7 +77,7 @@ export async function hubHealth(env, { today, addDays, priced, readCredits, writ
     soccer: gameChecks(soc, now, { graceH: 6, priced }),
     nhl: gameChecks(hk, now, { graceH: 5, needPrice: c => !c.px }),
     analyst: analystChecks(doc, now),
-    writes: { used: wt.used, limit: writeLimit, by: wt.by, saver: wt.used >= saverAt * writeLimit }, // by = which job wrote what today; saver = background job skipping low-priority saves
+    writes: { used: wt.used, limit: writeLimit, by: wt.by, saver: wt.used >= saverAt * writeLimit, yesterday: wt.yesterday || null }, // by = which job wrote what today; saver = background job skipping low-priority saves; yesterday = {d, n, by} saved for the UTC day before (null if unknown)
     oddsApiCredits: await readCredits(0),
     oddsApiCredits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, // the backup key (ODDS_API_KEY_2); null when it is not set
     // Pinnacle (PinnOdds): the bench check leans on its closing prices. Last good list, the error being held (limited: rate limited

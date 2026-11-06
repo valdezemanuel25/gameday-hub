@@ -16,4 +16,10 @@ else console.log('note: authed status', authed.status, '(auth header scheme diff
 
 const broken = await worker.fetch(new Request('https://x.test/api/brew', { headers: { authorization: 'Bearer secret', 'x-admin-token': 'secret' } }), { ...env, ASSETS: { fetch: async () => new Response('nope', { status: 404 }) } });
 if (broken.status === 200) { const j = await broken.json(); ok(Array.isArray(j.issues) && j.issues.length === 0, 'missing file gives an empty list'); }
+// Nov 6, 2026: an issue from before today says how old it is (a newsletter that skipped a day no longer looks current)
+{ const html = readFileSync(new URL('../public/brew.html', import.meta.url), 'utf8'), m = html.match(/const ageTag = [^\n]*\n/);
+  ok(m, 'brew.html has ageTag');
+  if (m) { const ageTag = new Function(`${m[0]}; return ageTag;`)();
+    ok(ageTag('2026-11-04', '2026-11-06') === 'from Wed' && ageTag('2026-11-06', '2026-11-06') === '' && ageTag('', '2026-11-06') === '', 'ageTag: an older issue is marked with its weekday, today\'s is not'); }
+  ok(/ageTag\(i\.date, today\)/.test(html), 'the card shows the age tag'); }
 console.log(bad ? `${bad} failed` : 'brew ok'); process.exit(bad ? 1 : 0);

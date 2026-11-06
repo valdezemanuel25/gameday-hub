@@ -78,6 +78,11 @@ const now = new Date('2026-10-30T15:00:00Z'), cards = () => [{ id: '1', home: 'G
   const s2 = await ps(t0);
   ok('state: a rate limit is held with when it lifts (UTC midnight by default)', s2.requestsToday === 2 && s2.error.limited === true && s2.error.until === '2026-11-07T00:00:00.000Z', JSON.stringify(s2));
   ok('state: a new day starts the count again', (await ps(new Date('2026-11-07T01:00:00Z'))).requestsToday === 0);
+  // Nov 6, 2026: the Status tab's Check Pinnacle button counts its one request too
+  const { pinnCheck: pc } = await import('../src/worker.js');
+  const before = (await ps(new Date())).requestsToday;
+  await pc({ PINNODDS_KEY: 'K', HUB: { get: async () => null } }, '', mk([]), new Date());
+  ok('check page: one tap adds exactly one request to the day\'s count', (await ps(new Date())).requestsToday === before + 1, String(before));
   delete globalThis.caches; }
 ok('no key: nothing runs', (await addPinn({}, cards(), now, mk([]))) === 0);
 { const log = [], cs = cards(); const n = await addPinn({ PINNODDS_KEY: 'K' }, cs, now, mk(log, { status: 401 })); ok('a failed read changes nothing and does not throw', n === 0 && !cs[0].odds.pn); }

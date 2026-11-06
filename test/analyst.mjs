@@ -132,6 +132,16 @@ ok('summary: compact old rows still count', sf.settled === 2 && sf.wins === 2);
   const bb = { id: 'p1', rule: 'move', key: 'H', price: 130, kickoff: '2026-11-05T15:00:00Z', mins: 200, date: '2026-11-05', gid: 'g1', league: 'eng.1' };
   settle(bb, { odds: { h: 120, d: 250, a: 230, pn, pcl: '2026-11-05T14:35:00Z' } }, new Date('2026-11-05T15:01:00Z'));
   const q = pinFair({ pn, pcl: 'x' }, 'H');
+  // Nov 6, 2026: why a bet has no Pinnacle close, noted once at kickoff (the health report lists only real misses)
+  { const at = new Date('2026-11-05T15:01:00Z'), sb = key => ({ rule: 'move', key, price: 130, kickoff: '2026-11-05T15:00:00Z', mins: 200, date: '2026-11-05', gid: 'g9', league: 'eng.1' });
+    const o = { h: 120, d: 250, a: 230 }, line = sb('O'), btts = sb('B'), read = sb('H'), got = sb('H');
+    settle(line, { odds: { ...o, to: -110, tu: -110, tl: 2.5, pn: { ...pn, tl: 3 }, pcl: 'x' } }, at);
+    settle(btts, { odds: { ...o, by: -120, bn: 100, pn: { h: 120, d: 250, a: 230 }, pcl: 'x' } }, at);
+    settle(read, { odds: o }, at); settle(got, { odds: { ...o, pn, pcl: 'x' } }, at);
+    const pre = sb('H'); settle(pre, { odds: o }, new Date('2026-11-05T14:00:00Z'));
+    ok('settle: no Pinnacle close says why (another total line, no both-score price, no closing read); none when there is one or before kickoff',
+      line.pinNo === 'line' && btts.pinNo === 'btts' && read.pinNo === 'read' && got.pinNo === undefined && got.clvPin != null && pre.pinNo === undefined, JSON.stringify([line.pinNo, btts.pinNo, read.pinNo, got.pinNo, pre.pinNo]));
+    ok('settle: the reason is noted once (a later read changes nothing)', settle(read, { odds: o }, new Date('2026-11-05T15:20:00Z')) === false); }
   ok('settle: close value against Pinnacle\'s fair close is kept next to DraftKings\' close', bb.clv != null && Math.abs(bb.clvPin - Math.round(1000 * (q * 2.3 - 1)) / 10) < 0.11 && cvOf(bb) === bb.clvPin, JSON.stringify(bb));
   const mk = (i, o) => ({ id: 'q' + i, rule: 'follow', key: 'H', price: 110, kickoff: '2026-10-20T15:00:00Z', mins: 200, date: '2026-10-20', gid: 'g' + i, league: 'eng.1', res: 'win', units: 1.1, clv: -1, ...o });
   // 40 games, winning money but losing to the close: benched (profit no longer saves it)

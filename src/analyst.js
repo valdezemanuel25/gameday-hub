@@ -290,6 +290,12 @@ export function settle(b, c, now = new Date()) {
     if (m != null) { b.close = m; b.clv = r1(100 * (dec(b.price) / dec(m) - 1)); if (b.dk != null) b.clvDk = r1(100 * (dec(b.dk) / dec(m) - 1)); ch = true; }
   }
   if (b.clvPin == null && c && c.odds && now.getTime() >= ko) { const q = pinFair(c.odds, b.key); if (q != null) { b.pinFair = r1(100 * q); b.clvPin = r1(100 * (q * dec(b.price) - 1)); ch = true; } }
+  // Why there is no Pinnacle close (Nov 6, 2026), noted once at kickoff for the health report: 'read' = no Pinnacle closing read at all (Pinnacle
+  // out, rate limited, game not matched), 'line' = Pinnacle's main total was not 2.5, 'btts' = Pinnacle never posted a both-score price,
+  // 'price' = read but unusable. Only 'read' (and 'price') mean Pinnacle failed; the other two are expected and never get a Pinnacle close.
+  if (b.clvPin == null && b.pinNo == null && c && c.odds && now.getTime() >= ko) {
+    const pn = c.odds.pn; b.pinNo = !c.odds.pcl || !pn ? 'read' : 'OU'.includes(b.key) && pn.tl !== 2.5 ? 'line' : 'BN'.includes(b.key) && pn.bty == null ? 'btts' : 'price'; ch = true;
+  }
   if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); if (b.dk != null) b.udk = +(hit ? dec(b.dk) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
   else if (now.getTime() - ko > VOID_AFTER) { b.res = 'void'; b.units = 0; ch = true; }
   return ch;

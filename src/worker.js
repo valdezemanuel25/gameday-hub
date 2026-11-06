@@ -42,7 +42,7 @@ const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
 export const writeKind = k => { const s = String(k); return s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
   : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
 const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
-function counted(env) {
+export function counted(env) { // exported for test/writes.mjs
   const base = env.HUB; let n = 0, by = {};
   const hub = Object.create(base);
   hub.get = (...a) => base.get(...a);
@@ -58,7 +58,9 @@ function counted(env) {
     if (cache) { try { const r = await cache.match(ck); if (r) { const x = readPending(await r.text()); pending += x.n; pby = addBy(by, x.by); } } catch (e) { /* count from this run only */ } }
     if (cache && pending < 15) { try { await cache.put(ck, new Response(JSON.stringify({ n: pending, by: pby }), { headers: { 'cache-control': 'max-age=86400' } })); return; } catch (e) { /* fall through and save */ } }
     const c = (await base.get('meta:writes', 'json').catch(() => null)) || {}, same = c.d === d;
-    await base.put('meta:writes', JSON.stringify({ d, n: (same ? c.n : 0) + pending + 1, by: addBy(addBy(same ? c.by : {}, pby), { 'bookkeeping: write counter': 1 }) })).catch(() => {});
+    // y: the day before's saved total and breakdown, kept at the rollover inside the same save (no extra write) for the health report
+    const y = same ? c.y : c.d ? { d: c.d, n: c.n || 0, by: c.by || {} } : undefined;
+    await base.put('meta:writes', JSON.stringify({ d, n: (same ? c.n : 0) + pending + 1, by: addBy(addBy(same ? c.by : {}, pby), { 'bookkeeping: write counter': 1 }), ...(y ? { y } : {}) })).catch(() => {});
     if (cache) { try { await cache.delete(ck); } catch (e) { /* ignore */ } }
   } };
 }
@@ -72,7 +74,10 @@ async function pendingWrites(d) {
 // servers can each hold up to 14 not-yet-saved writes, which is why saver mode starts early (SAVER_AT).
 export async function writesToday(hub, now = new Date()) {
   const d = now.toISOString().slice(0, 10), w = await hub.get('meta:writes', 'json').catch(() => null);
-  return { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), by: w && w.d === d ? w.by || {} : {} };
+  // yesterday: the saved total for the UTC day before (the saved count only: each location's last unsaved tally is not in it), or null
+  const yd = new Date(Date.parse(d + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+  const y = !w ? null : w.d === d ? (w.y && w.y.d === yd ? w.y : null) : w.d === yd ? { d: w.d, n: w.n || 0, by: w.by || {} } : null;
+  return { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), by: w && w.d === d ? w.by || {} : {}, yesterday: y };
 }
 // Saver mode: from 80% of the daily writes, the background job skips the saves that matter least (the regular 6-hourly and hourly
 // price reads, SportsMole and Forebet fetches, v4 ratings rebuilds, re-analyzing a league already analyzed today) and keeps the ones
@@ -587,7 +592,7 @@ export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) 
 // match (or fail to), what Pinnacle's price is for each, and the size and freshness of the answer. Costs 1 request of the day's 100.
 export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
   if (!env.PINNODDS_KEY) return { error: 'PINNODDS_KEY is not set' };
-  const r = await fetchPinn(env.PINNODDS_KEY, f); await countPinnReq(now, 86400); if (r.error) return { error: r.error, limited: !!r.limited };
+  const r = await fetchPinn(env.PINNODDS_KEY, f); await countPinnReq(now, (Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000); if (r.error) return { error: r.error, limited: !!r.limited };
   const t = localDate(now.toISOString()), cards = [];
   for (const d of [t, addDays(t, 1)]) for (const c of ((await env.HUB.get(`day:${d}`, 'json'))?.cards || [])) if (!slug || c.league === slug) cards.push(c);
   const lgs = {}; for (const e of r.events) lgs[e.lg] = (lgs[e.lg] || 0) + 1;

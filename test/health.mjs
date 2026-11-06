@@ -69,6 +69,9 @@ ok('route: reading health writes nothing', puts.length === 0, puts.join());
     b({ gid: 'p5', kickoff: k(-0.2), close: null })];
   const a2 = analystChecks({ items }, T);
   ok('health: a recent top-division bet with no Pinnacle close is listed (second divisions, old and unclosed bets are not)', a2.noPinClose.length === 1 && /C v D/.test(a2.noPinClose[0].bet), JSON.stringify(a2.noPinClose));
+  const a2b = analystChecks({ items: [...items, b({ gid: 'p6', key: 'O', home: 'E', away: 'F', kickoff: k(-5), close: 100, clv: 1, pinNo: 'line' }),
+    b({ gid: 'p7', key: 'B', home: 'G', away: 'H', kickoff: k(-5), close: 100, clv: 1, pinNo: 'btts' }), b({ gid: 'p8', home: 'I', away: 'J', kickoff: k(-5), close: 100, clv: 1, pinNo: 'read' })] }, T);
+  ok('health: bets that can never have a Pinnacle close (another total line, no both-score price) are not listed; a missed read is, with why', a2b.noPinClose.length === 2 && !a2b.noPinClose.some(x => /E v F|G v H/.test(x.bet)) && a2b.noPinClose.find(x => /I v J/.test(x.bet)).why === 'read', JSON.stringify(a2b.noPinClose));
   const many = Array.from({ length: 40 }, (_, i) => b({ gid: 'g' + i, kickoff: new Date(T - (41 - i) * 86400000).toISOString(), close: 100, clv: -1, res: 'win', units: 1.1 }));
   const a3 = analystChecks({ items: many }, T), cb = a3.closeBenched.find(r => r.name.startsWith('Follow the move'));
   ok('health: a rule benched on close value is listed with the date it was benched', cb && cb.sport === 'soccer' && cb.since === many[39].kickoff && cb.games === 40 && cb.cv === -1, JSON.stringify(a3.closeBenched));
@@ -82,7 +85,7 @@ ok('route: reading health writes nothing', puts.length === 0, puts.join());
   const src = (await import('fs')).readFileSync(new URL('../public/sweep.js', import.meta.url), 'utf8'), m = src.match(/function readHealth\(h\) \{[\s\S]*?return out;\n  \}/);
   const rh = new Function(`${m[0]}; return readHealth;`)(), base = { at: k(0), soccer: { ungraded: [], unpriced: [] }, nhl: { ungraded: [], unpriced: [] }, syncProblems: {} };
   const f1 = rh({ ...base, pinnacle: hh.pinnacle, analyst: { noClose: [], stale: [], noPinClose: [1, 2, 3], closeBenched: [{ sport: 'soccer', set: 1, name: 'Follow the move: x', since: k(-20), games: 40, cv: -1 }, { sport: 'nhl', name: 'Old one', since: k(-24 * 10), games: 40, cv: -2 }] } });
-  ok("Sweep: flags the Pinnacle rate limit, missing Pinnacle closes and a rule benched in the last 3 days (not one benched long ago)", f1.some(x => /Pinnacle rate limited/.test(x)) && f1.some(x => /3 recent Analyst bets closed with no Pinnacle price/.test(x)) && f1.some(x => /benched set 1 Follow the move/.test(x)) && !f1.some(x => /Old one/.test(x)), JSON.stringify(f1));
+  ok("Sweep: flags the Pinnacle rate limit, missing Pinnacle closes and a rule benched in the last 3 days (not one benched long ago)", f1.some(x => /Pinnacle rate limited/.test(x)) && f1.some(x => /3 recent Analyst bets had no Pinnacle closing read/.test(x)) && f1.some(x => /benched set 1 Follow the move/.test(x)) && !f1.some(x => /Old one/.test(x)), JSON.stringify(f1));
   const f2 = rh({ ...base, pinnacle: null, analyst: { noClose: [], stale: [], noPinClose: [1, 2, 3, 4], closeBenched: [] } });
   ok('Sweep: without Pinnacle set up, missing Pinnacle closes are not news', f2.length === 0, JSON.stringify(f2)); }
 console.log(fail ? `\n${fail} health check(s) FAILED` : '\nAll health checks passed'); process.exit(fail ? 1 : 0);
