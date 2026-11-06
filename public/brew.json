@@ -1,6 +1,71 @@
 {
-  "updated": "2026-11-05T22:09:16Z",
+  "updated": "2026-11-06T11:10:35Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-06",
+      "title": "Panicky vibes",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "24,315",
+          "change": -5.52
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,353.8",
+          "change": -4.36
+        },
+        {
+          "label": "Dow",
+          "value": "51,521",
+          "change": -3.44
+        },
+        {
+          "label": "10-yr",
+          "value": "4.837%",
+          "change": -6,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$75,999",
+          "change": -5.18
+        },
+        {
+          "label": "Tesla",
+          "value": "$343.69",
+          "change": -10.77
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Selloff",
+          "t": "Fears over AI regulation after the Democratic midterm win sent the Nasdaq down 5.52% to more than 10% below its high, and the S&P 500 fell 4.36% in its worst day since April 2025."
+        },
+        {
+          "h": "Chips and software",
+          "t": "The Philadelphia semiconductor index dropped over 12%, with Nvidia down 9%, Sandisk down 22%, and Palantir and CrowdStrike each down nearly 10%."
+        },
+        {
+          "h": "Fear and havens",
+          "t": "The VIX jumped 69% while gold rose more than 0.6% and Treasuries rallied, pulling the 10-year yield down 6 bps to 4.837%."
+        },
+        {
+          "h": "Tesla",
+          "t": "Shares fell 10.77% on worries about clashing with a bluer Texas."
+        },
+        {
+          "h": "LIV Golf",
+          "t": "The league is shutting down in bankruptcy after Saudi PIF pulled its $5 billion backing and a $300 million BC Partners rescue fell through."
+        },
+        {
+          "h": "Deals",
+          "t": "The NYT is reportedly in advanced talks to buy Letterboxd for about $330 million, and Wendy's rejected a $1.4 billion buyout bid from Trian-led investors."
+        }
+      ],
+      "note": "Market numbers are the Nov 5 close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-05",
@@ -128,71 +193,6 @@
           "t": "The US is projected to hit its $41.1T debt ceiling by summer 2027, and BNY expects at least one shutdown next year."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-04",
-      "title": "Blue tsunami",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,372",
-          "change": 0.82
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,569",
-          "change": 0.36
-        },
-        {
-          "label": "Dow",
-          "value": "51,787",
-          "change": -0.38
-        },
-        {
-          "label": "10-yr",
-          "value": "4.952%",
-          "change": 6,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$77,819",
-          "change": 1.46
-        },
-        {
-          "label": "Shopify",
-          "value": "$142.57",
-          "change": -8.74
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Midterms",
-          "t": "Democrats flipped both chambers and were on track for 228 House seats and 54 Senate seats as of 5am ET."
-        },
-        {
-          "h": "Voter mood",
-          "t": "Voters named the economy their top issue, and gas topped a $4 national average on Election Day for the first time ever."
-        },
-        {
-          "h": "Markets",
-          "t": "Chip stocks rebounded, lifting the Nasdaq 0.82% and S&P 500 0.36%, while the Dow slipped 0.38% and the 10-year yield rose 6 bps to 4.952%."
-        },
-        {
-          "h": "Shopify",
-          "t": "Shares fell 8.74% after the company missed revenue targets for the first time in four years."
-        },
-        {
-          "h": "Rivian",
-          "t": "Stock is up 16% after Q3 revenue rose 38% to $2.2 billion on 19,248 deliveries, led by the cheaper R2 SUV."
-        },
-        {
-          "h": "Deals and legal",
-          "t": "3M agreed to a $7.4 billion settlement over forever-chemicals injuries, and Disney is reportedly planning thousands more layoffs."
-        }
-      ],
-      "note": "Market numbers are the Nov 3 close."
     },
     {
       "source": "Brew Markets",
