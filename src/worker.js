@@ -440,12 +440,16 @@ export async function addPinn(env, cards, now = new Date(), f = fetch) {
   const close = c => inWin(c) && !c.odds.pcl, open = c => !c.odds.pf;
   const ago = t => (t ? now.getTime() - new Date(t).getTime() : Infinity);
   const bttsDue = c => c.odds.pf && !c.odds.bf && !(c.odds.pn && c.odds.pn.bty != null) && ago(c.odds.pbt) >= PN_RETRY_OPEN_H * 3600000;
-  const due = cards.filter(c => { if (!c.odds) return false; if (!(close(c) || open(c))) return bttsDue(c); return ago(c.odds.pat) >= (close(c) ? PN_RETRY_CLOSE_MIN * 60000 : PN_RETRY_OPEN_H * 3600000); });
+  // A game with no price at all (ESPN has none) is looked up too (Nov 6, 2026): Pinnacle may have it, and then it is the card's stand-in
+  // price (pinnStandIn). A miss on such a card is stamped on the card (c.pnat), not in a price object, so it still counts as unpriced.
+  const due = cards.filter(c => { if (!c.odds) return ago(c.pnat) >= PN_RETRY_OPEN_H * 3600000; if (!(close(c) || open(c))) return bttsDue(c); return ago(c.odds.pat) >= (close(c) ? PN_RETRY_CLOSE_MIN * 60000 : PN_RETRY_OPEN_H * 3600000); });
   if (!due.length) return 0;
   const r = await pinnEvents(env, f, now); if (r.error) return 0;
   let changed = 0;
   for (const c of due) {
-    const e = matchPinn(c, r.events), o = c.odds, was = JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]);
+    const e = matchPinn(c, r.events);
+    if (!c.odds) { if (!e) { c.pnat = now.toISOString(); changed++; continue; } c.odds = {}; delete c.pnat; }
+    const o = c.odds, was = JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]);
     if (e) { o.pn = pinnPrice(e); if (!o.pf) o.pf = pinnPrice(e); if (inWin(c)) o.pcl = now.toISOString(); delete o.pat; } else o.pat = now.toISOString();
     // no both-score price yet: try again in PN_RETRY_OPEN_H hours. Stamped on a miss too (Nov 6, 2026: a game Pinnacle priced and then stopped
     // listing was due again on every run, re-saving the day and asking PinnOdds every 10 minutes); a game never matched (no pf) waits on pat.
@@ -453,6 +457,21 @@ export async function addPinn(env, cards, now = new Date(), f = fetch) {
     if (JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]) !== was) changed++;
   }
   return changed;
+}
+// Pinnacle as the stand-in price (Nov 6, 2026): a game ESPN has no home / draw / away price for (no book, or a book without the three)
+// takes Pinnacle's home / draw / away and 2.5 total, marked src 'pinnacle' like the Bet365 stand-in. The board, the score card (v6) and
+// Movement show it; the Analyst, Scout's home / draw / away / total bets and the Shots read sit it out (they close against DraftKings).
+// DraftKings arriving from ESPN replaces it (withOdds); a Bet365 stand-in already on the card is left alone. -> true when the card changed
+export function pinnStandIn(c, now = new Date()) {
+  const o = c.odds, q = o && o.pn;
+  if (!q || ![q.h, q.d, q.a].every(Number.isFinite)) return false;
+  if (Number.isFinite(o.h) && o.src !== 'pinnacle') return false;
+  const px = p => ({ h: p.h, d: p.d, a: p.a, ...(p.tl === 2.5 && Number.isFinite(p.to) && Number.isFinite(p.tu) ? { tl: 2.5, to: p.to, tu: p.tu } : {}) });
+  const n = withOdds(o.src === 'pinnacle' ? o : { ...o }, { ...px(q), src: 'pinnacle' }, now);
+  if (!o.f && o.pf && [o.pf.h, o.pf.d, o.pf.a].every(Number.isFinite)) n.f = px(o.pf); // the first Pinnacle price the Hub saw, as the opening
+  if (o.pcl && !n.cl) n.cl = o.pcl; // Pinnacle's lineup-window read is this price's close
+  if (sameJson(n, o)) return false;
+  n.ts = now.toISOString(); c.odds = n; return true;
 }
 // "Get the final price" on one card (the Movement tab's No lineup read badge): the price read the lineup window should have taken, asked for by
 // hand. Before kickoff: ESPN's price now, noted as the close (cby = 'you'), with Pinnacle and the both-score price asked for as well.
@@ -481,7 +500,7 @@ export async function refreshCardClose(env, date, slug, id, now = new Date(), f 
 // The Movement tab's "No price" button: why one game has no price, in plain words, from ESPN's feed read now. When ESPN does have a
 // price now and the game is still open, the league's prices are read and saved at once (the same as Refresh prices).
 // -> { kind: 'saved' | 'none' | 'partial' | 'gone' | 'locked' | 'unpriced' | 'error', title, detail }
-export async function priceWhy(env, date, slug, id, now = new Date(), why = oddsWhy) {
+export async function priceWhy(env, date, slug, id, now = new Date(), why = oddsWhy, pinnFetch = fetch) {
   if (!PRICED.has(slug)) return { kind: 'unpriced', title: 'League not priced', detail: 'The Hub does not read prices for this league.' };
   const day = await env.HUB.get(`day:${date}`, 'json'), c = (day?.cards || []).find(x => x.id === id && x.league === slug);
   if (!c) return { kind: 'error', title: 'Game not found', detail: 'This game is not saved for that day any more. Reload the page.' };
@@ -489,6 +508,14 @@ export async function priceWhy(env, date, slug, id, now = new Date(), why = odds
   if (r.error) return { kind: 'error', title: 'ESPN did not answer', detail: `The check could not reach ESPN (${String(r.error).slice(0, 80)}). Try again in a minute.` };
   if (!r.found) return { kind: 'gone', title: 'Not on ESPN for this day', detail: 'ESPN no longer lists this game on this day: it may have been postponed or moved. With no game in the feed there is no price to read.' };
   const bk = r.books.length ? r.books.join(', ') : null;
+  const espnHas = r.parsed && [r.parsed.h, r.parsed.d, r.parsed.a].every(Number.isFinite);
+  // ESPN has no home / draw / away price: ask Pinnacle now (the stand-in), before explaining why ESPN has none
+  if (!espnHas && priceOpen(c, now) && env.PINNODDS_KEY) {
+    if (c.odds) delete c.odds.pat; delete c.pnat;
+    let ch = await addPinn(env, [c], now, pinnFetch); if (pinnStandIn(c, now)) { setV6(c, c, now); ch++; }
+    if (ch) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+    if (c.odds && c.odds.src === 'pinnacle') return { kind: 'saved', title: 'Pinnacle price used', detail: `ESPN ${bk ? `lists ${bk} but without a full home / draw / away price` : 'has no price on this game'}, so the card takes Pinnacle's (${[c.odds.h, c.odds.d, c.odds.a].map(m => (m > 0 ? '+' : '') + m).join(' / ')}) as a stand-in. The Analyst sits stand-in games out; DraftKings replaces it if ESPN posts one.` };
+  }
   if (r.parsed && [r.parsed.h, r.parsed.d, r.parsed.a].every(Number.isFinite)) {
     const px = `${[r.parsed.h, r.parsed.d, r.parsed.a].map(m => (m > 0 ? '+' : '') + m).join(' / ')}${r.parsed.src ? ` (${r.parsed.src === 'bet365' ? 'Bet365' : r.parsed.src} stand-in)` : ''}`;
     if (!priceOpen(c, now)) return { kind: 'locked', title: 'Price came too late', detail: `ESPN has a price now (${px}), but prices lock 20 minutes before kickoff, so it was not taken for this game.` };
@@ -513,7 +540,8 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
   const ctx = shotsLg && open.some(c => !c.sx && c.hId && c.aId) ? await getContext(lg, env, new Map()) : null;
   let changed = 0, priced = 0;
   for (const c of open) {
-    const o = byId.get(c.id)?.odds; if (o) priced++;
+    let o = byId.get(c.id)?.odds; if (o && o.src && c.odds && c.odds.src === 'pinnacle') o = null; // Pinnacle beats a Bet365 stand-in
+    if (o) priced++;
     let ch = false;
     if (ctx && !c.sx && c.hId && c.aId) { const h = ctx.teams?.[c.hId], a = ctx.teams?.[c.aId]; const sx = h && a ? shotsMatchup(shotsAt(h, c.kickoff), shotsAt(a, c.kickoff)) : null; if (sx) { c.sx = sx; ch = true; } }
     if (o) { const n = withOdds(c.odds, o, now); if (sameJson(n, c.odds) === false) { n.ts = now.toISOString(); c.odds = n; ch = true; } }
@@ -523,6 +551,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
     if (ch) changed++;
   }
   changed += await addPinn(env, open, now, f); // first: its both-score price is the first choice of addBtts
+  for (const c of open) if (pinnStandIn(c, now)) { if (setV6(c, c, now)) {} changed++; } // no ESPN price: Pinnacle's stands in
   changed += await addBtts(env, open, slug, now, f);
   if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
   const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f), analystSharp(env, slug, f, now)); // the Analyst reads the same prices (src/analyst.js)

@@ -1545,7 +1545,7 @@ function trackedView() {
 // Prices (American odds, from ESPN's sportsbook block) are shown next to a pick for first divisions only. They never feed a model.
 const needP = m => m < 0 ? -m / (-m + 100) * 100 : 100 / (m + 100) * 100;
 const fmtOdds = m => (m > 0 ? '+' : '') + m;
-const BOOKS = { bet365: 'Bet365', draftkings: 'DraftKings' }; // a stand-in book's name, when ESPN had no DraftKings price (c.odds.src)
+const BOOKS = { bet365: 'Bet365', draftkings: 'DraftKings', pinnacle: 'Pinnacle' }; // a stand-in book's name, when ESPN had no DraftKings price (c.odds.src)
 function priceFor(c, key) { const o = c.odds; if (!o) return null; const m = ({ H: o.h, D: o.d, A: o.a, O: o.tl === 2.5 ? o.to : null, U: o.tl === 2.5 ? o.tu : null, B: o.by, N: o.bn })[key]; return Number.isFinite(m) ? m : null; }
 // The model's chance that the game total goes over / under a book line (half lines only), from v4's expected goals (v2's when v4 has none).
 function pTotal(c, line, over) { const q = c.v4 && c.v4.lam ? c.v4 : c.v2, lam = q && q.lam ? q.lam[0] + q.lam[1] : null; if (lam == null || line % 1 !== 0.5) return null; let term = Math.exp(-lam), cdf = 0; for (let i = 0; i <= Math.floor(line); i++) { cdf += term; term *= lam / (i + 1); } return Math.round(100 * (over ? 1 - cdf : cdf)); }

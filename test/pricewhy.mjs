@@ -45,4 +45,15 @@ const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), '
 ok('page: no-price cards and the count at the top only for leagues the Hub prices (no card for Portugal)', /const np = day\.cards\.filter\(c => PRICED_LG\.has\(c\.league\)/.test(html) && /unpriced = day\.cards\.filter\(c => PRICED_LG\.has\(c\.league\)/.test(html) && !/PRICED_LG = new Set\(\[[^\]]*por\.1/.test(html));
 ok('page: Refresh prices and Get Both-score prices are on the Movement tab too, and say why when a day has nothing left to price', /return oddsBar\(\) \+ seg \+ head/.test(html) && /if \(!n\) return `<div class="small"[^`]*Pick a later day above/.test(html));
 ok('page: the No price signal is a button that asks the Hub why', /data-npwhy="\$\{esc\(c\.id\)\}"/.test(html) && /post\('\/api\/price-why'/.test(html));
+
+// ESPN has no home / draw / away price: the check asks Pinnacle now and saves its price as the stand-in (Nov 6, 2026)
+{ const { kv, env: e } = mkEnv([{ ...card }]); e.PINNODDS_KEY = 'K';
+  const fx = { sport_id: 1, events: [{ event_id: 77, league_name: 'Germany - 2. Bundesliga', home: 'Hertha BSC', away: 'Wolfsburg', starts: KO, event_type: 'prematch', periods: { num_0: { money_line: { home: 2.5, draw: 3.4, away: 2.9 }, totals: { '2.5': { points: 2.5, over: 1.9, under: 1.95 } } } } }] };
+  const pf = async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(fx), json: async () => fx });
+  const r = await priceWhy(e, D, 'ger.2', '9', NOW, why({ found: true, books: ['Bet 365'], parsed: null, missing: ['home', 'draw', 'away'] }), pf);
+  const c = JSON.parse(kv.get(`day:${D}`)).cards[0];
+  ok('why: no ESPN price, Pinnacle has one: saved as the stand-in', r.kind === 'saved' && /Pinnacle/.test(r.title) && c.odds && c.odds.src === 'pinnacle' && c.odds.h === 150 && c.odds.tl === 2.5, JSON.stringify(r) + ' ' + JSON.stringify(c.odds));
+  const { env: e2 } = mkEnv([{ ...card }]); e2.PINNODDS_KEY = 'K';
+  const r2 = await priceWhy(e2, D, 'ger.2', '9', NOW, why({ found: true, books: ['Bet 365'], parsed: null, missing: ['home', 'draw', 'away'] }), async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => '{"events":[]}', json: async () => ({ events: [] }) }));
+  ok('why: Pinnacle has nothing either: the ESPN explanation stands', r2.kind === 'partial'); }
 console.log(bad ? `\n${bad} FAILED` : '\nAll no-price checks passed'); process.exit(bad ? 1 : 0);

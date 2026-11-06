@@ -3,7 +3,7 @@ import fs from 'fs';
 import { same, americanOf } from '../src/names.js';
 import { reduceEvents, matchPinn, fetchPinn, pinnEvents, pinnPrice, specialsSample } from '../src/pinn.js';
 import { pinnMove } from '../src/moves.js';
-import { addPinn, pinnCheck, withOdds } from '../src/worker.js';
+import { addPinn, pinnCheck, withOdds, pinnStandIn } from '../src/worker.js';
 let fails = 0; const ok = (n, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${c ? '' : x}`); };
 
 const ev = (id, lg, home, away, starts, ml, tot, extra = {}) => ({ event_id: id, league_name: lg, home, away, starts, event_type: 'prematch', periods: { num_0: { money_line: ml, totals: tot || {} } }, ...extra });
@@ -154,6 +154,22 @@ ok('move: needs both prices', pinnMove({ ...odds, pf: null }) === null && pinnMo
   { const cs = cardB({ h: 125, d: 240, a: 205, pn: { h: 130, d: 240, a: 220, bty: -129, btn: 113 } }); await addBtts({}, cs, 'bra.1', nowB, f, '2026-10-30'); ok('no keys at all: nothing happens', cs[0].odds.by === undefined); }
   const html3 = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   ok('the Movement tab names Pinnacle as the book', html3.includes("b === 'pinnacle' ? 'Pinnacle'")); }
+
+// Pinnacle as the stand-in when ESPN has no home / draw / away price (Nov 6, 2026)
+{ const t = new Date('2026-10-30T16:00:00Z'), c = { id: '1', home: 'Grêmio', away: 'Athletico-PR', kickoff: T1 }, miss = { id: '9', home: 'Nobody', away: 'Nowhere', kickoff: T1 };
+  const log = []; await addPinn({ PINNODDS_KEY: 'K' }, [c, miss], t, mk(log));
+  ok('a game with no price at all is looked up at Pinnacle too', log.length === 1 && c.odds && c.odds.pn && c.odds.pn.h === 110 && c.odds.h == null, JSON.stringify(c.odds));
+  ok('a miss on a game with no price stays unpriced (stamped on the card, no price object)', !miss.odds && !!miss.pnat);
+  const log2 = []; await addPinn({ PINNODDS_KEY: 'K' }, [miss], new Date(t.getTime() + 3600e3), mk(log2)); ok('and waits 3 hours before the next try', log2.length === 0);
+  ok('the stand-in: Pinnacle\'s home / draw / away and 2.5 total, marked pinnacle', pinnStandIn(c, t) && c.odds.src === 'pinnacle' && c.odds.h === 110 && Number.isFinite(c.odds.d) && c.odds.ts === t.toISOString() && c.odds.pn.h === 110, JSON.stringify(c.odds));
+  ok('its opening price is the first Pinnacle price seen', c.odds.f && c.odds.f.h === c.odds.pf.h);
+  ok('nothing new: no change', pinnStandIn(c, new Date(t.getTime() + 60000)) === false);
+  c.odds.pn = { ...c.odds.pn, h: 120 }; ok('Pinnacle moves: the stand-in follows', pinnStandIn(c, t) && c.odds.h === 120 && c.odds.f.h === c.odds.pf.h);
+  const dk = withOdds(c.odds, { h: 115, d: 240, a: 230 }, t);
+  ok('DraftKings from ESPN replaces it and starts the price over', !dk.src && dk.h === 115 && dk.f.h === 115 && dk.pn && dk.pn.h === 120, JSON.stringify(dk));
+  ok('a DraftKings price is never replaced', pinnStandIn({ odds: { h: 100, d: 250, a: 260, pn: { h: 90, d: 250, a: 280 } } }, t) === false);
+  ok('nor a Bet365 stand-in', pinnStandIn({ odds: { h: 100, d: 250, a: 260, src: 'bet365', pn: { h: 90, d: 250, a: 280 } } }, t) === false);
+  ok('nor without a full Pinnacle price', pinnStandIn({ odds: { pn: { h: 90, a: 280 } } }, t) === false); }
 ok('names: Athletico-PR matches the spelled-out club, and an unrelated one does not', same('Athletico-PR', 'Athletico Paranaense') && same('Grêmio', 'Gremio') && !same('Santos', 'Fortaleza'));
 ok('decimal to American', americanOf('1.72') === -139 && americanOf('2.05') === 105 && americanOf('2.00') === 100 && americanOf('abc') === null && americanOf('1') === null);
 console.log(fails ? `\n${fails} FAILED` : '\nAll Pinnacle checks passed'); process.exit(fails ? 1 : 0);
