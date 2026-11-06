@@ -28,6 +28,7 @@ const mk = (log, o = {}) => async (u, init) => { log.push([u, init && init.heade
   ok('one request, soccer prematch, key in the x-portal-apikey header', log.length === 1 && log[0][0] === 'https://pinnodds.com/kit/v1/prematch/fixtures?sport_id=1' && log[0][1]['x-portal-apikey'] === 'KEY' && r.events.length === 2 && r.age === 3000 && r.bytes > 100); }
 ok('no key: error, no request', (await fetchPinn('', mk([]))).error.includes('PINNODDS_KEY'));
 { const r = await fetchPinn('K', mk([], { status: 429, headers: { 'retry-after': '41' } })); ok('rate limited: flagged with the wait', r.limited && r.retryMs === 41000); }
+{ const r = await fetchPinn('K', mk([], { status: 429, headers: {} })); ok('rate limited with no Retry-After: held until the daily reset, not 1 second', r.limited && r.retryMs === null, JSON.stringify(r)); }
 ok('401 and stale are errors, not prices', (await fetchPinn('K', mk([], { status: 401 }))).error.includes('401') && (await fetchPinn('K', mk([], { headers: { 'x-data-status': 'stale' } }))).error.includes('stale'));
 ok('a network failure does not throw', (await fetchPinn('K', async () => { throw new Error('down'); })).error.includes('down'));
 
@@ -57,6 +58,27 @@ const now = new Date('2026-10-30T15:00:00Z'), cards = () => [{ id: '1', home: 'G
   ok('both score: once it has one, no more early reads', l4.length === 0);
   const cb = [{ ...cards()[0], odds: { h: 125, d: 240, a: 205, pf: { h: 130 }, pn: { h: 130 }, bf: { by: -110, bn: -110 } } }], l5 = [];
   await addPinn({ PINNODDS_KEY: 'K' }, cb, now, mk(l5)); ok('both score: a game that already has one from another book is not re-read', l5.length === 0); }
+// both score, Nov 6, 2026 (sweep bug): a game Pinnacle priced and then stopped listing waits 3 hours like any other, not every run
+{ const saved = fixtures.events; fixtures.events = [];
+  const c = { id: '1', home: 'Grêmio', away: 'Athletico-PR', kickoff: T1, odds: { h: 125, d: 240, a: 205, pf: { h: 130 }, pn: { h: 130 }, pbt: new Date(now.getTime() - 4 * 3600e3).toISOString() } };
+  const l1 = [], n1 = await addPinn({ PINNODDS_KEY: 'K' }, [c], now, mk(l1));
+  const l2 = [], n2 = await addPinn({ PINNODDS_KEY: 'K' }, [c], new Date(now.getTime() + 5 * 60000), mk(l2));
+  const l3 = [], n3 = await addPinn({ PINNODDS_KEY: 'K' }, [c], new Date(now.getTime() + 3 * 3600e3), mk(l3));
+  fixtures.events = saved;
+  ok('both score: a game Pinnacle stopped listing notes the try once, then waits 3 hours (no request, no save)', l1.length === 1 && n1 === 1 && c.odds.pbt !== undefined && l2.length === 0 && n2 === 0 && l3.length === 1, JSON.stringify([l1.length, n1, l2.length, n2, l3.length, c.odds])); }
+// the request count and the rate limit are kept in the edge cache for the health report (a stand-in caches.default here)
+{ const store = new Map(); globalThis.caches = { default: { match: async k => (store.has(k) ? new Response(store.get(k)) : undefined), put: async (k, r) => { store.set(k, await r.text()); } } };
+  const { pinnEvents: pe, pinnState: ps } = await import('../src/pinn.js?count');
+  const t0 = new Date('2026-11-06T12:00:00Z');
+  await pe({ PINNODDS_KEY: 'K' }, mk([]), t0); await pe({ PINNODDS_KEY: 'K' }, mk([]), t0); // the second one is served from the list cache
+  const s1 = await ps(t0);
+  ok('state: requests sent today are counted (a cached list costs none)', s1.requestsToday === 1 && s1.last && !s1.error, JSON.stringify(s1));
+  store.delete('https://hub.local/pinn-list');
+  await pe({ PINNODDS_KEY: 'K' }, mk([], { status: 429 }), t0);
+  const s2 = await ps(t0);
+  ok('state: a rate limit is held with when it lifts (UTC midnight by default)', s2.requestsToday === 2 && s2.error.limited === true && s2.error.until === '2026-11-07T00:00:00.000Z', JSON.stringify(s2));
+  ok('state: a new day starts the count again', (await ps(new Date('2026-11-07T01:00:00Z'))).requestsToday === 0);
+  delete globalThis.caches; }
 ok('no key: nothing runs', (await addPinn({}, cards(), now, mk([]))) === 0);
 { const log = [], cs = cards(); const n = await addPinn({ PINNODDS_KEY: 'K' }, cs, now, mk(log, { status: 401 })); ok('a failed read changes nothing and does not throw', n === 0 && !cs[0].odds.pn); }
 ok('a fresh ESPN price keeps the Pinnacle prices', (n => n.pn && n.pf && n.pcl === 'x' && n.pat === 'y')(withOdds({ h: 1, d: 2, a: 3, pn: { h: 1 }, pf: { h: 2 }, pcl: 'x', pat: 'y' }, { h: 4, d: 5, a: 6 })));

@@ -16,7 +16,9 @@ import { shotsOver, SHOTS, SHOTS2, LEAGUES as SX1, LEAGUES2 as SX2 } from './sho
 // so the difference has a standard error: verdict 'beats' / 'worse' when the whole 95% range (2 standard errors) is on one side,
 // 'level' otherwise, 'early' under BOARD_MIN games. A model that never beats the price adds nothing a bettor does not already have.
 export const BOARD_MIN = 50;
-export const BOARD_MODELS = { '1x2': ['v2', 'v4', 'v5', 'fb'], ou: ['v2', 'v4', 'v5', 'v6', 'fb', 'shots'], btts: ['v2', 'v4', 'v5', 'v6', 'fb'] };
+// The score card (v6) is fitted to the same home / draw / away and Over/Under 2.5 price it would be scored against, so on those two it
+// can only ever come out level: it is left out there (Nov 6, 2026). Its both-score chance never sees the both-score price, so it stays in.
+export const BOARD_MODELS = { '1x2': ['v2', 'v4', 'v5', 'fb'], ou: ['v2', 'v4', 'v5', 'fb', 'shots'], btts: ['v2', 'v4', 'v5', 'v6', 'fb'] };
 const bBlank = () => Object.fromEntries(Object.entries(BOARD_MODELS).map(([m, ks]) => [m, Object.fromEntries(ks.map(k => [k, { n: 0, ll: 0, llP: 0, d: 0, d2: 0 }]))]));
 const LLo = (q, y) => -Math.log(Math.max(1e-6, y ? q : 1 - q));
 const bAdd = (t, llM, llP) => { const d = llM - llP; t.n++; t.ll += llM; t.llP += llP; t.d += d; t.d2 += d * d; };

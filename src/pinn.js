@@ -67,7 +67,8 @@ export async function fetchPinn(key, f = fetch) {
   if (!key) return { error: 'PINNODDS_KEY is not set' };
   let r; try { r = await f(`${BASE}/kit/v1/prematch/fixtures?sport_id=1`, { headers: { 'x-portal-apikey': key } }); } catch (e) { return { error: `PinnOdds: ${e && e.message || e}` }; }
   const hd = k => (r.headers && r.headers.get ? r.headers.get(k) : null);
-  if (r.status === 429) { const ra = Number(hd('retry-after')); return { error: 'PinnOdds: rate limited', limited: true, retryMs: Number.isFinite(ra) ? ra * 1000 : null }; }
+  // no Retry-After header means "until the daily reset" (retryMs null): Number(null) is 0, which used to hold the limit for one second
+  if (r.status === 429) { const h = hd('retry-after'), ra = h != null && String(h).trim() !== '' ? Number(h) : NaN; return { error: 'PinnOdds: rate limited', limited: true, retryMs: Number.isFinite(ra) && ra > 0 ? ra * 1000 : null }; }
   if (!r.ok) return { error: `PinnOdds ${r.status}` };
   if (hd('x-data-status') === 'stale') return { error: 'PinnOdds: the prematch feed is stale (prices withheld)' };
   let txt, j; try { txt = await r.text(); j = JSON.parse(txt); } catch (e) { return { error: 'PinnOdds: answer was not JSON' }; }
@@ -88,9 +89,16 @@ export async function pinnEvents(env, f = fetch, now = new Date()) {
   const bad = await getC('err'); if (bad) return { error: bad.error };
   const hit = await getC('list'); if (hit) return { events: hit.events, cached: true };
   const r = await fetchPinn(env.PINNODDS_KEY, f);
-  if (r.error) { const toMidnight = (Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000; await putC('err', { error: r.error }, r.limited ? (r.retryMs != null ? r.retryMs / 1000 : toMidnight) : 300); return { error: r.error }; }
+  const toMidnight = (Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000;
+  await countReq(now, toMidnight);
+  if (r.error) { const ttl = r.limited ? (r.retryMs != null ? r.retryMs / 1000 : toMidnight) : 300; await putC('err', { error: r.error, at: now.toISOString(), ...(r.limited ? { limited: true, until: new Date(now.getTime() + ttl * 1000).toISOString() } : {}) }, ttl); return { error: r.error }; }
   await putC('list', { events: r.events }, PN_LIST_TTL);
   await putC('last', { at: now.toISOString(), n: r.events.length, bytes: r.bytes, age: r.age, status: r.status }, 86400);
   return { events: r.events };
 }
-export const pinnState = async () => ({ last: await getC('last'), error: (await getC('err')) || null });
+// Requests sent today (UTC), counted in the same edge cache: no KV write. The cache belongs to one Cloudflare location, so this is the
+// count seen here, a floor on the plan's daily total rather than the exact figure.
+export async function countReq(now, ttl) { const d = now.toISOString().slice(0, 10), c = await getC('day'); await putC('day', { d, n: (c && c.d === d ? c.n : 0) + 1 }, ttl + 60); }
+// For the Status tab and the health report: the last good list, the error being held (a rate limit holds until `until`), requests today.
+export const pinnState = async (now = new Date()) => { const day = await getC('day'), d = now.toISOString().slice(0, 10);
+  return { last: await getC('last'), error: (await getC('err')) || null, requestsToday: day && day.d === d ? day.n : 0 }; };

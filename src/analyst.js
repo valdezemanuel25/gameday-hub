@@ -314,7 +314,7 @@ function settleNhl(b, c, now) {
 
 // ---- the record ----
 const blank = () => ({ n: 0, open: 0, settled: 0, wins: 0, units: 0, clvN: 0, clvSum: 0, beat: 0, shopN: 0, better: 0, gain: 0, dkN: 0, udk: 0, cdN: 0, cd: 0,
-  cvN: 0, cvSum: 0, cvBeat: 0, pinN: 0, pinSum: 0, games: new Set(), cvGames: new Map() });
+  cvN: 0, cvSum: 0, cvBeat: 0, pinN: 0, pinSum: 0, games: new Set(), cvGames: new Map(), cvTot: 0, since: null });
 // One game = one position: bets on the same game (any market) count once for the bench check; units still add up bet by bet.
 let anon = 0;
 export const gameOf = b => (b.gid ? `${b.sport || 'soccer'}|${b.date || ''}|${b.gid}` : `bet${++anon}`);
@@ -325,13 +325,19 @@ function add(t, b) {
   if (b.clv != null) { t.clvN++; t.clvSum += b.clv; t.beat += b.clv > 0 ? 1 : 0; }
   if (b.clvPin != null) { t.pinN++; t.pinSum += b.clvPin; }
   const cv = cvOf(b);
-  if (cv != null) { t.cvN++; t.cvSum += cv; t.cvBeat += cv > 0 ? 1 : 0; const g = gameOf(b), x = t.cvGames.get(g) || [0, 0]; x[0] += cv; x[1]++; t.cvGames.set(g, x); }
+  if (cv != null) { t.cvN++; t.cvSum += cv; t.cvBeat += cv > 0 ? 1 : 0; const g = gameOf(b), x = t.cvGames.get(g) || [0, 0]; if (x[1]) t.cvTot -= x[0] / x[1]; x[0] += cv; x[1]++; t.cvTot += x[0] / x[1]; t.cvGames.set(g, x); }
   if (b.dk != null) { t.shopN++; const g = dec(b.price) / dec(b.dk) - 1; t.gain += g; t.better += g > 0 ? 1 : 0; }
   if (b.udk != null) { t.dkN++; t.udk += b.udk; }
   if (b.clvDk != null) { t.cdN++; t.cd += b.clvDk; }
   if (!b.res) { t.open++; return; }
   if (b.res === 'void') return;
   t.settled++; t.wins += b.res === 'win' ? 1 : 0; t.units += b.units; t.games.add(gameOf(b));
+}
+// since: the kickoff of the bet that last tipped the record onto the bench (bets are added in kickoff order), null while it is not
+// benched. Kept running so the health report can tell a rule benched in the last few days from one benched long ago.
+function track(t, b) {
+  const on = t.games.size >= BENCH.n && t.cvGames.size > 0 && +(t.cvTot / t.cvGames.size).toFixed(2) <= BENCH.clv; // rounded as done() rounds cv, so this agrees with isBenched
+  if (on && !t.since) t.since = b.kickoff; else if (!on) t.since = null;
 }
 // cv: average close value per GAME (a game's bets averaged first, so two linked bets do not count double); cvN: games with a close
 const cvGame = t => { const v = [...t.cvGames.values()].map(([s, n]) => s / n); return v.length ? +(v.reduce((a, x) => a + x, 0) / v.length).toFixed(2) : null; };
@@ -348,10 +354,10 @@ export function summary(items0, old = [], rules0 = RULES, since = SINCE) {
   const all = blank(), per = Object.fromEntries(rules0.map(r => [r.id, blank()])), top = Object.fromEntries(rules0.map(r => [r.id, blank()])), when = Object.fromEntries(WHEN.map(w => [w[0], blank()])), mk = { '1x2': blank(), ou: blank(), btts: blank() };
   const curve = []; let cum = 0;
   for (const b of [...items].sort((x, y) => (x.kickoff < y.kickoff ? -1 : 1))) {
-    add(all, b); if (per[b.rule]) add(per[b.rule], b); if (top[b.rule] && tierOf(b) === 'top') add(top[b.rule], b); add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
+    add(all, b); if (per[b.rule]) add(per[b.rule], b); if (top[b.rule] && tierOf(b) === 'top') { add(top[b.rule], b); track(top[b.rule], b); } add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
     if (b.res === 'win' || b.res === 'loss') { cum += b.units; curve.push([b.kickoff.slice(0, 10), +cum.toFixed(2)]); }
   }
-  const rules = rules0.map(r => { const s = done(per[r.id]), t = done(top[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benchCheck: { games: t.games, cv: t.cv, cvN: t.cvN }, benched: !r.retired && (!!r.bench || isBenched(t)), ...(r.bench ? { benchedOn: r.bench } : {}), ...(r.retired ? { retired: r.retired } : {}) }; });
+  const rules = rules0.map(r => { const s = done(per[r.id]), t = done(top[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benchCheck: { n: BENCH.n, games: t.games, cv: t.cv, cvN: t.cvN, ...(!r.bench && !r.retired && isBenched(t) && top[r.id].since ? { since: top[r.id].since } : {}) }, benched: !r.retired && (!!r.bench || isBenched(t)), ...(r.bench ? { benchedOn: r.bench } : {}), ...(r.retired ? { retired: r.retired } : {}) }; });
   return { since, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou), btts: done(mk.btts) }, curve, verdict: verdict(done(all)) };
 }
 // The Analyst's own read of its record, in one line. CLV first: it settles in tens of bets, profit needs hundreds.

@@ -19,7 +19,7 @@ import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP, SPORT } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
 import { goalSeq, maxLead, earlyPaid } from './early.js';
-import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn } from './pinn.js';
+import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn, countReq as countPinnReq } from './pinn.js';
 import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { homeSummary } from './home.js';
@@ -140,7 +140,7 @@ async function authed(req, env) {
 }
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
-const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT });
+const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState });
 // Scout was removed (Nov 5, 2026): its old log (KV 'scout') is deleted by the first cron run that finds it. A delete is not a write, so
 // it costs nothing from the write budget; after DROP_SCOUT_UNTIL the check stops (not even a read), and this can be taken out.
 export const DROP_SCOUT_UNTIL = '2026-11-12';
@@ -447,7 +447,9 @@ export async function addPinn(env, cards, now = new Date(), f = fetch) {
   for (const c of due) {
     const e = matchPinn(c, r.events), o = c.odds, was = JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]);
     if (e) { o.pn = pinnPrice(e); if (!o.pf) o.pf = pinnPrice(e); if (inWin(c)) o.pcl = now.toISOString(); delete o.pat; } else o.pat = now.toISOString();
-    if (o.bf || (o.pn && o.pn.bty != null)) delete o.pbt; else if (e) o.pbt = now.toISOString(); // no both-score price yet: try again later
+    // no both-score price yet: try again in PN_RETRY_OPEN_H hours. Stamped on a miss too (Nov 6, 2026: a game Pinnacle priced and then stopped
+    // listing was due again on every run, re-saving the day and asking PinnOdds every 10 minutes); a game never matched (no pf) waits on pat.
+    if (o.bf || (o.pn && o.pn.bty != null)) delete o.pbt; else if (e || o.pf) o.pbt = now.toISOString();
     if (JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]) !== was) changed++;
   }
   return changed;
@@ -556,7 +558,7 @@ export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) 
 // match (or fail to), what Pinnacle's price is for each, and the size and freshness of the answer. Costs 1 request of the day's 100.
 export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
   if (!env.PINNODDS_KEY) return { error: 'PINNODDS_KEY is not set' };
-  const r = await fetchPinn(env.PINNODDS_KEY, f); if (r.error) return { error: r.error, limited: !!r.limited };
+  const r = await fetchPinn(env.PINNODDS_KEY, f); await countPinnReq(now, 86400); if (r.error) return { error: r.error, limited: !!r.limited };
   const t = localDate(now.toISOString()), cards = [];
   for (const d of [t, addDays(t, 1)]) for (const c of ((await env.HUB.get(`day:${d}`, 'json'))?.cards || [])) if (!slug || c.league === slug) cards.push(c);
   const lgs = {}; for (const e of r.events) lgs[e.lg] = (lgs[e.lg] || 0) + 1;

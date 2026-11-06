@@ -61,4 +61,28 @@ ok('route: reading health writes nothing', puts.length === 0, puts.join());
   const d1 = await dropScout(kvd, new Date('2026-11-05T12:00:00Z')), d2 = await dropScout(kvd, new Date('2026-11-05T12:05:00Z'));
   const r0 = reads, d3 = await dropScout({ ...kvd, get: async () => { reads++; return '{}'; } }, new Date('2026-11-12T00:00:00Z'));
   ok('Scout clean-up: deletes only the scout log, once; stops after the cut-off', d1 === true && d2 === false && !m.has('scout') && m.has('analyst') && d3 === false && reads === r0); }
+// Nov 6, 2026: bets that fell back to DraftKings' close, rules benched on close value, and Pinnacle's state
+{ const T = Date.parse('2026-11-06T06:00:00Z'), k = h => new Date(T + h * H).toISOString();
+  const b = (o) => ({ rule: 'follow', key: 'H', home: 'A', away: 'B', price: 110, mins: 200, league: 'eng.1', date: '2026-11-05', ...o });
+  const items = [b({ gid: 'p1', kickoff: k(-5), close: 100, clv: 1, clvPin: 0.5 }), b({ gid: 'p2', home: 'C', away: 'D', kickoff: k(-5), close: 100, clv: 1 }),
+    b({ gid: 'p3', kickoff: k(-5), close: 100, clv: 1, league: 'ger.2' }), b({ gid: 'p4', kickoff: k(-100), close: 100, clv: 1, res: 'win', units: 1.1 }),
+    b({ gid: 'p5', kickoff: k(-0.2), close: null })];
+  const a2 = analystChecks({ items }, T);
+  ok('health: a recent top-division bet with no Pinnacle close is listed (second divisions, old and unclosed bets are not)', a2.noPinClose.length === 1 && /C v D/.test(a2.noPinClose[0].bet), JSON.stringify(a2.noPinClose));
+  const many = Array.from({ length: 40 }, (_, i) => b({ gid: 'g' + i, kickoff: new Date(T - (41 - i) * 86400000).toISOString(), close: 100, clv: -1, res: 'win', units: 1.1 }));
+  const a3 = analystChecks({ items: many }, T), cb = a3.closeBenched.find(r => r.name.startsWith('Follow the move'));
+  ok('health: a rule benched on close value is listed with the date it was benched', cb && cb.sport === 'soccer' && cb.since === many[39].kickoff && cb.games === 40 && cb.cv === -1, JSON.stringify(a3.closeBenched));
+  ok('health: a rule benched by hand is not in that list', !a3.closeBenched.some(r => /Under/.test(r.name)));
+  const { hubHealth } = await import('../src/health.js');
+  const kv = { get: async () => null };
+  const deps = { today: () => '2026-11-06', addDays: (d, n) => d, priced: null, readCredits: async () => null, writesToday: async () => ({ used: 0, by: {} }), writeLimit: 1000, saverAt: 0.8,
+    pinnState: async () => ({ last: { at: '2026-11-06T05:50:00Z', n: 812 }, error: { error: 'PinnOdds: rate limited', limited: true, until: '2026-11-07T00:00:00.000Z' }, requestsToday: 100 }) };
+  const hh = await hubHealth({ HUB: kv, PINNODDS_KEY: 'K' }, deps, T), h0 = await hubHealth({ HUB: kv }, deps, T);
+  ok('health: Pinnacle\'s last list, its rate limit and today\'s requests are reported (null without the key)', hh.pinnacle && hh.pinnacle.limited && hh.pinnacle.until === '2026-11-07T00:00:00.000Z' && hh.pinnacle.requestsToday === 100 && hh.pinnacle.events === 812 && h0.pinnacle === null, JSON.stringify(hh.pinnacle));
+  const src = (await import('fs')).readFileSync(new URL('../public/sweep.js', import.meta.url), 'utf8'), m = src.match(/function readHealth\(h\) \{[\s\S]*?return out;\n  \}/);
+  const rh = new Function(`${m[0]}; return readHealth;`)(), base = { at: k(0), soccer: { ungraded: [], unpriced: [] }, nhl: { ungraded: [], unpriced: [] }, syncProblems: {} };
+  const f1 = rh({ ...base, pinnacle: hh.pinnacle, analyst: { noClose: [], stale: [], noPinClose: [1, 2, 3], closeBenched: [{ sport: 'soccer', set: 1, name: 'Follow the move: x', since: k(-20), games: 40, cv: -1 }, { sport: 'nhl', name: 'Old one', since: k(-24 * 10), games: 40, cv: -2 }] } });
+  ok("Sweep: flags the Pinnacle rate limit, missing Pinnacle closes and a rule benched in the last 3 days (not one benched long ago)", f1.some(x => /Pinnacle rate limited/.test(x)) && f1.some(x => /3 recent Analyst bets closed with no Pinnacle price/.test(x)) && f1.some(x => /benched set 1 Follow the move/.test(x)) && !f1.some(x => /Old one/.test(x)), JSON.stringify(f1));
+  const f2 = rh({ ...base, pinnacle: null, analyst: { noClose: [], stale: [], noPinClose: [1, 2, 3, 4], closeBenched: [] } });
+  ok('Sweep: without Pinnacle set up, missing Pinnacle closes are not news', f2.length === 0, JSON.stringify(f2)); }
 console.log(fail ? `\n${fail} health check(s) FAILED` : '\nAll health checks passed'); process.exit(fail ? 1 : 0);

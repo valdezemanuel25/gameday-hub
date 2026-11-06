@@ -85,6 +85,14 @@
     // low only when the backup key (ODDS_API_KEY_2) cannot take over either; an unread backup counts as unknown, not low
     var c1 = h.oddsApiCredits && h.oddsApiCredits.left, c2 = h.oddsApiCredits2 && h.oddsApiCredits2.left, low = function (x) { return x != null && x < 50; };
     if (low(c1) && (h.oddsApiCredits2 === undefined || h.oddsApiCredits2 === null || low(c2))) out.push('Odds API credits low (' + c1 + ' left' + (c2 != null ? ', backup ' + c2 : '') + ')');
+    // Pinnacle: the Analyst's bench check reads its closing prices first
+    var pn = h.pinnacle;
+    if (pn && pn.limited) out.push('Pinnacle rate limited' + (pn.until ? ' until ' + new Date(pn.until).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }) : '') + ': no Pinnacle closing prices till then');
+    var np = n(h.analyst && h.analyst.noPinClose);
+    if (pn && np >= 3) out.push(np + ' recent Analyst bets closed with no Pinnacle price (the bench check fell back to DraftKings)');
+    // a rule the close-value check benched in the last 3 days (one benched long ago is on the Analyst table, not news)
+    var nowMs = h.at ? Date.parse(h.at) : Date.now(), nb = ((h.analyst && h.analyst.closeBenched) || []).filter(function (r) { return nowMs - Date.parse(r.since) <= 3 * 86400000; });
+    if (nb.length) out.push('Analyst benched ' + nb.map(function (r) { return (r.sport === 'nhl' ? 'hockey ' : r.set ? 'set ' + r.set + ' ' : '') + r.name.split(':')[0]; }).join(', ') + ' (behind the closing price over ' + nb[0].games + ' games)');
     return out;
   }
   function setMood(m, text) {

@@ -138,6 +138,13 @@ ok('summary: compact old rows still count', sf.settled === 2 && sf.wins === 2);
   const win40 = Array.from({ length: 40 }, (_, i) => mk(i));
   const r1 = summary(win40).rules.find(r => r.id === 'follow');
   ok('bench: 40 top-division games behind the close are benched even while winning money', r1.benched && r1.units > 0 && r1.benchCheck.games === 40 && r1.benchCheck.cv === -1, JSON.stringify(r1.benchCheck));
+  // Nov 6, 2026: the bench check carries its size and when the rule went onto the bench (the kickoff of the bet that tipped it)
+  const dated = Array.from({ length: 41 }, (_, i) => mk(i, { kickoff: new Date(Date.UTC(2026, 9, 1 + i, 15)).toISOString(), clv: i < 20 ? 2 : -3 }));
+  const rd = summary(dated.slice(0, 40)).rules.find(r => r.id === 'follow'), rd41 = summary(dated).rules.find(r => r.id === 'follow');
+  ok('bench: the check says how many games it needs, and the date the rule was benched', r1.benchCheck.n === BENCH.n && rd.benched && rd.benchCheck.since === dated[39].kickoff && rd41.benchCheck.since === dated[39].kickoff, JSON.stringify([rd.benchCheck, rd41.benchCheck]));
+  const back = summary(dated.slice(0, 40).concat(Array.from({ length: 30 }, (_, i) => mk(100 + i, { kickoff: new Date(Date.UTC(2026, 10, 15 + i, 15)).toISOString(), clv: 5 })))).rules.find(r => r.id === 'follow');
+  ok('bench: a rule that climbs back above the close is off the bench, with no date', !back.benched && back.benchCheck.since === undefined, JSON.stringify(back.benchCheck));
+  ok('bench: a rule benched by hand carries no close-value date', summary([]).rules.find(r => r.id === 'under').benchCheck.since === undefined);
   // losing money but beating the close: not benched
   const r2 = summary(Array.from({ length: 40 }, (_, i) => mk(i, { res: 'loss', units: -1, clv: 2 }))).rules.find(r => r.id === 'follow');
   ok('bench: losing money but beating the close is not benched', !r2.benched && r2.units < 0);

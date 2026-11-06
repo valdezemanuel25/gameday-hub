@@ -1645,7 +1645,7 @@ function anRow(name, sub, x, extra = '') {
   const v = x.settled ? `<b class="${x.units >= 0 ? 'up' : 'dn'}">${u2(x.units)}</b><small>${x.wins} of ${x.settled} won · ROI ${sgn(x.roi)}%${x.open ? ` · ${x.open} open` : ''}</small>` : `<small>${x.n ? `${x.n} open` : 'no bets yet'}</small>`;
   // close value: what the bets paid over the closing price, a game at a time (Pinnacle's fair close first, else DraftKings' close)
   const c = x.cvN ? `<small>close value ${sgn(x.cv)}% a game (${x.cvN} game${x.cvN === 1 ? '' : 's'}${x.pinN ? `, ${x.pinN} vs Pinnacle` : ''})${x.clvN ? ` · DraftKings close ${sgn(x.clv)}%` : ''}</small>` : x.clvN ? `<small>vs close ${sgn(x.clv)}% · beat it ${x.beat}% (${x.clvN})</small>` : '';
-  const bc = x.benchCheck && !extra ? `<small>bench check: ${Math.min(x.benchCheck.games, 40)} of 40 games${x.benchCheck.cv != null ? `, close value ${sgn(x.benchCheck.cv)}%` : ''}</small>` : '';
+  const bc = x.benchCheck && !extra ? `<small>bench check: ${Math.min(x.benchCheck.games, x.benchCheck.n || 40)} of ${x.benchCheck.n || 40} games${x.benchCheck.cv != null ? `, close value ${sgn(x.benchCheck.cv)}%` : ''}</small>` : '';
   return `<div class="mbr"><div class="mbl">${name}${extra}${sub ? `<small>${sub}</small>` : ''}</div><div class="mbv">${v}${c}${bc}</div></div>`;
 }
 function anCurve(pts) {

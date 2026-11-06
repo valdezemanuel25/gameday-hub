@@ -49,6 +49,8 @@ ok('no opening line, no op', parseOdds([{ moneyline: { home: { close: { odds: '-
   ok('scoreboard: a model saying 50% against a 50% price is level with it', F.ou.v2.verdict === 'level' && Math.abs(F.ou.v2.diff) < 1e-9 && F.btts.v4.verdict === 'level');
   ok('scoreboard: the result market and the shots read are scored too', F['1x2'].v4.n === BOARD_MIN + 10 && F.ou.shots.n === BOARD_MIN + 10 && F['1x2'].v5.n === 0);
   const E = bm(); for (let i = 0; i < 5; i++) am(E, g(i, i % 2 ? 80 : 20)); ok('scoreboard: under 50 games it is too early to say', fm(E).board.ou.v4.verdict === 'early'); }
+{ const { BOARD_MODELS } = await import('../src/market.js');
+  ok('scoreboard: the score card is not scored on the prices it is fitted to (result, Over/Under) but is on both score', !BOARD_MODELS['1x2'].includes('v6') && !BOARD_MODELS.ou.includes('v6') && BOARD_MODELS.btts.includes('v6')); }
 const html2 = (await import('node:fs')).readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 ok('page: the scoreboard sits on the Results tab after Models against the market', /marketView\(t\) \+ scoreboardView\(t\)/.test(html2) && /function scoreboardView\(t\)/.test(html2));
 console.log(bad ? `\n${bad} FAILED` : '\nAll market checks passed');
