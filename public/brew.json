@@ -1,6 +1,70 @@
 {
-  "updated": "2026-11-06T11:10:35Z",
+  "updated": "2026-11-06T22:08:32Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-06",
+      "title": "Jobs pop, rate hopes drop",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "24,579",
+          "change": 1.09
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,377",
+          "change": 0.32
+        },
+        {
+          "label": "Dow",
+          "value": "51,286",
+          "change": -0.46
+        },
+        {
+          "label": "10-yr",
+          "value": "4.859%",
+          "change": 2.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$90.62",
+          "change": 0.11
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$75,769",
+          "change": 0.08
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "Stocks partly rebounded from Thursday's rout as chipmakers rallied: Nasdaq +1.09%, S&P 500 +0.32%, Dow -0.46%."
+        },
+        {
+          "h": "Jobs",
+          "t": "October payrolls rose 165,000 and unemployment slipped to 4.1%, while September's gain was revised up from 29,000 to 60,000."
+        },
+        {
+          "h": "Rates",
+          "t": "Wages grew 3.1% against 3.7% inflation, and traders put the odds of a December Fed hike near 80%, nudging the 10-year up 2 bps to 4.859%."
+        },
+        {
+          "h": "Chips",
+          "t": "Dip buyers lifted AMD 11.04%, Intel 7.71% and Micron 5.12%; Lam Research gained 8.23% on a $25B buyback."
+        },
+        {
+          "h": "Earnings",
+          "t": "Airbnb jumped 11.67% on 19% revenue growth to $4.87B, while Atlassian fell 16.15% and Axon 18.18% on weak outlooks."
+        },
+        {
+          "h": "DraftKings",
+          "t": "Shares fell 21.30% after full-year profit guidance was cut from $700-900M to $175-275M to fund up to $700M in prediction markets."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-11-06",
