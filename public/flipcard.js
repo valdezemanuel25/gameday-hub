@@ -14,11 +14,12 @@
     '.fc-face{position:absolute;inset:0 0 auto 0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:' + O.radius + 'px;box-shadow:0 22px 48px rgba(' + O.shadowColor + ',' + O.shadowOpacity + ')}' +
     '.fc-front{transform:rotateY(0deg) translateZ(.5px)}' +
     '.fc-front>*{margin-bottom:0!important;border-radius:' + O.radius + 'px!important}' +
-    // the back is the Movement card exactly as the Movement tab draws it (its colours, outline and flags); the plain FlipCard
-    // background (#27272a) only shows if the back has no card of its own
-    '.fc-back{transform:rotateY(180deg) translateZ(.5px);color:' + O.color + ';overflow:hidden;background:var(--bg,#0b0b0c)}' + // the page colour under the card, as on the Movement tab
+    // the back is the Movement card as the Movement tab draws it (its colours, outline and flags), see-through like the Board cards so the
+    // moving background shows; the plain FlipCard background (#27272a) only shows if the back has no card of its own
+    '.fc-back{transform:rotateY(180deg) translateZ(.5px);color:' + O.color + ';overflow:hidden;background:transparent;text-shadow:0 0 2px rgba(0,0,0,.95),0 0 9px rgba(0,0,0,.8)}' + // see-through (a dark outline keeps text readable over the dots, as on the soccer Board);: the Board's moving background shows behind the card, like the front
     '.fc-back:not(:has(>.mvg)){background:' + O.background + ';padding:4px 2px 10px}' +
     '.fc-back>.mvg{margin:0!important;border-radius:' + O.radius + 'px!important}' +
+    '.fc-back .mvx{background:rgba(0,0,0,.34);border-radius:10px}' + // a light tint behind the price table only: still see-through, but the numbers read over bright dots
     '.fc-back .fc-tip{display:block;text-align:center;font-size:11.5px;opacity:.5;margin-top:8px;letter-spacing:.02em}' +
     '.fc-glare{position:absolute;inset:0;border-radius:' + O.radius + 'px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:5;transform:translateZ(1px);' +
       'background:radial-gradient(circle at var(--gx,50%) var(--gy,50%),rgba(255,255,255,' + O.glareOpacity + ') 0%,rgba(255,255,255,0) 60%)}' +
