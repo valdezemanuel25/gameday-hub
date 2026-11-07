@@ -109,7 +109,6 @@
       if (b && !b.hasAttribute('data-goboard')) return; // the Movement card's own buttons still work
       e.stopPropagation(); e.preventDefault(); settle(w, w._target - 180);
     }, true);
-    window.addEventListener('resize', function () { if (w.isConnected) setHeight(w, w._vis); });
     if (window.ResizeObserver) { var ro = new ResizeObserver(function () { if (w.isConnected) setHeight(w, w._vis); else ro.disconnect(); }); if (w._front.firstElementChild) ro.observe(w._front.firstElementChild); ro.observe(w._back); }
   }
   function toggle(el, id, backHtml) {
@@ -133,5 +132,7 @@
     });
     if (flippedId && !keep) flippedId = null;
   }
+  // one shared resize listener for every card on the page (a listener per card was never removed and kept every redrawn card alive)
+  window.addEventListener('resize', function () { document.querySelectorAll('.fc-wrap').forEach(function (w) { if (w._back) setHeight(w, w._vis); }); });
   window.FlipCard = { toggle: toggle, sync: sync, reapply: sync, isFlipped: function (id) { return flippedId === id; } };
 })();
