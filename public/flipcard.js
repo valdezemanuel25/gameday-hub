@@ -14,9 +14,12 @@
     '.fc-face{position:absolute;inset:0 0 auto 0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:' + O.radius + 'px;box-shadow:0 22px 48px rgba(' + O.shadowColor + ',' + O.shadowOpacity + ')}' +
     '.fc-front{transform:rotateY(0deg) translateZ(.5px)}' +
     '.fc-front>*{margin-bottom:0!important;border-radius:' + O.radius + 'px!important}' +
-    '.fc-back{transform:rotateY(180deg) translateZ(.5px);background:' + O.background + ';color:' + O.color + ';border:1px solid rgba(255,255,255,.08);padding:4px 2px 10px;overflow:hidden}' +
-    '.fc-back .mvg{margin:0!important;background:none!important;border-color:transparent!important;box-shadow:none!important}' +
-    '.fc-back .fc-tip{display:block;text-align:center;font-size:11.5px;opacity:.5;margin-top:2px;letter-spacing:.02em}' +
+    // the back is the Movement card exactly as the Movement tab draws it (its colours, outline and flags); the plain FlipCard
+    // background (#27272a) only shows if the back has no card of its own
+    '.fc-back{transform:rotateY(180deg) translateZ(.5px);color:' + O.color + ';overflow:hidden;background:var(--bg,#0b0b0c)}' + // the page colour under the card, as on the Movement tab
+    '.fc-back:not(:has(>.mvg)){background:' + O.background + ';padding:4px 2px 10px}' +
+    '.fc-back>.mvg{margin:0!important;border-radius:' + O.radius + 'px!important}' +
+    '.fc-back .fc-tip{display:block;text-align:center;font-size:11.5px;opacity:.5;margin-top:8px;letter-spacing:.02em}' +
     '.fc-glare{position:absolute;inset:0;border-radius:' + O.radius + 'px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:5;transform:translateZ(1px);' +
       'background:radial-gradient(circle at var(--gx,50%) var(--gy,50%),rgba(255,255,255,' + O.glareOpacity + ') 0%,rgba(255,255,255,0) 60%)}' +
     '.fc-wrap.fc-hov .fc-glare{opacity:1}' +
@@ -52,12 +55,17 @@
     if (instant || reduce) { w._x = target; w._v = 0; paint(w); } else run(w);
     if (on !== w._on) { w._on = on; flippedId = on ? w._id : (flippedId === w._id ? null : flippedId); document.dispatchEvent(new CustomEvent('flipcard', { detail: { id: w._id, flipped: on } })); }
   }
+  // the back: the Movement card, with the flip-back hint inside it
+  function fillBack(w, html) {
+    w._back.innerHTML = html; var tip = '<span class="fc-tip">Tap or swipe to flip back</span>', m = w._back.querySelector('.mvg');
+    if (m) m.insertAdjacentHTML('beforeend', tip); else w._back.insertAdjacentHTML('beforeend', tip);
+  }
   function wrap(el, id, backHtml) {
     var w = document.createElement('div'); w.className = 'fc-wrap'; w._id = id;
     w.innerHTML = '<div class="fc-in"><div class="fc-face fc-front"></div><div class="fc-face fc-back"></div></div><div class="fc-glare"></div>';
     el.parentNode.insertBefore(w, el);
     w._in = w.firstChild; w._front = w._in.firstChild; w._back = w._in.lastChild; w._front.appendChild(el);
-    w._back.innerHTML = backHtml + '<span class="fc-tip">Tap or swipe to flip back</span>';
+    fillBack(w, backHtml);
     w._x = 0; w._v = 0; w._target = 0; w._on = false; w._scale = 1; w._tx = 0; w._ty = 0; w._ttx = 0; w._tty = 0;
     w._vis = false; setHeight(w, false); paint(w); hook(w); return w;
   }
@@ -102,7 +110,7 @@
   function toggle(el, id, backHtml) {
     if (!el || !backHtml) return false;
     var w = el.parentNode && el.parentNode.classList.contains('fc-front') ? el.parentNode.parentNode.parentNode : null;
-    if (!w) w = wrap(el, id, backHtml); else { w._back.innerHTML = backHtml + '<span class="fc-tip">Tap or swipe to flip back</span>'; if (w._vis) setHeight(w, true); }
+    if (!w) w = wrap(el, id, backHtml); else { fillBack(w, backHtml); if (w._vis) setHeight(w, true); }
     requestAnimationFrame(function () { settle(w, w._on ? w._target - 180 : w._target + 180); });
     return true;
   }
