@@ -388,7 +388,7 @@ function card(c) {
   const hp = m0 ? m0.w : null, ap = hp == null ? null : 100 - hp;
   const hf = hp != null && hp >= 50;
   const mid = f ? `<div class="mid sc">${f.a}–${f.h}${f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : '<small>FINAL</small>'}</div>` : `<div class="mid">@</div>`;
-  const go = hp != null && hockeyMove(c.px) ? ` data-gomove="${esc(c.id)}" role="button" tabindex="0" title="Show this game's Movement card"` : ''; // the win %: this game's Movement card
+  const go = hp != null && hockeyMove(c.px) ? ` data-gomove="${esc(c.id)}" role="button" tabindex="0" title="Flip to this game's Movement card"` : ''; // the win %: this game's Movement card
   const split = hp == null ? '' : `<div class="sp"><div class="nums${go ? ' pgo' : ''}"${go}><span class="${hf ? 'dim' : ''}"><b>${ap}%</b> ${esc(c.aAbbr)}</span><span class="${hf ? '' : 'dim'}">${esc(c.hAbbr)} <b>${hp}%</b></span></div>
     <div class="bar"><i class="${hf ? '' : 'fav'}" style="flex:${ap};--c:${tcol(c.aAbbr)}"></i><i class="${hf ? 'fav' : ''}" style="flex:${hp};--c:${tcol(c.hAbbr)}"></i></div></div>`;
   const all = c.v2 && c.v4 && c.fb, cs = consensus(c);
@@ -781,7 +781,7 @@ function renderDays() {
 function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
   document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'bgrid') updDots(); }, true);
-function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); }
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); if (window.FlipCard && S.tab === 'board' && day) FlipCard.reapply(id => movesView(id)); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
   render();
@@ -800,8 +800,9 @@ document.addEventListener('click', async e => {
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.push) return pushAct(t.dataset.push);
   // Movement card title: the game's Board card pops up over the Movement tab in a spotlight card (public/spotlight.js); you stay here.
-  if (t.dataset.gomove) { // the win %: this game's Movement card, popped up over the Board
-    const html = window.Spotlight && day ? movesView(t.dataset.gomove) : ''; if (html) Spotlight.open(`<div class="mvpop">${html}</div>`, t); return; }
+  if (t.dataset.gomove) { // the win %: the card flips over to this game's Movement card (public/flipcard.js); the pop-up if it can't
+    const id = t.dataset.gomove, html = day ? movesView(id) : '', el = t.closest('.card'); if (!html) return;
+    if (!(window.FlipCard && el && FlipCard.toggle(el, id, html)) && window.Spotlight) Spotlight.open(`<div class="mvpop">${html}</div>`, t); return; }
   if (t.dataset.goboard) {
     const id = t.dataset.goboard, c = ((day && day.cards) || []).find(x => x.id === id); if (!c || !window.Spotlight) return;
     Spotlight.open(card(c), t); return; }
@@ -843,5 +844,6 @@ try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js
 <script src="/waves.js" data-color="#FF4D57" data-opacity="0.55" defer></script>
 <script src="/sweep.js" defer></script>
 <script src="/spotlight.js" defer></script>
+<script src="/flipcard.js" defer></script>
 </body>
 </html>

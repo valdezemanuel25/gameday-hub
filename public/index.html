@@ -1246,7 +1246,7 @@ const NPW = {}; // game id -> the "No price" check's answer { kind, title, detai
 // The pick % on a Board card opens that game's Movement card in a pop-up (Nov 6, 2026), the way a Movement title opens the Board card.
 // Only games that have a Movement card (a price, or a priced league with no price yet) get it.
 const hasMv = c => !!((c.odds && moveOf(c.odds)) || (PRICED_LG.has(c.league) && (c.v2 || c.v4)));
-const pctGo = (c, p) => hasMv(c) ? `<span class="p pgo" role="button" tabindex="0" data-gomove="${esc(c.id)}" title="Show this game's Movement card">${p}%<i>›</i></span>` : `<span class="p">${p}%</span>`;
+const pctGo = (c, p) => hasMv(c) ? `<span class="p pgo" role="button" tabindex="0" data-gomove="${esc(c.id)}" title="Flip to this game's Movement card">${p}%<i>›</i></span>` : `<span class="p">${p}%</span>`;
 function movesView(onlyId) {
   if (!day || !day.cards) return onlyId ? '' : `<div class="empty">Loading…</div>`;
   const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
@@ -1984,6 +1984,7 @@ function render() {
   renderHeader();
   $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : S.tab === 'moves' ? movesView() : S.tab === 'analyst' ? analystView() : board();
   updSDots();
+  if (window.FlipCard && S.tab === 'board') FlipCard.reapply(id => movesView(id)); // a card flipped to its Movement side stays flipped
 }
 async function loadCounts() {
   const ds = [-2, -1, 0, 1, 2].map(o => addDays(S.date, o)).filter(d => counts[d] == null || d === S.date);
@@ -2170,8 +2171,9 @@ document.addEventListener('click', async e => {
   if (t.dataset.tm) { S.tm = t.dataset.tm; keepFilter(); return render(); }
   if (t.dataset.more) { S.more[t.dataset.more] = !S.more[t.dataset.more]; return render(); }
   // Movement card title: the game's Board card pops up over the Movement tab in a spotlight card (public/spotlight.js); you stay here.
-  if (t.dataset.gomove) { // the pick %: this game's Movement card, popped up over the Board
-    const html = window.Spotlight ? movesView(t.dataset.gomove) : ''; if (html) Spotlight.open(`<div class="mvpop">${html}</div>`, t); return; }
+  if (t.dataset.gomove) { // the pick %: the card flips over to this game's Movement card (public/flipcard.js); the pop-up if it can't
+    const id = t.dataset.gomove, html = movesView(id), el = t.closest('.m'); if (!html) return;
+    if (!(window.FlipCard && el && FlipCard.toggle(el, id, html)) && window.Spotlight) Spotlight.open(`<div class="mvpop">${html}</div>`, t); return; }
   if (t.dataset.goboard) {
     const id = t.dataset.goboard, c = (day.cards || []).find(x => x.id === id); if (!c || !window.Spotlight) return;
     const was = S.open; S.open = id; const html = game(c); S.open = was; // the card as it sits on the Board, opened
@@ -2214,5 +2216,6 @@ try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js
 <script src="/waves.js" data-color="#C8FF2E" data-opacity="0.55" defer></script>
 <script src="/sweep.js" defer></script>
 <script src="/spotlight.js" defer></script>
+<script src="/flipcard.js" defer></script>
 </body>
 </html>
