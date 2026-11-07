@@ -1984,7 +1984,7 @@ function render() {
   renderHeader();
   $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : S.tab === 'moves' ? movesView() : S.tab === 'analyst' ? analystView() : board();
   updSDots();
-  if (window.FlipCard && S.tab === 'board') FlipCard.reapply(id => movesView(id)); // a card flipped to its Movement side stays flipped
+  if (window.FlipCard && S.tab === 'board') FlipCard.sync(id => movesView(id)); // a card flipped to its Movement side stays flipped
 }
 async function loadCounts() {
   const ds = [-2, -1, 0, 1, 2].map(o => addDays(S.date, o)).filter(d => counts[d] == null || d === S.date);

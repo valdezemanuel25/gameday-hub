@@ -1,11 +1,12 @@
-// FlipCard (Nov 6, 2026): an open Board card flips over on its Y axis to show that game's Movement card on the back. Tapping the pick %
-// (soccer) or the win % (hockey) flips it; tap the back (or its title), or swipe sideways, to flip back.
+// FlipCard (Nov 6, 2026): an open Board card flips over on its Y axis to show that game's Movement card on the back. Swipe it sideways,
+// or tap the pick % (soccer) or the win % (hockey), to flip it; tap the back (or its title), or swipe again, to flip back. Every open
+// card that has a Movement card is ready to swipe as soon as it is drawn (FlipCard.sync, called at the end of each page's render()).
 // Written for the Hub in plain JavaScript after the React FlipCard, with these settings: axis y, flipOnClick (on the back), draggable,
 // dragDistance 0, tilt (max 12 degrees), glare (opacity 0.22), hoverScale 1.03, perspective 1100, a spring (stiffness 170, damping 20),
 // radius 22, background #27272a, color #f5f5f5, shadow #000000 at 0.45. Tilt, glare and the hover scale follow a mouse; on a phone the
 // card follows your finger while you swipe it.
-//   FlipCard.toggle(cardEl, id, backHtml) flips that card (wrapping it the first time); FlipCard.reapply(backHtmlOf) puts a flipped card
-//   back after the page redraws (the pages call it at the end of render()). Fires 'flipcard' on document: { id, flipped }.
+//   FlipCard.toggle(cardEl, id, backHtml) flips that card; FlipCard.sync(backHtmlOf) readies every open card on the page and keeps the one
+//   that was flipped flipped after a redraw. Fires 'flipcard' on document: { id, flipped }.
 (function () {
   var O = { perspective: 1100, stiffness: 170, damping: 20, tiltMax: 12, glareOpacity: 0.22, hoverScale: 1.03, radius: 22, background: '#27272a', color: '#f5f5f5', shadowColor: '0,0,0', shadowOpacity: 0.45, drag: 0.55 };
   var css = '' +
@@ -89,12 +90,14 @@
       }
     });
     w.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') { w._hover = false; w._ttx = 0; w._tty = 0; w.classList.remove('fc-hov'); run(w); } });
-    w.addEventListener('pointerdown', function (e) { if (e.button) return; down = true; moved = false; sx = lastX = e.clientX; sy = e.clientY; lastT = performance.now(); base = w._x; vel = 0; pid = e.pointerId; });
+    var sideScroll = function (t) { for (var n = t; n && n !== w; n = n.parentElement) { if (/^(INPUT|SELECT|TEXTAREA)$/.test(n.tagName)) return true; if (n.scrollWidth > n.clientWidth + 2) { var ox = getComputedStyle(n).overflowX; if (ox === 'auto' || ox === 'scroll') return true; } } return false; };
+    w.addEventListener('pointerdown', function (e) { if (e.button || sideScroll(e.target)) return; down = true; moved = false; sx = lastX = e.clientX; sy = e.clientY; lastT = performance.now(); base = w._x; vel = 0; pid = e.pointerId; });
     var up = function () {
       if (!down) return; down = false;
       if (w._drag) {
         w._drag = false; if (w.matches && !w.matches(':hover')) w.classList.remove('fc-hov');
         var proj = w._x + vel * 0.18; settle(w, Math.round(proj / 180) * 180); w._v = vel;
+        setTimeout(function () { moved = false; }, 350); // a swipe swallows only its own click, never the next tap
       }
     };
     w.addEventListener('pointerup', up); w.addEventListener('pointercancel', up);
@@ -107,6 +110,7 @@
       e.stopPropagation(); e.preventDefault(); settle(w, w._target - 180);
     }, true);
     window.addEventListener('resize', function () { if (w.isConnected) setHeight(w, w._vis); });
+    if (window.ResizeObserver) { var ro = new ResizeObserver(function () { if (w.isConnected) setHeight(w, w._vis); else ro.disconnect(); }); if (w._front.firstElementChild) ro.observe(w._front.firstElementChild); ro.observe(w._back); }
   }
   function toggle(el, id, backHtml) {
     if (!el || !backHtml) return false;
@@ -115,13 +119,19 @@
     requestAnimationFrame(function () { settle(w, w._on ? w._target - 180 : w._target + 180); });
     return true;
   }
-  // after the page redraws: the card that was flipped is flipped again at once (no animation), with a fresh Movement card
-  function reapply(backHtmlOf) {
-    if (!flippedId) return;
-    var t = document.querySelector('[data-gomove="' + (window.CSS && CSS.escape ? CSS.escape(flippedId) : flippedId) + '"]');
-    var el = t && (t.closest('.m') || t.closest('.card')), html = el && backHtmlOf(flippedId);
-    if (!el || !html) { flippedId = null; return; }
-    var w = wrap(el, flippedId, html); w._on = false; settle(w, 180, true); w._on = true;
+  // after the page draws: every open card with a Movement card (it shows a [data-gomove] %) is wrapped, so a swipe flips it straight away;
+  // the card that was flipped is flipped again at once (no animation), with a fresh Movement card
+  function sync(backHtmlOf) {
+    var seen = {}, keep = false;
+    document.querySelectorAll('[data-gomove]').forEach(function (t) {
+      if (t.closest('.fc-back,.spl-in')) return;
+      var id = t.getAttribute('data-gomove'), el = t.closest('.m') || t.closest('.card');
+      if (!el || seen[id] || (el.parentNode && el.parentNode.classList && el.parentNode.classList.contains('fc-front'))) return; seen[id] = 1;
+      var html = backHtmlOf(id); if (!html) return;
+      var w = wrap(el, id, html);
+      if (id === flippedId) { keep = true; settle(w, 180, true); }
+    });
+    if (flippedId && !keep) flippedId = null;
   }
-  window.FlipCard = { toggle: toggle, reapply: reapply, isFlipped: function (id) { return flippedId === id; } };
+  window.FlipCard = { toggle: toggle, sync: sync, reapply: sync, isFlipped: function (id) { return flippedId === id; } };
 })();
