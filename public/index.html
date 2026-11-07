@@ -410,7 +410,7 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .zsum{margin:12px 0 0 4px;font-size:12.5px;color:var(--dim);line-height:1.55}.zsum b{color:var(--ink)}
 
 .xhl{display:flex;align-items:baseline;gap:7px;margin-top:9px;padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid var(--line);font-size:13px;flex-wrap:wrap}
-.xhl .k{font-size:10.5px;font-weight:700;color:var(--faint)}.xhl b{color:var(--ink);font-weight:700}.xhl .p{margin-left:auto;font-weight:750;color:var(--grass)}
+.xhl .k{font-size:10.5px;font-weight:700;color:var(--faint)}.xhl b{color:var(--ink);font-weight:700}.xhl .p{margin-left:auto;font-weight:750;color:var(--grass)}.xhl .pgo{cursor:pointer;display:inline-flex;align-items:center;gap:3px;padding:2px 8px;margin-right:-8px;border-radius:999px;border:1px solid transparent;transition:background .15s,border-color .15s}.xhl .pgo i{font-style:normal;font-weight:600;opacity:.55}.xhl .pgo:hover,.xhl .pgo:active{background:rgba(214,255,64,.1);border-color:rgba(214,255,64,.35)}
 .xhl small.pr{flex-basis:100%;font-size:11px;line-height:1.5}
 /* the Analyst's bets on this game (Original / New rule sets), one line under the price; only when a set has bet it */
 .xhl .anl{flex-basis:100%;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;font-size:11px;line-height:1.5;color:var(--dim);margin-top:2px}.xhl .anl .k{margin-right:2px}.xhl .anl b{font-weight:650;color:var(--ink)}.xhl .anl .w{color:var(--grass)}.xhl .anl .l{color:var(--miss)}.xhl .anl .go{margin-left:auto;color:var(--faint);font-size:13px}.xhl .ag{font-size:11px;color:var(--dim);flex-basis:100%}.xhl .ag.all{color:var(--grass)}
@@ -838,12 +838,12 @@ function headline(c) {
     const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key];
     const tags = [...L.by.map(n => `<span class="ag all">${esc(n)} agrees</span>`), ...L.no.map(n => `<span class="ag">${esc(n)} disagrees</span>`)].join(' ');
     const ag = `<span class="ag">Market pick (price, margin removed)${L.a ? '' : ' · no model has numbers yet'}</span>${tags ? ' ' + tags : ''}`;
-    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b>${pctGo(c, L.p)}${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
   }
   if (L && L.src === 'v4') { // no price yet: v4 leads with its single strongest call, the other models counted as agree / disagree
     const name = { H: `${esc(strip(c.home))} to win`, D: 'Draw', A: `${esc(strip(c.away))} to win`, O: 'Over 2.5 goals', U: 'Under 2.5 goals', B: 'Both teams score', N: 'Not both teams score' }[L.key], names = r => r.join(', ');
     const ag = L.k === 'solo' ? `<span class="ag">v4's pick · no other model has numbers yet</span>` : L.k === 'split' ? `<span class="ag">v4's pick · no majority across the models</span>` : L.no.length === 0 ? `<span class="ag all">v4's pick · all ${L.a} models agree</span>` : `<span class="ag">v4's pick · ${L.y} of ${L.a} back it (${names(L.by)}) · ${names(L.no)} disagree${L.no.length === 1 ? 's' : ''}</span>`;
-    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b><span class="p">${L.p}%</span>${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
+    return `<div class="xhl"><span class="k">${L.k === 'best' ? 'Best pick' : L.k === 'lean' || L.k === 'solo' ? 'Lean' : 'Split'}</span><b>${name}</b>${pctGo(c, L.p)}${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === L.key ? c.lean : { key: L.key, p: L.p }) : ''}${anLine(c)}</div>`;
   }
   const v = c.v2, v4 = c.v4 || {}, f = c.fb || {};
   const hda = x => (x ? 'HDA'[x.indexOf(Math.max(...x))] : null);
@@ -861,16 +861,16 @@ function headline(c) {
   const best = rows.filter(r => r.a.length >= 2).sort((x, y) => { const a = score(x), b = score(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; })[0];
   if (!best) { // only v2 to go on: its own strongest pick
     const mx = Math.max(...v.p), wi = v.p.indexOf(mx), alts = [[mx, wi === 1 ? 'Draw' : `${wi === 0 ? home : away} to win`], [v.over, 'Over 2.5 goals'], [100 - v.over, 'Under 2.5 goals'], [v.btts, 'Both teams score'], [100 - v.btts, 'Not both teams score']].sort((x, y) => y[0] - x[0])[0];
-    return `<div class="xhl"><span class="k">${alts[0] >= 60 ? 'Best pick' : 'Lean'}</span><b>${alts[1]}</b><span class="p">${alts[0]}%</span></div>`;
+    return `<div class="xhl"><span class="k">${alts[0] >= 60 ? 'Best pick' : 'Lean'}</span><b>${alts[1]}</b>${pctGo(c, alts[0])}</div>`;
   }
   const maj = best.yes.length * 2 > best.a.length, all = best.yes.length === best.a.length;
   if (!maj) { // nobody has a majority on anything: show v2's strongest pick, flagged as a split
     const mx = Math.max(...v.p), wi = v.p.indexOf(mx);
-    return `<div class="xhl"><span class="k">Split</span><b>${wi === 1 ? 'Draw' : `${wi === 0 ? home : away} to win`}</b><span class="p">${mx}%</span><span class="ag">v2's pick · no majority across the models</span></div>`;
+    return `<div class="xhl"><span class="k">Split</span><b>${wi === 1 ? 'Draw' : `${wi === 0 ? home : away} to win`}</b>${pctGo(c, mx)}<span class="ag">v2's pick · no majority across the models</span></div>`;
   }
   const names = r => r.map(m => m.n).join(', ');
   const ag = all ? `<span class="ag all">All ${best.a.length} models agree</span>` : `<span class="ag">${best.yes.length} of ${best.a.length} back it (${names(best.yes)}) · ${names(best.no)} disagree${best.no.length === 1 ? 's' : ''}</span>`;
-  return `<div class="xhl"><span class="k">${all && best.p != null && best.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${best.label}</b>${best.p != null ? `<span class="p">${best.p}%</span>` : ''}${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === best.key ? c.lean : { key: best.key, p: best.p }) : ''}${anLine(c)}</div>`;
+  return `<div class="xhl"><span class="k">${all && best.p != null && best.p >= 60 ? 'Best pick' : 'Lean'}</span><b>${best.label}</b>${best.p != null ? `${pctGo(c, best.p)}` : ''}${ag}${PRICED_LG.has(c.league) ? priceLine(c, c.lean && c.lean.key === best.key ? c.lean : { key: best.key, p: best.p }) : ''}${anLine(c)}</div>`;
 }
 // The likeliest exact score that agrees with the model's own pick, its Over 2.5 side and its both-score side, worked out from the
 // same expected goals the model used. (The single most common score can clash with those, e.g. 2-0 beside both-score 53%.)
@@ -1243,8 +1243,12 @@ function pinnNote(c, o) {
   return `<small class="mvn">Pinnacle${o.pcl ? ` (closing read ✓ ${tmCT(o.pcl)})` : ' (first seen → now)'}: ${[0, 1, 2].map(part).join(' · ')}${pm.ou ? ` · Over ${pm.ou.line} ${Math.round(pm.ou.p0)}→${Math.round(pm.ou.p1)}` : ''}${pm.bt ? ` · Both score ${Math.round(pm.bt.p0)}→${Math.round(pm.bt.p1)}${Math.abs(pm.bt.p1 - pm.bt.p0) >= 1 ? ` <b>(${sgn(Math.round(pm.bt.p1 - pm.bt.p0))})</b>` : ''}` : ''}${gap}</small>`;
 }
 const NPW = {}; // game id -> the "No price" check's answer { kind, title, detail } (or { busy })
-function movesView() {
-  if (!day || !day.cards) return `<div class="empty">Loading…</div>`;
+// The pick % on a Board card opens that game's Movement card in a pop-up (Nov 6, 2026), the way a Movement title opens the Board card.
+// Only games that have a Movement card (a price, or a priced league with no price yet) get it.
+const hasMv = c => !!((c.odds && moveOf(c.odds)) || (PRICED_LG.has(c.league) && (c.v2 || c.v4)));
+const pctGo = (c, p) => hasMv(c) ? `<span class="p pgo" role="button" tabindex="0" data-gomove="${esc(c.id)}" title="Show this game's Movement card">${p}%<i>›</i></span>` : `<span class="p">${p}%</span>`;
+function movesView(onlyId) {
+  if (!day || !day.cards) return onlyId ? '' : `<div class="empty">Loading…</div>`;
   const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
   // A game in a priced league with no home / draw / away price gets its own card too: red outline and a "No price" signal (npCard)
   const np = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).map(c => ({ c, np: true }));
@@ -1292,6 +1296,7 @@ function movesView() {
       ${pinnNote(c, o)}
       ${o.ts ? `<small class="mvn">Price last changed ${tmCT(o.ts)}</small>` : ''}</div>`;
   };
+  if (onlyId) { const r = rows.find(x => x.c.id === onlyId); return r ? card(r) : ''; } // one game's Movement card (the Board's pick % pop-up)
   return oddsBar() + seg + head + (shown.length ? shown.map(card).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices are read for the first divisions and the two European cups once a day is analyzed.'}</div>`);
 }
 
@@ -2129,7 +2134,7 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); as.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-goboard],[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;
+  const t = e.target.closest('[data-gomove],[data-goboard],[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;
   if (t.dataset.ansp) { AN_SP = t.dataset.ansp; return render(); }
   if (t.dataset.anopen) { S.tab = 'analyst'; S.open = null; AN_SP = 'soccer'; AN_SET = t.dataset.anopen; AN_MK = 'all'; saveView(); render(); window.scrollTo(0, 0); return; } // the card's Analyst line
   if (t.dataset.anset) { const y = window.scrollY; AN_SET = t.dataset.anset; render(); window.scrollTo(0, y); return; }
@@ -2165,6 +2170,8 @@ document.addEventListener('click', async e => {
   if (t.dataset.tm) { S.tm = t.dataset.tm; keepFilter(); return render(); }
   if (t.dataset.more) { S.more[t.dataset.more] = !S.more[t.dataset.more]; return render(); }
   // Movement card title: the game's Board card pops up over the Movement tab in a spotlight card (public/spotlight.js); you stay here.
+  if (t.dataset.gomove) { // the pick %: this game's Movement card, popped up over the Board
+    const html = window.Spotlight ? movesView(t.dataset.gomove) : ''; if (html) Spotlight.open(`<div class="mvpop">${html}</div>`, t); return; }
   if (t.dataset.goboard) {
     const id = t.dataset.goboard, c = (day.cards || []).find(x => x.id === id); if (!c || !window.Spotlight) return;
     const was = S.open; S.open = id; const html = game(c); S.open = was; // the card as it sits on the Board, opened

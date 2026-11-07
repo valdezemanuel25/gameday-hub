@@ -128,6 +128,7 @@ table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mv
 .mvx td.m3 b{color:var(--amber);font-weight:750}.gc.x{border-style:dashed}
 .gc.c{color:var(--good);border-color:rgba(94,224,143,.45)}.gc.e{color:var(--amber);border-color:rgba(240,195,90,.5)}.gc.b{color:var(--bad);border-color:rgba(255,123,107,.5)}
 .sgr{border-color:rgba(120,190,255,.5)!important}
+.sp .nums.pgo{cursor:pointer}.sp .nums.pgo b{text-decoration:underline dotted rgba(255,255,255,.4);text-underline-offset:4px}.sp .nums.pgo span:last-child::after{content:' ›';opacity:.55}
 .sghot,.sghot b{color:#3ee8ff!important;text-shadow:0 0 8px rgba(62,232,255,.75),0 0 18px rgba(62,232,255,.35)}
 .v5r{margin-top:9px;border:1px dashed rgba(240,195,90,.55);border-radius:10px;padding:7px 9px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:12px;color:var(--mut)}
 .v5r .lb{font-size:10.5px;font-weight:700;color:var(--amber);letter-spacing:.02em}.v5r b{font-size:14px;color:var(--ink);font-weight:700}.v5r .df{margin-left:auto;font-size:11px;color:var(--faint)}
@@ -387,7 +388,8 @@ function card(c) {
   const hp = m0 ? m0.w : null, ap = hp == null ? null : 100 - hp;
   const hf = hp != null && hp >= 50;
   const mid = f ? `<div class="mid sc">${f.a}–${f.h}${f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : '<small>FINAL</small>'}</div>` : `<div class="mid">@</div>`;
-  const split = hp == null ? '' : `<div class="sp"><div class="nums"><span class="${hf ? 'dim' : ''}"><b>${ap}%</b> ${esc(c.aAbbr)}</span><span class="${hf ? '' : 'dim'}">${esc(c.hAbbr)} <b>${hp}%</b></span></div>
+  const go = hp != null && hockeyMove(c.px) ? ` data-gomove="${esc(c.id)}" role="button" tabindex="0" title="Show this game's Movement card"` : ''; // the win %: this game's Movement card
+  const split = hp == null ? '' : `<div class="sp"><div class="nums${go ? ' pgo' : ''}"${go}><span class="${hf ? 'dim' : ''}"><b>${ap}%</b> ${esc(c.aAbbr)}</span><span class="${hf ? '' : 'dim'}">${esc(c.hAbbr)} <b>${hp}%</b></span></div>
     <div class="bar"><i class="${hf ? '' : 'fav'}" style="flex:${ap};--c:${tcol(c.aAbbr)}"></i><i class="${hf ? 'fav' : ''}" style="flex:${hp};--c:${tcol(c.hAbbr)}"></i></div></div>`;
   const all = c.v2 && c.v4 && c.fb, cs = consensus(c);
   const lab = cs.same ? '<span class="cfx s">Consensus</span>' : cs.split ? '<span class="cfx sp">Split</span>' : '';
@@ -469,7 +471,7 @@ function closeState(c) {
   if (ko - Date.now() <= 45 * 60000) return { k: 'due', t: px.cl ? `Closing read ${tmCT(px.cl)}${px.cby === 'you' ? ' (your update)' : ''} · tap to read again` : 'Pre-game read due now · tap to read', act: true };
   return { k: 'pend', t: `Pending · closing read from ~${tmCT(new Date(ko - 45 * 60000).toISOString())}` };
 }
-function movesView() {
+function movesView(onlyId) {
   const rows = day.cards.filter(c => hockeyMove(c.px)).sort((a, b) => a.kickoff.localeCompare(b.kickoff)).map(c => ({ c, hm: hockeyMove(c.px), st: closeState(c) }));
   // Upcoming = puck hasn't dropped yet. It opens first; a day with none (a past day) opens on All unless you picked a filter.
   const inF = (r, k) => k === 'big' ? r.hm.big : k === 'up' ? !r.c.final && new Date(r.c.kickoff).getTime() > Date.now() : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
@@ -491,6 +493,7 @@ function movesView() {
       <table class="mvx"><tr><th></th><th>${faStamp(c.px.fa)}${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
       ${px.ts ? `<small class="mvn">Price last changed ${tmCT(px.ts)}</small>` : ''}</div>`;
   };
+  if (onlyId) { const r = rows.find(x => x.c.id === onlyId); return r ? card1(r) : ''; } // one game's Movement card (the Board's % pop-up)
   const shown = rows.filter(r => inF(r, f));
   return seg + head + (shown.length ? shown.map(card1).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices come from ESPN as the schedule is checked.'}</div>`);
 }
@@ -786,7 +789,7 @@ async function load() {
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-goboard],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel],[data-mvf],[data-getclose],[data-fin]'); if (!t) return;
+  const t = e.target.closest('[data-gomove],[data-goboard],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel],[data-mvf],[data-getclose],[data-fin]'); if (!t) return;
   if (t.dataset.getclose) {
     if (t.disabled) return; const t0 = t.textContent; t.disabled = true; t.textContent = 'Reading the price…';
     try { const r = await (await fetch('/api/nhl/close', { method: 'POST', body: JSON.stringify({ date: S.date, id: t.dataset.getclose }) })).json(); if (r.error) throw new Error(r.error); await load(); }
@@ -797,6 +800,8 @@ document.addEventListener('click', async e => {
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.push) return pushAct(t.dataset.push);
   // Movement card title: the game's Board card pops up over the Movement tab in a spotlight card (public/spotlight.js); you stay here.
+  if (t.dataset.gomove) { // the win %: this game's Movement card, popped up over the Board
+    const html = window.Spotlight && day ? movesView(t.dataset.gomove) : ''; if (html) Spotlight.open(`<div class="mvpop">${html}</div>`, t); return; }
   if (t.dataset.goboard) {
     const id = t.dataset.goboard, c = ((day && day.cards) || []).find(x => x.id === id); if (!c || !window.Spotlight) return;
     Spotlight.open(card(c), t); return; }

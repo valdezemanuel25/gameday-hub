@@ -27,7 +27,7 @@
     '.spl-x{display:block;margin:12px auto 0;position:relative;z-index:6;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(10,12,10,.7);color:#fff;font-size:20px;line-height:1;cursor:pointer}' +
     '.spl-in{position:relative;z-index:1}' +
     // read-only inside: the card\'s own buttons do nothing here (its More details still opens)
-    '.spl-in button,.spl-in input,.spl-in select,.spl-in textarea{pointer-events:none}' +
+    '.spl-in button,.spl-in input,.spl-in select,.spl-in textarea,.spl-in [data-gomove],.spl-in [data-goboard]{pointer-events:none}' +
     '@media (prefers-reduced-motion:reduce){.spl-card,.spl-back{transition:none!important}}';
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
   var back = null, raf = 0;
