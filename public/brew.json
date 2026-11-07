@@ -1,6 +1,71 @@
 {
-  "updated": "2026-11-06T22:08:32Z",
+  "updated": "2026-11-07T11:08:28Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-07",
+      "title": "Cybertruck’s sunset",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "24,579",
+          "change": 1.09
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,377",
+          "change": 0.32
+        },
+        {
+          "label": "Dow",
+          "value": "51,286",
+          "change": -0.46
+        },
+        {
+          "label": "10-yr",
+          "value": "4.859%",
+          "change": 2,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$75,912",
+          "change": 0.43
+        },
+        {
+          "label": "Nvidia",
+          "value": "$186.64",
+          "change": 2.77
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "The Nasdaq bounced 1.09% a day after its worst session in 18 months, as Nvidia, AMD and Intel clawed back losses; the Dow slipped 0.46%."
+        },
+        {
+          "h": "Cybertruck",
+          "t": "Tesla will end Cybertruck production at its Texas plant by mid-2027 to make room for the Cybercab, after only about 73,000 sold versus Musk's 250,000-a-year goal."
+        },
+        {
+          "h": "Sales slide",
+          "t": "US Cybertruck sales fell to 20,237 in 2025 from 38,965 in 2024 and are down another 28% this year."
+        },
+        {
+          "h": "Jobs",
+          "t": "The US added 165,000 jobs in October, beating estimates, with unemployment edging down to 4.1% and earlier months revised up."
+        },
+        {
+          "h": "Fox and Roku",
+          "t": "Fox completed its $22 billion acquisition of Roku and pledged to keep the platform open."
+        },
+        {
+          "h": "Anthropic IPO",
+          "t": "Investors are reportedly skeptical that Anthropic merits a $1.5 trillion valuation in its upcoming IPO."
+        }
+      ],
+      "note": "Market numbers are the Nov 6 close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-06",
@@ -64,71 +129,6 @@
           "t": "Shares fell 21.30% after full-year profit guidance was cut from $700-900M to $175-275M to fund up to $700M in prediction markets."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-06",
-      "title": "Panicky vibes",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "24,315",
-          "change": -5.52
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,353.8",
-          "change": -4.36
-        },
-        {
-          "label": "Dow",
-          "value": "51,521",
-          "change": -3.44
-        },
-        {
-          "label": "10-yr",
-          "value": "4.837%",
-          "change": -6,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$75,999",
-          "change": -5.18
-        },
-        {
-          "label": "Tesla",
-          "value": "$343.69",
-          "change": -10.77
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Selloff",
-          "t": "Fears over AI regulation after the Democratic midterm win sent the Nasdaq down 5.52% to more than 10% below its high, and the S&P 500 fell 4.36% in its worst day since April 2025."
-        },
-        {
-          "h": "Chips and software",
-          "t": "The Philadelphia semiconductor index dropped over 12%, with Nvidia down 9%, Sandisk down 22%, and Palantir and CrowdStrike each down nearly 10%."
-        },
-        {
-          "h": "Fear and havens",
-          "t": "The VIX jumped 69% while gold rose more than 0.6% and Treasuries rallied, pulling the 10-year yield down 6 bps to 4.837%."
-        },
-        {
-          "h": "Tesla",
-          "t": "Shares fell 10.77% on worries about clashing with a bluer Texas."
-        },
-        {
-          "h": "LIV Golf",
-          "t": "The league is shutting down in bankruptcy after Saudi PIF pulled its $5 billion backing and a $300 million BC Partners rescue fell through."
-        },
-        {
-          "h": "Deals",
-          "t": "The NYT is reportedly in advanced talks to buy Letterboxd for about $330 million, and Wendy's rejected a $1.4 billion buyout bid from Trian-led investors."
-        }
-      ],
-      "note": "Market numbers are the Nov 5 close."
     },
     {
       "source": "Brew Markets",
