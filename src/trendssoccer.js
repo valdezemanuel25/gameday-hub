@@ -1,15 +1,20 @@
-// Soccer Trends (Nov 8, 2026). Two situations that held up on seven European leagues' past matches (football-data.co.uk closing prices,
+// Soccer Trends (Nov 8, 2026). Three situations that held up on seven European leagues' past matches (football-data.co.uk closing prices,
 // found on 2023-25 and re-checked on 2025-26 and this season), and a read on each game of a day. Pure functions: the Worker loads the
 // saved days and the page draws what comes back (public/index.html, Trends tab, right of Analyst). A read of past results, never a model
 // bet: it feeds no pick.
 //   roadloss3  the road team has lost its last 3+ league games -> the DRAW. 472 matches: 28.8% drew, the price expected 23.7%.
 //   homeshort  the home-win price shortened 3+ points since the opening -> OVER 2.5. 945 matches: 61% went Over, the price expected 56%.
+//   bttsno     BTTS Yes priced at 65%+ (margin removed) AND v4's BTTS No chance at or above the No price's breakeven -> BTTS NO. Shown only
+//              when both hold, so it does not flag every game (about 1 game in 6 on a full slate; at 58.2%+ it was 1 in 2). Found in this
+//              season's saved games (45 games with both prices and v4: No won 40%, the price needed 33%, +26% ROI on No), so it is untested
+//              on past seasons (those files have no BTTS prices): Strong here means "passed this season's test", not "proven".
 // Both are Watch: small edges, from one scan each. They were tested on EPL, Championship, Bundesliga, Ligue 1, Serie A, Eredivisie and La Liga;
 // in any other league the read says so. Streaks are counted from the Hub's saved league games only.
 const imp = o => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
 const norm = a => { if (a.some(x => !Number.isFinite(x))) return null; const p = a.map(imp), t = p.reduce((s, x) => s + x, 0); return p.map(x => x / t); };
 export const SITUATIONS = [
   { id: 'roadloss3', market: 'D', label: 'Road team lost its last 3+ league games', pick: 'Draw', hist: { n: 472, rate: 29, priced: 24 } },
+  { id: 'bttsno', market: 'B', label: 'BTTS Yes priced at 65%+ and v4 rates No above the breakeven', pick: 'BTTS No', hist: { n: 45, rate: 40, priced: 33 }, seasonOnly: true },
   { id: 'homeshort', market: 'O', label: 'Home-win price shortened 3+ points since the open', pick: 'Over 2.5', hist: { n: 945, rate: 61, priced: 56 } },
 ];
 export const TESTED = new Set(['eng.1', 'eng.2', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1']);
@@ -38,6 +43,12 @@ export function inSpot(s, c) {
     const p = norm([o.h, o.d, o.a]); if (!p || !Number.isFinite(o.d)) return { price: null, breakeven: null, priced: null };
     return { price: o.d, breakeven: Math.round(imp(o.d) * 100), priced: p[1] };
   }
+  if (s.id === 'bttsno') {
+    const v = c.v4; if (!v || !Number.isFinite(v.btts) || !Number.isFinite(o.by) || !Number.isFinite(o.bn)) return false;
+    const p = norm([o.by, o.bn]); if (!p || p[0] < 0.65) return false;
+    const be = imp(o.bn) * 100; if (100 - v.btts < be) return false;
+    return { price: o.bn, breakeven: Math.round(be), priced: p[1] };
+  }
   if (s.id === 'homeshort') {
     const op = o.op; if (!op || o.tl !== 2.5) return false;
     const now = norm([o.h, o.d, o.a]), was = norm([op.h, op.d, op.a]); if (!now || !was || now[0] - was[0] < 0.03) return false;
@@ -47,7 +58,7 @@ export function inSpot(s, c) {
 }
 function pickWon(s, c) {
   const f = c.final; if (!f || !Number.isFinite(f.h) || !Number.isFinite(f.a)) return null;
-  return s.market === 'D' ? f.h === f.a : f.h + f.a > 2.5;
+  return s.market === 'D' ? f.h === f.a : s.market === 'B' ? f.h === 0 || f.a === 0 : f.h + f.a > 2.5;
 }
 // How each situation has done in the Hub's own saved games (shown beside the past-seasons record).
 export function live(ctx) {
@@ -60,9 +71,9 @@ export function gameReads(ctx, date) {
     const reads = [];
     for (const s of SITUATIONS) {
       const sp = inSpot(s, c); if (!sp) continue;
-      const v = c.v4 || c.v2, mp = v ? (s.market === 'D' ? v.p && v.p[1] : v.over) : null;
+      const v = c.v4 || c.v2, mp = v ? (s.market === 'D' ? v.p && v.p[1] : s.market === 'B' ? (Number.isFinite(v.btts) ? 100 - v.btts : null) : v.over) : null;
       const modelOk = mp == null || sp.priced == null ? null : mp >= Math.round(sp.priced * 100);
-      reads.push({ won: pickWon(s, c), id: s.id, market: s.market, label: s.label, pick: s.pick, price: sp.price, breakeven: sp.breakeven, hist: s.hist, live: lv[s.id], moved: sp.moved ?? null, modelOk, model: mp == null || sp.priced == null ? null : `${mp}% vs ${Math.round(sp.priced * 100)}% price`, lab: modelOk === false ? 'Conflict' : 'Watch', streak: s.id === 'roadloss3' ? c.al : null });
+      reads.push({ won: pickWon(s, c), id: s.id, market: s.market, label: s.label, pick: s.pick, price: sp.price, breakeven: sp.breakeven, hist: s.hist, live: lv[s.id], moved: sp.moved ?? null, modelOk, model: mp == null || sp.priced == null ? null : `${mp}% vs ${Math.round(sp.priced * 100)}% price`, lab: modelOk === false ? 'Conflict' : s.seasonOnly ? 'Strong' : 'Watch', seasonOnly: !!s.seasonOnly, streak: s.id === 'roadloss3' ? c.al : null });
     }
     return { id: c.id, league: c.league, leagueName: c.leagueName || c.league, kickoff: c.kickoff, ko: c.ko, home: c.home, away: c.away, hId: c.hId, aId: c.aId, hRank: c.hRank, aRank: c.aRank, final: c.final || null, line: c.odds && c.odds.tl != null ? c.odds.tl : null, tested: TESTED.has(c.league), reads };
   }).filter(g => g.reads.length);

@@ -34,13 +34,25 @@ const o = (h, d, a, extra = {}) => ({ h, d, a, tl: 2.5, to: -120, tu: 100, ...ex
   ok('another total line is not (tested on 2.5 only)', inSpot(S.homeshort, { ...short, odds: { ...short.odds, tl: 3 } }) === false);
   ok('no opening price: no read', inSpot(S.homeshort, { ...short, odds: o(-150, 300, 400) }) === false);
 }
+// 2b. BTTS No: only when Yes is priced at 65%+ AND v4's No chance reaches the No breakeven
+{
+  const b = (by, bn, btts, extra = {}) => ({ ...card('b', '2026-11-05T15:00Z', 'H', 'A'), al: 0, hl: 0, odds: { h: -120, d: 275, a: 310, by, bn, ...extra }, v4: { btts, over: 50, p: [40, 30, 30] } });
+  const strong = inSpot(S.bttsno, b(-250, 190, 30)); // Yes ~71% devigged; No breakeven ~34.5%; model No 70%
+  ok('Yes priced 65%+ and v4 No above the breakeven is a BTTS No spot', strong && strong.price === 190, JSON.stringify(strong));
+  ok('Yes priced under 65% is not (the common case)', inSpot(S.bttsno, b(-165, 125, 40)) === false);
+  ok('v4 No below the breakeven is not', inSpot(S.bttsno, b(-250, 190, 70)) === false);
+  ok('no v4 BTTS number: no read', inSpot(S.bttsno, { ...b(-250, 190, 30), v4: undefined }) === false);
+  ok('no BTTS price: no read', inSpot(S.bttsno, { ...b(-250, 190, 30), odds: { h: -120, d: 275, a: 310 } }) === false);
+  const g = gameReads([{ ...b(-250, 190, 30), date: '2026-11-05' }], '2026-11-05');
+  ok('the read is labelled Strong and says it is this season only', g.length === 1 && g[0].reads[0].lab === 'Strong' && g[0].reads[0].seasonOnly === true && g[0].reads[0].model === '70% vs 33% price', JSON.stringify(g[0] && g[0].reads));
+}
 // 3. the read on a day, with the model check
 {
   const hist = [lost('a', '2026-11-01', 'H1', 'RRR'), lost('b', '2026-11-02', 'H2', 'RRR'), lost('c', '2026-11-03', 'H3', 'RRR')].map(c => day(c.kickoff.slice(0, 10), [c]));
   const t = card('t', '2026-11-05T15:00Z', 'H4', 'RRR', { odds: o(-120, 275, 310), v4: { p: [49, 27, 24], over: 50 } });
   const good = buildSoccerTrends([...hist, day('2026-11-05', [t])], '2026-11-05');
   ok('one game is in a situation; the draw read is Watch with the model at 27% vs the 25% price', good.cards.length === 1 && good.cards[0].reads[0].lab === 'Watch' && good.cards[0].reads[0].model === '27% vs 25% price', JSON.stringify(good.cards));
-  ok('a tested league is marked tested; the situation records come with it', good.cards[0].tested === true && good.situations.length === 2 && TESTED.has('eng.1'));
+  ok('a tested league is marked tested; the situation records come with it', good.cards[0].tested === true && good.situations.length === 3 && TESTED.has('eng.1'));
   const bad = buildSoccerTrends([...hist, day('2026-11-05', [{ ...t, v4: { p: [60, 15, 25], over: 50 } }])], '2026-11-05');
   ok('a model that rates the draw below the price makes it a Conflict', bad.cards[0].reads[0].lab === 'Conflict');
   const mx = buildSoccerTrends([...hist.map(d => day(d.date, d.cards.map(c => ({ ...c, league: 'mex.1' })))), day('2026-11-05', [{ ...t, league: 'mex.1' }])], '2026-11-05');
