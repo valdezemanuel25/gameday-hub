@@ -410,7 +410,9 @@ function card(c) {
 // ---------- Trends: how each situation has done in the saved days, and a read on each game of the day (src/trends.js) ----------
 const TREND_TAG = { lean: 'Lean', watch: 'Watch', noise: 'Noise' };
 const trendRec = x => `${x.w}-${x.l} · n=${x.n}`;
-function trendEv(x, towardHome) { const yes = (x.toward > 0) === towardHome; return `<div class="evr"><span class="${yes ? 'y' : 'x'}">${yes ? '✓' : '✕'}</span><span class="et">${esc(x.label)}</span><em>${trendRec(x)}</em></div>`; }
+// Hit rate of the side this situation points to: the subject's record when it did better than its price, the other side's when it did worse.
+const trendHit = x => `${x.n ? Math.round(100 * (x.dir === 'with' ? x.w : x.l) / x.n) : 0}% · n=${x.n}`;
+function trendEv(x, towardHome) { const yes = (x.toward > 0) === towardHome; return `<div class="evr"><span class="${yes ? 'y' : 'x'}">${yes ? '✓' : '✕'}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}</em></div>`; }
 function trendTile(label, verdict, lab, sub, hi) {
   const cls = lab === 'Strong' ? 's' : lab === 'Conflict' ? 'b' : 'sp';
   return `<div class="mt${hi ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${esc(verdict)}</b></div><div class="o"><b class="chp ${cls}">${esc(lab)}</b><span class="l2">${esc(sub)}</span></div></div>`;
