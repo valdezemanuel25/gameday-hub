@@ -222,6 +222,7 @@ button:focus-visible{outline:2px solid var(--blue)}
 /* Trends tab (src/trends.js): the read on each game, in the Board card's own colours */
 .trd{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
 .trd .trh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;font-size:11px;font-weight:700;color:var(--acc-hi);letter-spacing:.04em;text-transform:uppercase}
+.trd .trh[data-gomove]{cursor:pointer}
 .trd .trh small{font-size:10.5px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
 .trd .ml2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .trd .mt .w b{font-size:16px}
@@ -418,6 +419,7 @@ function trendTile(label, verdict, lab, sub, hi) {
   return `<div class="mt${hi ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${esc(verdict)}</b></div><div class="o"><b class="chp ${cls}">${esc(lab)}</b><span class="l2">${esc(sub)}</span></div></div>`;
 }
 function trendCard(g) {
+  const dc = day && (day.cards || []).find(x => x.id === g.id), mv = dc && hockeyMove(dc.px) ? ` data-gomove="${esc(g.id)}" role="button" tabindex="0" title="Flip to this game's Movement card"` : ''; // same flip as the Board card (public/flipcard.js)
   const ml = g.ml && g.ml.lab !== 'None' ? g.ml : null, ou = g.ou && g.ou.lab !== 'None' ? g.ou : null, tiles = [], ev = [], chips = [];
   if (ml) {
     const c = ml.lab === 'Conflict';
@@ -438,7 +440,7 @@ function trendCard(g) {
   const tag = best ? `<span class="cfx${best === 'Strong' ? ' s' : best === 'Conflict' ? '' : ' sp'}">${best}</span>` : '<span class="cfx">No match</span>';
   const body = tiles.length ? `<div class="ml2">${tiles.join('')}</div><div class="evl">${ev.join('')}</div><div class="chs">${chips.join('')}</div>` : `<div class="pxl" style="margin-top:0">No situation matches this game, or the ones that do have not been counted long enough to point a way.</div>`;
   return `<div class="card"><div class="xh"><span>${esc(g.ko)} CT${g.line != null ? ` <span class="lnc">O/U ${g.line}</span>` : ''}</span>${tag}</div><div class="mu"><div class="tm">${crest(g.aAbbr)}<div><b>${esc(g.aAbbr)}</b><small>${esc(g.away)}</small></div></div><div class="mid">@</div><div class="tm r"><div><b>${esc(g.hAbbr)}</b><small>${esc(g.home)}</small></div>${crest(g.hAbbr)}</div></div>
-  <div class="trd"><div class="trh"><span>Trend read</span><small>from your saved days</small></div>${body}</div></div>`;
+  <div class="trd"><div class="trh"${mv}><span>Trend read</span><small>${mv ? 'Movement ⟲ tap or swipe' : 'from your saved days'}</small></div>${body}</div></div>`;
 }
 const imp = o => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
 function trendsView() {
@@ -787,7 +789,7 @@ function renderDays() {
 function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
   document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'bgrid') updDots(); }, true);
-function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'trends' ? trendsView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); if (window.FlipCard && S.tab === 'board' && day) FlipCard.sync(movesView(MV_ALL)); }
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'trends' ? trendsView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); if (window.FlipCard && (S.tab === 'board' || S.tab === 'trends') && day) FlipCard.sync(movesView(MV_ALL)); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
   render();
