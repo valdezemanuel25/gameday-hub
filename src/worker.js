@@ -145,7 +145,9 @@ async function authed(req, env) {
 }
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
-const health = env => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState });
+// deep: the nightly sweep's read (token route) also gets the hockey rest-vs-price check, which lists and reads every saved hockey day. The
+// signed-in read (Sweep on every page load) leaves it out, so a page load costs no extra KV list call.
+const health = (env, deep = false) => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState, nhlRest: deep ? e => nhlTally(e).then(t => t && t.rest) : null });
 // Scout was removed (Nov 5, 2026): its old log (KV 'scout') is deleted by the first cron run that finds it. A delete is not a write, so
 // it costs nothing from the write budget; after DROP_SCOUT_UNTIL the check stops (not even a read), and this can be taken out.
 export const DROP_SCOUT_UNTIL = '2026-11-12';
@@ -1070,7 +1072,7 @@ const hub = {
     if (req.method === 'GET' && (p === '/login' || PUBLIC_FILES.has(p))) return env.ASSETS.fetch(req); // /login is public/login.html (the assets handler serves it without the .html)
 
     // Hub health for the nightly sweep: read-only, with its own secret (HEALTH_TOKEN) so the scheduled task never holds the password
-    if (req.method === 'GET' && p === '/api/health' && env.HEALTH_TOKEN && same(String(q('k') || req.headers.get('x-health-token') || ''), env.HEALTH_TOKEN)) return json(await health(env));
+    if (req.method === 'GET' && p === '/api/health' && env.HEALTH_TOKEN && same(String(q('k') || req.headers.get('x-health-token') || ''), env.HEALTH_TOKEN)) return json(await health(env, true));
     // Whole site is private: page and data both need the password.
     if (!(await authed(req, env))) {
       if (p.startsWith('/api/')) return json({ error: 'Bad or missing admin token' }, 401);

@@ -322,6 +322,22 @@ ok('hprice: v2 within 3 points of the price: no bet', !decideNhl([], [lr({ v2: {
 const p3 = decideNhl([], [lr({ v2: { w: 75, o: 50 } })], '2026-10-28', at(40)).find(b => b.rule === 'hprice');
 ok('hprice: v2 higher than the price on EDM: bet DET at +190', p3 && p3.key === 'A' && p3.price === 190);
 ok('hprice: no opening price needed', !!decideNhl([], [lr({ px: { h: -230, a: 190, cl: at(40).toISOString() } })], '2026-10-28', at(40)).find(b => b.rule === 'hprice'));
+// Rested team against a back-to-back (Nov 8, 2026): lineup read, exactly one team tired, rested team priced 35-65%, not already moved 3+ for it
+const rc = (b2b, o = {}) => lr({ v2: { w: 50, o: 50 }, v5: { in: { b2b, bk: [0, 0] } }, px: { h: -110, a: -110, cl: at(40).toISOString() }, ...o }); // 50/50, v2 agrees: no hprice
+const rb = (b2b, o, n = at(40)) => decideNhl([], [rc(b2b, o)], '2026-10-28', n).filter(b => b.rule === 'hrest');
+const r1b = rb([0, 1]);
+ok('hrest: visitor on a back-to-back, home rested at 50%: bet the home moneyline', r1b.length === 1 && r1b[0].key === 'H' && r1b[0].price === -110 && /back-to-back/.test(r1b[0].why) && /DET/.test(r1b[0].why), JSON.stringify(r1b));
+const r2b = rb([1, 0]);
+ok('hrest: home on a back-to-back: bet the visitor', r2b.length === 1 && r2b[0].key === 'A');
+ok('hrest: both tired, neither tired, or rest unknown: no bet', !rb([1, 1]).length && !rb([0, 0]).length && !rb([0, null]).length && !rb(null).length);
+ok('hrest: no bet before the lineup read', !rb([0, 1], { px: { h: -110, a: -110 } }).length);
+ok('hrest: rested team priced over 65%: no bet', !rb([0, 1], { px: { h: -230, a: 190, cl: at(40).toISOString() } }).length);
+ok('hrest: rested team priced under 35%: no bet', !rb([1, 0], { px: { h: -230, a: 190, cl: at(40).toISOString() } }).length);
+// opening EDM -185 (~63%) -> now 50%: the visitor's chance rose ~13 points, so a rested visitor is skipped; a rested home team (fell) is still bet
+ok('hrest: rested team\'s chance already rose 3+ points since the opening price: no bet', !rb([1, 0], { px: { op: { h: -185, a: 154 }, h: -110, a: -110, cl: at(40).toISOString() } }).length);
+ok('hrest: rested team\'s chance fell since the opening price: still bet', rb([0, 1], { px: { op: { h: -185, a: 154 }, h: -110, a: -110, cl: at(40).toISOString() } }).length === 1);
+const both = decideNhl([], [rc([0, 1], { v2: { w: 40, o: 50 } })], '2026-10-28', at(40));
+ok('hrest: a game Price over v2 already bet on the moneyline is skipped (one moneyline position per game)', both.filter(b => 'HA'.includes(b.key)).length === 1 && both[0].rule === 'hprice', JSON.stringify(both.map(b => b.rule)));
 // settling hockey bets
 const hw = { ...p1 }, ho = { sport: 'nhl', rule: 'htotals', key: 'O', line: 6.5, price: -125, kickoff: KO, mins: 60, close: null, res: null };
 const fin = hc({ px: { ...hc().px, h: -250 } }); fin.final = { h: 4, a: 3, total: 6, last: 'SO' };

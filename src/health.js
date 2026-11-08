@@ -66,7 +66,12 @@ async function pinnSummary(pinnState, now) {
     return { last: p.last ? p.last.at : null, events: p.last ? p.last.n : null, error: e ? e.error : null, limited: !!(e && e.limited), until: e && e.until || null, requestsToday: p.requestsToday || 0 };
   } catch (err) { return { error: 'could not read the Pinnacle state' }; }
 }
-export async function hubHealth(env, { today, addDays, priced, readCredits, writesToday, writeLimit, saverAt, pinnState = null }, now = Date.now()) {
+// Hockey rest against the price (src/nhl.js restFinish via nhlTally): does DraftKings' moneyline already carry the back-to-back effect?
+// The Rested team rule (src/analyst.js hrest) leans on the answer. Reads the saved hockey days only; never writes.
+async function restSummary(nhlRest, env) {
+  try { const r = await nhlRest(env); return r && typeof r === 'object' ? r : null; } catch (err) { return { error: 'could not read the hockey rest check' }; }
+}
+export async function hubHealth(env, { today, addDays, priced, readCredits, writesToday, writeLimit, saverAt, pinnState = null, nhlRest = null }, now = Date.now()) {
   const t = today(), ds = [addDays(t, -1), t, addDays(t, 1)];
   const [sd, nd, errs, wt, doc] = await Promise.all([
     Promise.all(ds.map(d => env.HUB.get(`day:${d}`, 'json'))), Promise.all(ds.map(d => env.HUB.get(`nhl:day:${d}`, 'json'))),
@@ -84,6 +89,8 @@ export async function hubHealth(env, { today, addDays, priced, readCredits, writ
     // until `until`, then no Pinnacle price until it lifts), requests sent today as counted at this location. null without the key.
     pinnacle: env.PINNODDS_KEY && pinnState ? await pinnSummary(pinnState, now) : null,
     // only problems from the last 3 days: older entries are leagues ESPN stopped answering for long ago, not news
+    // hockey rest vs the price: { n, won, expected, llPrice, llRest, diff, se, verdict: early | missing | priced | overdone }; null when not wired
+    hockeyRest: nhlRest ? await restSummary(nhlRest, env) : null,
     syncProblems: Object.fromEntries(Object.entries(errs || {}).filter(([, e]) => e && e.at && now - Date.parse(e.at) <= 3 * 86400000)),
   };
 }

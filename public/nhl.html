@@ -471,6 +471,7 @@ function closeState(c) {
   if (ko - Date.now() <= 45 * 60000) return { k: 'due', t: px.cl ? `Closing read ${tmCT(px.cl)}${px.cby === 'you' ? ' (your update)' : ''} · tap to read again` : 'Pre-game read due now · tap to read', act: true };
   return { k: 'pend', t: `Pending · closing read from ~${tmCT(new Date(ko - 45 * 60000).toISOString())}` };
 }
+var MV_ALL = '\u0000all';
 function movesView(onlyId) {
   const rows = day.cards.filter(c => hockeyMove(c.px)).sort((a, b) => a.kickoff.localeCompare(b.kickoff)).map(c => ({ c, hm: hockeyMove(c.px), st: closeState(c) }));
   // Upcoming = puck hasn't dropped yet. It opens first; a day with none (a past day) opens on All unless you picked a filter.
@@ -493,6 +494,8 @@ function movesView(onlyId) {
       <table class="mvx"><tr><th></th><th>${faStamp(c.px.fa)}${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
       ${px.ts ? `<small class="mvn">Price last changed ${tmCT(px.ts)}</small>` : ''}</div>`;
   };
+  // MV_ALL: a lookup id -> that game's Movement card from one pass over the day (FlipCard.sync asks once per card on the Board)
+  if (onlyId === MV_ALL) { const by = new Map(rows.map(r => [r.c.id, r])); return id => { const r = by.get(id); return r ? card1(r) : ''; }; }
   if (onlyId) { const r = rows.find(x => x.c.id === onlyId); return r ? card1(r) : ''; } // one game's Movement card (the Board's % pop-up)
   const shown = rows.filter(r => inF(r, f));
   return seg + head + (shown.length ? shown.map(card1).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices come from ESPN as the schedule is checked.'}</div>`);
@@ -781,13 +784,15 @@ function renderDays() {
 function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
   document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'bgrid') updDots(); }, true);
-function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); if (window.FlipCard && S.tab === 'board' && day) FlipCard.sync(id => movesView(id)); }
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'top' ? topView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); if (window.FlipCard && S.tab === 'board' && day) FlipCard.sync(movesView(MV_ALL)); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
   render();
   loadTop().then(() => { if (S.tab === 'top') render(); });
   try { tally = await api('/api/nhl/tally'); status = await api('/api/nhl/status'); render(); } catch (e) { /* shown as Loading */ }
 }
+// keyboard: Enter or Space on a focused pick % does what a tap does (flip to the Movement card), not the card header around it (Nov 8, 2026)
+document.addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; const t = e.target; if (!t || !t.matches || !t.matches('[data-gomove]')) return; e.preventDefault(); e.stopPropagation(); t.click(); }, true);
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-gomove],[data-goboard],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-tf],[data-sel],[data-mvf],[data-getclose],[data-fin]'); if (!t) return;
   if (t.dataset.getclose) {

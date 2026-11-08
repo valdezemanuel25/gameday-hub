@@ -241,6 +241,17 @@ export const NHL_RULES = [
     pick: (c, hm, ctx) => { const q = ctx.ml; if (!q) return null; const p = 100 * q[0], gap = c.v2.w - p; if (Math.abs(gap) < 3) return null;
       const k = gap > 0 ? 'A' : 'H', pk = k === 'H' ? p : 100 - p, vk = k === 'H' ? c.v2.w : 100 - c.v2.w;
       return { key: k, price: k === 'H' ? c.px.h : c.px.a, why: `${hk(c, k)} priced ${r1(pk)}%, v2 ${r1(vk)}%: the price rates ${hk(c, k)} ${r1(pk - vk)} points higher. Goalies: ${ctx.gkText}` }; } },
+  // From Nov 8, 2026 (paper tracking). In 14,347 games (2012-2026, docs/hockey-rest-goalie-2026-10-28.md) a team on the second night of
+  // a back-to-back against a rested one costs about 6 points of win chance, and v2 / v4 cannot see rest. The open question is whether
+  // DraftKings already prices it (src/nhl.js restAdd / restFinish measure that on the Hub's own games). Bets only at the lineup read, only
+  // when the rested team is priced 35-65% and its chance has not already risen 3+ points since the opening price. Runs after Price over v2,
+  // so a game that rule already bet on the moneyline is skipped (one moneyline position per game).
+  { id: 'hrest', mk: ['1x2'], lineup: true, name: 'Rested team against a back-to-back', rule: 'At the lineup read: exactly one team is on the second night of a back-to-back; bet the rested team\'s moneyline when it is priced 35-65% (margin removed) and its chance has not already risen 3+ points since the opening price',
+    pick: (c, hm, ctx) => { const q = ctx.ml, b = ctx.b2b; if (!q || !b || b[0] == null || b[1] == null || (b[0] === 1) === (b[1] === 1)) return null;
+      const k = b[1] === 1 ? 'H' : 'A', pk = 100 * (k === 'H' ? q[0] : q[1]); if (pk < 35 || pk > 65) return null;
+      const m = hm && hm.ml, rose = m ? (k === 'H' ? m.d : -m.d) : 0; if (rose >= 3) return null;
+      const tired = k === 'H' ? 'A' : 'H';
+      return { key: k, price: k === 'H' ? c.px.h : c.px.a, why: `${hk(c, tired)} on the second night of a back-to-back, ${hk(c, k)} rested; ${hk(c, k)} priced ${r1(pk)}%${m ? ` (${rose >= 0 ? '+' : ''}${r1(rose)} since the opening price)` : ''}. Goalies: ${ctx.gkText}` }; } },
 ];
 export function decideNhl(items, cards, date, now = new Date(), benched = new Set()) {
   const held = new Set(items.map(b => `${b.date}|${b.league}|${b.gid}|${MKT(b.key)}`)), out = [];
@@ -248,7 +259,7 @@ export function decideNhl(items, cards, date, now = new Date(), benched = new Se
     if (!c || c.final || c.skipped || !c.px || !c.v2 || c.v2.w == null) continue;
     const hm = hockeyMove(c.px), ml = devig(c.px.h, c.px.a), mins = (new Date(c.kickoff).getTime() - now.getTime()) / 60000;
     const g = c.gk || {}, gs = s => (s === 'c' ? 'confirmed' : s === 'e' ? 'expected' : 'unknown'), both = g.h && g.a && g.h.st === 'c' && g.a.st === 'c';
-    const ctx = { ml, gkText: g.h || g.a ? `${hk(c, 'A')} ${(g.a && g.a.n) || '?'} (${gs(g.a && g.a.st)}), ${hk(c, 'H')} ${(g.h && g.h.n) || '?'} (${gs(g.h && g.h.st)})` : 'not listed' };
+    const ctx = { ml, b2b: c.v5 && c.v5.in && c.v5.in.b2b, gkText: g.h || g.a ? `${hk(c, 'A')} ${(g.a && g.a.n) || '?'} (${gs(g.a && g.a.st)}), ${hk(c, 'H')} ${(g.h && g.h.n) || '?'} (${gs(g.h && g.h.st)})` : 'not listed' };
     // lineup rules: only after a lineup read (c.px.cl), and once both goalies are confirmed or it is the last read before the lock
     const lineupOk = !!c.px.cl && (both || mins <= 30);
     for (const r of NHL_RULES) {

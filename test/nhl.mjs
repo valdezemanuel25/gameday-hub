@@ -261,5 +261,11 @@ import { ctxFor, isBackup, gkKey, gkResolve, withGk, adj5, B2B_OWN, B2B_OPP, BAC
   const R2 = { n: 0, llP: 0, llA: 0, d: 0, d2: 0, won: 0, exp: 0 }; for (let i = 0; i < 100; i++) restAdd(R2, g(i, i % 2 === 0));
   ok('rest: winning half of even games over 100 is no difference yet (the shift is small next to the noise)', restFinish(R2).verdict === 'priced' && restFinish(R2).diff > 0);
   const R3 = { n: 0, llP: 0, llA: 0, d: 0, d2: 0, won: 0, exp: 0 }; for (let i = 0; i < REST_MIN - 1; i++) restAdd(R3, g(i, true)); ok('rest: too few games is too early', restFinish(R3).verdict === 'early'); }
+{ // tools/export-nhl-history.mjs: one row per graded game with a closing moneyline (Nov 8, 2026)
+  const { rowsOf } = await import('../tools/export-nhl-history.mjs');
+  const card = { id: 'g1', hAbbr: 'EDM', aAbbr: 'DET', kickoff: '2026-11-01T01:00:00Z', final: { h: 3, a: 2, last: 'OT' }, v2: { w: 60, o: 50 }, v5: { w: 62, o: 51, in: { b2b: [0, 1], bk: [0, 1] } },
+    px: { op: { h: -150, a: 125 }, h: -170, a: 140, tl: 6.5, to: -110, tu: -110, opt: { tl: 6.5, to: -105, tu: -115 }, cl: '2026-11-01T00:20:00Z' }, gk: { h: { n: 'Skinner' }, a: { n: 'Talbot' } } };
+  const rows = rowsOf('2026-10-31', [card, { ...card, id: 'g2', final: null }, { ...card, id: 'g3', px: null }, { ...card, id: 'g4', skipped: true }]);
+  ok('history export: graded games with a closing price only, with open / close, totals, result, rest and goalies', rows.length === 1 && rows[0].open.h === -150 && rows[0].close.h === -170 && rows[0].totalOpen.o === -105 && rows[0].final.last === 'OT' && rows[0].b2b.join() === '0,1' && rows[0].backup[1] === 1 && rows[0].goalies.a === 'Talbot', JSON.stringify(rows)); }
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);

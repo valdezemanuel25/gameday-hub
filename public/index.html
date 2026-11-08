@@ -1247,8 +1247,9 @@ const NPW = {}; // game id -> the "No price" check's answer { kind, title, detai
 // Only games that have a Movement card (a price, or a priced league with no price yet) get it.
 const hasMv = c => !!((c.odds && moveOf(c.odds)) || (PRICED_LG.has(c.league) && (c.v2 || c.v4)));
 const pctGo = (c, p) => hasMv(c) ? `<span class="p pgo" role="button" tabindex="0" data-gomove="${esc(c.id)}" title="Flip to this game's Movement card">${p}%<i>›</i></span>` : `<span class="p">${p}%</span>`;
+var MV_ALL = '\u0000all';
 function movesView(onlyId) {
-  if (!day || !day.cards) return onlyId ? '' : `<div class="empty">Loading…</div>`;
+  if (!day || !day.cards) return onlyId === MV_ALL ? () => '' : onlyId ? '' : `<div class="empty">Loading…</div>`;
   const priced = day.cards.filter(c => c.odds && moveOf(c.odds)).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)), unpriced = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).length;
   // A game in a priced league with no home / draw / away price gets its own card too: red outline and a "No price" signal (npCard)
   const np = day.cards.filter(c => PRICED_LG.has(c.league) && (c.v2 || c.v4) && !(c.odds && moveOf(c.odds))).map(c => ({ c, np: true }));
@@ -1296,6 +1297,9 @@ function movesView(onlyId) {
       ${pinnNote(c, o)}
       ${o.ts ? `<small class="mvn">Price last changed ${tmCT(o.ts)}</small>` : ''}</div>`;
   };
+  // MV_ALL: a lookup id -> that game's Movement card, built from one pass over the day (FlipCard.sync asks for every card on the Board;
+  // before Nov 8, 2026 each ask rebuilt and sorted the whole day's rows)
+  if (onlyId === MV_ALL) { const by = new Map(rows.map(r => [r.c.id, r])); return id => { const r = by.get(id); return r ? card(r) : ''; }; }
   if (onlyId) { const r = rows.find(x => x.c.id === onlyId); return r ? card(r) : ''; } // one game's Movement card (the Board's pick % pop-up)
   return oddsBar() + seg + head + (shown.length ? shown.map(card).join('') : `<div class="empty">${rows.length ? 'Nothing in this filter.' : 'No priced games on this day yet. Prices are read for the first divisions and the two European cups once a day is analyzed.'}</div>`);
 }
@@ -1984,7 +1988,7 @@ function render() {
   renderHeader();
   $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : S.tab === 'moves' ? movesView() : S.tab === 'analyst' ? analystView() : board();
   updSDots();
-  if (window.FlipCard && S.tab === 'board') FlipCard.sync(id => movesView(id)); // a card flipped to its Movement side stays flipped
+  if (window.FlipCard && S.tab === 'board') FlipCard.sync(movesView(MV_ALL)); // a card flipped to its Movement side stays flipped
 }
 async function loadCounts() {
   const ds = [-2, -1, 0, 1, 2].map(o => addDays(S.date, o)).filter(d => counts[d] == null || d === S.date);
@@ -2054,6 +2058,8 @@ async function runAll(kind) {
 }
 
 /* ---------- events ---------- */
+// keyboard: Enter or Space on a focused pick % does what a tap does (flip to the Movement card), not the card header around it (Nov 8, 2026)
+document.addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; const t = e.target; if (!t || !t.matches || !t.matches('[data-gomove]')) return; e.preventDefault(); e.stopPropagation(); t.click(); }, true);
 document.addEventListener('click', async e => {
   const edl = e.target.closest('[data-edlong]'); if (edl) { S.edLong = !S.edLong; return render(); }
   const mvf = e.target.closest('[data-mvf]'); if (mvf) { S.mvf = mvf.dataset.mvf; return render(); }
