@@ -1,70 +1,38 @@
 {
-  "updated": "2026-11-07T11:08:28Z",
+  "updated": "2026-11-08T11:08:33Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-07",
-      "title": "Cybertruck’s sunset",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "24,579",
-          "change": 1.09
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,377",
-          "change": 0.32
-        },
-        {
-          "label": "Dow",
-          "value": "51,286",
-          "change": -0.46
-        },
-        {
-          "label": "10-yr",
-          "value": "4.859%",
-          "change": 2,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$75,912",
-          "change": 0.43
-        },
-        {
-          "label": "Nvidia",
-          "value": "$186.64",
-          "change": 2.77
-        }
-      ],
+      "date": "2026-11-08",
+      "title": "Art Brew",
+      "markets": [],
       "takeaways": [
         {
-          "h": "Markets",
-          "t": "The Nasdaq bounced 1.09% a day after its worst session in 18 months, as Nvidia, AMD and Intel clawed back losses; the Dow slipped 0.46%."
+          "h": "Auction rebound",
+          "t": "Christie's, Sotheby's and Phillips sales hit $6.8 billion in the first half, up 70% year over year, after a 2022-2025 slump."
         },
         {
-          "h": "Cybertruck",
-          "t": "Tesla will end Cybertruck production at its Texas plant by mid-2027 to make room for the Cybercab, after only about 73,000 sold versus Musk's 250,000-a-year goal."
+          "h": "Record prices",
+          "t": "A Jackson Pollock sold for $181.2 million and a Rothko for $98.4 million, while Art Basel's median disclosed sale price nearly tripled to $287,500."
         },
         {
-          "h": "Sales slide",
-          "t": "US Cybertruck sales fell to 20,237 in 2025 from 38,965 in 2024 and are down another 28% this year."
+          "h": "Big Nov. 18 sale",
+          "t": "Sotheby's will auction a 12-painting collection in New York expected to bring $450+ million, led by a Van Gogh projected at $180 million or more."
         },
         {
-          "h": "Jobs",
-          "t": "The US added 165,000 jobs in October, beating estimates, with unemployment edging down to 4.1% and earlier months revised up."
+          "h": "Gallery economics",
+          "t": "A small-to-midsize gallery may take in about $295,000 a month against $91,000 in costs, with commissions of 40%-60% on sales."
         },
         {
-          "h": "Fox and Roku",
-          "t": "Fox completed its $22 billion acquisition of Roku and pledged to keep the platform open."
+          "h": "Art as investment",
+          "t": "Art has trailed the S&P 500 for much of three decades with bond-like returns and more risk; experts say treat it as a passion."
         },
         {
-          "h": "Anthropic IPO",
-          "t": "Investors are reportedly skeptical that Anthropic merits a $1.5 trillion valuation in its upcoming IPO."
+          "h": "Stolen art",
+          "t": "Fewer than 10% of stolen works are recovered, with some estimates at 2%-3%."
         }
       ],
-      "note": "Market numbers are the Nov 6 close."
+      "note": "No market data in this edition; the Sunday issue was a themed special."
     },
     {
       "source": "Brew Markets",
