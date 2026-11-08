@@ -168,3 +168,12 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * Ratings are rebuilt about daily by the spare cron slots (3 warm passes, a few ms) and saved as `rat:cup`. `POST /api/ratings?league=cup` forces a rebuild.
 * Over 2.5 / both-score are the raw model numbers (no pull toward the base rate: it tested slightly better raw on cups).
 * Test (settings chosen on Nov 2024-Aug 2025 cup games, scored on Sep 2025-Oct 13 2026): on the 127 games v2 can also predict, log-loss 0.918 vs 0.999-1.014 for v2 (about 2.3 standard errors better); on all 380 covered games 0.941 vs 1.016 for always guessing the base rates. Over/both-score gain is small. Unknown club names show in the analyze response's debug list as `v4 cup: unknown club "..."`.
+
+## NHL Trends tab (Nov 8, 2026)
+
+* **The NHL page's tabs are now Board, Movement, Trends, Results (then Model bets and Status).** The NHL Top tab is gone: Trends replaces it. Soccer is unchanged and has no Trends tab yet.
+* `src/trends.js` counts five situations in the days the Hub has saved (road team on a back-to-back against a rested home team, home favorite at 60%+, slight home favorite at 50-55%, Over when a team is on a back-to-back, Over in the first game of the day). `GET /api/nhl/trends?date=YYYY-MM-DD` returns each situation's record and a read on every game of that day.
+* Each record is judged against the price, not against 50%: expected wins come from the margin-free moneyline (the base rate when there is no price), and z = (wins - expected) / sqrt(sum of p(1-p)). Lean = |z| 1.5+ on 20+ games, Watch = |z| 0.8+, Noise = less than that or under 10 games. "With" means the spot did better than its price, "against" worse.
+* The game read adds up the points of the situations a game is in (Lean 2, Watch 1, pointing the other way when the record is against), then +1 when the Hub's winner or total model (v4, else v2) agrees, +1 or -1 when the price moved 3+ points with or against it. 4+ is Strong, 3 Medium, 1-2 Weak. A model on the other side is a Conflict (no play).
+* It is a read of past results only. It does not change any pick, model or tracked bet. Rest is counted from saved days only, so a team's first saved game has unknown rest. Games tied at the earliest kickoff all count as first games of the day.
+* Test: `node test/trends.mjs`.

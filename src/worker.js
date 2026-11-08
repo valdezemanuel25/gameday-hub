@@ -24,6 +24,7 @@ import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { homeSummary } from './home.js';
 import { hubHealth } from './health.js';
+import { buildTrends } from './trends.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -1158,6 +1159,12 @@ const hub = {
       return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'content-disposition': `attachment; filename="gameday-hub-hockey-${new Date().toISOString().slice(0, 10)}.json"`, 'cache-control': 'no-store' } });
     }
     if (p === '/api/nhl/tally') return json(await nhlTally(env));
+    if (p === '/api/nhl/trends') { // Trends tab: how each situation has done over every saved hockey day, and a read on each game of the date
+      const names = []; let cursor;
+      do { const r = await env.HUB.list({ prefix: 'nhl:day:', cursor }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
+      const days = (await Promise.all(names.sort().map(n => env.HUB.get(n, 'json')))).filter(Boolean);
+      return json(buildTrends(days, q('date') || today()));
+    }
     if (req.method === 'POST' && p === '/api/nhl/line') { try { const b = await req.json(); return json(await nhlSetLine(env, String(b.date || ''), String(b.id || ''), b.line, new Date())); } catch (e) { return json({ error: `Line: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/status') return json(await nhlStatus(env));
     if (p === '/api/nhl/gk-check') { try { return json(await gkCheck(env, String(url.searchParams.get('date') || today()))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
