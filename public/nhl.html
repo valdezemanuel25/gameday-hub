@@ -446,10 +446,7 @@ const imp = o => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
 function trendsView() {
   if (!trends) return `<div class="empty">Loading…</div>`;
   const cards = (trends.cards || []).slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
-  const rows = (trends.situations || []).map(x => `<tr><td>${esc(x.label)}<small>${x.kind === 'ou' ? 'Over' : esc(x.who)} · ${x.exp != null ? 'price expected ' + x.exp + ' wins' : ''}</small></td><td>${x.w}-${x.l}<small>n=${x.n}</small></td><td><span class="chp ${x.tag === 'lean' ? 's' : x.tag === 'watch' ? 'sp' : 'n'}">${TREND_TAG[x.tag]}</span>${x.tag !== 'noise' ? `<small>${x.dir === 'with' ? 'better' : 'worse'} than its price</small>` : ''}</td></tr>`).join('');
-  return `<div class="pad">${cards.length ? cards.map(trendCard).join('') : `<div class="empty">No NHL games saved for this day yet.</div>`}</div>
-  <h4>Situations</h4><table class="cal"><tr><th>${trends.games} graded games, ${trends.days} days</th><th>Record</th><th>Read</th></tr>${rows}</table>
-  <div class="nt">n is how many graded games were in that spot. The record is how the first team named (or the Over) did. Each record is judged against what the price expected, not against 50%. Lean needs 20+ games and a clear gap, Watch is a smaller gap, Noise is too few games or no gap. A game read adds up the situations it is in, then checks your winner and total models and how the price moved. It is a read of past results, not a model bet, and it changes no pick.</div>`;
+  return `<div class="pad">${cards.length ? cards.map(trendCard).join('') : `<div class="empty">No NHL games saved for this day yet.</div>`}</div>`;
 }
 // The board tile's move line: each price that moved 3+ points since the opening (moneyline: the side whose chance rose).
 function hotLine(c) {
@@ -619,6 +616,12 @@ function calView() {
   const rows = row('v2', 'v2') + row('v4', 'v4');
   return rows ? `<h4>Are the percentages honest?</h4><table class="cal"><tr><th></th><th>It said</th><th>It won</th></tr>${rows}</table><div class="nt">Winner picks grouped by how sure the model was. When "said" and "won" are far apart the percentage is not telling you much yet. Small groups swing a lot.</div>` : '';
 }
+function trendSituations() {
+  if (!trends) return '';
+  const rows = (trends.situations || []).map(x => `<tr><td>${esc(x.label)}<small>${x.kind === 'ou' ? 'Over' : esc(x.who)} · ${x.exp != null ? 'price expected ' + x.exp + ' wins' : ''}</small></td><td>${x.w}-${x.l}<small>n=${x.n}</small></td><td><span class="chp ${x.tag === 'lean' ? 's' : x.tag === 'watch' ? 'sp' : 'n'}">${TREND_TAG[x.tag]}</span>${x.tag !== 'noise' ? `<small>${x.dir === 'with' ? 'better' : 'worse'} than its price</small>` : ''}</td></tr>`).join('');
+  return `<h4>Situations</h4><table class="cal"><tr><th>${trends.games} graded games, ${trends.days} days</th><th>Record</th><th>Read</th></tr>${rows}</table>
+  <div class="nt">n is how many graded games were in that spot. The record is how the first team named (or the Over) did. Each record is judged against what the price expected, not against 50%. Lean needs 20+ games and a clear gap, Watch is a smaller gap, Noise is too few games or no gap. A game read adds up the situations it is in, then checks your winner and total models and how the price moved. It is a read of past results, not a model bet, and it changes no pick.</div>`;
+}
 // Results tab: how the Trends reads have done on the saved games (src/trends.js track)
 function trendTrack() {
   if (!trends) return '';
@@ -639,7 +642,7 @@ function results() {
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
   <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. ± is the 95% margin: the true rate probably sits within that many points, and it shrinks as games pile up. Over/Under is graded only at the game's DraftKings line: ${tally.lined || 0} of ${tally.graded} graded games had one, and the ${tally.graded - (tally.lined || 0)} without a line are left out of the Over/Under row. \"Always pick home\" is the baseline a winner pick has to beat. A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
   ${(Mv => Mv && (Mv.ml.n || Mv.ou.n) ? `<div class="nt">Price moves (opening → close): the winner went the way of the moneyline move in ${Mv.ml.n ? Math.round(100 * Mv.ml.follow / Mv.ml.n) + '% of ' + Mv.ml.n : '–'} games${Mv.ml.big ? ` (big moves ${Math.round(100 * Mv.ml.bigFollow / Mv.ml.big)}% of ${Mv.ml.big})` : ''}; the total went the way of its move in ${Mv.ou.n ? Math.round(100 * Mv.ou.follow / Mv.ou.n) + '% of ' + Mv.ou.n : '–'}${Mv.ou.big ? ` (big moves ${Math.round(100 * Mv.ou.bigFollow / Mv.ou.big)}% of ${Mv.ou.big})` : ''}. See the Movement tab for each game.</div>` : '')(tally.moves)}
-  ${v5View()}${restView()}${calView()}${trendTrack()}
+  ${v5View()}${restView()}${calView()}${trendSituations()}${trendTrack()}
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
     const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${r.ln ? `${m.o >= 50 ? 'Over' : 'Under'} ${r.ln.v}${mark(g && g.ou)}` : '<small>no line</small>'}` : '–';
     const c = { h: r.hAbbr, a: r.aAbbr };
