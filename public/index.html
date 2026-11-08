@@ -486,6 +486,33 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .mbx{background:rgba(4,5,4,.55);-webkit-backdrop-filter:blur(1.2px);backdrop-filter:blur(1.2px);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:2px 14px}
 .mbx>.mbr:first-child{border-top:0}
 .mvx th .fa{display:block;font-size:9.5px;font-weight:500;color:var(--faint);letter-spacing:0;text-transform:none;white-space:nowrap;margin-bottom:1px}
+
+/* Trends tab (src/trendssoccer.js) */
+.trd{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+.trd .trh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;font-size:11px;font-weight:700;color:var(--acc-hi);letter-spacing:.04em;text-transform:uppercase}
+.trd .trh small{font-size:10.5px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
+.trd .ml2{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.trd .mt{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;min-width:0}
+.trd .mt.hi{border-color:rgba(var(--acc-rgb),.45)}
+.trd .mt .lb{font-size:11px;color:var(--faint);font-weight:600}
+.trd .mt .w b{font-size:16px}
+.trd .mt .o{display:flex;flex-direction:column;gap:3px;align-items:flex-start;margin-top:6px}
+.trd .mt .o .l2{font-size:11.5px;color:var(--dim);font-weight:500}
+.chp{display:inline-block;font-size:10.5px;font-weight:750;padding:2px 8px;border-radius:99px;border:1px solid var(--line);letter-spacing:.02em;color:var(--faint)}
+.chp.sp{color:#ffc247;border-color:rgba(255,194,71,.5);background:rgba(255,194,71,.1)}
+.chp.b{color:#ff7b6b;border-color:rgba(255,123,107,.5);background:rgba(255,123,107,.08)}
+.xh .cfx.sp{color:#ffc247;border-color:rgba(255,194,71,.5);background:rgba(255,194,71,.1)}
+.evl{margin-top:8px;display:flex;flex-direction:column}
+.evr{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:6px;padding:5px 0;border-top:1px solid var(--line);font-size:12px;color:var(--dim);align-items:baseline}
+.evr:first-child{border-top:0}.evr .y{color:var(--grass)}
+.evr em{font-style:normal;color:var(--faint);font-size:11px;text-align:right}
+.chs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.trd .gc{font-size:11px;font-weight:650;padding:3px 9px;border-radius:99px;border:1px solid var(--line)}.trd .gc.c{color:var(--acc-hi);border-color:rgba(var(--acc-rgb),.4)}.trd .gc.b{color:#ff7b6b;border-color:rgba(255,123,107,.5)}
+.trd .pxl{font-size:11.5px;color:var(--faint);line-height:1.4}
+.trk{margin:18px 2px 8px;font-size:11px;font-weight:700;color:var(--acc-hi);letter-spacing:.04em;text-transform:uppercase}
+.trt{width:100%;border-collapse:collapse;font-size:12.5px;color:var(--ink)}.trt th{text-align:left;font-size:10.5px;color:var(--faint);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}.trt td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}.trt td small{display:block;color:var(--faint);font-size:11px;margin-top:2px}
+.trn{margin:10px 2px;font-size:11.5px;color:var(--faint);line-height:1.45}
+.trw .lnc{color:var(--dim);font-weight:650;margin-left:6px}
 </style>
 </head>
 <body>
@@ -509,7 +536,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const OUT = { H: 'home win', D: 'draw', A: 'away win' };
 const TZ = 'America/Chicago';
-let cfg = null, day = { cards: [] }, tally = null, cands = [];
+let cfg = null, day = { cards: [] }, tally = null, cands = [], trendsS = null; // trendsS: the Trends tab's data for the open day
 const S = { date: '', tab: 'board', league: 'all', top: false, open: null, fin: false, tm: 'all', more: {} };
 try { const f = JSON.parse(localStorage.getItem('hubFilter') || 'null'); if (f) { S.league = f.league || 'all'; S.top = !!f.top; if (f.tm) S.tm = f.tm; } } catch (e) {}
 const keepFilter = () => { try { localStorage.setItem('hubFilter', JSON.stringify({ league: S.league, top: S.top, tm: S.tm })); } catch (e) {} };
@@ -1685,6 +1712,38 @@ function anSharp() {
   return `<div class="small" style="margin:6px 18px 0">${t}<br>${btn}</div>`;
 }
 let AN_MK = 'all', AN_SET = '1'; // soccer: which rule set the tab shows (Analyst 1 = the original rules, Analyst 2 = the new rules)
+// ---------- Trends (src/trendssoccer.js): the two situations that held on past European seasons, and a read on each game of the day that is in one ----------
+async function loadTrends() { const d = S.date; trendsS = null; try { const t = await api('/api/trends?date=' + d); if (d === S.date) trendsS = t; } catch (e) { trendsS = { cards: [], situations: [], live: [], games: 0, days: 0, err: true }; } if (S.tab === 'trends') render(); }
+const trAm = o => (o == null ? '' : (o > 0 ? '+' : '') + o);
+function trendRow(r) {
+  const h = r.hist, lv = r.live && r.live.n >= 5 ? ` · this Hub ${r.live.w}/${r.live.n}` : '';
+  return `<div class="evr"><span class="y">✓</span><span class="et">${esc(r.label)}${r.streak ? ` <small>(${r.streak} straight)</small>` : r.moved ? ` <small>(+${r.moved} pts)</small>` : ''}</span><em>${h.rate}% vs ${h.priced}% priced · n=${h.n}${lv}</em></div>`;
+}
+function trendTile(r) {
+  const c = r.lab === 'Conflict' ? 'b' : 'sp';
+  return `<div class="mt hi"><div class="lb">${r.market === 'D' ? 'Result' : 'Total'}</div><div class="w"><b>${esc(r.pick)}${r.price != null ? ' ' + trAm(r.price) : ''}</b></div><div class="o"><b class="chp ${c}">${esc(r.lab)}</b><span class="l2">${r.breakeven != null ? 'breakeven ' + r.breakeven + '%' : 'no price yet'}</span></div></div>`;
+}
+function trendCardS(g) {
+  const worst = g.reads.some(r => r.lab === 'Conflict') && g.reads.every(r => r.lab === 'Conflict') ? 'Conflict' : 'Watch';
+  const chips = g.reads.filter(r => r.model).map(r => `<span class="gc ${r.modelOk === false ? 'b' : 'c'}">${r.market === 'D' ? 'Draw' : 'Over'} model ${esc(r.model)}</span>`).join('');
+  const rk = x => x ? `${ord(x)}` : '';
+  return `<div class="m x"><div class="xh"><span>${esc(g.leagueName)}${g.line != null ? ` <span class="lnc">O/U ${g.line}</span>` : ''}</span><span class="cfx${worst === 'Watch' ? ' sp' : ''}">${worst}</span></div>
+    <div class="xt"><div class="xk">${xcrest(g.home, false, g.hId)}<div><b>${esc(g.home)}</b><small>${rk(g.hRank)}</small></div></div><div class="xm">vs<br>${esc(g.ko)}</div><div class="xk r">${xcrest(g.away, false, g.aId)}<div><b>${esc(g.away)}</b><small>${rk(g.aRank)}</small></div></div></div>
+    <div class="trd"><div class="trh"><span>Trend read</span><small>${g.tested ? 'from past seasons' : 'untested in this league'}</small></div>
+      <div class="ml2">${g.reads.map(trendTile).join('')}</div><div class="evl">${g.reads.map(trendRow).join('')}</div>${chips ? `<div class="chs">${chips}</div>` : ''}
+      ${g.tested ? '' : `<div class="pxl" style="margin-top:8px">Found and checked on seven European leagues (EPL, Championship, Bundesliga, Ligue 1, Serie A, Eredivisie, La Liga). ${esc(g.leagueName)} is not in that history.</div>`}</div></div>`;
+}
+function trendsView() {
+  if (!trendsS) { if (!day || !day.cards) return `<div class="empty">Loading…</div>`; loadTrendsOnce(); return `<div class="empty">Loading…</div>`; }
+  const cards = (trendsS.cards || []).slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const lg = [...new Map(cards.map(c => [c.league, c.leagueName])).entries()];
+  const shown = S.league === 'all' ? cards : cards.filter(c => { const k = day.cards.find(x => x.id === c.id); return k && k.leagueKey === S.league; });
+  const other = trendsS.games - cards.length;
+  return `<div class="trw">${shown.length ? shown.map(trendCardS).join('') : `<div class="empty">${trendsS.err ? 'Could not load the Trends.' : 'No game on this day is in a trend situation.'}</div>`}${other > 0 ? `<div class="trn">${other} other game${other === 1 ? '' : 's'} on this day ${other === 1 ? 'is' : 'are'} in no trend situation.</div>` : ''}</div>
+  <div class="trk">The two situations</div><table class="trt"><tr><th>Found on past seasons</th><th>Past matches</th><th>In this Hub</th></tr>${(trendsS.situations || []).map(x => { const lv = (trendsS.live || []).find(l => l.id === x.id) || { w: 0, n: 0 }; return `<tr><td>${esc(x.label)}<small>${esc(x.pick)}</small></td><td>${x.hist.rate}%<small>vs ${x.hist.priced}% priced · n=${x.hist.n}</small></td><td>${lv.n ? lv.w + '-' + (lv.n - lv.w) : '–'}<small>${lv.n ? 'n=' + lv.n : 'none yet'}</small></td></tr>`; }).join('')}</table>
+  <div class="trn">Both were found on 2023-25 matches of seven European leagues, then held on 2025-26 and this season, at closing prices. They are small edges (about 5 points over the price) from one scan each, so both are Watch, not bets. "In this Hub" is how the pick has done in the games saved here so far. A model on the other side of the price makes it a Conflict. It is a read of past results and changes no pick.</div>`;
+}
+let trTry = null; function loadTrendsOnce() { if (trTry === S.date) return; trTry = S.date; loadTrends(); }
 function analystView() {
   if (!AN) return `<div class="empty">Loading…</div>`;
   if (AN.error) return `<div class="empty">${esc(AN.error)}</div>`;
@@ -1977,7 +2036,7 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['analyst', 'Analyst'], ['results', 'Results'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['analyst', 'Analyst'], ['trends', 'Trends'], ['results', 'Results'], ['status', 'Status'], ['assign', 'Assign'], ['bets', 'Bets'], ['mbets', 'Model bets']] /* Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function updSDots() { const g = document.getElementById('sgrid'), ds = document.querySelectorAll('.sdots i'); if (!g || !ds.length) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2);
@@ -1986,7 +2045,7 @@ document.addEventListener('scroll', e => { if (e.target && e.target.id === 'sgri
 function render() {
   keepFilter();
   renderHeader();
-  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : S.tab === 'moves' ? movesView() : S.tab === 'analyst' ? analystView() : board();
+  $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'results' ? results() : S.tab === 'status' ? statusView() : S.tab === 'assign' ? asgView() : S.tab === 'bets' ? betsView() : S.tab === 'mbets' ? mbetsView() : S.tab === 'edges' ? edgesView() : S.tab === 'moves' ? movesView() : S.tab === 'analyst' ? analystView() : S.tab === 'trends' ? trendsView() : board();
   updSDots();
   if (window.FlipCard && S.tab === 'board') FlipCard.sync(movesView(MV_ALL)); // a card flipped to its Movement side stays flipped
 }
@@ -2194,7 +2253,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
-    if (S.tab === 'status') { pushCheck(); stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab === 'analyst') { render(); await loadAnalyst(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
+    if (S.tab === 'status') { pushCheck(); stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab === 'analyst') { render(); await loadAnalyst(); } else if (S.tab === 'trends') { render(); await loadTrends(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
   if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
   if (t.classList.contains('hd') && t.closest('#sdt')) { // tapping the opened game's header closes it and returns to the grid

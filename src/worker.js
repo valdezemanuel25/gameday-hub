@@ -25,6 +25,7 @@ import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.
 import { homeSummary } from './home.js';
 import { hubHealth } from './health.js';
 import { buildTrends } from './trends.js';
+import { buildSoccerTrends } from './trendssoccer.js';
 import { nhlStep, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 
@@ -1108,6 +1109,12 @@ const hub = {
     if (p === '/api/day') {
       const date = q('date') || today();
       return json((await env.HUB.get(`day:${date}`, 'json')) || { date, cards: [] });
+    }
+    if (p === '/api/trends') { // soccer Trends tab: the two situations, and a read on each game of the date that is in one
+      const names = []; let cursor;
+      do { const r = await env.HUB.list({ prefix: 'day:', cursor }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
+      const days = (await Promise.all(names.sort().map(n => env.HUB.get(n, 'json')))).filter(Boolean);
+      return json(buildSoccerTrends(days, q('date') || today()));
     }
     if (p === '/api/tally') return json(await tally(env));
     if (p === '/api/brew') { // newsletter summaries: public/brew.json is rewritten daily by a scheduled task

@@ -180,3 +180,11 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * The Results tab carries the Situations table (each situation's record against its price) and "How the Trends reads have done" (trend vs model). The Trends tab itself shows only the game cards.
 * "How the Trends reads have done" (`track` in `src/trends.js`), shown on the Results tab, replays every saved graded game through the reads and shows how often the trend pick won, and the model's pick where it disagreed (moneyline and total), plus underdog and favorite picks with 2+ trends. It is in-sample: the situations were found in these same games.
 * Test: `node test/trends.mjs`.
+
+## Soccer Trends tab (Nov 8, 2026)
+
+* **A Trends tab sits right of Analyst** on the soccer page (Board, Movement, Analyst, Trends, Results, ...). Club logos are the same as on the Board. It lists only the games of the day that are in a trend situation, with a count of the rest; the league chips filter it.
+* `src/trendssoccer.js` holds two situations that were found on 2023-25 matches of seven European leagues (football-data.co.uk, closing prices) and then held on 2025-26 and this season: **the road team has lost its last 3+ league games -> the Draw** (472 matches: 29% drew, the price expected 24%) and **the home-win price shortened 3+ points since the open -> Over 2.5** (945 matches: 61% went Over, the price expected 56%). Both are Watch: small edges from one scan each, so a read, never a bet. The scan tested about 2,500 combinations and most others reversed on the later seasons.
+* A game's read is Watch; a v4 chance for the pick that is below the price makes it a Conflict. Streaks count only the Hub's saved domestic league games. Liga MX, La Liga 2, 2. Bundesliga and the other leagues outside the seven are read the same way and marked "untested in this league".
+* "In this Hub" on the tab is how each pick has done in the saved games so far (kept beside the past-seasons record, so a gap shows early). `GET /api/trends?date=YYYY-MM-DD` is the data.
+* It changes no pick, model or tracked bet. Test: `node test/trendssoccer.mjs`.
