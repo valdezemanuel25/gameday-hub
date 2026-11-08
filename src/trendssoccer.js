@@ -62,9 +62,9 @@ export function gameReads(ctx, date) {
       const sp = inSpot(s, c); if (!sp) continue;
       const v = c.v4 || c.v2, mp = v ? (s.market === 'D' ? v.p && v.p[1] : v.over) : null;
       const modelOk = mp == null || sp.priced == null ? null : mp >= Math.round(sp.priced * 100);
-      reads.push({ id: s.id, market: s.market, label: s.label, pick: s.pick, price: sp.price, breakeven: sp.breakeven, hist: s.hist, live: lv[s.id], moved: sp.moved ?? null, modelOk, model: mp == null || sp.priced == null ? null : `${mp}% vs ${Math.round(sp.priced * 100)}% price`, lab: modelOk === false ? 'Conflict' : 'Watch', streak: s.id === 'roadloss3' ? c.al : null });
+      reads.push({ won: pickWon(s, c), id: s.id, market: s.market, label: s.label, pick: s.pick, price: sp.price, breakeven: sp.breakeven, hist: s.hist, live: lv[s.id], moved: sp.moved ?? null, modelOk, model: mp == null || sp.priced == null ? null : `${mp}% vs ${Math.round(sp.priced * 100)}% price`, lab: modelOk === false ? 'Conflict' : 'Watch', streak: s.id === 'roadloss3' ? c.al : null });
     }
-    return { id: c.id, league: c.league, leagueName: c.leagueName || c.league, kickoff: c.kickoff, ko: c.ko, home: c.home, away: c.away, hId: c.hId, aId: c.aId, hRank: c.hRank, aRank: c.aRank, line: c.odds && c.odds.tl != null ? c.odds.tl : null, tested: TESTED.has(c.league), reads };
+    return { id: c.id, league: c.league, leagueName: c.leagueName || c.league, kickoff: c.kickoff, ko: c.ko, home: c.home, away: c.away, hId: c.hId, aId: c.aId, hRank: c.hRank, aRank: c.aRank, final: c.final || null, line: c.odds && c.odds.tl != null ? c.odds.tl : null, tested: TESTED.has(c.league), reads };
   }).filter(g => g.reads.length);
 }
 export function buildSoccerTrends(days, date) {

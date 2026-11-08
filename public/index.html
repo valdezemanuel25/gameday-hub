@@ -491,7 +491,7 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .trd{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
 .trd .trh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;font-size:11px;font-weight:700;color:var(--acc-hi);letter-spacing:.04em;text-transform:uppercase}
 .trd .trh small{font-size:10.5px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
-.trd .ml2{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.trd .ml2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .trd .mt{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;min-width:0}
 .trd .mt.hi{border-color:rgba(var(--acc-rgb),.45)}
 .trd .mt .lb{font-size:11px;color:var(--faint);font-weight:600}
@@ -500,18 +500,19 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .trd .mt .o .l2{font-size:11.5px;color:var(--dim);font-weight:500}
 .chp{display:inline-block;font-size:10.5px;font-weight:750;padding:2px 8px;border-radius:99px;border:1px solid var(--line);letter-spacing:.02em;color:var(--faint)}
 .chp.sp{color:#ffc247;border-color:rgba(255,194,71,.5);background:rgba(255,194,71,.1)}
+.chp.ok{color:var(--acc-hi);border-color:rgba(var(--acc-rgb),.5);background:rgba(var(--acc-rgb),.12)}
 .chp.b{color:#ff7b6b;border-color:rgba(255,123,107,.5);background:rgba(255,123,107,.08)}
 .xh .cfx.sp{color:#ffc247;border-color:rgba(255,194,71,.5);background:rgba(255,194,71,.1)}
 .evl{margin-top:8px;display:flex;flex-direction:column}
-.evr{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:6px;padding:5px 0;border-top:1px solid var(--line);font-size:12px;color:var(--dim);align-items:baseline}
+.evr{display:grid;grid-template-columns:16px minmax(0,1fr);gap:2px 6px;padding:6px 0;border-top:1px solid var(--line);font-size:12px;color:var(--dim);align-items:baseline}
 .evr:first-child{border-top:0}.evr .y{color:var(--grass)}
-.evr em{font-style:normal;color:var(--faint);font-size:11px;text-align:right}
+.evr em{grid-column:2;font-style:normal;color:var(--faint);font-size:11px}
 .chs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .trd .gc{font-size:11px;font-weight:650;padding:3px 9px;border-radius:99px;border:1px solid var(--line)}.trd .gc.c{color:var(--acc-hi);border-color:rgba(var(--acc-rgb),.4)}.trd .gc.b{color:#ff7b6b;border-color:rgba(255,123,107,.5)}
 .trd .pxl{font-size:11.5px;color:var(--faint);line-height:1.4}
-.trk{margin:18px 2px 8px;font-size:11px;font-weight:700;color:var(--acc-hi);letter-spacing:.04em;text-transform:uppercase}
-.trt{width:100%;border-collapse:collapse;font-size:12.5px;color:var(--ink)}.trt th{text-align:left;font-size:10.5px;color:var(--faint);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}.trt td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}.trt td small{display:block;color:var(--faint);font-size:11px;margin-top:2px}
-.trn{margin:10px 2px;font-size:11.5px;color:var(--faint);line-height:1.45}
+.trw{padding:10px 14px 0}.trw .m.x{padding:14px 14px 12px}.trk{margin:18px 16px 8px;font-size:11px;font-weight:700;color:var(--acc-hi);letter-spacing:.04em;text-transform:uppercase}
+.trt{width:calc(100% - 28px);margin:0 14px;border-collapse:collapse;font-size:12.5px;color:var(--ink)}.trt th{text-align:left;font-size:10.5px;color:var(--faint);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}.trt td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}.trt td small{display:block;color:var(--faint);font-size:11px;margin-top:2px}
+.trn{margin:10px 16px;font-size:11.5px;color:var(--faint);line-height:1.45}
 .trw .lnc{color:var(--dim);font-weight:650;margin-left:6px}
 </style>
 </head>
@@ -1721,14 +1722,16 @@ function trendRow(r) {
 }
 function trendTile(r) {
   const c = r.lab === 'Conflict' ? 'b' : 'sp';
-  return `<div class="mt hi"><div class="lb">${r.market === 'D' ? 'Result' : 'Total'}</div><div class="w"><b>${esc(r.pick)}${r.price != null ? ' ' + trAm(r.price) : ''}</b></div><div class="o"><b class="chp ${c}">${esc(r.lab)}</b><span class="l2">${r.breakeven != null ? 'breakeven ' + r.breakeven + '%' : 'no price yet'}</span></div></div>`;
+  return `<div class="mt hi"><div class="lb">${r.market === 'D' ? 'Result' : 'Total'}</div><div class="w"><b>${esc(r.pick)}${r.price != null ? ' ' + trAm(r.price) : ''}</b></div><div class="o"><b class="chp ${r.won === true ? 'ok' : r.won === false ? 'b' : c}">${r.won === true ? 'Hit ✓' : r.won === false ? 'Missed ✗' : esc(r.lab)}</b><span class="l2">${r.breakeven != null ? 'breakeven ' + r.breakeven + '%' : 'no price yet'}</span></div></div>`;
 }
+const trPhase = g => { const ko = new Date(g.kickoff).getTime(), now = Date.now(); return g.final || now >= ko + GAME_MS ? 'fin' : now < ko ? 'up' : 'live'; };
 function trendCardS(g) {
+  const fin = trPhase(g) === 'fin', mid = g.final ? `FT<br><b>${g.final.h}–${g.final.a}</b>` : trPhase(g) === 'live' ? `<span class="live">In play</span><br>${esc(g.ko)}` : fin ? `Result<br>pending` : `vs<br>${esc(g.ko)}`;
   const worst = g.reads.some(r => r.lab === 'Conflict') && g.reads.every(r => r.lab === 'Conflict') ? 'Conflict' : 'Watch';
   const chips = g.reads.filter(r => r.model).map(r => `<span class="gc ${r.modelOk === false ? 'b' : 'c'}">${r.market === 'D' ? 'Draw' : 'Over'} model ${esc(r.model)}</span>`).join('');
   const rk = x => x ? `${ord(x)}` : '';
   return `<div class="m x"><div class="xh"><span>${esc(g.leagueName)}${g.line != null ? ` <span class="lnc">O/U ${g.line}</span>` : ''}</span><span class="cfx${worst === 'Watch' ? ' sp' : ''}">${worst}</span></div>
-    <div class="xt"><div class="xk">${xcrest(g.home, false, g.hId)}<div><b>${esc(g.home)}</b><small>${rk(g.hRank)}</small></div></div><div class="xm">vs<br>${esc(g.ko)}</div><div class="xk r">${xcrest(g.away, false, g.aId)}<div><b>${esc(g.away)}</b><small>${rk(g.aRank)}</small></div></div></div>
+    <div class="xt"><div class="xk">${xcrest(g.home, false, g.hId)}<div><b>${esc(g.home)}</b><small>${rk(g.hRank)}</small></div></div><div class="xm">${mid}</div><div class="xk r">${xcrest(g.away, false, g.aId)}<div><b>${esc(g.away)}</b><small>${rk(g.aRank)}</small></div></div></div>
     <div class="trd"><div class="trh"><span>Trend read</span><small>${g.tested ? 'from past seasons' : 'untested in this league'}</small></div>
       <div class="ml2">${g.reads.map(trendTile).join('')}</div><div class="evl">${g.reads.map(trendRow).join('')}</div>${chips ? `<div class="chs">${chips}</div>` : ''}
       ${g.tested ? '' : `<div class="pxl" style="margin-top:8px">Found and checked on seven European leagues (EPL, Championship, Bundesliga, Ligue 1, Serie A, Eredivisie, La Liga). ${esc(g.leagueName)} is not in that history.</div>`}</div></div>`;
@@ -1738,8 +1741,9 @@ function trendsView() {
   const cards = (trendsS.cards || []).slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   const lg = [...new Map(cards.map(c => [c.league, c.leagueName])).entries()];
   const shown = S.league === 'all' ? cards : cards.filter(c => { const k = day.cards.find(x => x.id === c.id); return k && k.leagueKey === S.league; });
+  const up = shown.filter(g => trPhase(g) !== 'fin'), fin = shown.filter(g => trPhase(g) === 'fin').sort((a, b) => b.kickoff.localeCompare(a.kickoff));
   const other = trendsS.games - cards.length;
-  return `<div class="trw">${shown.length ? shown.map(trendCardS).join('') : `<div class="empty">${trendsS.err ? 'Could not load the Trends.' : 'No game on this day is in a trend situation.'}</div>`}${other > 0 ? `<div class="trn">${other} other game${other === 1 ? '' : 's'} on this day ${other === 1 ? 'is' : 'are'} in no trend situation.</div>` : ''}</div>
+  return `<div class="trw">${up.length ? up.map(trendCardS).join('') : `<div class="empty">${trendsS.err ? 'Could not load the Trends.' : fin.length ? 'No upcoming game is in a trend situation.' : 'No game on this day is in a trend situation.'}</div>`}${fin.length ? `<div class="trk" style="margin:18px 2px 8px">Finished<i style="font-style:normal;color:var(--faint);margin-left:6px">${fin.length}</i></div>${fin.map(trendCardS).join('')}` : ''}${other > 0 ? `<div class="trn" style="margin:10px 2px">${other} other game${other === 1 ? '' : 's'} on this day ${other === 1 ? 'is' : 'are'} in no trend situation.</div>` : ''}</div>
   <div class="trk">The two situations</div><table class="trt"><tr><th>Found on past seasons</th><th>Past matches</th><th>In this Hub</th></tr>${(trendsS.situations || []).map(x => { const lv = (trendsS.live || []).find(l => l.id === x.id) || { w: 0, n: 0 }; return `<tr><td>${esc(x.label)}<small>${esc(x.pick)}</small></td><td>${x.hist.rate}%<small>vs ${x.hist.priced}% priced · n=${x.hist.n}</small></td><td>${lv.n ? lv.w + '-' + (lv.n - lv.w) : '–'}<small>${lv.n ? 'n=' + lv.n : 'none yet'}</small></td></tr>`; }).join('')}</table>
   <div class="trn">Both were found on 2023-25 matches of seven European leagues, then held on 2025-26 and this season, at closing prices. They are small edges (about 5 points over the price) from one scan each, so both are Watch, not bets. "In this Hub" is how the pick has done in the games saved here so far. A model on the other side of the price makes it a Conflict. It is a read of past results and changes no pick.</div>`;
 }
