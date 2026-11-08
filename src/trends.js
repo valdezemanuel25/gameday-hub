@@ -1,7 +1,7 @@
 // Hockey Trends (Nov 8, 2026). Situations the Hub can count in its own saved days, how each has done, and a read on each game of a day.
 // Pure functions, no I/O: the Worker loads the saved days and the page draws what comes back (public/nhl.html, Trends tab).
 //
-// A situation is a spot a game can be in (a road team on a back-to-back, a heavy home favorite, a first game of the day). For every
+// A situation is a spot a game can be in (a road team on a back-to-back, a heavy home favorite, a team on a losing streak, a first game of the day). For every
 // graded game that was in it, the situation records how the SUBJECT did (the road team won, the home favorite won, the game went
 // Over) and what the price expected for that subject, so a record is judged against the price and not against 50%.
 //   z    = (wins - expected wins) / sqrt(sum p(1-p)); above 0 means the subject did better than its price.
@@ -16,6 +16,9 @@ export const SITUATIONS = [
   { id: 'roadb2b', kind: 'ml', subject: 'A', who: 'road team', label: 'Road team on a back-to-back, home team rested', base: 0.45 },
   { id: 'homefav60', kind: 'ml', subject: 'H', who: 'home team', label: 'Home favorite at 60%+ implied', base: 0.64 },
   { id: 'homefav50', kind: 'ml', subject: 'H', who: 'home team', label: 'Slight home favorite, 50-55% implied', base: 0.52 },
+  { id: 'homeloss2', kind: 'ml', subject: 'H', who: 'home team', label: 'Home team on a 2+ game losing streak', base: 0.54 },
+  { id: 'roadloss2', kind: 'ml', subject: 'H', who: 'home team', label: 'Road team on a 2+ game losing streak', base: 0.6 },
+  { id: 'resthome', kind: 'ml', subject: 'H', who: 'home team', label: 'Home team 2+ days rested, road team on a back-to-back', base: 0.58 },
   { id: 'b2bover', kind: 'ou', subject: 'O', who: 'Over', label: 'A team on a back-to-back, over', base: 0.5 },
   { id: 'firstover', kind: 'ou', subject: 'O', who: 'Over', label: 'First game of the day, over', base: 0.5 },
 ];
@@ -26,15 +29,16 @@ export const lineOf = c => (c.ln && Number.isFinite(c.ln.v) ? c.ln.v : c.px && N
 // Every card of every saved day, in order, with each team's days of rest (days since it last played in the saved days; null for a team's
 // first saved game) and whether it is the first game of its day. Rest is an honest null, not 0, when the days before were not saved.
 export function withContext(days) {
-  const out = [], last = new Map();
+  const out = [], last = new Map(), losses = new Map(); // losses: a team's current run of straight losses in the saved graded games
   const sorted = (days || []).filter(d => d && d.date && Array.isArray(d.cards)).slice().sort((a, b) => a.date.localeCompare(b.date));
   for (const d of sorted) {
     const D = Date.parse(d.date + 'T12:00:00Z'), cards = d.cards.filter(c => c && c.kickoff).slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
     const first = cards.length ? cards[0].kickoff : null;
     for (const c of cards) {
       const rest = ab => (last.has(ab) ? Math.round((D - last.get(ab)) / 86400000) - 1 : null);
-      out.push({ ...c, date: d.date, hrest: rest(c.hAbbr), arest: rest(c.aAbbr), firstGame: c.kickoff === first });
+      out.push({ ...c, date: d.date, hrest: rest(c.hAbbr), arest: rest(c.aAbbr), firstGame: c.kickoff === first, hloss: losses.get(c.hAbbr) || 0, aloss: losses.get(c.aAbbr) || 0 });
     }
+    for (const c of cards) { if (!c.final || !c.grade) continue; const hw = c.final.h > c.final.a; losses.set(c.hAbbr, hw ? 0 : (losses.get(c.hAbbr) || 0) + 1); losses.set(c.aAbbr, hw ? (losses.get(c.aAbbr) || 0) + 1 : 0); }
     for (const c of cards) { last.set(c.hAbbr, D); last.set(c.aAbbr, D); }
   }
   return out;
@@ -44,6 +48,9 @@ function inSpot(s, c) {
   const px = c.px, hp = px && Number.isFinite(px.h) && Number.isFinite(px.a) ? imp(px.h) * 100 : null, ap = hp == null ? null : imp(px.a) * 100;
   const pr = px ? two(px.h, px.a) : null;
   if (s.id === 'roadb2b') return c.arest === 0 && (c.hrest || 0) >= 1 ? { exp: pr ? pr[1] : s.base } : false;
+  if (s.id === 'homeloss2') return c.hloss >= 2 ? { exp: pr ? pr[0] : s.base } : false;
+  if (s.id === 'roadloss2') return c.aloss >= 2 ? { exp: pr ? pr[0] : s.base } : false;
+  if (s.id === 'resthome') return c.arest === 0 && (c.hrest || 0) >= 2 ? { exp: pr ? pr[0] : s.base } : false;
   if (s.id === 'homefav60') return hp != null && hp > ap && hp >= 60 ? { exp: pr[0] } : false;
   if (s.id === 'homefav50') return hp != null && hp > ap && hp >= 50 && hp < 55 ? { exp: pr[0] } : false;
   if (s.id === 'b2bover') return c.arest === 0 || c.hrest === 0 ? { exp: 0.5 } : false;

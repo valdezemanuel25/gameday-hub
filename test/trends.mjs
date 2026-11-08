@@ -63,4 +63,21 @@ ok('score 1 + model 1 is Weak; a move against takes one off', rate(1, true, null
   ok('a model on the other side makes it a Conflict', bad.ml.lab === 'Conflict', JSON.stringify(bad.ml));
   ok('no days saved: empty and no crash', buildTrends([], '2026-11-04').cards.length === 0 && buildTrends(null, '2026-11-04').games === 0);
 }
+// 6. losing streaks and the rested-home spot
+{
+  const lose = (i, d, a, h) => card('l' + i, d + 'T19:00', a, h, { final: { h: 1, a: 3, total: 4 }, grade: true });
+  const ctx = withContext([
+    day('2026-11-02', [lose(1, '2026-11-02', 'RRR', 'HHH')]),
+    day('2026-11-03', [card('w', '2026-11-03T19:00', 'HHH', 'XXX', { final: { h: 4, a: 1, total: 5 }, grade: true })]),
+    day('2026-11-06', [card('t', '2026-11-06T19:00', 'XXX', 'HHH')]),
+  ]);
+  const t = ctx.find(c => c.id === 't'), w = ctx.find(c => c.id === 'w');
+  ok('a loss starts the run at 1, a second straight loss makes it 2', w.aloss === 1 && t.hloss === 2, JSON.stringify([w.aloss, t.hloss]));
+  ok('a win resets the run', t.aloss === 0);
+  const st = situations(ctx);
+  ok('the three new situations exist and count only graded games', ['homeloss2', 'roadloss2', 'resthome'].every(id => st.find(s => s.id === id) && st.find(s => s.id === id).n === 0));
+  const rh = withContext([day('2026-11-02', [card('a', '2026-11-02T19:00', 'AAA', 'BBB')]), day('2026-11-03', [card('b', '2026-11-03T19:00', 'AAA', 'CCC')]), day('2026-11-06', [card('c', '2026-11-06T19:00', 'AAA', 'BBB')])]);
+  const b = rh.find(c => c.id === 'b'), cc = rh.find(c => c.id === 'c');
+  ok('road on a back-to-back with a home team 2+ days rested is the rested-home spot', b.arest === 0 && cc.arest === 2, JSON.stringify([b.arest, b.hrest, cc.arest]));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nall trends checks pass'); process.exit(fails ? 1 : 0);
