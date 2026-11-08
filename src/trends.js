@@ -121,8 +121,34 @@ export function rate(score, modelOk, mvOn) {
   const t = score + (modelOk ? 1 : 0) + (mvOn === true ? 1 : 0) - (mvOn === false ? 1 : 0);
   return { lab: t >= 4 ? 'Strong' : t === 3 ? 'Medium' : t >= 1 ? 'Weak' : 'None', total: t };
 }
+// How the reads have done: every graded game replayed through gameReads with today's situation records (so it is in-sample: the
+// situations were found in these same games, treat it as a guide). Each row is a group of reads and how often the trend pick won;
+// where the model disagreed it also says how often the model's pick won. A pushed total is left out.
+export function track(ctx, stats) {
+  const byKey = Object.fromEntries(ctx.map(c => [c.id + '|' + c.date, c])), G = {};
+  const add = (id, label, won, mwon) => { const g = G[id] || (G[id] = { id, label, w: 0, n: 0, mw: 0, hasModel: mwon != null }); g.n++; if (won) g.w++; if (mwon) g.mw++; };
+  for (const date of [...new Set(ctx.map(c => c.date))]) for (const r of gameReads(ctx, stats, date)) {
+    const c = byKey[r.id + '|' + date]; if (!c.final || !c.grade) continue;
+    if (r.ml) {
+      const x = r.ml, home = x.side === 'H', won = home ? c.final.h > c.final.a : c.final.a > c.final.h, conflict = x.lab === 'Conflict';
+      if (x.modelOk === true) add('ml-agree', 'Moneyline, model agrees', won, null);
+      if (conflict) add('ml-conflict', 'Moneyline, model disagrees (Conflict)', won, !won);
+      if (c.px && Number.isFinite(c.px.h) && Number.isFinite(c.px.a)) {
+        const pr = two(c.px.h, c.px.a), pp = home ? pr[0] : pr[1], n = x.ev.filter(e => (e.toward > 0) === home).length;
+        if (pp < 0.5) { add('ml-dog', 'Moneyline pick is the underdog', won, null); if (n >= 2) add('ml-dog2', 'Underdog pick with 2+ trends', won, null); }
+        else if (n >= 2) add('ml-fav2', 'Favorite pick with 2+ trends', won, null);
+      }
+    }
+    if (r.ou && c.final.total !== r.line) {
+      const x = r.ou, won = x.side === 'Over' ? c.final.total > r.line : c.final.total < r.line;
+      if (x.modelOk === true) add('ou-agree', 'Total, model agrees', won, null);
+      if (x.lab === 'Conflict') add('ou-conflict', 'Total, model disagrees (Conflict)', won, !won);
+    }
+  }
+  return ['ml-agree', 'ml-conflict', 'ml-dog', 'ml-dog2', 'ml-fav2', 'ou-agree', 'ou-conflict'].filter(k => G[k]).map(k => G[k]);
+}
 // What /api/nhl/trends sends: the situations, and a read for each game of the date.
 export function buildTrends(days, date) {
   const ctx = withContext(days), stats = situations(ctx);
-  return { date, games: ctx.filter(c => c.final && c.grade).length, days: new Set(ctx.map(c => c.date)).size, situations: stats, cards: gameReads(ctx, stats, date) };
+  return { date, games: ctx.filter(c => c.final && c.grade).length, days: new Set(ctx.map(c => c.date)).size, situations: stats, track: track(ctx, stats), cards: gameReads(ctx, stats, date) };
 }

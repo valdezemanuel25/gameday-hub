@@ -80,4 +80,12 @@ ok('score 1 + model 1 is Weak; a move against takes one off', rate(1, true, null
   const b = rh.find(c => c.id === 'b'), cc = rh.find(c => c.id === 'c');
   ok('road on a back-to-back with a home team 2+ days rested is the rested-home spot', b.arest === 0 && cc.arest === 2, JSON.stringify([b.arest, b.hrest, cc.arest]));
 }
+// 7. the track record panel
+{
+  const hist = [], g = (i, hw) => card('k' + i, '2026-11-03T19:00', 'AAA', 'BBB', { px: { h: -170, a: 145, tl: 6 }, final: { h: hw ? 4 : 1, a: hw ? 1 : 4, total: 5 }, grade: true, v4: { w: 62, o: 40 } });
+  for (let i = 0; i < 40; i++) hist.push(g(i, i < 35));
+  const tr = buildTrends([day('2026-11-03', hist), day('2026-11-04', [])], '2026-11-04').track;
+  ok('track is a list of groups with w <= n', Array.isArray(tr) && tr.every(x => x.n >= x.w && x.n > 0 && x.label));
+  ok('track is empty with no games', buildTrends([], '2026-11-04').track.length === 0);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nall trends checks pass'); process.exit(fails ? 1 : 0);
