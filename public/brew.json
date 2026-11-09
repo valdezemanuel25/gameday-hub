@@ -1,38 +1,65 @@
 {
-  "updated": "2026-11-08T11:08:33Z",
+  "updated": "2026-11-09T11:14:51Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-08",
-      "title": "Art Brew",
-      "markets": [],
-      "takeaways": [
+      "date": "2026-11-09",
+      "title": "Having reservations",
+      "markets": [
         {
-          "h": "Auction rebound",
-          "t": "Christie's, Sotheby's and Phillips sales hit $6.8 billion in the first half, up 70% year over year, after a 2022-2025 slump."
+          "label": "Nasdaq YTD",
+          "value": "24,579",
+          "change": 5.75
         },
         {
-          "h": "Record prices",
-          "t": "A Jackson Pollock sold for $181.2 million and a Rothko for $98.4 million, while Art Basel's median disclosed sale price nearly tripled to $287,500."
+          "label": "S&P 500 YTD",
+          "value": "7,377",
+          "change": 7.76
         },
         {
-          "h": "Big Nov. 18 sale",
-          "t": "Sotheby's will auction a 12-painting collection in New York expected to bring $450+ million, led by a Van Gogh projected at $180 million or more."
+          "label": "Dow YTD",
+          "value": "51,286",
+          "change": 6.7
         },
         {
-          "h": "Gallery economics",
-          "t": "A small-to-midsize gallery may take in about $295,000 a month against $91,000 in costs, with commissions of 40%-60% on sales."
+          "label": "10-yr YTD",
+          "value": "4.859%",
+          "change": 69.6,
+          "unit": "bps"
         },
         {
-          "h": "Art as investment",
-          "t": "Art has trailed the S&P 500 for much of three decades with bond-like returns and more risk; experts say treat it as a passion."
-        },
-        {
-          "h": "Stolen art",
-          "t": "Fewer than 10% of stolen works are recovered, with some estimates at 2%-3%."
+          "label": "Bitcoin YTD",
+          "value": "$74,789",
+          "change": -14.54
         }
       ],
-      "note": "No market data in this edition; the Sunday issue was a themed special."
+      "takeaways": [
+        {
+          "h": "Nvidia probe",
+          "t": "Nvidia is investigating CEO Jensen Huang after he admitted an affair with Alice Huang, a business contact US intelligence says spied for China; he stays in charge."
+        },
+        {
+          "h": "Chip stocks",
+          "t": "The Philadelphia Semiconductor Index is still down 29% over five weeks, and the news could weigh on chips today."
+        },
+        {
+          "h": "Succession risk",
+          "t": "Huang oversees about 60 direct reports and Nvidia has no public succession plan, complicating the US-China AI race."
+        },
+        {
+          "h": "Inflation week",
+          "t": "October CPI lands Tuesday, the last reading before a December Fed meeting where a hike is expected; September wholesale prices ran 6.3% year over year."
+        },
+        {
+          "h": "Earnings",
+          "t": "Paramount Skydance reports its first quarter since buying Warner Bros. Discovery today; CoreWeave (down 41% YTD) reports Tuesday, Cisco and Applied Materials Thursday."
+        },
+        {
+          "h": "Recall hit",
+          "t": "Once Upon a Farm fell 38% last week, erasing $242 million of value, after recalling its Tractor Wheels toddler bars."
+        }
+      ],
+      "note": "Market numbers are the Friday close and show year-to-date moves."
     },
     {
       "source": "Brew Markets",
