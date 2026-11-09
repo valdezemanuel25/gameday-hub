@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-09T11:14:51Z",
+  "updated": "2026-11-09T22:09:28Z",
   "issues": [
     {
       "source": "Morning Brew",
@@ -60,6 +60,64 @@
         }
       ],
       "note": "Market numbers are the Friday close and show year-to-date moves."
+    },
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-09",
+      "title": "Wall Street weighs Nvidia without Huang",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,253",
+          "change": 2.74
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,550",
+          "change": 2.34
+        },
+        {
+          "label": "Dow",
+          "value": "52,390",
+          "change": 2.15
+        },
+        {
+          "label": "Oil",
+          "value": "$86.92",
+          "change": -4.3
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$74,862",
+          "change": 1.11
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Rebound",
+          "t": "Dip-buyers returned after last week's rout, lifting the Nasdaq 2.74%, the S&P 500 2.34% and the Dow 2.15% as tech recovered."
+        },
+        {
+          "h": "Nvidia",
+          "t": "Nvidia fell 4.27%, erasing over $300 billion in value, after CEO Jensen Huang admitted an affair with a suspected Chinese spy; its board is investigating."
+        },
+        {
+          "h": "Key-person risk",
+          "t": "Nvidia is worth about $4.5 trillion, roughly 6.25% of the S&P 500; Bernstein notes Huang has about 60 direct reports and no obvious successor, and earnings come Nov. 17."
+        },
+        {
+          "h": "Oil",
+          "t": "Crude dropped 4.3% to $86.92 after Trump signaled reluctance to launch new strikes on Iran, easing supply fears; the 10-year held near 4.86% ahead of Tuesday's CPI."
+        },
+        {
+          "h": "KKR",
+          "t": "KKR posted record quarterly profit with adjusted EPS of $1.78 versus roughly $1.58 expected, and expects to return over $40 billion to clients this year; shares rose 1.67%."
+        },
+        {
+          "h": "Constellation",
+          "t": "Constellation Energy jumped 10.44% after Q3 revenue rose 45% to $9.55 billion, adjusted EPS climbed 66% to $5.06 and it raised its full-year outlook again."
+        }
+      ]
     },
     {
       "source": "Brew Markets",
@@ -758,66 +816,6 @@
         {
           "h": "Two-tier consumer",
           "t": "US luxury spending fell 6% in September while high earners drove most Beige Book districts."
-        }
-      ]
-    },
-    {
-      "source": "Brew Markets",
-      "date": "2026-10-22",
-      "title": "Fare necessities",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "26,009",
-          "change": -2.6
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,663",
-          "change": -1.21
-        },
-        {
-          "label": "Dow",
-          "value": "52,868",
-          "change": 0.02
-        },
-        {
-          "label": "10-yr",
-          "value": "4.953%",
-          "change": -19,
-          "unit": "bps"
-        },
-        {
-          "label": "Oil",
-          "value": "$99.32",
-          "change": 2.23
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$81,366",
-          "change": -3.84
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Tech selloff",
-          "t": "Nasdaq had its worst day since June."
-        },
-        {
-          "h": "Meta -7%",
-          "t": "AI spending worries. Stock split in January keeps Zuckerberg's voting control."
-        },
-        {
-          "h": "Airlines",
-          "t": "Fuel up 68% at American, but premium-cabin revenue is growing 17-23%."
-        },
-        {
-          "h": "Defensives won",
-          "t": "Staples +5%, healthcare at a record, P&G +5.6%, Lockheed +6.9%."
-        },
-        {
-          "h": "Chips hurt",
-          "t": "Lam Research -11.8%. Semis had their worst week since April 2025."
         }
       ]
     },
