@@ -238,6 +238,32 @@ button:focus-visible{outline:2px solid var(--blue)}
 .evr em{font-style:normal;color:var(--faint);font-size:11px;white-space:nowrap}
 .chs{display:flex;flex-wrap:wrap;margin-top:6px}
 .cal td small{display:block}.cal td:nth-child(2){white-space:nowrap}
+
+/* Lines tab (Nov 9, 2026): replaces the Trends cards. One short card per game. */
+.lg2{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 18px 0;font-size:11px;color:var(--faint)}.lg2 span{display:inline-flex;align-items:center;gap:5px}.lg2 b{font-weight:700}.lg2 .y{color:var(--good)}.lg2 .x{color:var(--bad)}.lg2 .str i{width:4px;height:10px}
+.sc{background:var(--s);border:1px solid var(--line);border-radius:16px;padding:12px 14px 8px;margin-bottom:10px}
+.sc.lv-r{box-shadow:inset 3px 0 0 #ff7b6b;border-color:rgba(255,123,107,.5)}.sc.lv-a{box-shadow:inset 3px 0 0 #f0c35a;border-color:rgba(240,195,90,.4)}
+.sh{display:flex;align-items:center;gap:10px}.sh .cr{width:30px;height:30px;font-size:9px}
+.sh .mm{flex:1;min-width:0}.sh .mm b{font-size:17px;font-weight:750;letter-spacing:-.01em;white-space:nowrap}.sh .mm small{display:block;font-size:11px;color:var(--faint)}
+.sc .st{font-size:10.5px;font-weight:650;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.sc .st.ok{background:rgba(94,224,143,.12);color:var(--good)}.sc .st.due{background:rgba(240,195,90,.14);color:var(--amber)}.sc .st.miss{background:rgba(255,157,132,.12);color:#ff9d84}.sc .st.pend{background:rgba(255,255,255,.06);color:var(--mut)}.sc .st.fn{background:rgba(255,255,255,.08);color:var(--ink)}
+.sc button.st.act{font:inherit;font-size:10.5px;font-weight:700;border:1px solid currentColor;cursor:pointer}
+.sco{color:var(--ink);font-weight:750;margin:0 4px;padding:1px 7px;border-radius:6px;background:rgba(255,255,255,.08)}
+.pk{display:grid;grid-template-columns:40px minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:9px 0 0;margin-top:9px;border-top:1px solid var(--line)}
+.pk.fin{grid-template-columns:40px minmax(0,1fr) auto auto auto}
+.pk .k{font-size:10.5px;font-weight:700;color:var(--faint);letter-spacing:.04em}
+.pk .v{font-size:16px;font-weight:750;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk .v.dim{color:var(--mut);font-weight:600;font-size:14px}
+.pk .pass{font-size:12.5px;color:var(--bad);font-weight:650}
+.lc{color:var(--amber);font-size:14px}
+.str{display:inline-flex;gap:3px}.str i{width:7px;height:16px;border-radius:2px;background:rgba(255,255,255,.12)}.str.s i.f{background:var(--blue)}.str.m i.f{background:var(--gold)}.str.w i.f{background:rgba(255,255,255,.5)}
+.pk .mv{font-size:13px;font-weight:750;min-width:48px;text-align:right;white-space:nowrap}.pk .mv.y{color:var(--good)}.pk .mv.n{color:var(--bad)}.pk .mv.z{color:var(--faint);font-weight:600;font-size:12px}
+.rs{font-size:10px;font-weight:800;letter-spacing:.05em;padding:3px 7px;border-radius:6px}.rs.w{background:rgba(94,224,143,.16);color:var(--good)}.rs.l{background:rgba(255,123,107,.14);color:var(--bad)}.rs.p{background:rgba(255,255,255,.08);color:var(--mut)}
+.sc.done .mv,.sc.done .str{opacity:.55}
+.ag3{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.ag3 span{font-size:11px;font-weight:650;padding:3px 9px;border-radius:99px;background:rgba(255,255,255,.05);color:var(--mut)}
+.ag3 .y{color:var(--good);background:rgba(94,224,143,.1)}.ag3 .n{color:var(--bad);background:rgba(255,123,107,.1)}.ag3 .a{color:var(--amber);background:rgba(240,195,90,.12)}
+.lnd{margin-top:6px}.lnd summary{list-style:none;cursor:pointer;text-align:center;font-size:11px;color:var(--faint);padding:6px 0 4px}.lnd summary::-webkit-details-marker{display:none}.lnd summary:after{content:' ›'}.lnd[open] summary:after{content:' ˅'}
+.lnd .lnh{font-size:11px;font-weight:700;color:var(--acc-hi);margin:4px 0 2px}.lnd .mvg{margin:10px 0 4px}.lnd .mvgk{text-align:left}
+.grp{font-size:10.5px;font-weight:700;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin:6px 2px 8px}
 </style>
 </head>
 <body>
@@ -414,39 +440,80 @@ const trendRec = x => `${x.w}-${x.l} · n=${x.n}`;
 // Hit rate of the side this situation points to: the subject's record when it did better than its price, the other side's when it did worse.
 const trendHit = x => `${x.n ? Math.round(100 * (x.dir === 'with' ? x.w : x.l) / x.n) : 0}% · n=${x.n}`;
 function trendEv(x, towardHome) { const yes = (x.toward > 0) === towardHome; return `<div class="evr"><span class="${yes ? 'y' : 'x'}">${yes ? '✓' : '✕'}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}</em></div>`; }
-function trendTile(label, verdict, lab, sub, hi) {
-  const cls = lab === 'Strong' ? 's' : lab === 'Conflict' ? 'b' : 'sp';
-  return `<div class="mt${hi ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b>${esc(verdict)}</b></div><div class="o"><b class="chp ${cls}">${esc(lab)}</b><span class="l2">${esc(sub)}</span></div></div>`;
+// ---------- Lines tab (Nov 9, 2026): replaces the Trends cards. One short card per game: the trend's pick on the winner and the total, its
+// strength as bars, how far the price moved since the opening and whether that was toward the pick (✓) or against it (✕), a changed total
+// line in amber, the result once the game is final. Plays (Strong or Medium) come first; finished games drop to the bottom. "Tap for
+// details" opens the situations behind the read and the game's Movement card (prices, goalies) in place. The Movement tab stays as it is.
+const LN_ORDER = { Strong: 0, Medium: 1, Weak: 2, Conflict: 3 };
+const lnBars = lab => { const n = { Strong: 3, Medium: 2, Weak: 1 }[lab] || 0, k = { Strong: 's', Medium: 'm', Weak: 'w' }[lab] || ''; return `<span class="str ${k}" role="img" aria-label="${lab} trend" title="${lab} trend">${[0, 1, 2].map(i => `<i${i < n ? ' class="f"' : ''}></i>`).join('')}</span>`; };
+const lnPlay = g => [g.ml, g.ou].some(x => x && (x.lab === 'Strong' || x.lab === 'Medium'));
+const lnBest = g => Math.min(...[g.ml, g.ou].filter(x => x && x.lab !== 'None').map(x => LN_ORDER[x.lab] ?? 4), 4);
+// d: the change in the chance of `upName` (home win / Over), in points. towardUp: the pick is that side (null = no pick: just say which side rose).
+function lnMove(d, towardUp, upName, downName) {
+  if (d == null) return '<span class="mv z">–</span>';
+  const a = Math.round(Math.abs(d)); if (!a) return '<span class="mv z" aria-label="no price move">0</span>';
+  if (towardUp == null) return `<span class="mv z" aria-label="${esc(d > 0 ? upName : downName)} chance up ${a} points">${esc(d > 0 ? upName : downName)} ↑${a}</span>`;
+  const w = (d > 0) === towardUp;
+  return `<span class="mv ${w ? 'y' : 'n'}" aria-label="price moved ${a} points ${w ? 'toward' : 'against'} the pick">${w ? '↑' : '↓'}${a} ${w ? '✓' : '✕'}</span>`;
 }
-function trendCard(g) {
-  const dc = day && (day.cards || []).find(x => x.id === g.id), mv = dc && hockeyMove(dc.px) ? ` data-gomove="${esc(g.id)}" role="button" tabindex="0" title="Flip to this game's Movement card"` : ''; // same flip as the Board card (public/flipcard.js)
-  const ml = g.ml && g.ml.lab !== 'None' ? g.ml : null, ou = g.ou && g.ou.lab !== 'None' ? g.ou : null, tiles = [], ev = [], chips = [];
+const lnRes = r => r == null ? '' : `<span class="rs ${r === 'push' ? 'p' : r ? 'w' : 'l'}">${r === 'push' ? 'PUSH' : r ? 'WON' : 'LOST'}</span>`;
+function lnCard(g, dc) {
+  const px = dc && dc.px, hm = dc ? hockeyMove(px) : null, f = dc && dc.final, a = g.aAbbr, h = g.hAbbr;
+  const ml = g.ml && g.ml.lab !== 'None' ? g.ml : null, ou = g.ou && g.ou.lab !== 'None' ? g.ou : null;
+  const row = (k, pick, lab, mv, res) => `<div class="pk${res ? ' fin' : ''}"><span class="k">${k}</span>${pick}${lab && lab !== 'Conflict' ? lnBars(lab) : '<span></span>'}${mv}${res}</div>`;
+  // Winner
+  let r1;
   if (ml) {
-    const c = ml.lab === 'Conflict';
-    tiles.push(trendTile('Moneyline', c ? 'Pass' : `${ml.team}${ml.price != null ? ' ' + fmtOdds(ml.price) : ''}`, ml.lab, c ? `trends lean ${ml.team}${ml.price != null ? ' ' + fmtOdds(ml.price) : ''}` : ml.price != null ? `breakeven ${Math.round(imp(ml.price) * 100)}%` : 'no price yet', ml.lab === 'Strong' || ml.lab === 'Medium'));
-    for (const x of ml.ev) ev.push(trendEv(x, ml.side === 'H'));
-    if (ml.modelOk != null) chips.push(`<span class="gc ${ml.modelOk ? 'c' : 'b'}">Winner model ${ml.modelOk ? 'agrees' : 'disagrees'}</span>`);
-    if (ml.moveWith != null) chips.push(`<span class="gc ${ml.moveWith ? 'c' : 'b'}">Price ${ml.moveWith ? 'with' : 'against'} it</span>`);
-  }
+    const c = ml.lab === 'Conflict', pick = c ? `<span class="pass">Pass · mixed signals</span>` : `<span class="v">${esc(ml.team)}${ml.price != null ? ' ' + fmtOdds(ml.price) : ''}</span>`;
+    const res = f && !c ? ((ml.side === 'H') === (f.h > f.a)) : null;
+    r1 = row('ML', pick, ml.lab, lnMove(hm && hm.ml ? hm.ml.d : null, ml.side === 'H', h, a), lnRes(res));
+  } else r1 = row('ML', '<span class="v dim">No trend</span>', '', lnMove(hm && hm.ml ? hm.ml.d : null, null, h, a), '');
+  // Total: a total line that moved since the opening shows as "6.5 → 6" in amber (its price move is then not comparable, so none is shown)
+  const ot = px && (px.opt || (px.f && px.f.tl != null ? px.f : null)), lnMoved = ot && px.tl != null && ot.tl !== px.tl;
+  let r2;
   if (ou) {
-    const c = ou.lab === 'Conflict';
-    tiles.push(trendTile('Total', c ? 'No play' : `${ou.side} ${ou.line}`, ou.lab, c ? `trend ${ou.side}, model ${ou.model.split(' ')[0]}` : `trend ${ou.score > 0 ? '+' : ''}${ou.score}`, ou.lab === 'Strong' || ou.lab === 'Medium'));
-    for (const x of ou.ev) ev.push(trendEv(x, ou.side === 'Over'));
-    chips.push(`<span class="gc ${ou.modelOk ? 'c' : 'b'}">Total model ${ou.modelOk ? 'agrees' : 'disagrees'}</span>`);
-    if (ou.moveWith) chips.push(`<span class="gc c">Price moved ${esc(ou.side)}</span>`);
+    const c = ou.lab === 'Conflict', lineTxt = lnMoved && px.tl === ou.line ? `${ot.tl} <span class="lc">→ ${ou.line}</span>` : String(ou.line);
+    const pick = c ? `<span class="pass">Pass · mixed signals</span>` : `<span class="v">${esc(ou.side)} ${lineTxt}</span>`;
+    const res = f && !c ? (f.total === ou.line ? 'push' : (f.total > ou.line) === (ou.side === 'Over')) : null;
+    r2 = row('O/U', pick, ou.lab, lnMove(hm && hm.ou ? hm.ou.d : null, ou.side === 'Over', 'Over', 'Under'), lnRes(res));
+  } else r2 = row('O/U', `<span class="v dim">No trend${lnMoved ? ` <span class="lc">${ot.tl} → ${px.tl}</span>` : ''}</span>`, '', lnMove(hm && hm.ou ? hm.ou.d : null, null, 'Over', 'Under'), '');
+  // Pills: the models, then the goalies (warnings from the Movement card's flags, else confirmed / expected). Goalies only before the game ends.
+  const pills = [], mo = [ml && ml.modelOk != null ? ['Winner', ml.modelOk] : null, ou && ou.modelOk != null ? ['Total', ou.modelOk] : null].filter(Boolean);
+  if (mo.length && mo.every(x => x[1] === mo[0][1])) pills.push(`<span class="${mo[0][1] ? 'y' : 'n'}">${mo[0][1] ? '✓' : '✕'} Model</span>`);
+  else for (const [k, v] of mo) pills.push(`<span class="${v ? 'y' : 'n'}">${v ? '✓' : '✕'} ${k} model</span>`);
+  const fl = dc && !f ? cardFlags(dc, hm) : { level: '', items: [] }, warn = fl.items.filter(x => !/move|Total:/i.test(x.t));
+  for (const x of warn) pills.push(`<span class="${x.lv === 'r' ? 'n' : 'a'}">⚠ ${esc(x.t.replace('back-to-back', 'B2B'))}</span>`);
+  if (dc && !f && dc.gk && !warn.some(x => /confirmed/.test(x.t))) {
+    const open = ['a', 'h'].filter(s => dc.gk[s] && dc.gk[s].st !== 'c');
+    pills.push(open.length ? `<span class="a">${open.length === 2 ? 'Goalies' : esc((open[0] === 'a' ? a : h) + ' goalie')} expected</span>` : '<span class="y">✓ Goalies set</span>');
   }
-  const order = { Strong: 0, Medium: 1, Weak: 2, Conflict: 3 }, labs = [ml, ou].filter(Boolean).map(x => x.lab);
-  const best = labs.length ? labs.sort((a, b) => order[a] - order[b])[0] : null;
-  const tag = best ? `<span class="cfx${best === 'Strong' ? ' s' : best === 'Conflict' ? '' : ' sp'}">${best}</span>` : '<span class="cfx">No match</span>';
-  const body = tiles.length ? `<div class="ml2">${tiles.join('')}</div><div class="evl">${ev.join('')}</div><div class="chs">${chips.join('')}</div>` : `<div class="pxl" style="margin-top:0">No situation matches this game, or the ones that do have not been counted long enough to point a way.</div>`;
-  return `<div class="card"><div class="xh"><span>${esc(g.ko)} CT${g.line != null ? ` <span class="lnc">O/U ${g.line}</span>` : ''}</span>${tag}</div><div class="mu"><div class="tm">${crest(g.aAbbr)}<div><b>${esc(g.aAbbr)}</b><small>${esc(g.away)}</small></div></div><div class="mid">@</div><div class="tm r"><div><b>${esc(g.hAbbr)}</b><small>${esc(g.home)}</small></div>${crest(g.hAbbr)}</div></div>
-  <div class="trd"><div class="trh"${mv}><span>Trend read</span><small>${mv ? 'Movement ⟲ tap or swipe' : 'from your saved days'}</small></div>${body}</div></div>`;
+  // Header: the score once final, else the closing-read state (tappable when a read is due or missed, as on the Movement tab)
+  let tag = '';
+  if (f) tag = `<span class="st fn">${f.last && f.last !== 'REG' ? esc(f.last) : 'Final'}</span>`;
+  else if (dc && px) { const cs = closeState(dc), short = cs.k === 'ok' ? 'Closed' : cs.k === 'due' ? 'Read now ›' : cs.k === 'miss' ? 'Get price ›' : `Close ~${tmCT(new Date(new Date(dc.kickoff).getTime() - 45 * 60000).toISOString())}`;
+    tag = cs.act ? `<button type="button" class="st ${cs.k} act" data-getclose="${esc(g.id)}" title="${esc(cs.t)}">${short}</button>` : `<span class="st ${cs.k}" title="${esc(cs.t)}">${short}</span>`; }
+  const title = f ? `${esc(a)} <span class="sco">${f.a}–${f.h}</span> ${esc(h)}` : `${esc(a)} @ ${esc(h)}`;
+  // Details: the situations behind the read, then the Movement card (prices, goalies, rest), else just the goalies
+  const ev = [...(ml ? ml.ev.map(x => trendEv(x, ml.side === 'H')) : []), ...(ou ? ou.ev.map(x => trendEv(x, ou.side === 'Over')) : [])];
+  const mvc = dc && hm ? movesView(g.id) : dc ? gkRestTags(dc) : '';
+  const det = `${ev.length ? `<div class="lnh">Why · ${ev.length} situation${ev.length === 1 ? '' : 's'}</div><div class="evl">${ev.join('')}</div>` : `<div class="pxl" style="margin-top:4px">No situation matches this game, or the ones that do have not been counted long enough to point a way.</div>`}${mvc}`;
+  return `<div class="sc${fl.level ? ' lv-' + fl.level : ''}${f ? ' done' : ''}"><div class="sh">${crest(a)}<div class="mm"><b>${title}</b><small>${esc(g.ko)} CT</small></div>${crest(h)}${tag}</div>${r1}${r2}${pills.length ? `<div class="ag3">${pills.join('')}</div>` : ''}
+  <details class="lnd" data-lnid="${esc(g.id)}"${S.lnOpen && S.lnOpen[g.id] ? ' open' : ''}><summary>Tap for details</summary>${det}</details></div>`;
 }
 const imp = o => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
 function trendsView() {
   if (!trends) return `<div class="empty">Loading…</div>`;
-  const cards = (trends.cards || []).slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
-  return `<div class="pad">${cards.length ? cards.map(trendCard).join('') : `<div class="empty">No NHL games saved for this day yet.</div>`}</div>`;
+  const dcOf = id => day && (day.cards || []).find(x => x.id === id);
+  const all = (trends.cards || []).map(g => { const dc = dcOf(g.id); return { g, dc, f: dc && dc.final, hm: dc ? hockeyMove(dc.px) : null }; });
+  if (!all.length) return `<div class="empty">No NHL games saved for this day yet.</div>`;
+  const inF = (r, k) => k === 'up' ? !r.f && new Date(r.g.kickoff).getTime() > Date.now() : k === 'plays' ? lnPlay(r.g) : k === 'big' ? !!(r.hm && r.hm.big) : true;
+  const f = S.lnf || (all.some(r => inF(r, 'up')) ? 'up' : 'all');
+  const seg = `<div class="mvseg">${[['up', 'Upcoming'], ['plays', 'Plays'], ['big', 'Big moves'], ['all', 'All']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-lnf="${k}">${l}<i>${all.filter(r => inF(r, k)).length}</i></button>`).join('')}</div>`;
+  const key = `<div class="lg2"><span>${lnBars('Medium').replace(/role="img" aria-label="[^"]*" title="[^"]*"/, 'aria-hidden="true"')} strength</span><span><b class="y">✓</b> price moved toward pick</span><span><b class="x">✕</b> against</span></div>`;
+  const shown = all.filter(r => inF(r, f)), byKo = (x, y) => x.g.kickoff.localeCompare(y.g.kickoff);
+  const live = shown.filter(r => !r.f).sort((x, y) => (lnPlay(y.g) - lnPlay(x.g)) || (lnBest(x.g) - lnBest(y.g)) || byKo(x, y)), done = shown.filter(r => r.f).sort(byKo);
+  const grp = (t, rs) => rs.length ? `<div class="grp">${t}</div>${rs.map(r => lnCard(r.g, r.dc)).join('')}` : '';
+  return seg + key + `<div class="pad">${shown.length ? grp('To play · plays first', live) + grp('Final', done) : '<div class="empty">Nothing in this filter.</div>'}</div>`;
 }
 // The board tile's move line: each price that moved 3+ points since the opening (moneyline: the side whose chance rose).
 function hotLine(c) {
@@ -792,12 +859,12 @@ function renderDays() {
   { const d = new Date(S.date + 'T12:00:00Z'); $('#title').innerHTML = `<span class="wd">NHL · ${d.toLocaleDateString('en-US',{weekday:'long',timeZone:'UTC'})}</span><span class="dt2">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}</span>`; }
   const t = fmt(new Date()), list = [[addDays(t, -1), 'Yesterday'], [t, 'Today'], [addDays(t, 1), 'Tomorrow']];
   $('#days').innerHTML = list.map(([d, l]) => `<button type="button" class="day${d === S.date ? ' on' : ''}" data-d="${d}">${l}<b>${+d.slice(8)}</b></button>`).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['trends', 'Trends'], ['results', 'Results'], ['mbets', 'Model bets'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
+  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['trends', 'Lines'], ['results', 'Results'], ['mbets', 'Model bets'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
 }
 function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
   document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'bgrid') updDots(); }, true);
-function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'trends' ? trendsView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); if (window.FlipCard && (S.tab === 'board' || S.tab === 'trends') && day) FlipCard.sync(movesView(MV_ALL)); }
+function render() { renderDays(); $('#view').innerHTML = S.tab === 'board' ? board() : S.tab === 'trends' ? trendsView() : S.tab === 'results' ? results() : S.tab === 'mbets' ? mbetsView() : S.tab === 'moves' ? movesView() : statusView(); updDots(); if (window.FlipCard && S.tab === 'board' && day) FlipCard.sync(movesView(MV_ALL)); }
 async function load() {
   try { day = await api('/api/nhl/day?date=' + S.date); } catch (e) { day = { cards: [] }; $('#st').textContent = e.message; }
   render();
@@ -806,8 +873,10 @@ async function load() {
 }
 // keyboard: Enter or Space on a focused pick % does what a tap does (flip to the Movement card), not the card header around it (Nov 8, 2026)
 document.addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; const t = e.target; if (!t || !t.matches || !t.matches('[data-gomove]')) return; e.preventDefault(); e.stopPropagation(); t.click(); }, true);
+// Lines tab: an opened "Tap for details" stays open when the page redraws
+document.addEventListener('toggle', e => { const d = e.target; if (d && d.matches && d.matches('details.lnd')) (S.lnOpen = S.lnOpen || {})[d.dataset.lnid] = d.open; }, true);
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-gomove],[data-goboard],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-sel],[data-mvf],[data-getclose],[data-fin]'); if (!t) return;
+  const t = e.target.closest('[data-gomove],[data-goboard],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-sel],[data-mvf],[data-lnf],[data-getclose],[data-fin]'); if (!t) return;
   if (t.dataset.getclose) {
     if (t.disabled) return; const t0 = t.textContent; t.disabled = true; t.textContent = 'Reading the price…';
     try { const r = await (await fetch('/api/nhl/close', { method: 'POST', body: JSON.stringify({ date: S.date, id: t.dataset.getclose }) })).json(); if (r.error) throw new Error(r.error); await load(); }
@@ -815,6 +884,7 @@ document.addEventListener('click', async e => {
     return;
   }
   if (t.dataset.mvf) { S.mvf = t.dataset.mvf; return render(); }
+  if (t.dataset.lnf) { S.lnf = t.dataset.lnf; return render(); }
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.push) return pushAct(t.dataset.push);
   // Movement card title: the game's Board card pops up over the Movement tab in a spotlight card (public/spotlight.js); you stay here.
