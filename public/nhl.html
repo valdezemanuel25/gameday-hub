@@ -235,6 +235,7 @@ button:focus-visible{outline:2px solid var(--blue)}
 .evl{margin-top:8px;display:flex;flex-direction:column}
 .evr{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:6px;padding:5px 0;border-top:1px solid var(--line);font-size:12px;color:var(--mut);align-items:baseline}
 .evr:first-child{border-top:0}
+.evr.sx{grid-template-columns:42px minmax(0,1fr) auto}.evr .tg{font-size:9.5px;font-weight:800;letter-spacing:.02em;padding:1px 0;border-radius:4px;text-align:center}.evr .tg.y{background:rgba(94,224,143,.14);color:var(--good)}.evr .tg.n{background:rgba(255,123,107,.12);color:var(--bad)}
 .evr em{font-style:normal;color:var(--faint);font-size:11px;white-space:nowrap}
 .chs{display:flex;flex-wrap:wrap;margin-top:6px}
 .cal td small{display:block}.cal td:nth-child(2){white-space:nowrap}
@@ -438,8 +439,11 @@ function card(c) {
 const TREND_TAG = { lean: 'Lean', watch: 'Watch', noise: 'Noise' };
 const trendRec = x => `${x.w}-${x.l} · n=${x.n}`;
 // Hit rate of the side this situation points to: the subject's record when it did better than its price, the other side's when it did worse.
-const trendHit = x => `${x.n ? Math.round(100 * (x.dir === 'with' ? x.w : x.l) / x.n) : 0}% · n=${x.n}`;
-function trendEv(x, towardHome) { const yes = (x.toward > 0) === towardHome; return `<div class="evr"><span class="${yes ? 'y' : 'x'}">${yes ? '✓' : '✕'}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}</em></div>`; }
+const trendHit = x => `${x.n ? Math.round(100 * (x.dir === 'with' ? x.w : x.l) / x.n) : 0}% of ${x.n}`;
+// One situation row: tagged with the side it backs (the home team or Over when it points up, else the away team or Under), written
+// "Van", "Over". Green when that is the card's pick, red when it backs the other side.
+const tcase = t => String(t).charAt(0).toUpperCase() + String(t).slice(1).toLowerCase();
+function trendEv(x, pickUp, upName, downName) { const up = x.toward > 0, yes = up === pickUp, side = tcase(up ? upName : downName); return `<div class="evr sx"><span class="tg ${yes ? 'y' : 'n'}" aria-label="backs ${esc(side)}${yes ? ', the pick' : ', against the pick'}">${esc(side)}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}</em></div>`; }
 // ---------- Lines tab (Nov 9, 2026): replaces the Trends cards. One short card per game: the trend's pick on the winner and the total, its
 // strength as bars, how far the price moved since the opening and whether that was toward the pick (✓) or against it (✕), a changed total
 // line in amber, the result once the game is final. Plays (Strong or Medium) come first; finished games drop to the bottom. "Tap for
@@ -494,7 +498,7 @@ function lnCard(g, dc) {
     tag = cs.act ? `<button type="button" class="st ${cs.k} act" data-getclose="${esc(g.id)}" title="${esc(cs.t)}">${short}</button>` : `<span class="st ${cs.k}" title="${esc(cs.t)}">${short}</span>`; }
   const title = f ? `${esc(a)} <span class="sco">${f.a}–${f.h}</span> ${esc(h)}` : `${esc(a)} @ ${esc(h)}`;
   // Details: the situations behind the read, then the Movement card (prices, goalies, rest), else just the goalies
-  const ev = [...(ml ? ml.ev.map(x => trendEv(x, ml.side === 'H')) : []), ...(ou ? ou.ev.map(x => trendEv(x, ou.side === 'Over')) : [])];
+  const ev = [...(ml ? ml.ev.map(x => trendEv(x, ml.side === 'H', h, a)) : []), ...(ou ? ou.ev.map(x => trendEv(x, ou.side === 'Over', 'Over', 'Under')) : [])];
   const mvc = dc && hm ? movesView(g.id) : dc ? gkRestTags(dc) : '';
   const det = `${ev.length ? `<div class="lnh">Why · ${ev.length} situation${ev.length === 1 ? '' : 's'}</div><div class="evl">${ev.join('')}</div>` : `<div class="pxl" style="margin-top:4px">No situation matches this game, or the ones that do have not been counted long enough to point a way.</div>`}${mvc}`;
   return `<div class="sc${fl.level ? ' lv-' + fl.level : ''}${f ? ' done' : ''}"><div class="sh">${crest(a)}<div class="mm"><b>${title}</b><small>${esc(g.ko)} CT</small></div>${crest(h)}${tag}</div>${r1}${r2}${pills.length ? `<div class="ag3">${pills.join('')}</div>` : ''}
