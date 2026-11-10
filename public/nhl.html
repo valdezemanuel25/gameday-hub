@@ -194,6 +194,7 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .bt .r{gap:10px;padding:4px 0}.bt .r .cr{width:30px;height:30px}
 .bt .r b{font-size:21px;font-weight:400;letter-spacing:-.025em;color:var(--mut)}.bt .r span{font-size:28px;font-weight:300;letter-spacing:-.04em;color:var(--faint)}
 .bt .r.fv b{color:var(--ink);font-weight:500}.bt .r.fv span{color:var(--blue);font-weight:500}
+.bt .r b small.mvtag{font-size:10px;font-weight:650;letter-spacing:0;color:var(--faint);margin-left:3px;vertical-align:middle}.bt .r b small.mvpc{display:block;font-size:10px;font-weight:500;letter-spacing:0;color:var(--faint);margin-top:1px;line-height:1.1}.bt .ou small.mvtag{font-size:10px;font-weight:650;margin-left:3px}
 .pb{display:flex;gap:3px;height:4px;margin-top:12px}.pb i{display:block;height:100%;border-radius:2px}.pb .a{background:rgba(255,255,255,.4)}.pb .h{background:var(--blue)}
 .bt .ou{border:0;margin-top:8px;padding-top:0;font-size:12px}
 .card,.dt .card,.rail .card{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px;padding:18px}
@@ -519,23 +520,18 @@ function trendsView() {
   const grp = (t, rs) => rs.length ? `<div class="grp">${t}</div>${rs.map(r => lnCard(r.g, r.dc)).join('')}` : '';
   return seg + key + `<div class="pad">${shown.length ? grp('To play · plays first', live) + grp('Final', done) : '<div class="empty">Nothing in this filter.</div>'}</div>`;
 }
-// The board tile's move line: each price that moved 3+ points since the opening (moneyline: the side whose chance rose).
-function hotLine(c) {
-  const hm = hockeyMove(c.px); if (!hm) return '';
-  const out = [];
-  if (hm.ml && hot(hm.ml.d)) out.push(`${esc(hm.ml.d > 0 ? c.hAbbr : c.aAbbr)} ${sgn(Math.round(Math.abs(hm.ml.d)))}`);
-  if (hm.ou && hot(hm.ou.d)) out.push(`${hm.ou.d > 0 ? 'Over' : 'Under'} ${hm.ou.line} ${sgn(Math.round(Math.abs(hm.ou.d)))}`);
-  return out.length ? `<div class="hotl neon">Moved: ${out.join(' · ')}</div>` : '';
-}
+// Board tile: a price that moved 3+ points since the opening shows as a small +/- beside each team (moneyline) and beside the O/U line (total).
 function tileOf(c, on) {
   const f = c.final, g = c.grade || {}, m0 = c.v2 || c.v4, hp = m0 ? m0.w : null, hf = hp != null && hp >= 50, cs = consensus(c);
   const tag = f ? `<i class="fin">${f.last !== 'REG' ? esc(f.last) : 'Final'}</i>` : cs.same ? '<i>All agree</i>' : cs.split ? '<i class="sp">Split</i>' : '';
   const gs = f ? null : goalsSide(c), gw = !f && cs.same;
+  const hm = hockeyMove(c.px), mlHot = hm && hm.ml && hot(hm.ml.d); // price move of 3+ points: shown small beside each team (riser +, other side -)
   const row = (ab, side) => { const fav = !f && hp != null && (side === 'h') === hf; const v = f ? (side === 'h' ? f.h : f.a) : hp == null ? '–' : (side === 'h' ? hp : 100 - hp) + '%';
-    return `<div class="r${fav ? ' fv' : ''}">${crest(ab)}<b>${esc(ab)}</b><span${fav && gw ? ' class="gd"' : ''}>${v}</span></div>`; };
+    const d = mlHot ? Math.round(side === 'h' ? hm.ml.d : -hm.ml.d) : 0, mvt = d ? ` <small class="mvtag${d > 0 ? ' neon' : ''}" title="Moneyline price move since the opening price">${sgn(d)}</small><small class="mvpc">${Math.round(side === 'h' ? hm.ml.p0 : 100 - hm.ml.p0)}→${Math.round(side === 'h' ? hm.ml.p1 : 100 - hm.ml.p1)}%</small>` : '';
+    return `<div class="r${fav ? ' fv' : ''}">${crest(ab)}<b>${esc(ab)}${mvt}</b><span${fav && gw ? ' class="gd"' : ''}>${v}</span></div>`; };
   const ln = lineOf(c), ou = c.v2 ? pickOu(c.v2) : null;
-  const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}</span>${ou ? `<span${gs ? ' class="gd"' : ''}><b${gs ? ' class="gd"' : ''}>${ou.side}</b> ${ou.p}%</span>` : ''}`;
-  return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}${hp == null || f ? '' : `<div class="pb"><i class="a" style="flex:${100 - hp}"></i><i class="h" style="flex:${hp}"></i></div>`}${hotLine(c)}<div class="ou">${foot}</div></button>`;
+  const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}${hm && hm.ou && hot(hm.ou.d) ? ` <small class="mvtag neon" title="Total price move since the opening price">${hm.ou.d > 0 ? 'Over' : 'Under'} ${sgn(Math.round(Math.abs(hm.ou.d)))}</small>` : ''}</span>${ou ? `<span${gs ? ' class="gd"' : ''}><b${gs ? ' class="gd"' : ''}>${ou.side}</b> ${ou.p}%</span>` : ''}`;
+  return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}${hp == null || f ? '' : `<div class="pb"><i class="a" style="flex:${100 - hp}"></i><i class="h" style="flex:${hp}"></i></div>`}<div class="ou">${foot}</div></button>`;
 }
 // ---------- Movement: every priced game of the day, opening -> close ----------
 function closeState(c) {
@@ -611,25 +607,6 @@ function gkRestTags(c) {
   }
   return t.length ? `<div class="mvgk">${t.join('')}</div>` : '';
 }
-// Board recap of the day's price moves of HOT_MOVE+ points (moneyline: the side whose chance rose; total: Over or Under), biggest first.
-// The model note says whether v4 (else v2) already rated the moneyline mover above its opening chance. Display only, not a bet.
-function movesBox(list) {
-  const rows = [];
-  for (const c of list) {
-    const hm = hockeyMove(c.px); if (!hm) continue;
-    const parts = [];
-    if (hm.ml && hot(hm.ml.d)) { const up = hm.ml.d > 0, m = c.v4 && c.v4.w != null ? ['v4', c.v4.w] : c.v2 && c.v2.w != null ? ['v2', c.v2.w] : null;
-      parts.push({ size: Math.abs(hm.ml.d), txt: `${esc(up ? c.hAbbr : c.aAbbr)} ${sgn(Math.round(Math.abs(hm.ml.d)))}`, sub: `${Math.round(up ? hm.ml.p0 : 100 - hm.ml.p0)}→${Math.round(up ? hm.ml.p1 : 100 - hm.ml.p1)}%`,
-        note: m ? ((m[1] - hm.ml.p0 > 0) === up ? `${m[0]} already leaned this way` : `against ${m[0]}`) : '' }); }
-    if (hm.ou && hot(hm.ou.d)) parts.push({ size: Math.abs(hm.ou.d), txt: `${hm.ou.d > 0 ? 'Over' : 'Under'} ${hm.ou.line} ${sgn(Math.round(Math.abs(hm.ou.d)))}`, sub: `Over ${Math.round(hm.ou.p0)}→${Math.round(hm.ou.p1)}%`, note: '' });
-    if (parts.length) rows.push({ c, parts, size: Math.max(...parts.map(x => x.size)) });
-  }
-  if (!rows.length) return '';
-  rows.sort((a, b) => b.size - a.size);
-  return `<details class="mvb" open><summary>Big price moves today · ${rows.length}</summary><div class="small" style="margin:4px 0 6px">${HOT_MOVE}+ points on the moneyline or the total since the opening price. Usually starting goalies, injuries or informed money. Not a bet.</div>${rows.map(({ c, parts }) => {
-    const f = c.final, notes = parts.map(x => x.note).filter(Boolean);
-    return `<div class="mr"><span><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b><br><small>${esc(c.ko || '')}${f ? ` · final ${f.a}–${f.h}${f.last && f.last !== 'REG' ? ' ' + esc(f.last) : ''}` : ''}${notes.length ? ' · ' + esc(notes.join(' · ')) : ''}</small></span><em>${parts.map(x => `<b class="neon">${x.txt}</b><br><small>${x.sub}</small>`).join('<br>')}</em></div>`; }).join('')}</details>`;
-}
 function board() {
   let list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
@@ -643,7 +620,7 @@ function board() {
   const frow = c => { const f = c.final, g = c.grade || {};
     return `<div class="fr"><b>${esc(c.aAbbr)} ${f ? `${f.a}–${f.h}` : '@'} ${esc(c.hAbbr)}</b>${f && f.last && f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : ''}${!f ? '<i class="pend">result pending</i>' : g.v2 ? `<i class="${g.v2.win ? 'ok' : 'no'}">v2 ${g.v2.win ? '✓' : '✗'}</i>` : ''}</div>`; };
   const fin = done.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${!!S.fin}">Finished <b>${done.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? done.map(c => `<div class="fcard" id="fc-${esc(c.id)}">${card(c)}</div>`).join('') : done.map(frow).join('')}</div>` : '';
-  return `${movesBox([...list, ...done])}<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}${fin}`;
+  return `<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}${fin}`;
 }
 function cell(m, key, other) {
   const v = pct(m.hit, m.n);
