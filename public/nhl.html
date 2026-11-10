@@ -187,6 +187,8 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .day.on{background:var(--blue);color:rgba(7,4,5,.6)}.day.on b{color:#070405;font-weight:500}
 .tabs{border-bottom:0;padding:0 20px;margin-top:14px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
 .tab{color:var(--faint);font-size:15px;white-space:nowrap;margin-right:6px}.tab.on{color:var(--ink);font-weight:500;border-bottom-color:transparent}
+/* Phones: the five tabs fit on one row; on a very narrow screen the row still scrolls and its right edge fades to show there is more. */
+@media (max-width:430px){.tabs{padding:0 14px;gap:0;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent)}.tab{font-size:14.5px;margin-right:2px;padding-left:5px;padding-right:5px}}
 .bgrid{display:flex;flex-direction:column;gap:12px;overflow:visible;padding:12px 18px 6px}.bdots{display:none}
 .bt{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px;padding:18px}
 .bt.on{border-color:rgba(255,77,87,.6);box-shadow:none}
@@ -636,7 +638,7 @@ function gkRestTags(c) {
 }
 function board() {
   let list = day.cards.slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
-  if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or press Update NHL now.</div>`;
+  if (!list.length) return `<div class="empty">No NHL games saved for this day yet.<br>The Hub checks the schedule in the background, or tap the highlighted day above and press Analyze this day.</div>`;
   // In play and upcoming games on top; finished ones (or 3.5+ hours past puck drop, result pending) in a Finished box at the bottom,
   // like soccer. A day where every game is over shows them all as tiles.
   const ended = c => c.final || Date.now() > new Date(c.kickoff).getTime() + GAME_MS;
