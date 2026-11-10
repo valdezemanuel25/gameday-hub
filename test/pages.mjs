@@ -77,5 +77,17 @@ try {
     ok(`${label} page: Enter on the focused % flips that card to its Movement side, and does not open or close the card`, flipped && open1 === open0, `flipped ${flipped}, open ${open0} -> ${open1}`);
     await page.close();
   }
+  { // Top picks saved as on (Nov 10, 2026): its button was replaced by Flip on Nov 9, so the soccer page must open in the normal Board, not stuck in Top picks
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+    await page.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('hubFilter', JSON.stringify({ league: 'all', top: true, tm: 'all' })); sessionStorage.setItem('seeded', '1'); } } catch (e) {} });
+    await page.route('**/api/**', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify(answer(r.request().url())) }));
+    await page.route(u => !u.href.startsWith(base), r => r.abort());
+    await page.goto(`${base}/index.html`);
+    await page.waitForFunction(() => typeof render === 'function' && typeof day !== 'undefined' && day && day.cards && day.cards.length > 0, null, { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const st = await page.evaluate(() => ({ top: !!S.top, all: !!document.querySelector('.chip.on[data-league="all"]') }));
+    ok('soccer page: a saved Top picks "on" is not restored, and the All chip shows as on', !st.top && st.all, JSON.stringify(st));
+    await page.close();
+  }
 } finally { await browser.close(); server.close(); }
 console.log(bad ? `\n${bad} page check(s) FAILED` : '\nAll page checks passed'); process.exit(bad ? 1 : 0);

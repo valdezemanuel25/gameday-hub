@@ -558,7 +558,7 @@ const OUT = { H: 'home win', D: 'draw', A: 'away win' };
 const TZ = 'America/Chicago';
 let cfg = null, day = { cards: [] }, tally = null, cands = [], trendsS = null; // trendsS: the Trends tab's data for the open day
 const S = { date: '', tab: 'board', league: 'all', top: false, open: null, fin: false, tm: 'all', more: {} };
-try { const f = JSON.parse(localStorage.getItem('hubFilter') || 'null'); if (f) { S.league = f.league || 'all'; S.top = !!f.top; if (f.tm) S.tm = f.tm; } } catch (e) {}
+try { const f = JSON.parse(localStorage.getItem('hubFilter') || 'null'); if (f) { S.league = f.league || 'all'; /* Top picks is no longer restored (Nov 10, 2026): its button was replaced by Flip on Nov 9, so a saved 'on' left the Board stuck in Top picks with no way to see it */ if (f.tm) S.tm = f.tm; } } catch (e) {}
 const keepFilter = () => { try { localStorage.setItem('hubFilter', JSON.stringify({ league: S.league, top: S.top, tm: S.tm })); } catch (e) {} };
 const counts = {};
 try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); /* the page always opens on Board (Nov 9, 2026); the last tab is no longer restored */ if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }

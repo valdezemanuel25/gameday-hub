@@ -88,4 +88,15 @@ ok('score 1 + model 1 is Weak; a move against takes one off', rate(1, true, null
   ok('track is a list of groups with w <= n', Array.isArray(tr) && tr.every(x => x.n >= x.w && x.n > 0 && x.label));
   ok('track is empty with no games', buildTrends([], '2026-11-04').track.length === 0);
 }
+{ // one rest fact counts once (Nov 10, 2026): home rested 2 days, road on a back-to-back fires roadb2b and resthome; the read keeps one
+  const st0 = (id, tag, dir) => ({ id, tag, dir, w: 12, l: 8, n: 20 }), quiet = ['homeloss2', 'roadloss2', 'homefav60', 'homefav50', 'b2bover', 'firstover'].map(id => st0(id, null, 'with'));
+  const st = (id, tag, dir) => [st0(id, tag, dir)], S2 = (a, b) => [...a, ...b, ...quiet];
+  const g = card('r1', '2026-11-10T00:00:00Z', 'TOR', 'EDM', { date: '2026-11-09', hrest: 2, arest: 0 });
+  const both = gameReads([g], S2(st('roadb2b', 'watch', 'against'), st('resthome', 'lean', 'with')), '2026-11-09')[0];
+  ok('rest read: only one of roadb2b / resthome is counted', both.ml && both.ml.ev.length === 1 && both.ml.ev[0].id === 'resthome' && both.ml.score === 2, JSON.stringify(both.ml));
+  const tie = gameReads([g], S2(st('roadb2b', 'lean', 'against'), st('resthome', 'lean', 'with')), '2026-11-09')[0];
+  ok('rest read: a tie keeps resthome', tie.ml && tie.ml.ev.length === 1 && tie.ml.ev[0].id === 'resthome', JSON.stringify(tie.ml));
+  const one = gameReads([{ ...g, hrest: 1 }], S2(st('roadb2b', 'lean', 'against'), st('resthome', 'lean', 'with')), '2026-11-09')[0];
+  ok('rest read: home rested 1 day still counts roadb2b', one.ml && one.ml.ev.length === 1 && one.ml.ev[0].id === 'roadb2b', JSON.stringify(one.ml));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nall trends checks pass'); process.exit(fails ? 1 : 0);

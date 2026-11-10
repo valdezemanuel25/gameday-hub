@@ -278,8 +278,16 @@ import { ctxFor, isBackup, gkKey, gkResolve, withGk, adj5, B2B_OWN, B2B_OPP, BAC
   const dr = JSON.parse(kv.get(dayKey));
   ok('Update results: no new games, no Forebet read', !rr.created && !rr.forebet, JSON.stringify(rr));
   ok('Update results: nothing about the unstarted game changed', JSON.stringify(dr.cards.find(c => c.id === '9201')) === JSON.stringify(da.cards.find(c => c.id === '9201')));
+  // the default (cron) mode still does both (Nov 10, 2026: this check used to pass whatever happened): a game with a card that has now finished
+  // is graded, and a game seen for the first time is created, in the same run
+  feed[key] = [ev('9301', 6, 'Boston Bruins', 'BOS', 'Montreal Canadiens', 'MTL', false), ev('9302', -1, 'Dallas Stars', 'DAL', 'Vegas Golden Knights', 'VGK', false)];
+  await nhlStep(env, new Date(Date.now() - 3 * 3600000), fetchFn2, { force: true, mode: 'analyze' }); // 9302 gets its card before puck drop (9301 is made too; drop it)
+  const d0 = JSON.parse(kv.get(dayKey)); d0.cards = d0.cards.filter(c => c.id !== '9301'); kv.set(dayKey, JSON.stringify(d0));
+  ok('cron setup: 9302 has an ungraded card and 9301 has none', d0.cards.some(c => c.id === '9302' && !c.final));
+  feed[key] = [ev('9301', 6, 'Boston Bruins', 'BOS', 'Montreal Canadiens', 'MTL', false), ev('9302', -1, 'Dallas Stars', 'DAL', 'Vegas Golden Knights', 'VGK', true, 4, 2, 'Final')];
   const r_all = await nhlStep(env, c0, fetchFn2, { force: true });
-  ok('the default (cron) mode still does both', r_all.created >= 1 || r_all.graded >= 0, JSON.stringify(r_all));
+  const dc = JSON.parse(kv.get(dayKey)), g9302 = dc.cards.find(c => c.id === '9302');
+  ok('the default (cron) mode grades a finished game and creates a new one in the same run', r_all.graded >= 1 && r_all.created >= 1 && g9302 && g9302.final && g9302.final.h === 4 && g9302.final.a === 2 && dc.cards.some(c => c.id === '9301'), JSON.stringify(r_all));
 }
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);

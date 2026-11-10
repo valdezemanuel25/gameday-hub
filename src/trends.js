@@ -97,6 +97,10 @@ export function gameReads(ctx, stats, date) {
       const toward = s.kind === 'ml' ? pts * (s.subject === 'H' ? 1 : -1) : pts;
       (s.kind === 'ml' ? ml : ou).push({ id: s.id, label: s.label, w: st.w, l: st.l, n: st.n, who: s.who, tag: st.tag, dir: st.dir, toward });
     }
+    // One fact, one count (Nov 10, 2026): 'resthome' (home 2+ days rested, road on a back-to-back) is a subset of 'roadb2b', so when both fire
+    // only the stronger one is kept (a tie keeps resthome, the narrower spot).
+    const rb = ml.findIndex(x => x.id === 'roadb2b'), rh = ml.findIndex(x => x.id === 'resthome');
+    if (rb >= 0 && rh >= 0) ml.splice(Math.abs(ml[rb].toward) > Math.abs(ml[rh].toward) ? rh : rb, 1);
     const m = c.v4 || c.v2, hm = c.px ? hockeyMove(c.px) : null, line = lineOf(c), out = { id: c.id, date: c.date, kickoff: c.kickoff, ko: c.ko, aAbbr: c.aAbbr, hAbbr: c.hAbbr, away: c.away, home: c.home, line, hrest: c.hrest, arest: c.arest };
     const ms = ml.reduce((a, x) => a + x.toward, 0);
     if (ms !== 0) {
