@@ -561,7 +561,7 @@ const S = { date: '', tab: 'board', league: 'all', top: false, open: null, fin: 
 try { const f = JSON.parse(localStorage.getItem('hubFilter') || 'null'); if (f) { S.league = f.league || 'all'; S.top = !!f.top; if (f.tm) S.tm = f.tm; } } catch (e) {}
 const keepFilter = () => { try { localStorage.setItem('hubFilter', JSON.stringify({ league: S.league, top: S.top, tm: S.tm })); } catch (e) {} };
 const counts = {};
-try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); if (['board', 'results', 'moves', 'status'].includes(v.tab)) S.tab = v.tab; if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }
+try { const v = JSON.parse(localStorage.getItem('hubView') || '{}'); /* the page always opens on Board (Nov 9, 2026); the last tab is no longer restored */ if (typeof v.league === 'string') S.league = v.league; } catch (e) { /* first visit */ }
 const saveView = () => { try { localStorage.setItem('hubView', JSON.stringify({ tab: S.tab, league: S.league })); } catch (e) { /* ignore */ } };
 
 /* ---------- admin token (protects Analyze / Update so strangers can't use your free quota) ---------- */

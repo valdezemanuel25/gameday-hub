@@ -388,11 +388,15 @@ const tmCT = iso => new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'nume
 const pxLocked = c => c.final || new Date(c.kickoff).getTime() - Date.now() <= 20 * 60000;
 // What moved most, in words: "NYR +6" (home / away on the moneyline) or "Over 6.5 +5".
 const mvWord = (c, hm) => hm.top === 'ml' ? (hm.ml.d > 0 ? `${c.hAbbr} ${sgn(Math.round(hm.ml.d))}` : `${c.aAbbr} ${sgn(Math.round(-hm.ml.d))}`) : `${hm.ou.d > 0 ? 'Over' : 'Under'} ${hm.ou.line} ${sgn(Math.round(Math.abs(hm.ou.d)))}`;
+// pxLine(c) is no longer shown on the open card (removed Nov 9, 2026: the same prices are on the card's Movement side). To bring it back, add ${pxLine(c)} after ${goalsPill(c)} in card().
 function pxLine(c) {
   const px = c.px, hm = hockeyMove(px); if (!px) return '';
   const op = px.op || px.f || {}, ot = px.opt || px.f || {}, now = pxLocked(c) ? 'close' : 'now';
-  const ml = px.h != null ? `Moneyline (${hm && hm.from === 'first' ? 'first seen' : 'opening'} → ${now}): ${esc(c.aAbbr)} ${op.a != null ? fmtOdds(op.a) + ' → ' : ''}<b>${fmtOdds(px.a)}</b> · ${esc(c.hAbbr)} ${op.h != null ? fmtOdds(op.h) + ' → ' : ''}<b>${fmtOdds(px.h)}</b>${hm && hm.ml ? ` · ${esc(c.hAbbr)} ${Math.round(hm.ml.p0)}→${Math.round(hm.ml.p1)}%${Math.abs(hm.ml.d) >= 1 ? ` ${mvTag(hm.ml.d)}` : ''}` : ''}` : '';
-  const ou = px.tl != null ? `Over/Under ${px.tl}: Over ${ot.tl === px.tl && ot.to != null ? fmtOdds(ot.to) + ' → ' : ''}<b>${fmtOdds(px.to)}</b> · Under ${ot.tl === px.tl && ot.tu != null ? fmtOdds(ot.tu) + ' → ' : ''}<b>${fmtOdds(px.tu)}</b>${hm && hm.ou ? ` · Over ${Math.round(hm.ou.p0)}→${Math.round(hm.ou.p1)}%${Math.abs(hm.ou.d) >= 1 ? ` ${mvTag(hm.ou.d)}` : ''}` : ''}` : '';
+  // Shortened on Nov 9, 2026: one tight line each ("ML NYR +133→+156 · EDM -133→-156 +4", "O/U 6.5 Over -100→-100 · Under -100→-100"); the opening/first-seen
+  // wording is in the tooltip, and the win % move is already on the card above, so it is not repeated here.
+  const arrow = (o, n) => (o != null ? fmtOdds(o) + '→' : '') + `<b>${fmtOdds(n)}</b>`;
+  const ml = px.h != null ? `<span title="Moneyline, ${hm && hm.from === 'first' ? 'first seen' : 'opening'} → ${now}">ML</span> ${esc(c.aAbbr)} ${arrow(op.a, px.a)} · ${esc(c.hAbbr)} ${arrow(op.h, px.h)}${hm && hm.ml && Math.abs(hm.ml.d) >= 1 ? ` ${mvTag(hm.ml.d)}` : ''}` : '';
+  const ou = px.tl != null ? `<span title="Over/Under line ${px.tl}, opening → ${now}">O/U ${px.tl}</span> Over ${arrow(ot.tl === px.tl ? ot.to : null, px.to)} · Under ${arrow(ot.tl === px.tl ? ot.tu : null, px.tu)}${hm && hm.ou && Math.abs(hm.ou.d) >= 1 ? ` ${mvTag(hm.ou.d)}` : ''}` : '';
   return `<div class="pxl">${[ml, ou].filter(Boolean).join('<br>')}</div>`;
 }
 // Tonight's starting goalie (ESPN: expected, then confirmed) and rest, for both teams, away on the left like the matchup.
@@ -450,9 +454,9 @@ function card(c) {
   const lnc = `<span class="lnc${c.ln ? '' : ' none'}">O/U ${ln}${c.ln ? ' · ' + esc(c.ln.src || 'sportsbook') : ' · no line yet'}</span>`;
   const lnrow = pre && S.ln === c.id ? `<div class="lnrow"><label>Total line</label><input type="number" inputmode="decimal" step="0.5" min="3.5" max="9.5" id="ln-${esc(c.id)}" value="${ln}"><button type="button" class="btn sm" data-saveln="${esc(c.id)}">Save</button>${c.ln && c.ln.how === 'manual' ? `<button type="button" class="btn sm ghost" data-clrln="${esc(c.id)}">Use ESPN</button>` : ''}<button type="button" class="btn sm ghost" data-setln="">Cancel</button></div>` : '';
   return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
-  ${split}${(hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${goalsPill(c)}${pxLine(c)}
+  ${split}${(hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${goalsPill(c)}
   <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>${gkStrip(c)}${v5Row(c, g.v5)}${sgRow(c)}
-  <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Winner pick, Over/Under ${ln}${c.ln ? '' : ' (the default until a line is known)'}, then the single likeliest final score (score shown away–home; Forebet: its predicted score). Blue marks a confident pick.`}</div></div>`;
+  <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Scores are away–home · blue = confident pick${c.ln ? '' : ` · O/U ${ln} is the default line`}`}</div></div>`;
 }
 // ---------- Trends: how each situation has done in the saved days, and a read on each game of the day (src/trends.js) ----------
 const TREND_TAG = { lean: 'Lean', watch: 'Watch', noise: 'Noise' };
