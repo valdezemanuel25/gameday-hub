@@ -44,6 +44,7 @@
   }
   var css = '#sweep{position:fixed;left:max(10px,env(safe-area-inset-left,0px));z-index:900;width:60px;height:63px;padding:0;border:0;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent;filter:drop-shadow(0 4px 10px rgba(0,0,0,.6));transition:opacity .4s,transform .4s}'
     + '#sweep svg{width:100%;height:100%;display:block;overflow:visible}#sweep.in{opacity:1;transform:none}#sweep.out{opacity:0;transform:translateY(12px)}'
+    + '#sweep[data-tuck]{opacity:0;transform:translateY(14px);pointer-events:none}@media (prefers-reduced-motion:reduce){#sweep{transition:none}}'
     + '#sweep-tip{position:fixed;left:max(10px,env(safe-area-inset-left,0px));z-index:901;max-width:min(270px,calc(100vw - 32px));background:#0d100b;color:#e8eee0;border:1px solid rgba(200,255,46,.45);border-radius:14px;padding:10px 12px;font:500 13px/1.4 "DM Sans",system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.6)}'
     + '#sweep-tip.issue{border-color:rgba(255,77,87,.6)}#sweep-tip b{color:#C8FF2E}#sweep-tip.issue b{color:#FF4D57}'
     + '.sw .float{animation:swf 3s ease-in-out infinite}.sw .shadow{animation:sws 3s ease-in-out infinite;transform-origin:100px 196px}'
@@ -135,6 +136,18 @@
     if (tip) tip.style.bottom = 'calc(' + (b + 68) + 'px + env(safe-area-inset-bottom,0px))';
     if (panel) panel.style.bottom = 'calc(' + (b + 70) + 'px + env(safe-area-inset-bottom,0px))';
   };
+  // Sweep steps out of the way while you read: scrolling down tucks him away, scrolling up (or the top of the page) brings him back,
+  // the same way the top bar behaves. He stays put while his note or report is open. Display only.
+  var lastY = window.pageYOffset || 0, tucked = false, ticking = false;
+  var tuck = function () { if (el) el.toggleAttribute('data-tuck', tucked && !tip && !panel); };
+  var onScroll = function () {
+    ticking = false;
+    var y = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || 0), d = y - lastY;
+    if (y <= 8) tucked = false; else if (d > 6) tucked = true; else if (d < -6) tucked = false;
+    if (Math.abs(d) > 6 || y <= 8) lastY = y;
+    tuck();
+  };
+  window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
   var show = function () {
     if (el) return;
     var st = document.createElement('style'); st.textContent = css + PANEL_CSS; document.head.appendChild(st);
@@ -145,7 +158,7 @@
       if (mood === 'work' && !swept()) { tip = document.createElement('div'); tip.id = 'sweep-tip'; tip.setAttribute('role', 'status'); tip.innerHTML = note; document.body.appendChild(tip); return place(); }
       openPanel(); place();
     });
-    document.body.appendChild(el); decide(); place(); requestAnimationFrame(function () { el.className = 'in'; });
+    document.body.appendChild(el); decide(); place(); tuck(); requestAnimationFrame(function () { el.className = 'in'; });
   };
   var hide = function () { if (tip) { tip.remove(); tip = null; } if (panel) { panel.remove(); panel = null; } if (el) { el.remove(); el = null; } mood = null; };
   var last = null;
