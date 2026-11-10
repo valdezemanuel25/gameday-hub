@@ -275,6 +275,7 @@ button:focus-visible{outline:2px solid var(--blue)}
 .days{position:relative;z-index:5}
 .bfan{position:absolute;left:50%;width:min(300px,calc(100% - 40px));margin-left:calc(min(300px,calc(100% - 40px)) / -2);z-index:4;pointer-events:none}
 .bcard{position:absolute;left:0;right:0;top:0;--d:calc(var(--i) * 46px);transform:translateY(calc(var(--d) * -1 - 56px)) scale(.7);opacity:0;transition:transform .42s cubic-bezier(.2,.9,.25,1.1) calc(var(--i) * 45ms),opacity .25s ease calc(var(--i) * 45ms);transform-origin:50% 0}
+.bcard .btn.g{background:#1a1214}
 .bcard .btn{display:block;width:100%;height:40px;padding:0;line-height:40px;box-shadow:0 8px 18px rgba(0,0,0,.45)}
 .bshade{position:absolute;inset:0;border-radius:999px;background:#000;opacity:calc(var(--i) * .16);pointer-events:none}
 .bfan.open{pointer-events:auto}
@@ -292,7 +293,7 @@ button:focus-visible{outline:2px solid var(--blue)}
     <div class="title" id="title">NHL</div>
     <div class="sub" title="Winner and Over/Under at the sportsbook line (5.5 when no line is known). Overtime and shootout wins count.">Winner and Over/Under · Times are Central</div>
     <div class="days" id="days"></div>
-    <div class="bfan-scrim" id="bscrim"></div><div class="bfan" id="bfan" aria-hidden="true"><div class="bcard" style="--i:0"><button type="button" class="btn" id="run">Update NHL now</button><span class="bshade"></span></div></div>
+    <div class="bfan-scrim" id="bscrim"></div><div class="bfan" id="bfan" aria-hidden="true"><div class="bcard" style="--i:0"><button type="button" class="btn" id="run" title="Reads new games, prices and price moves, goalies and lineups, and Forebet">Analyze this day</button><span class="bshade"></span></div><div class="bcard" style="--i:1"><button type="button" class="btn g" id="run-res" title="Grades finished games and the model bets">Update results</button><span class="bshade"></span></div></div>
   </div>
   <div class="tabs" id="tabs"></div>
   <div id="view"></div>
@@ -884,7 +885,7 @@ document.addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== '
 // Lines tab: an opened "Tap for details" stays open when the page redraws
 document.addEventListener('toggle', e => { const d = e.target; if (d && d.matches && d.matches('details.lnd')) (S.lnOpen = S.lnOpen || {})[d.dataset.lnid] = d.open; }, true);
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-gomove],[data-goboard],[data-flipall],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-sel],[data-mvf],[data-lnf],[data-getclose],[data-fin]'); if (!t) return;
+  const t = e.target.closest('[data-gomove],[data-goboard],[data-flipall],[data-d],[data-tab],[data-sc],#run,#run-res,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-sel],[data-mvf],[data-lnf],[data-getclose],[data-fin]'); if (!t) return;
   if (t.dataset.getclose) {
     if (t.disabled) return; const t0 = t.textContent; t.disabled = true; t.textContent = 'Reading the price…';
     try { const r = await (await fetch('/api/nhl/close', { method: 'POST', body: JSON.stringify({ date: S.date, id: t.dataset.getclose }) })).json(); if (r.error) throw new Error(r.error); await load(); }
@@ -928,10 +929,15 @@ document.addEventListener('click', async e => {
     if (S.tab === 'status') render();
     window.location.href = '/api/nhl/export';
   }
-  else if (t.id === 'run') {
-    t.disabled = true; $('#st').textContent = 'Updating…';
-    try { const r = await (await fetch('/api/nhl/run', { method: 'POST' })).json();
-      $('#st').textContent = r.error ? r.error : `${r.created || 0} new, ${r.graded || 0} graded${r.priced ? `, ${r.priced} price${r.priced === 1 ? '' : 's'} read` : ''}${r.goalies ? `, ${r.goalies} goalie update${r.goalies === 1 ? '' : 's'}` : ''}${r.closed ? `, ${r.closed} closing price${r.closed === 1 ? '' : 's'} from ESPN` : ''}${r.forebet ? ', Forebet ' + (r.forebet.error || r.forebet.note || r.forebet.saved + ' saved') : ''}`;
+  else if (t.id === 'run' || t.id === 'run-res') {
+    // Two buttons (Nov 9, 2026): Analyze this day = new games, prices and price moves, goalies / lineups, Forebet; Update results = grade finished
+    // games, closing prices and the model bets. Each sends its mode to /api/nhl/run.
+    const mode = t.id === 'run' ? 'analyze' : 'results';
+    t.disabled = true; $('#st').textContent = mode === 'analyze' ? 'Analyzing…' : 'Updating results…';
+    try { const r = await (await fetch('/api/nhl/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode }) })).json();
+      $('#st').textContent = r.error ? r.error : mode === 'analyze'
+        ? `${r.created || 0} new${r.priced ? `, ${r.priced} price${r.priced === 1 ? '' : 's'} read` : ''}${r.goalies ? `, ${r.goalies} goalie update${r.goalies === 1 ? '' : 's'}` : ''}${r.forebet ? ', Forebet ' + (r.forebet.error || r.forebet.note || r.forebet.saved + ' saved') : ''}`
+        : `${r.graded || 0} graded${r.closed ? `, ${r.closed} closing price${r.closed === 1 ? '' : 's'} from ESPN` : ''}`;
       await load(); } catch (err) { $('#st').textContent = err.message; }
     t.disabled = false;
   }

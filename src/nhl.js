@@ -464,7 +464,9 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
 }
 
 // ---- cron / on-demand step ---------------------------------------------------------------------
-export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = false } = {}) {
+// mode (Nov 9, 2026): 'all' (the cron, as before), 'analyze' (new games, prices and price moves, goalies / lineups, Forebet; no grading) or 'results'
+// (grade finished games, closing prices, leads, shots, and with them the model bets; no price, lineup or Forebet reads). The two buttons on the NHL page.
+export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = false, mode = 'all' } = {}) {
   const debug = [], t = localDate(now.toISOString());
   let S = (await env.HUB.get('nhl:state', 'json')) || freshState(), stateDirty = withGk(S);
   let SH = await getShots(env), shDirty = false; // shots + goalie read (src/nhlshots.js), tracking only
@@ -488,6 +490,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
       const ld = localDate(e.date);
       if (seen.has(e.id)) continue; seen.add(e.id); // a game is filed under the day ESPN lists it
       let c = day.cards.find(x => x.id === e.id);
+      if (e.done && mode === 'analyze') continue; // Analyze reads prices and lineups only; finished games are Update results' job
       if (e.done) {
         if (c && !c.final) {
           c.final = { h: e.hs, a: e.as, last: e.last, total: 0 };
@@ -516,6 +519,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
         }
         continue;
       }
+      if (mode === 'results') continue; // Update results leaves unstarted games alone
       const manual = c && c.ln && c.ln.how === 'manual', lineNow = manual ? c.ln.v : e.line ?? (c && c.ln ? c.ln.v : null);
       const rs = { h: restOf(e.hc, date), a: restOf(e.ac, date) }, rsN = rs.h == null && rs.a == null ? null : rs, gkN = e.gk && (e.gk.h || e.gk.a) ? e.gk : null;
       const pr = predict(S, e.hc, e.ac, lineNow ?? LINE, ctxFor(S, e.hc, e.ac, gkN || (c && c.gk), rsN || (c && c.rs)));
@@ -551,7 +555,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
   // Forebet: one page read, at most once per 3 hours (6 after a failure), only when a game still lacks its numbers.
   let fb = null;
   const meta = (await env.HUB.get('nhl:fbmeta', 'json')) || {};
-  if (force || !meta.at || (!meta.ok && meta.hv !== FB_HV) || now.getTime() - new Date(meta.at).getTime() >= (meta.ok ? 3 : 6) * HOUR) {
+  if (mode !== 'results' && (force || !meta.at || (!meta.ok && meta.hv !== FB_HV) || now.getTime() - new Date(meta.at).getTime() >= (meta.ok ? 3 : 6) * HOUR)) {
     const work = [];
     for (const d of [t, addDays(t, 1)]) {
       const day = await env.HUB.get(`nhl:day:${d}`, 'json');

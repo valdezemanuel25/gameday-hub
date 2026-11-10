@@ -1177,7 +1177,7 @@ const hub = {
     if (p === '/api/nhl/gk-check') { try { return json(await gkCheck(env, String(url.searchParams.get('date') || today()))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (p === '/api/nhl/odds-raw') { try { return json(await nhlOddsRaw(env, String(url.searchParams.get('date') || ''))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (req.method === 'POST' && p === '/api/nhl/close') { try { const b = await req.json(); return json(await nhlCardClose(env, String(b.date || ''), String(b.id || ''), new Date())); } catch (e) { return json({ error: `Final price: ${e && e.message || e}` }, 500); } }
-    if (req.method === 'POST' && p === '/api/nhl/run') { try { return json({ ok: true, ...(await nhlStep(env, new Date(), fetch, { force: true })) }); } catch (e) { return json({ error: `NHL: ${e && e.message ? e.message : e}` }, 500); } }
+    if (req.method === 'POST' && p === '/api/nhl/run') { try { let mode = 'all'; try { const b = await req.json(); if (b && (b.mode === 'analyze' || b.mode === 'results')) mode = b.mode; } catch (e) { /* no body: the old single button */ } return json({ ok: true, ...(await nhlStep(env, new Date(), fetch, { force: true, mode })) }); } catch (e) { return json({ error: `NHL: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/days') { // every saved day, for the Export button
       const out = []; let cursor;
       do { const r = await env.HUB.list({ prefix: 'day:', cursor }); out.push(...r.keys.map(k => k.name.slice(4))); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);

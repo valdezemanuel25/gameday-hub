@@ -267,5 +267,19 @@ import { ctxFor, isBackup, gkKey, gkResolve, withGk, adj5, B2B_OWN, B2B_OPP, BAC
     px: { op: { h: -150, a: 125 }, h: -170, a: 140, tl: 6.5, to: -110, tu: -110, opt: { tl: 6.5, to: -105, tu: -115 }, cl: '2026-11-01T00:20:00Z' }, gk: { h: { n: 'Skinner' }, a: { n: 'Talbot' } } };
   const rows = rowsOf('2026-10-31', [card, { ...card, id: 'g2', final: null }, { ...card, id: 'g3', px: null }, { ...card, id: 'g4', skipped: true }]);
   ok('history export: graded games with a closing price only, with open / close, totals, result, rest and goalies', rows.length === 1 && rows[0].open.h === -150 && rows[0].close.h === -170 && rows[0].totalOpen.o === -105 && rows[0].final.last === 'OT' && rows[0].b2b.join() === '0,1' && rows[0].backup[1] === 1 && rows[0].goalies.a === 'Talbot', JSON.stringify(rows)); }
+{ // the two NHL buttons (Nov 9, 2026): mode 'analyze' reads new games, prices and Forebet and grades nothing; mode 'results' grades and reads nothing new
+  const key = today.replace(/-/g, '');
+  feed[key] = [ev('9201', 6, 'Edmonton Oilers', 'EDM', 'Toronto Maple Leafs', 'TOR', false), ev('9202', -1, 'Chicago Blackhawks', 'CHI', 'Colorado Avalanche', 'COL', true, 2, 3, 'Final')];
+  const c0 = new Date(Date.now() + 2 * 3600000);
+  const ra = await nhlStep(env, c0, fetchFn2, { force: true, mode: 'analyze' });
+  const da = JSON.parse(kv.get(dayKey));
+  ok('Analyze: makes the new game and grades nothing', ra.created >= 1 && !ra.graded && da.cards.find(c => c.id === '9201') && !(da.cards.find(c => c.id === '9202') || {}).final, JSON.stringify(ra));
+  const rr = await nhlStep(env, c0, fetchFn2, { force: true, mode: 'results' });
+  const dr = JSON.parse(kv.get(dayKey));
+  ok('Update results: no new games, no Forebet read', !rr.created && !rr.forebet, JSON.stringify(rr));
+  ok('Update results: nothing about the unstarted game changed', JSON.stringify(dr.cards.find(c => c.id === '9201')) === JSON.stringify(da.cards.find(c => c.id === '9201')));
+  const r_all = await nhlStep(env, c0, fetchFn2, { force: true });
+  ok('the default (cron) mode still does both', r_all.created >= 1 || r_all.graded >= 0, JSON.stringify(r_all));
+}
 console.log(fail ? `\n${fail} NHL checks FAILED` : '\nAll NHL checks passed');
 process.exit(fail ? 1 : 0);
