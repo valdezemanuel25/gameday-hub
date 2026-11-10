@@ -1964,6 +1964,17 @@ function pushBox() {
   return `<div class="sec" style="padding-top:16px">Notifications<small>A heads-up about 45 minutes before a game where every model agrees on its best pick: soccer Best picks (all models agree at 60% or more) and hockey games where v2, v4 and Forebet agree.</small></div>
     <div class="pair" style="padding-top:0">${body}${pushSt.msg ? `<div class="small" style="margin-top:6px">${esc(pushSt.msg)}</div>` : ''}</div>`;
 }
+// Assign now lives at the bottom of the Status tab, under Export data (it was its own tab until Nov 9, 2026): the same list, loaded when Status opens.
+let asgTry = false;
+function asgSection() {
+  if (!asg && !asgTry) { asgTry = true; loadAssign().then(() => { if (S.tab === 'status') render(); }).catch(() => {}); }
+  return `<div class="sec" style="padding-top:16px">Games waiting for a pick<small>${asg ? asgCount() : 'Looking…'}</small></div><div class="pair" style="padding-top:0">${asgView()}</div>`;
+}
+function asgCount() {
+  const now = Date.now(); let n = 0;
+  for (const d of asg.days) for (const c of d.cards) { if (!FIRST.has(c.league) || c.final || new Date(c.kickoff).getTime() <= now) continue; if (!(c.fb && c.fb.p) || !(c.fb && c.fb.over != null) || !(c.fb && c.fb.btts != null) || !c.sm) n++; }
+  return n ? `${n} game${n === 1 ? '' : 's'} still missing a Forebet or SportsMole prediction.` : 'Nothing waiting.';
+}
 function statusView() {
   if (!stat) return `<div class="empty">Loading…</div>`;
   const w = stat.writes, pct = Math.min(100, Math.round(100 * w.used / w.limit)), cls = pct >= 90 ? 'x' : pct >= 70 ? 'w' : '';
@@ -1980,7 +1991,8 @@ function statusView() {
     ${bttsBlock()}
     ${forebetBox()}
     <div class="sec" style="padding-top:16px">Back up your history<small>Downloads every saved day with predictions, results and SportsMole picks, plus the carried-over totals.</small></div>
-    <div class="pair" style="padding-top:0"><div class="small" style="margin:0 0 4px;${backupAge() == null || backupAge() >= 7 ? 'color:var(--amber)' : ''}">${backupAge() == null ? 'No backup made from this device yet.' : backupAge() === 0 ? 'Last backup from this device: today.' : `Last backup from this device: ${backupAge()} day${backupAge() === 1 ? '' : 's'} ago.`}</div><button type="button" class="xbtn" id="btn-export">Export data</button></div>`;
+    <div class="pair" style="padding-top:0"><div class="small" style="margin:0 0 4px;${backupAge() == null || backupAge() >= 7 ? 'color:var(--amber)' : ''}">${backupAge() == null ? 'No backup made from this device yet.' : backupAge() === 0 ? 'Last backup from this device: today.' : `Last backup from this device: ${backupAge()} day${backupAge() === 1 ? '' : 's'} ago.`}</div><button type="button" class="xbtn" id="btn-export">Export data</button></div>
+    ${asgSection()}`;
 }
 // Paste Forebet's league table (select the table on the page, copy, paste here). Only games that have not kicked off are saved.
 function forebetReads() {
@@ -1989,13 +2001,14 @@ function forebetReads() {
 }
 function forebetBox() {
   const opts = (cfg.leagues || []).map(l => `<option value="${esc(l.slug)}"${l.slug === (S.league !== 'all' ? S.league : 'uefa.europa') ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
-  return `<div class="sec" style="padding-top:16px">Forebet picks<small>The Hub reads Forebet's league pages by itself for games that have not started. If a page can't be read, copy the league table from forebet.com and paste it here. Do it once per tab on Forebet (1X2, Under/Over 2.5, Both teams to score). It is saved for ${esc(S.date)}, only for games that have not started, and only once per game for each table. Nothing uses it except the Results tab.</small></div>
-    <div class="pair" style="padding-top:0">${forebetReads()}<select id="fb-league" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit">${opts}</select>
+  return `<div class="sec" style="padding-top:16px">Forebet picks</div>
+    <div class="pair" style="padding-top:0"><select id="fb-league" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit">${opts}</select>
     <select id="fb-kind" style="width:100%;margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit"><option value="1x2">Table: 1X2 (win, draw, loss)</option><option value="ou">Table: Under/Over 2.5</option><option value="btts">Table: Both teams to score</option></select>
     <div class="note"><textarea id="fb-text" placeholder="Paste the table here"></textarea></div><button type="button" class="xbtn" id="btn-fb">Save pasted picks</button><div class="small" id="fb-msg" style="margin-top:6px"></div></div>`;
 }
 // Both-score prices from The Odds API: read by themselves (opening and lineup read) once the ODDS_API_KEY secret is set.
 function bttsBlock() {
+  return ''; // the Both-score prices text block was removed from Status (Nov 9, 2026)
   const b = stat && stat.btts; if (!b) return '';
   const cl = c => (c ? `${c.left} left (as of ${ago(c.at)})` : 'no read yet');
   const cr = b.keys > 1 ? `Key 1: ${cl(b.credits)}. Backup key: ${cl(b.credits2)}. The backup takes over when key 1 is out or below ${b.reserve} and the backup has more; opening reads pause below ${b.reserve} on every key.` : (b.credits ? `${b.credits.left} credits left this month (as of ${ago(b.credits.at)}). Opening reads pause below ${b.reserve}, so the closing reads keep going.` : 'No read yet this month.');
@@ -2038,7 +2051,7 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['analyst', 'Analyst'], ['trends', 'Trends'], ['results', 'Results'], ['status', 'Status'], ['assign', 'Assign'], ['mbets', 'Model bets']] /* Bets tab hidden on Nov 9, 2026 (betsView() and its code are kept); Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['analyst', 'Analyst'], ['trends', 'Trends'], ['results', 'Results'], ['status', 'Status'], ['mbets', 'Model bets']] /* Bets tab hidden on Nov 9, 2026 (betsView() and its code are kept); Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function updSDots() { const g = document.getElementById('sgrid'), ds = document.querySelectorAll('.sdots i'); if (!g || !ds.length) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2);
@@ -2192,7 +2205,7 @@ document.addEventListener('click', async e => {
   }
   const as = e.target.closest('[data-assign]');
   if (as) {
-    const onAsg = S.tab === 'assign', dt = as.dataset.date || S.date, c = onAsg ? { id: as.dataset.card, league: as.dataset.lg } : day.cards.find(x => x.id === as.dataset.card); if (!c) return;
+    const onAsg = S.tab === 'assign' || S.tab === 'status', dt = as.dataset.date || S.date, c = onAsg ? { id: as.dataset.card, league: as.dataset.lg } : day.cards.find(x => x.id === as.dataset.card); if (!c) return;
     as.disabled = true;
     try { const keys = as.dataset.assign.split(','); let r, done = 0;
       for (const key of keys) { r = await post('/api/assign', { date: dt, league: c.league, id: c.id, key, dismiss: !!as.dataset.dismiss }); if (r.error) throw new Error(done ? `${r.error} (${done} of ${keys.length} already applied)` : r.error); done++; }
@@ -2255,7 +2268,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date) { S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
-    if (S.tab === 'status') { pushCheck(); stat = null; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab === 'analyst') { render(); await loadAnalyst(); } else if (S.tab === 'trends') { render(); await loadTrends(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
+    if (S.tab === 'status') { pushCheck(); stat = null; asg = null; asgTry = false; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab === 'analyst') { render(); await loadAnalyst(); } else if (S.tab === 'trends') { render(); await loadTrends(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
   if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
   if (t.classList.contains('hd') && t.closest('#sdt')) { // tapping the opened game's header closes it and returns to the grid
