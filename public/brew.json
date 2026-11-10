@@ -1,65 +1,70 @@
 {
-  "updated": "2026-11-09T22:09:28Z",
+  "updated": "2026-11-10T11:09:50Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-09",
-      "title": "Having reservations",
+      "date": "2026-11-10",
+      "title": "Everyone's problem",
       "markets": [
         {
-          "label": "Nasdaq YTD",
-          "value": "24,579",
-          "change": 5.75
+          "label": "Nasdaq",
+          "value": "25,253",
+          "change": 2.74
         },
         {
-          "label": "S&P 500 YTD",
-          "value": "7,377",
-          "change": 7.76
+          "label": "S&P 500",
+          "value": "7,550",
+          "change": 2.35
         },
         {
-          "label": "Dow YTD",
-          "value": "51,286",
-          "change": 6.7
+          "label": "Dow",
+          "value": "52,390",
+          "change": 2.15
         },
         {
-          "label": "10-yr YTD",
-          "value": "4.859%",
-          "change": 69.6,
+          "label": "10-yr",
+          "value": "4.864%",
+          "change": 0,
           "unit": "bps"
         },
         {
-          "label": "Bitcoin YTD",
-          "value": "$74,789",
-          "change": -14.54
+          "label": "Bitcoin",
+          "value": "$75,218",
+          "change": 1.12
+        },
+        {
+          "label": "AMD",
+          "value": "$508.58",
+          "change": 13.26
         }
       ],
       "takeaways": [
         {
-          "h": "Nvidia probe",
-          "t": "Nvidia is investigating CEO Jensen Huang after he admitted an affair with Alice Huang, a business contact US intelligence says spied for China; he stays in charge."
+          "h": "Nvidia fallout",
+          "t": "Nvidia fell 4.3%, wiping out nearly $230 billion, after CEO Jensen Huang admitted an affair with an alleged Chinese spy."
         },
         {
-          "h": "Chip stocks",
-          "t": "The Philadelphia Semiconductor Index is still down 29% over five weeks, and the news could weigh on chips today."
+          "h": "AI exposure",
+          "t": "Nvidia has put about $500 billion into AI infrastructure, including roughly $165 billion lent to neoclouds, so trouble there could spread across the industry."
         },
         {
-          "h": "Succession risk",
-          "t": "Huang oversees about 60 direct reports and Nvidia has no public succession plan, complicating the US-China AI race."
+          "h": "Tech rebound",
+          "t": "The Nasdaq rose 2.74% as Amazon, Alphabet, Microsoft, AMD (up 13.26%) and Broadcom bounced while oil prices fell."
         },
         {
-          "h": "Inflation week",
-          "t": "October CPI lands Tuesday, the last reading before a December Fed meeting where a hike is expected; September wholesale prices ran 6.3% year over year."
+          "h": "Data centers",
+          "t": "Investors were already wary after Democrats won Congress on promises to halt new data center construction."
         },
         {
-          "h": "Earnings",
-          "t": "Paramount Skydance reports its first quarter since buying Warner Bros. Discovery today; CoreWeave (down 41% YTD) reports Tuesday, Cisco and Applied Materials Thursday."
+          "h": "Seed-oil free",
+          "t": "Sales of seed-oil-free products jumped 72% to $1 billion in a year, with PepsiCo and Utz adding tallow-cooked snacks."
         },
         {
-          "h": "Recall hit",
-          "t": "Once Upon a Farm fell 38% last week, erasing $242 million of value, after recalling its Tractor Wheels toddler bars."
+          "h": "Deals and moves",
+          "t": "Honda plans a $3 billion Ohio assembly plant, and PwC will put 85,000 employees through a six-month critical-thinking program."
         }
       ],
-      "note": "Market numbers are the Friday close and show year-to-date moves."
+      "note": "Market numbers are the Monday close."
     },
     {
       "source": "Brew Markets",
