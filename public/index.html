@@ -1188,7 +1188,7 @@ function board() {
   const leagues = [...new Map(day.cards.map(c => [c.leagueKey, c.leagueName])).entries()];
   if (S.league !== 'all' && !leagues.some(([k]) => k === S.league)) S.league = 'all';
   const chips = `<div class="chips"><button type="button" class="chip ${S.league === 'all' && !S.top ? 'on' : ''}" data-league="all">All<i>${day.cards.filter(c => c.v2).length}</i></button>` +
-    `<button type="button" class="chip ${S.top ? 'on' : ''}" data-top="1">Top picks</button>` +
+    `<button type="button" class="chip flipall ${window.FlipCard && FlipCard.allOn() ? 'on' : ''}" data-flipall="1" title="Flip every card to its other side">⟲ Flip</button>` +
     leagues.map(([k, n]) => `<button type="button" class="chip ${S.league === k && !S.top ? 'on' : ''}" data-league="${k}">${FLAG[k] || ''}${esc(LCODE[k] || n)}<i>${day.cards.filter(c => c.v2 && c.leagueKey === k).length}</i></button>`).join('') + `</div>`;
   if (!day.cards.length) return chips + `<div class="empty">No games analyzed for this day yet.<br>Tap <b>Analyze this day</b> below to load the fixtures and predictions.</div>`;
   if (S.league !== 'all') cs = cs.filter(c => c.leagueKey === S.league);
@@ -1242,7 +1242,7 @@ function sidebar(leagues) {
   const lab = (k, nm) => `<span class="cd">${LCODE[k] || esc(String(nm).slice(0, 3).toUpperCase())}</span><span class="nm">${esc(nm)}</span>`;
   const idle = ((cfg && cfg.leagues) || []).filter(l => !l.cup && !leagues.some(([k]) => k === l.key));
   return `<aside class="lsb"><button type="button" class="it ${S.league === 'all' && !S.top ? 'on' : ''}" data-league="all"><span class="cd">ALL</span><span class="nm">All</span><i>${day.cards.filter(c => c.v2).length}</i></button>` +
-    `<button type="button" class="it amber ${S.top ? 'on' : ''}" data-top="1"><span class="cd">TOP</span><span class="nm">Top picks</span></button>` +
+    `<button type="button" class="it flipall ${window.FlipCard && FlipCard.allOn() ? 'on' : ''}" data-flipall="1"><span class="cd">⟲</span><span class="nm">Flip</span></button>` +
     leagues.map(([k, nm]) => `<button type="button" class="it ${on(k)}" data-league="${k}" aria-label="${esc(nm)}">${lab(k, nm)}<i>${n(k)}</i></button>`).join('') +
     (idle.length ? `<div class="lsp">No games on this day</div>` + idle.map(l => `<div class="it off" aria-label="${esc(l.name)}">${lab(l.key, l.name)}<i>0</i></div>`).join('') : '') + `</aside>`;
 }
@@ -2068,7 +2068,7 @@ function renderHeader() {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
   }).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['analyst', 'Analyst'], ['trends', 'Trends'], ['results', 'Results'], ['status', 'Status'], ['mbets', 'Model bets']] /* Bets tab hidden on Nov 9, 2026 (betsView() and its code are kept); Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
+  $('#tabs').innerHTML = [['board', 'Board'], ['analyst', 'Analyst'], ['trends', 'Trends'], ['results', 'Results'], ['status', 'Status'], ['mbets', 'Model bets']] /* Movement tab hidden on Nov 9, 2026 (moves now show on each Board tile and the card flip still opens movementView). TO BRING IT BACK: put ['moves', 'Movement'] after ['board', 'Board'] in this list; nothing else changed (movesView(), movementView() and the S.tab === 'moves' render branch are all still here); Bets tab hidden on Nov 9, 2026 (betsView() and its code are kept); Edges tab hidden on Oct 26, 2026 (it lists Value-tag picks); edgesView() is kept */.map(([k, n]) =>
     `<button type="button" role="tab" class="tab ${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${S.tab === k}">${n}${k === 'status' && alerts().length ? '<span class="dotm"></span>' : ''}</button>`).join('');
 }
 function updSDots() { const g = document.getElementById('sgrid'), ds = document.querySelectorAll('.sdots i'); if (!g || !ds.length) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2);
@@ -2232,7 +2232,7 @@ document.addEventListener('click', async e => {
     catch (er) { say(er.message); as.disabled = false; }
     return;
   }
-  const t = e.target.closest('[data-gomove],[data-goboard],[data-date],[data-tab],[data-league],[data-top],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;
+  const t = e.target.closest('[data-gomove],[data-goboard],[data-date],[data-tab],[data-league],[data-top],[data-flipall],[data-rb],[data-fin],[data-tm],[data-af],[data-more],[data-bg],[data-bm],[data-bs],[data-bl],[data-badd],[data-brm],[data-bclear],[data-btrack],[data-bdel],[data-bvoid],[data-bchg],[data-bsp],[data-blg],[data-bback],[data-ssel],[data-push],[data-sharpchk],[data-ansp],.hd,[data-anmk],[data-anset],[data-anopen]'); if (!t) return;
   if (t.dataset.ansp) { AN_SP = t.dataset.ansp; return render(); }
   if (t.dataset.anopen) { S.tab = 'analyst'; S.open = null; AN_SP = 'soccer'; AN_SET = t.dataset.anopen; AN_MK = 'all'; saveView(); render(); window.scrollTo(0, 0); return; } // the card's Analyst line
   if (t.dataset.anset) { const y = window.scrollY; AN_SET = t.dataset.anset; render(); window.scrollTo(0, y); return; }
@@ -2284,10 +2284,12 @@ document.addEventListener('click', async e => {
   if (t.dataset.fin) { S.fin = !S.fin; return render(); }
   if (t.dataset.rb) { S.rb = t.dataset.rb; return render(); }
   if (t.dataset.date && t.classList.contains('day') && t.classList.contains('on') && window.HubFan) return HubFan.toggle(); // the highlighted day opens the button stack
-  if (t.dataset.date) { if (window.HubFan) HubFan.close(); S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
+  if (t.dataset.date) { if (window.HubFan) HubFan.close(); if (window.FlipCard) FlipCard.resetAll(); S.tab = 'board'; saveView(); return loadDay(t.dataset.date); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.open = null; saveView();
     if (S.tab === 'status') { pushCheck(); stat = null; asg = null; asgTry = false; render(); try { stat = await api('/api/status'); } catch (er) { say(er.message); } } else if (S.tab === 'assign') { asg = null; render(); await loadAssign(); } else if (S.tab === 'bets') { BS.games = null; render(); await loadBets(); } else if (S.tab === 'analyst') { render(); await loadAnalyst(); } else if (S.tab === 'trends') { render(); await loadTrends(); } else if (S.tab !== 'board') { render(); await ensureTally(); } return render(); }
   if (t.dataset.league) { S.league = t.dataset.league; S.top = false; S.open = null; saveView(); return render(); }
+  if (t.dataset.flipall) { // Flip (replaced the Top picks chip on Nov 9, 2026; the Top picks code is kept, S.top just has no button now): every card flips to its other side
+    const on = window.FlipCard ? FlipCard.flipAll(movesView(MV_ALL)) : false; document.querySelectorAll('[data-flipall]').forEach(b => b.classList.toggle('on', !!on)); return; }
   if (t.dataset.top) { S.top = !S.top; if (S.top) S.league = 'all'; S.open = null; return render(); }
   if (t.classList.contains('hd') && t.closest('#sdt')) { // tapping the opened game's header closes it and returns to the grid
     const g = document.getElementById('sgrid'), x = g ? g.scrollLeft : 0; S.sel = null; S.open = null; render();

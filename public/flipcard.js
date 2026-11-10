@@ -22,6 +22,7 @@
     '.fc-back>.mvg{margin:0!important;border-radius:' + O.radius + 'px!important}' +
     '.fc-back .mvx{background:rgba(0,0,0,.34);border-radius:10px}' + // a light tint behind the price table only: still see-through, but the numbers read over bright dots
     '.fc-back .fc-tip{display:block;text-align:center;font-size:11.5px;opacity:.5;margin-top:8px;letter-spacing:.02em}' +
+    '.fc-wrap.fc-tile{margin-bottom:0;width:100%;min-width:0}.fc-tile .fc-face,.fc-tile .fc-front>*{border-radius:28px!important}.fc-tile .fc-back>.mvg{border-radius:28px!important}' +
     '.fc-glare{position:absolute;inset:0;border-radius:' + O.radius + 'px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:5;transform:translateZ(1px);' +
       'background:radial-gradient(circle at var(--gx,50%) var(--gy,50%),rgba(255,255,255,' + O.glareOpacity + ') 0%,rgba(255,255,255,0) 60%)}' +
     '.fc-wrap.fc-hov .fc-glare{opacity:1}' +
@@ -29,7 +30,7 @@
     '@media (prefers-reduced-motion:reduce){.fc-wrap{transition:none}}';
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var flippedId = null;
+  var flippedId = null, allFlipped = false;
 
   function heights(w) { var f = w._front.firstElementChild, b = w._back; return { f: f ? f.offsetHeight : 0, b: b.scrollHeight }; }
   // the height follows the face that is showing, switching as the card passes edge-on (90 degrees)
@@ -120,19 +121,41 @@
   }
   // after the page draws: every open card with a Movement card (it shows a [data-gomove] %) is wrapped, so a swipe flips it straight away;
   // the card that was flipped is flipped again at once (no animation), with a fresh Movement card
+  // every Board tile (a game's small card in the grid) gets a back too, so Flip all can turn the whole board over
+  function wrapTiles(backHtmlOf, instantFlipped) {
+    document.querySelectorAll('.sgt[data-ssel]').forEach(function (t) {
+      if (t.closest('.fc-wrap')) return;
+      var id = t.getAttribute('data-ssel'), html = backHtmlOf(id); if (!html) return;
+      var w = wrap(t, id, html); w.classList.add('fc-tile');
+      if (instantFlipped) settle(w, 180, true);
+    });
+  }
+  var backOf = null;
   function sync(backHtmlOf) {
-    var seen = {}, keep = false;
+    backOf = backHtmlOf; var seen = {}, keep = false;
+    if (allFlipped) { wrapTiles(backHtmlOf, true); keep = true; }
     document.querySelectorAll('[data-gomove]').forEach(function (t) {
       if (t.closest('.fc-back,.spl-in')) return;
       var id = t.getAttribute('data-gomove'), el = t.closest('.m') || t.closest('.card');
       if (!el || seen[id] || (el.parentNode && el.parentNode.classList && el.parentNode.classList.contains('fc-front'))) return; seen[id] = 1;
       var html = backHtmlOf(id); if (!html) return;
       var w = wrap(el, id, html);
-      if (id === flippedId) { keep = true; settle(w, 180, true); }
+      if (id === flippedId || allFlipped) { keep = true; settle(w, 180, true); }
     });
     if (flippedId && !keep) flippedId = null;
+    if (allFlipped && !keep) allFlipped = false;
+  }
+  // Flip all: every open card on the page flips to its other side with the same spring animation (a short stagger, top to bottom). If any
+  // card is showing its front they all go to the back; if every card is already on the back they all go back to the front.
+  function flipAll(backHtmlOf) {
+    if (backHtmlOf) backOf = backHtmlOf; if (backOf) wrapTiles(backOf, false);
+    var ws = Array.prototype.slice.call(document.querySelectorAll('.fc-wrap')).filter(function (w) { return w._back && w.isConnected; });
+    if (!ws.length) return false;
+    var toBack = ws.some(function (w) { return !w._on; }); allFlipped = toBack;
+    ws.forEach(function (w, i) { setTimeout(function () { var k = Math.round(w._target / 180) * 180; settle(w, toBack ? (w._on ? k : k + 180) : (w._on ? k - 180 : k)); }, reduce ? 0 : Math.min(i, 8) * 55); });
+    return toBack;
   }
   // one shared resize listener for every card on the page (a listener per card was never removed and kept every redrawn card alive)
   window.addEventListener('resize', function () { document.querySelectorAll('.fc-wrap').forEach(function (w) { if (w._back) setHeight(w, w._vis); }); });
-  window.FlipCard = { toggle: toggle, sync: sync, reapply: sync, isFlipped: function (id) { return flippedId === id; } };
+  window.FlipCard = { toggle: toggle, sync: sync, reapply: sync, isFlipped: function (id) { return flippedId === id; }, flipAll: flipAll, allOn: function () { return allFlipped; }, resetAll: function () { allFlipped = false; } };
 })();
