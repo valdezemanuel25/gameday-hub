@@ -455,6 +455,7 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .sgt .r2{gap:10px;padding:4px 0}.sgt .r2 .xc{width:30px;height:30px}
 .sgt .r2 b{font-size:21px;font-weight:400;letter-spacing:-.025em;color:var(--dim)}.sgt .r2.fv b{color:var(--ink);font-weight:500}
 .sgt .r2 span{font-size:28px;font-weight:300;letter-spacing:-.04em;color:var(--faint)}.sgt .r2.fv span{color:var(--grass);font-weight:500}
+.sgt .r2 b small.mvtag,.sgt .f2 small.mvtag{font-size:10px;font-weight:650;letter-spacing:0;color:var(--faint);margin-left:4px;vertical-align:middle}.sgt .r2 b small.mvtag.up,.sgt .f2 small.mvtag.up{color:#ff2d55;text-shadow:0 0 6px rgba(255,45,85,.6)}.sgt .r2 b small.mvpc{display:block;font-size:10px;font-weight:500;letter-spacing:0;color:var(--faint);margin-top:1px;line-height:1.1}
 .pb{display:flex;gap:3px;height:4px;margin-top:12px}.pb i{display:block;height:100%;border-radius:2px}.pb .h{background:var(--grass)}.pb .d{background:rgba(255,255,255,.18)}.pb .a{background:rgba(255,255,255,.42)}
 .sgt .f2{border:0;margin-top:8px;padding-top:0;font-size:12px;color:var(--faint)}.sgt .f2 b{font-weight:500;color:var(--dim)}
 .sgt .lb{margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)}
@@ -987,11 +988,6 @@ function moveLine(c) {
   const bt = bp ? ` · Both score${bm ? ` ${fmtOdds(bm.b0[0])}→${fmtOdds(bm.b1[0])}` : ''} ${bp[0]}→${bp[1]}${Math.abs(bp[1] - bp[0]) >= 1 ? ` <b>(${sgn(bp[1] - bp[0])})</b>` : ''}` : '';
   return `<div class="ss">Price move (DraftKings, ${mv.from === 'open' ? 'opening' : 'first seen'} → ${locked(c) ? 'close' : 'now'}): ${[0, 1, 2].map(part).join(' · ')}${mv.ou ? ` · Over ${mv.ou.line} ${Math.round(mv.ou.p0)}→${Math.round(mv.ou.p1)}${Math.abs(mv.ou.d) >= 1 ? ` <b>(${sgn(Math.round(mv.ou.d))})</b>` : ''}` : ''}${bt}</div>`;
 }
-function movesBox(cs) {
-  const rows = cs.map(c => ({ c, mv: moveOf(c.odds) })).filter(x => x.mv && x.mv.big).sort((a, b) => b.mv.size - a.mv.size);
-  if (!rows.length) return '';
-  return `<details class="mvb" open><summary>Big price moves today · ${rows.length}</summary><div class="small" style="margin:4px 0 6px">5+ points on one result since the opening price. Usually team news or informed money: check the lineups. Not a bet.</div>${rows.map(({ c, mv }) => `<div class="mr"><span><b>${esc(strip(c.home))} v ${esc(strip(c.away))}</b><br><small>${esc(c.ko || '')} · ${esc(LCODE[c.leagueKey] || c.leagueName || '')}${v4Read(c, mv) ? ' · ' + esc(v4Read(c, mv)) : ''}</small></span><em>${esc(sideOf(c, mv.top))} ${sgn(Math.round(mv.d[mv.top]))}<br><small>${Math.round(mv.p0[mv.top])}→${Math.round(mv.p1[mv.top])}%</small></em></div>`).join('')}</details>`;
-}
 // Score card: winner, Over/Under 2.5, both-score and the likeliest scores, all read off one score grid, with fair odds (100 / chance).
 // v6 when the card has a sportsbook price (the grid that matches that price, margin removed), otherwise v4's own numbers.
 const fairOdds = p => { const q = Math.min(0.99, Math.max(0.01, p / 100)); return q >= 0.5 ? `${Math.round(-100 * q / (1 - q))}` : `+${Math.round(100 * (1 - q) / q)}`; };
@@ -1161,8 +1157,11 @@ function tileOf(c, on) {
   const v = vm(c), [h, d, a] = v.p, f = c.final, ko = new Date(c.kickoff).getTime(), now = Date.now(), g = vg(c);
   const fav = h >= d && h >= a ? 'h' : a >= d ? 'a' : 'd', hit = f && g ? g.outcomeHit : null;
   const tag = f ? `<i>Final</i>` : now > ko && now < ko + GAME_MS ? `<i>In play</i>` : `<i>${esc(LCODE[c.leagueKey] || '')}</i>`;
-  const row = (nm, side, id) => `<div class="r2${!f && fav === side ? ' fv' : ''}">${xcrest(nm, false, id)}<b>${esc(strip(nm))}</b><span>${f ? (side === 'h' ? f.h : f.a) : (side === 'h' ? h : a) + '%'}</span></div>`;
-  const foot = f ? `<span>${hit == null ? '' : lead(c).n + ' ' + (hit ? '✓' : '✗')}</span><span>${esc(LCODE[c.leagueKey] || '')}</span>` : `<span>Draw <b>${d}%</b></span><span>O2.5 <b>${v.over}%</b></span>`;
+  // A price move of HOT_MV+ points since the opening price (margin removed): +/- beside the team, opening → now under the name; the draw gets a +/- by its chance.
+  const pmv = !f && moveOf(c.odds), mvd = i => (pmv && Math.round(Math.abs(pmv.d[i])) >= HOT_MV ? Math.round(pmv.d[i]) : 0);
+  const mvt = (i, pc) => { const d = mvd(i); return d ? `<small class="mvtag${d > 0 ? ' up' : ''}" title="Price move since the opening price">${sgn(d)}</small>${pc ? `<small class="mvpc">${Math.round(pmv.p0[i])}→${Math.round(pmv.p1[i])}%</small>` : ''}` : ''; };
+  const row = (nm, side, id) => `<div class="r2${!f && fav === side ? ' fv' : ''}">${xcrest(nm, false, id)}<b>${esc(strip(nm))}${mvt(side === 'h' ? 0 : 2, true)}</b><span>${f ? (side === 'h' ? f.h : f.a) : (side === 'h' ? h : a) + '%'}</span></div>`;
+  const foot = f ? `<span>${hit == null ? '' : lead(c).n + ' ' + (hit ? '✓' : '✗')}</span><span>${esc(LCODE[c.leagueKey] || '')}</span>` : `<span>Draw <b>${d}%</b>${mvt(1, false)}</span><span>O2.5 <b>${v.over}%</b></span>`;
   return `<button type="button" class="sgt${on ? ' on' : ''}" data-ssel="${esc(c.id)}"><div class="m2"><span>${esc(c.ko)}</span>${tag}</div>${row(c.home, 'h', c.hId)}${row(c.away, 'a', c.aId)}${f ? '' : `<div class="pb"><i class="h" style="flex:${h}"></i><i class="d" style="flex:${d}"></i><i class="a" style="flex:${a}"></i></div>`}<div class="f2">${foot}</div>${f ? '' : tileBet(c)}</button>`;
 }
 const alertBox = () => { const a = alerts(); return a.length ? `<div class="alert">${a.join('<br>')}</div>` : ''; };
@@ -1189,7 +1188,7 @@ function board() {
   const cols = Math.ceil(cs.length / 4), sc = cs.find(c => c.id === S.sel);
   const html = cs.length ? `<div class="sgrid" id="sgrid">${cs.map(c => tileOf(c, c.id === S.sel) + (c.id === S.sel ? `<div class="sdt" id="sdt">${game(c)}</div>` : '')).join('')}</div>` : '';
   const fin = doneCs.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${S.fin}">Finished <b>${doneCs.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? doneCs.map(game).join('') : doneCs.map(c => `<div class="fr"><span class="lg">${esc(LCODE[c.leagueKey] || '')}</span><b>${esc(strip(c.home))} ${c.final ? `${c.final.h}–${c.final.a}` : 'vs'} ${esc(strip(c.away))}</b>${!c.final ? '<i class="pend">result pending</i>' : vg(c) ? `<i class="${vg(c).outcomeHit ? 'ok' : 'no'}">${vg(c).outcomeHit ? '✓' : '✗'}</i>` : ''}</div>`).join('')}</div>` : '';
-  return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + movesBox([...cs, ...doneCs]) + html + fin + uncovered(uncShown) + `</div></div>`;
+  return `<div class="bdy">${sidebar(leagues)}<div class="bmain">` + chips + alertBox() + recordBar() + html + fin + uncovered(uncShown) + `</div></div>`;
 }
 // Left league list for wide screens: leagues with games first, the rest dimmed underneath.
 const LCODE = { bundesliga: 'GER', bundesliga2: 'GER2', laliga: 'SP', laliga2: 'SP2', seriea: 'ITA', ligue1: 'FRA', eredivisie: 'NED', epl: 'ENG', championship: 'ENG2', ligamx: 'MEX', mls: 'USA', brasileirao: 'BRA', ucl: 'UCL', uel: 'UEL', nationsleague: 'NL' }
