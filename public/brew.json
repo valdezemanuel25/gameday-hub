@@ -1,6 +1,70 @@
 {
-  "updated": "2026-11-10T11:09:50Z",
+  "updated": "2026-11-10T21:09:09Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-10",
+      "title": "Hims & Hurts",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,066",
+          "change": -0.74
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,521",
+          "change": -0.38
+        },
+        {
+          "label": "Dow",
+          "value": "52,233",
+          "change": -0.3
+        },
+        {
+          "label": "10-yr",
+          "value": "4.983%",
+          "change": 12.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$73,864",
+          "change": -1.42
+        },
+        {
+          "label": "Oil",
+          "value": "$86.40",
+          "change": -0.52
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Yields jump",
+          "t": "Hot October CPI and hawkish Fed talk pushed the 10-year up 12 bps to 4.983%, and the two-year headed for its biggest one-day jump since April 2025."
+        },
+        {
+          "h": "Inflation",
+          "t": "CPI rose 0.4% in October versus 0.3% expected, core gained 0.3% for a third month, and traders now see a December hike as near-certain with 10%+ odds of 50 bps."
+        },
+        {
+          "h": "Stocks fade",
+          "t": "The rebound lost steam: Nasdaq fell 0.74%, S&P 500 0.38% and Dow 0.30%, while Nvidia dropped 5.47% on the Huang probe and Microsoft slid 2.20%."
+        },
+        {
+          "h": "SoftBank",
+          "t": "SoftBank posted a $7 billion quarterly loss, including a $3.7 billion writedown on prepaid US data center equipment, its first net loss in nearly two years."
+        },
+        {
+          "h": "Hims & Hers",
+          "t": "Shares sank 16.61% as revenue rose 49% to $890 million but gross margin fell from 74% to 57%, a $33 million net loss followed, and guidance was cut."
+        },
+        {
+          "h": "Movers",
+          "t": "Take-Two rose 8.31% on strong GTA VI preorders, AAON jumped 19.31% on record revenue, and Digital Turbine plunged 35.84% on AI spending plans."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-11-10",
@@ -757,70 +821,6 @@
         {
           "h": "Big movers",
           "t": "Tesla +5.21% on a Barclays upgrade; Fair Isaac -13.15% and JetBlue -9.71%; Petrobras -13.99% and Nu -16.95% after Lula's election win."
-        }
-      ]
-    },
-    {
-      "source": "Brew Markets",
-      "date": "2026-10-23",
-      "title": "IPO? I think no",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,955",
-          "change": -0.21
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,624",
-          "change": -0.52
-        },
-        {
-          "label": "Dow",
-          "value": "52,215",
-          "change": -1.24
-        },
-        {
-          "label": "10-yr",
-          "value": "4.988%",
-          "change": 4,
-          "unit": "bps"
-        },
-        {
-          "label": "Oil",
-          "value": "$103.67",
-          "change": 4.22
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$81,185",
-          "change": 0.03
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Oil spikes",
-          "t": "US crude jumped 4.2% to $103.67 on Middle East fears; gold hit its lowest since July."
-        },
-        {
-          "h": "AmEx",
-          "t": "Record $20.1B revenue (+9%) and profit up 28% to $3.71B, but stock fell 3.7% on a slight miss and ~3,500 job cuts."
-        },
-        {
-          "h": "IPO chill",
-          "t": "SK Hynix shelved a Solidigm US listing, Firmus scrapped its IPO, and Oura delayed its own."
-        },
-        {
-          "h": "OpenAI",
-          "t": "Reportedly trimmed its funding target to $1.25T from $1.4T on softer demand."
-        },
-        {
-          "h": "Telecom hit",
-          "t": "AT&T fell 8% and T-Mobile 7.7% on reports SpaceX is seeking access to 80,000 cell towers."
-        },
-        {
-          "h": "Two-tier consumer",
-          "t": "US luxury spending fell 6% in September while high earners drove most Beige Book districts."
         }
       ]
     },
