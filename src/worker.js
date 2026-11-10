@@ -157,7 +157,30 @@ export async function dropScout(kv, now = new Date()) {
   if (now.toISOString().slice(0, 10) >= DROP_SCOUT_UNTIL) return false;
   try { if ((await kv.get('scout')) === null) return false; await kv.delete('scout'); return true; } catch (e) { return false; }
 }
-const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/home');
+// Where to go after signing in: only a path on this site. A backslash is refused because browsers read "/\evil.example" as "//evil.example".
+const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.includes('\\') && !/[\u0000-\u001f]/.test(n) && !n.startsWith('/login') ? n : '/home');
+
+// Sent on every answer: stay on https, no guessing file types, no other site may frame the Hub or receive its forms.
+const SEC_HEADERS = {
+  'strict-transport-security': 'max-age=31536000',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'SAMEORIGIN',
+  'referrer-policy': 'same-origin',
+  'content-security-policy': "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'",
+};
+function withSecurity(r) {
+  if (!r || r.status === 101) return r;
+  try { for (const [k, v] of Object.entries(SEC_HEADERS)) r.headers.set(k, v); return r; } catch (e) { /* a file from ASSETS has locked headers: copy it */ }
+  try { const out = new Response(r.body, r); for (const [k, v] of Object.entries(SEC_HEADERS)) out.headers.set(k, v); return out; } catch (e) { return r; }
+}
+// Password guessing: LOGIN_LIMIT and API_LIMIT are rate-limit bindings in wrangler.toml, counted per visitor address. Without the
+// binding (tests, local runs) nothing is limited, and a limiter that fails never locks the owner out.
+const visitor = req => req.headers.get('cf-connecting-ip') || 'unknown';
+async function limited(binding, key) {
+  if (!binding || typeof binding.limit !== 'function') return false;
+  try { return !(await binding.limit({ key })).success; } catch (e) { return false; }
+}
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 
 // ---------------------------------------------------------------------------------------------
 // Analyze ONE league for ONE date: fixtures -> v2 + v4 (official since 2026-10-26) cards.
@@ -1051,9 +1074,25 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
 const safeNhl = async (env, now) => { try { return await nhlStep(env, now); } catch (e) { return { job: 'nhl', error: String(e && e.message || e).slice(0, 120) }; } };
 
 const hub = {
-  async fetch(req, env0) {
+  async fetch(req, env0, ctx) {
+    // The password must never travel unencrypted: plain http is sent to https before anything else happens (local runs excepted).
+    const u = new URL(req.url);
+    if (u.protocol === 'http:' && !LOCAL_HOST.test(u.hostname) && !u.hostname.endsWith('.localhost')) {
+      u.protocol = 'https:';
+      return withSecurity(new Response(null, { status: 301, headers: { location: u.toString(), 'cache-control': 'no-store' } }));
+    }
     const c = counted(env0), env = c.env;
-    try { return await hub.handle(req, env); } finally { await c.flush(); }
+    try { return withSecurity(await hub.handle(req, env)); }
+    catch (e) {
+      // A route with no catch of its own (a storage hiccup, say) answers in the Hub's own words instead of Cloudflare's error page.
+      console.error('unhandled', u.pathname, e && e.stack || e);
+      return withSecurity(json({ error: 'Something went wrong. Try again.' }, 500));
+    }
+    finally {
+      // The write counter is bookkeeping: when the platform can finish it after the answer is sent, the visitor does not wait for it.
+      const f = c.flush();
+      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(f); else await f;
+    }
   },
 
   async handle(req, env) {
@@ -1065,6 +1104,8 @@ const hub = {
     if (p === '/login' && req.method === 'POST') {
       let f; try { f = await req.formData(); } catch (e) { f = null; }
       const pw = f ? String(f.get('password') || '') : '', next = safeNext(f && String(f.get('next') || ''));
+      // Counted before the password is looked at, so a guesser is stopped whether or not a guess is right.
+      if (await limited(env.LOGIN_LIMIT, 'login:' + visitor(req))) return new Response(null, { status: 303, headers: { location: '/login?e=2' + (next !== '/' ? '&next=' + encodeURIComponent(next) : ''), 'cache-control': 'no-store', 'retry-after': '60' } });
       if (!env.ADMIN_TOKEN || !same(pw, env.ADMIN_TOKEN)) return new Response(null, { status: 303, headers: { location: '/login?e=1' + (next !== '/' ? '&next=' + encodeURIComponent(next) : ''), 'cache-control': 'no-store' } });
       return new Response(null, { status: 303, headers: { location: next, 'set-cookie': `${COOKIE}=${await sessionValue(env)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
     }
@@ -1075,6 +1116,10 @@ const hub = {
 
     // Hub health for the nightly sweep: read-only, with its own secret (HEALTH_TOKEN) so the scheduled task never holds the password
     if (req.method === 'GET' && p === '/api/health' && env.HEALTH_TOKEN && same(String(q('k') || req.headers.get('x-health-token') || ''), env.HEALTH_TOKEN)) return json(await health(env, true));
+    // The password can also arrive in a header (scripts). Those tries are counted too, or the header would be a way around the sign-in limit.
+    if ((req.headers.has('x-admin-token') || (req.headers.get('authorization') || '').startsWith('Basic ')) && await limited(env.API_LIMIT, 'api:' + visitor(req))) {
+      return new Response(JSON.stringify({ error: 'Too many requests. Wait a minute and try again.' }), { status: 429, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '60' } });
+    }
     // Whole site is private: page and data both need the password.
     if (!(await authed(req, env))) {
       if (p.startsWith('/api/')) return json({ error: 'Bad or missing admin token' }, 401);

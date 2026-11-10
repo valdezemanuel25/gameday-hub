@@ -39,8 +39,10 @@ button{margin-top:10px;border:0;background:var(--grass);color:#0B1210;font-weigh
 <script>
 (function () {
   var q = new URLSearchParams(location.search);
-  if (q.get('e')) document.getElementById('e').hidden = false;
-  var n = q.get('next'); if (n && n.charAt(0) === '/' && n.charAt(1) !== '/') document.getElementById('next').value = n;
+  var e = document.getElementById('e');
+  if (q.get('e') === '2') e.textContent = 'Too many tries. Wait a minute, then try again.';
+  if (q.get('e')) e.hidden = false;
+  var n = q.get('next'); if (n && n.charAt(0) === '/' && n.charAt(1) !== '/' && n.indexOf('\\') < 0) document.getElementById('next').value = n;
 })();
 </script>
 </body>

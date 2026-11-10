@@ -13,7 +13,25 @@ run_worker_first = true
 binding = "HUB"
 id = "3afff88abc944771a4c7bfdd78f05a36"
 
-# Every 10 minutes the Worker does ONE small job for ONE league, rotating:
+# Password-guessing limits, counted per visitor address (needs wrangler 4.36 or later). The namespace ids are numbers you pick;
+# they only need to be different from each other within this Cloudflare account.
+[[ratelimits]]
+name = "LOGIN_LIMIT"      # tries on the sign-in page: 5 a minute
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+[[ratelimits]]
+name = "API_LIMIT"        # requests that carry the password in a header (scripts): 60 a minute
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 60
+  period = 60
+
+# Every 5 minutes the Worker does ONE small job for ONE league, rotating:
 #   sync results -> grade (a league is graded GAME_HOURS + GRADE_DELAY_HOURS after its last kickoff) -> analyze.
 [triggers]
 crons = ["*/5 * * * *"]

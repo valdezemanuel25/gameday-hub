@@ -20,6 +20,22 @@ ok('the right password sets a one-year, HttpOnly, Secure cookie and goes to wher
 ok('the password itself is never in the cookie', !sc.includes('secret'));
 r = await go('/login', form({ password: 'secret', next: '//evil.example' }));
 ok('next can only be a path on this site (falls back to Home)', r.headers.get('location') === '/home', r.headers.get('location'));
+r = await go('/login', form({ password: 'secret', next: '/\\evil.example' }));
+ok('a backslash cannot smuggle another site into next', r.headers.get('location') === '/home', r.headers.get('location'));
+ok('answers carry the safety headers', /max-age=\d+/.test(r.headers.get('strict-transport-security') || '') && r.headers.get('x-content-type-options') === 'nosniff' && /frame-ancestors/.test(r.headers.get('content-security-policy') || ''));
+r = await worker.fetch(new Request('http://hub.test/login?next=%2Fnhl', { redirect: 'manual' }), env, { waitUntil() {} });
+ok('plain http is sent to https before anything else', r.status === 301 && r.headers.get('location') === 'https://hub.test/login?next=%2Fnhl', r.status + ' ' + r.headers.get('location'));
+r = await worker.fetch(new Request('http://localhost:8787/login', { redirect: 'manual' }), env, { waitUntil() {} });
+ok('a local run on http still works', r.status === 200, r.status);
+{
+  let n = 0; const lim = { limit: async ({ key }) => ({ success: ++n <= 2, key }) }, envL = { ...env, LOGIN_LIMIT: lim, API_LIMIT: lim };
+  const goL = (path, init = {}) => worker.fetch(new Request('https://hub.test' + path, { redirect: 'manual', ...init }), envL, { waitUntil() {} });
+  await goL('/login', form({ password: 'nope' })); await goL('/login', form({ password: 'nope' }));
+  r = await goL('/login', form({ password: 'secret' }));
+  ok('too many sign-in tries are stopped, even with the right password', r.status === 303 && r.headers.get('location').startsWith('/login?e=2') && !r.headers.get('set-cookie'), r.headers.get('location'));
+  r = await goL('/api/config', { headers: { 'x-admin-token': 'secret' } }); ok('too many header tries get 429', r.status === 429, r.status);
+  r = await goL('/api/config', { headers: { cookie: sc.split(';')[0] } }); ok('a signed-in device (cookie) is never rate limited', r.status === 200, r.status);
+}
 const cookie = sc.split(';')[0];
 r = await go('/api/config', { headers: { cookie } }); ok('the cookie opens the data', r.status === 200);
 r = await go('/', { headers: { cookie } }); ok('opening the Hub lands on Home', r.status === 302 && r.headers.get('location') === '/home', r.status + ' ' + r.headers.get('location'));
