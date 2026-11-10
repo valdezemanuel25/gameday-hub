@@ -333,6 +333,10 @@ const LGO = { NJD: 'nj', SJS: 'sj', TBL: 'tb', LAK: 'la', UTA: 'utah' };
 const logo = a => `https://a.espncdn.com/i/teamlogos/nhl/500/${LGO[a] || String(a).toLowerCase()}.png`;
 const crest = (a, win) => `<i class="cr${win ? ' win' : ''}" style="--tc:${tcol(a)}">${esc(a)}<img src="${logo(a)}" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('lg')" onerror="this.remove()"></i>`;
 function sideOf(m, c, kind) { return kind === 'fb' ? m.pick : (m.w >= 50 ? 'H' : 'A'); }
+// MIN_CARD (Nov 9, 2026): the open game card keeps the win % bar, the three model boxes (pick, Over/Under, score, result marks), the goalies (name, Confirmed /
+// Expected, Backup, Back-to-back), a one-line v5 shadow and a one-line Shots + goalie read. Left out: 'likeliest' / 'predicted' wording, push %, days-rest chips,
+// the 'vs v4' and 'tracking only' notes, the Big price move and All-say pills, and the pre-game note. Set MIN_CARD = false to bring all of it back.
+const MIN_CARD = true;
 function tile(label, m, c, g, kind) {
   const gw = !c.final && consensus(c).same ? ' gd' : '', go = !c.final && goalsSide(c) ? ' gd' : '';
   if (!m) return `<div class="mt none"><div class="lb">${label}</div><div class="w">${kind === 'fb' ? 'Not read yet' : 'No pick'}</div></div>`;
@@ -341,13 +345,13 @@ function tile(label, m, c, g, kind) {
     return `<div class="mt${side ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b class="${gw.trim()}">${side ? esc(side === 'H' ? c.hAbbr : c.aAbbr) : '–'}${p ? ' ' + p + '%' : ''}</b>${mark(g && g.win)}</div>
       <div class="cf"><i style="width:${p ? Math.max(0, (p - 50) * 2) : 0}%"></i></div>
       <div class="o">${m.score ? (() => { const tot = m.score.a + m.score.h, ln = lineOf(c); return `<b class="${go.trim()}">${tot === ln ? 'Push' : tot > ln ? 'Over' : 'Under'} ${ln}</b><span class="l2">${mark(g && g.ou) || ' '}</span>`; })() : 'No score'}</div>
-      ${m.score ? `<div class="sr"><b>${m.score.a}–${m.score.h}</b><span>predicted</span></div>` : ''}</div>`;
+      ${m.score ? `<div class="sr"><b>${m.score.a}–${m.score.h}</b>${MIN_CARD ? '' : '<span>predicted</span>'}</div>` : ''}</div>`;
   }
   const w = pickWin(m, c), o = pickOu(m);
   return `<div class="mt${w.strong ? ' hi' : ''}"><div class="lb">${label}</div><div class="w"><b class="${gw.trim()}">${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}</div>
     <div class="cf"><i style="width:${Math.max(0, (w.p - 50) * 2)}%"></i></div>
-    <div class="o${o.strong ? ' hi' : ''}"><b class="${go.trim()}">${o.side} ${lineOf(c)}</b><span class="l2">${o.p}%${mark(g && g.ou)}${m.push ? `<span class="sc3">push ${m.push}%</span>` : ''}</span></div>
-    ${m.sc ? `<div class="sr"><b>${m.sc.a}–${m.sc.h}</b><span>likeliest ${m.sc.p}%</span>${mark(g && g.sc)}</div>` : ''}</div>`;
+    <div class="o${o.strong ? ' hi' : ''}"><b class="${go.trim()}">${o.side} ${lineOf(c)}</b><span class="l2">${o.p}%${mark(g && g.ou)}${m.push && !MIN_CARD ? `<span class="sc3">push ${m.push}%</span>` : ''}</span></div>
+    ${m.sc ? `<div class="sr"><b>${m.sc.a}–${m.sc.h}</b><span>${MIN_CARD ? '' : 'likeliest '}${m.sc.p}%</span>${mark(g && g.sc)}</div>` : ''}</div>`;
 }
 function sidesOf(c) { return [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), c.fb && c.fb.pick].filter(Boolean); }
 function consensus(c) { const p = sidesOf(c); return { n: p.length, same: p.length >= 3 && p.every(x => x === p[0]), side: p[0], split: p.length >= 2 && !p.every(x => x === p[0]) }; }
@@ -405,7 +409,7 @@ function gkStrip(c) {
   const side = (s, ab, i) => {
     const g = c.gk && c.gk[s], r = c.rs && c.rs[s], v = c.v5 && c.v5.in, bk = v && v.bk && v.bk[i] === 1;
     const rest = r == null ? '' : r === 1 ? '<span class="gc b">Back-to-back</span>' : `<span class="gc">${r >= 4 ? '3+ days rest' : r + ' days rest'}</span>`;
-    return `<div><small>${esc(ab)} goalie</small><b>${g ? esc(g.n) : 'Not listed yet'}</b>${g ? `<span class="gc ${g.st === 'c' ? 'c' : 'e'}">${g.st === 'c' ? 'Confirmed' : 'Expected'}</span>` : ''}${bk ? '<span class="gc b">Backup</span>' : ''}${rest}</div>`;
+    return `<div><small>${esc(ab)} goalie</small><b>${g ? esc(g.n) : 'Not listed yet'}</b>${g ? `<span class="gc ${g.st === 'c' ? 'c' : 'e'}">${g.st === 'c' ? 'Confirmed' : 'Expected'}</span>` : ''}${bk ? '<span class="gc b">Backup</span>' : ''}${MIN_CARD && r !== 1 ? '' : rest}</div>`;
   };
   return `<div class="gl">${side('a', c.aAbbr, 1)}${side('h', c.hAbbr, 0)}</div>`;
 }
@@ -413,7 +417,7 @@ function gkStrip(c) {
 function v5Row(c, g) {
   const m = c.v5; if (!m) return '';
   const w = pickWin(m, c), o = pickOu(m), d = c.v4 ? m.w - c.v4.w : 0, i = m.in || {}, on = [...(i.b2b || []), ...(i.bk || [])].some(x => x === 1);
-  return `<div class="v5r"><span class="lb">v5 shadow</span><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}<span>${o.side} ${lineOf(c)} ${o.p}%${mark(g && g.ou)}</span>${m.sc ? `<span>${m.sc.a}–${m.sc.h} likeliest${mark(g && g.sc)}</span>` : ''}<span class="df">${on ? `${d === 0 ? 'same winner chance as v4' : (d > 0 ? '+' : '') + d + ' pts home vs v4'}` : 'nothing to adjust: same as v4'}</span></div>`;
+  return `<div class="v5r"><span class="lb">v5 shadow</span><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}<span>${o.side} ${lineOf(c)} ${o.p}%${mark(g && g.ou)}</span>${m.sc ? `<span>${m.sc.a}–${m.sc.h}${MIN_CARD ? '' : ' likeliest'}${mark(g && g.sc)}</span>` : ''}${MIN_CARD ? '' : `<span class="df">${on ? `${d === 0 ? 'same winner chance as v4' : (d > 0 ? '+' : '') + d + ' pts home vs v4'}` : 'nothing to adjust: same as v4'}</span>`}</div>`;
 }
 // Shots + goalie read (src/nhlshots.js, Nov 3, 2026): tracking only. Both clubs' recent shots on goal and the starting goalies' save %, at
 // the game's DraftKings line when it is 5.5 or 6.5. Saved with the line and price so it can be tested on prices later; it bets nothing.
@@ -438,7 +442,7 @@ function sgRow(c) {
   const gs = (s.gs || []).filter(Boolean), gw = !gs.length ? 'goalies not listed: league-average goalies' : gs.every(x => x === 'c') ? 'confirmed goalies' : 'expected goalies';
   // neon blue when the read rates Over at or above DraftKings' current (or closing) price, both rounded as shown
   const hot = dk != null && Math.round(p) >= Math.round(dk);
-  return `<div class="v5r sgr"><span class="lb">Shots + goalie · tracking only</span><b${hot ? ' class="sghot" title="Shots + goalie rates Over at or above DraftKings"' : ''}>Over ${line} ${Math.round(p)}%</b>${dk != null ? `<span>DraftKings ${Math.round(dk)}%</span>` : ''}<span class="df">${gw}${s.cl ? ' · lineup read' : ''}${at.est ? ' · estimated: fitted on 5.5 and 6.5, carried to this line by the goals average' : ''}</span></div>`;
+  return `<div class="v5r sgr"><span class="lb">${MIN_CARD ? 'Shots + goalie' : 'Shots + goalie · tracking only'}</span><b${hot ? ' class="sghot" title="Shots + goalie rates Over at or above DraftKings"' : ''}>Over ${line} ${Math.round(p)}%</b>${dk != null ? `<span>${MIN_CARD ? 'DK' : 'DraftKings'} ${Math.round(dk)}%</span>` : ''}${MIN_CARD ? '' : `<span class="df">${gw}${s.cl ? ' · lineup read' : ''}${at.est ? ' · estimated: fitted on 5.5 and 6.5, carried to this line by the goals average' : ''}</span>`}</div>`;
 }
 function card(c) {
   const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
@@ -454,9 +458,9 @@ function card(c) {
   const lnc = `<span class="lnc${c.ln ? '' : ' none'}">O/U ${ln}${c.ln ? ' · ' + esc(c.ln.src || 'sportsbook') : ' · no line yet'}</span>`;
   const lnrow = pre && S.ln === c.id ? `<div class="lnrow"><label>Total line</label><input type="number" inputmode="decimal" step="0.5" min="3.5" max="9.5" id="ln-${esc(c.id)}" value="${ln}"><button type="button" class="btn sm" data-saveln="${esc(c.id)}">Save</button>${c.ln && c.ln.how === 'manual' ? `<button type="button" class="btn sm ghost" data-clrln="${esc(c.id)}">Use ESPN</button>` : ''}<button type="button" class="btn sm ghost" data-setln="">Cancel</button></div>` : '';
   return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
-  ${split}${(hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${goalsPill(c)}
+  ${split}${MIN_CARD ? '' : (hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${MIN_CARD ? '' : goalsPill(c)}
   <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>${gkStrip(c)}${v5Row(c, g.v5)}${sgRow(c)}
-  <div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Scores are away–home · blue = confident pick${c.ln ? '' : ` · O/U ${ln} is the default line`}`}</div></div>`;
+  ${MIN_CARD && !f ? '' : `<div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Scores are away–home · blue = confident pick${c.ln ? '' : ` · O/U ${ln} is the default line`}`}</div>`}</div>`;
 }
 // ---------- Trends: how each situation has done in the saved days, and a read on each game of the day (src/trends.js) ----------
 const TREND_TAG = { lean: 'Lean', watch: 'Watch', noise: 'Noise' };
