@@ -121,11 +121,11 @@
   }
   // after the page draws: every open card with a Movement card (it shows a [data-gomove] %) is wrapped, so a swipe flips it straight away;
   // the card that was flipped is flipped again at once (no animation), with a fresh Movement card
-  // every Board tile (a game's small card in the grid) gets a back too, so Flip all can turn the whole board over
+  // every Board tile (a game's small card in the grid; soccer .sgt, hockey .bt) gets a back too, so Flip all can turn the whole board over
   function wrapTiles(backHtmlOf, instantFlipped) {
-    document.querySelectorAll('.sgt[data-ssel]').forEach(function (t) {
+    document.querySelectorAll('.sgt[data-ssel],.bt[data-sel]').forEach(function (t) {
       if (t.closest('.fc-wrap')) return;
-      var id = t.getAttribute('data-ssel'), html = backHtmlOf(id); if (!html) return;
+      var id = t.getAttribute('data-ssel') || t.getAttribute('data-sel'), html = backHtmlOf(id); if (!html) return;
       var w = wrap(t, id, html); w.classList.add('fc-tile');
       if (instantFlipped) settle(w, 180, true);
     });

@@ -266,6 +266,8 @@ button:focus-visible{outline:2px solid var(--blue)}
 .lnd{margin-top:6px}.lnd summary{list-style:none;cursor:pointer;text-align:center;font-size:11px;color:var(--faint);padding:6px 0 4px}.lnd summary::-webkit-details-marker{display:none}.lnd summary:after{content:' ›'}.lnd[open] summary:after{content:' ˅'}
 .lnd .lnh{font-size:11px;font-weight:700;color:var(--acc-hi);margin:4px 0 2px}.lnd .mvg{margin:10px 0 4px}.lnd .mvgk{text-align:left}
 .grp{font-size:10.5px;font-weight:700;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin:6px 2px 8px}
+.fliprow{padding:10px 18px 0;display:flex}.flipall{font-size:12.5px;padding:6px 13px;border-radius:99px;border:1px solid rgba(255,255,255,.16);color:var(--dim,#bbb);background:transparent}.flipall.on{background:rgba(255,255,255,.12);border-color:transparent;color:var(--ink,#fff)}
+.fliprow+.bgrid{padding-top:10px}
 </style>
 </head>
 <body>
@@ -620,7 +622,8 @@ function board() {
   const frow = c => { const f = c.final, g = c.grade || {};
     return `<div class="fr"><b>${esc(c.aAbbr)} ${f ? `${f.a}–${f.h}` : '@'} ${esc(c.hAbbr)}</b>${f && f.last && f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : ''}${!f ? '<i class="pend">result pending</i>' : g.v2 ? `<i class="${g.v2.win ? 'ok' : 'no'}">v2 ${g.v2.win ? '✓' : '✗'}</i>` : ''}</div>`; };
   const fin = done.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${!!S.fin}">Finished <b>${done.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? done.map(c => `<div class="fcard" id="fc-${esc(c.id)}">${card(c)}</div>`).join('') : done.map(frow).join('')}</div>` : '';
-  return `<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}${fin}`;
+  const flipRow = `<div class="fliprow"><button type="button" class="flipall${window.FlipCard && FlipCard.allOn() ? ' on' : ''}" data-flipall="1" title="Flip every game to its other side">⟲ Flip</button></div>`;
+  return `${flipRow}<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}${fin}`;
 }
 function cell(m, key, other) {
   const v = pct(m.hit, m.n);
@@ -840,7 +843,7 @@ function renderDays() {
   { const d = new Date(S.date + 'T12:00:00Z'); $('#title').innerHTML = `<span class="wd">NHL · ${d.toLocaleDateString('en-US',{weekday:'long',timeZone:'UTC'})}</span><span class="dt2">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}</span>`; }
   const t = fmt(new Date()), list = [[addDays(t, -1), 'Yesterday'], [t, 'Today'], [addDays(t, 1), 'Tomorrow']];
   $('#days').innerHTML = list.map(([d, l]) => `<button type="button" class="day${d === S.date ? ' on' : ''}" data-d="${d}">${l}<b>${+d.slice(8)}</b></button>`).join('');
-  $('#tabs').innerHTML = [['board', 'Board'], ['moves', 'Movement'], ['trends', 'Lines'], ['results', 'Results'], ['mbets', 'Model bets'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
+  $('#tabs').innerHTML = /* Movement tab hidden on Nov 9, 2026 (the price moves show on each Board tile and the card flip still opens the Movement card). TO BRING IT BACK: put ['moves', 'Movement'] after ['board', 'Board'] in this list; movesView() and the S.tab === 'moves' render branch are all still here. */ [['board', 'Board'], ['trends', 'Lines'], ['results', 'Results'], ['mbets', 'Model bets'], ['status', 'Status']].map(([k, l]) => `<button type="button" class="tab${S.tab === k ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
 }
 function updDots() { const g = document.getElementById('bgrid'); if (!g) return; const t = g.firstElementChild, step = t ? t.getBoundingClientRect().width + 8 : 1, i = Math.round(g.scrollLeft / step / 2 * 2);
   document.querySelectorAll('.bdots i').forEach((d, k) => d.classList.toggle('on', k === Math.min(i, document.querySelectorAll('.bdots i').length - 1))); }
@@ -857,7 +860,7 @@ document.addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== '
 // Lines tab: an opened "Tap for details" stays open when the page redraws
 document.addEventListener('toggle', e => { const d = e.target; if (d && d.matches && d.matches('details.lnd')) (S.lnOpen = S.lnOpen || {})[d.dataset.lnid] = d.open; }, true);
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-gomove],[data-goboard],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-sel],[data-mvf],[data-lnf],[data-getclose],[data-fin]'); if (!t) return;
+  const t = e.target.closest('[data-gomove],[data-goboard],[data-flipall],[data-d],[data-tab],[data-sc],#run,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-sel],[data-mvf],[data-lnf],[data-getclose],[data-fin]'); if (!t) return;
   if (t.dataset.getclose) {
     if (t.disabled) return; const t0 = t.textContent; t.disabled = true; t.textContent = 'Reading the price…';
     try { const r = await (await fetch('/api/nhl/close', { method: 'POST', body: JSON.stringify({ date: S.date, id: t.dataset.getclose }) })).json(); if (r.error) throw new Error(r.error); await load(); }
@@ -889,7 +892,9 @@ document.addEventListener('click', async e => {
     catch (er) { $('#st').textContent = er.message; t.disabled = false; }
     return;
   }
-  if (t.dataset.d) { S.date = t.dataset.d; await load(); }
+  if (t.dataset.flipall) { // Flip: every game card flips to its other side (its Movement card) and back, with the FlipCard spring (public/flipcard.js)
+    const on = window.FlipCard ? FlipCard.flipAll(movesView(MV_ALL)) : false; document.querySelectorAll('[data-flipall]').forEach(b => b.classList.toggle('on', !!on)); return; }
+  if (t.dataset.d) { S.date = t.dataset.d; if (window.FlipCard) FlipCard.resetAll(); await load(); }
   else if (t.dataset.tab) { S.tab = t.dataset.tab; if (S.tab === 'status') pushCheck(); render(); }
   else if (t.dataset.sc) { S.scope = t.dataset.sc; render(); }
   else if (t.id === 'xp') { // the server sends the file itself, which also works on phones that block script downloads
