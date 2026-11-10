@@ -1218,9 +1218,7 @@ function recordBar() {
     if (w.n + g.n === 0) return '';
     return `<div class="rec"><b>Top picks, last 30 games</b><span>Winner at ${TOP_WIN}%+ <u>${pc(w.hits, w.n)}</u> <small>${w.hits}/${w.n}</small></span><span>Goals at ${TOP_GOALS}%+ <u>${pc(g.hits, g.n)}</u> <small>${g.hits}/${g.n}</small></span><span>All other winners <u>${pc(r.hits, r.n)}</u> <small>${r.hits}/${r.n}</small></span></div>`;
   }
-  if (!l.n) return '';
-  const row = (name, x) => x.n ? `<span class="rn">${name}</span><u>${pc(x.w, x.n)}</u><u>${pc(x.ou, x.n)}</u><u>${pc(x.bt, x.n)}</u>` : '';
-  return `<div class="rec"><b>Hit rate</b><div class="rg"><span></span><small>Winner</small><small>Over/Under</small><small>BTTS</small>${row('v4', l.v4)}${row('v5', l.v5 || { n: 0 })}${row('Forebet', l.fb)}</div><small>${l.n} games</small></div>`;
+  return ''; // the Hit rate (last 30 games) box was removed (Nov 9, 2026); the Top picks box above stays
 }
 function sidebar(leagues) {
   const n = k => day.cards.filter(c => c.v2 && c.leagueKey === k).length, on = k => S.league === k && !S.top ? 'on' : '';
