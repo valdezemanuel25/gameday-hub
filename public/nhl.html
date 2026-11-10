@@ -268,6 +268,21 @@ button:focus-visible{outline:2px solid var(--blue)}
 .grp{font-size:10.5px;font-weight:700;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin:6px 2px 8px}
 .fliprow{padding:10px 18px 0;display:flex}.flipall{font-size:12.5px;padding:6px 13px;border-radius:99px;border:1px solid rgba(255,255,255,.16);color:var(--dim,#bbb);background:transparent}.flipall.on{background:rgba(255,255,255,.12);border-color:transparent;color:var(--ink,#fff)}
 .fliprow+.bgrid{padding-top:10px}
+
+/* Update NHL now (Nov 9, 2026): the button sits behind the selected day and slides out below it when that day is tapped (same as the Soccer page);
+   tap the day again, or anywhere else, to tuck it away. */
+.top{position:relative}
+.days{position:relative;z-index:5}
+.bfan{position:absolute;left:50%;width:min(300px,calc(100% - 40px));margin-left:calc(min(300px,calc(100% - 40px)) / -2);z-index:4;pointer-events:none}
+.bcard{position:absolute;left:0;right:0;top:0;--d:calc(var(--i) * 46px);transform:translateY(calc(var(--d) * -1 - 56px)) scale(.7);opacity:0;transition:transform .42s cubic-bezier(.2,.9,.25,1.1) calc(var(--i) * 45ms),opacity .25s ease calc(var(--i) * 45ms);transform-origin:50% 0}
+.bcard .btn{display:block;width:100%;height:40px;padding:0;line-height:40px;box-shadow:0 8px 18px rgba(0,0,0,.45)}
+.bshade{position:absolute;inset:0;border-radius:999px;background:#000;opacity:calc(var(--i) * .16);pointer-events:none}
+.bfan.open{pointer-events:auto}
+.bfan.open .bcard{opacity:1;transform:translateY(calc(var(--i) * 46px)) scale(calc(1 - var(--i) * .04))}
+.bfan:not(.open) .bcard .btn{pointer-events:none}
+.bfan-scrim{position:fixed;inset:0;z-index:3;display:none}.bfan-scrim.open{display:block}
+.dock:has(#st:empty){display:none}
+@media (prefers-reduced-motion:reduce){.bcard{transition:none}}
 </style>
 </head>
 <body>
@@ -275,13 +290,14 @@ button:focus-visible{outline:2px solid var(--blue)}
 <div class="wrap">
   <div class="top">
     <div class="title" id="title">NHL</div>
-    <div class="sub">Winner and Over/Under at the sportsbook line (5.5 when no line is known). Overtime and shootout wins count. Times are Central.</div>
+    <div class="sub" title="Winner and Over/Under at the sportsbook line (5.5 when no line is known). Overtime and shootout wins count.">Winner and Over/Under · Times are Central</div>
     <div class="days" id="days"></div>
+    <div class="bfan-scrim" id="bscrim"></div><div class="bfan" id="bfan" aria-hidden="true"><div class="bcard" style="--i:0"><button type="button" class="btn" id="run">Update NHL now</button><span class="bshade"></span></div></div>
   </div>
   <div class="tabs" id="tabs"></div>
   <div id="view"></div>
 </div>
-<div class="dock"><div class="in"><div id="st"></div><button type="button" class="btn" id="run">Update NHL now</button></div></div>
+<div class="dock"><div class="in"><div id="st"></div></div></div>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -894,7 +910,8 @@ document.addEventListener('click', async e => {
   }
   if (t.dataset.flipall) { // Flip: every game card flips to its other side (its Movement card) and back, with the FlipCard spring (public/flipcard.js)
     const on = window.FlipCard ? FlipCard.flipAll(movesView(MV_ALL)) : false; document.querySelectorAll('[data-flipall]').forEach(b => b.classList.toggle('on', !!on)); return; }
-  if (t.dataset.d) { S.date = t.dataset.d; if (window.FlipCard) FlipCard.resetAll(); await load(); }
+  if (t.dataset.d && t.classList.contains('day') && t.classList.contains('on') && window.HubFan) return HubFan.toggle(); // the highlighted day opens the Update NHL now button
+  if (t.dataset.d) { if (window.HubFan) HubFan.close(); S.date = t.dataset.d; if (window.FlipCard) FlipCard.resetAll(); await load(); }
   else if (t.dataset.tab) { S.tab = t.dataset.tab; if (S.tab === 'status') pushCheck(); render(); }
   else if (t.dataset.sc) { S.scope = t.dataset.sc; render(); }
   else if (t.id === 'xp') { // the server sends the file itself, which also works on phones that block script downloads
@@ -919,5 +936,18 @@ try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js
 <script src="/spotlight.js" defer></script>
 <script src="/flipcard.js" defer></script>
 <script src="/hidebar.js" defer></script>
+<script>/* Day-tap button: tapping the highlighted day opens / closes the Update NHL now button (#bfan) under it. */
+(function () {
+  var fan = document.getElementById('bfan'), scrim = document.getElementById('bscrim'), days = document.getElementById('days'), top = document.querySelector('.top');
+  if (!fan || !days) return;
+  function place() { var on = days.querySelector('.day.on'); if (!on) return; var a = on.getBoundingClientRect(), b = top.getBoundingClientRect(); fan.style.top = (a.bottom - b.top + 6) + 'px'; }
+  function set(o) { if (o) place(); fan.classList.toggle('open', o); scrim.classList.toggle('open', o); fan.setAttribute('aria-hidden', o ? 'false' : 'true'); var on = days.querySelector('.day.on'); if (on) on.setAttribute('aria-expanded', o ? 'true' : 'false'); }
+  window.HubFan = { toggle: function () { set(!fan.classList.contains('open')); }, close: function () { set(false); } };
+  scrim.addEventListener('click', function () { set(false); });
+  fan.addEventListener('click', function (e) { if (e.target.closest('.btn')) setTimeout(function () { set(false); }, 120); });
+  addEventListener('keydown', function (e) { if (e.key === 'Escape') set(false); });
+  addEventListener('resize', function () { if (fan.classList.contains('open')) place(); });
+})();
+</script>
 </body>
 </html>
