@@ -178,8 +178,42 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * It is a read of past results only. It does not change any pick, model or tracked bet. Rest is counted from saved days only, so a team's first saved game has unknown rest. Games tied at the earliest kickoff all count as first games of the day.
 * On a game with a price, the Trend read header is the flip: tap it (or swipe the card) and the card turns over to that game's Movement card, the same flip as the Board.
 * The Results tab carries the Situations table (each situation's record against its price) and "How the Trends reads have done" (trend vs model). The Trends tab itself shows only the game cards.
-* "How the Trends reads have done" (`track` in `src/trends.js`), shown on the Results tab, replays every saved graded game through the reads and shows how often the trend pick won, and the model's pick where it disagreed (moneyline and total), plus underdog and favorite picks with 2+ trends. It is in-sample: the situations were found in these same games.
+* "How the Trends reads have done" (`track` in `src/trends.js`), shown on the Results tab, replays every saved graded game through the reads and shows how often the trend pick won, and the model's pick where it disagreed (moneyline and total), plus underdog and favorite picks with 2+ trends. (Nov 11, 2026: no longer in-sample, see below.)
 * Test: `node test/trends.mjs`.
+
+### Lines reads rebuilt as a chance (Nov 11, 2026)
+
+Checked against the hockey backup of Nov 11, 2026 (178 graded games, Oct 15 to Nov 9, 101 of them with a price). What it showed:
+
+* **The pick's own chance decides the hit rate.** Over the 149 graded games from Oct 20 on, sides the price put at 55%+ (your model's chance where a game had no price) won 70 of 99 (71%); sides under 55% won 21 of 50 (42%). The old read added points (Lean 2, Watch 1) and ignored that chance, so a trend could put a Strong on an underdog.
+* **Totals are close to a coin flip** for every source (price, v2, v4, Forebet: 51 to 55%). The only thing that separated them: when your model was on the other side of the trend's total pick, the trend won 10 of 23 (new rules, replayed).
+* More situations (model and Forebet agree, price moved 3+) were tried and made the replay worse, so the eight situations stay.
+
+What changed in `src/trends.js`:
+
+* A read is now a chance: the price's chance for the home team (or the Over), margin removed, plus the lift of each situation the game is in, 12 points at most. The pick is the side above 50%. Strength is that chance: **Strong 65%+, Medium 58%+, Weak 53%+, Pass (coin flip) under that**. A model on the other side is still a Conflict. A game in no situation still has no trend.
+* Lift = 100 x (wins - expected wins) / (games + 30): the gap per game, held back as if 30 more games at exactly the expected rate had been played. No lift under 10 games; a lift under 1 point is ignored. This replaces the Lean / Watch points (the tags still show on the Results tab).
+* Expected wins on a game with no price now come from the model's chance (v4, else v2), not a fixed guess per situation. Total: the Over price on the graded line, else 50%.
+* The price move no longer adds or removes strength (the chance already starts from the moved price). The page still shows it.
+* A day's reads use only the games of earlier days, so a finished day shows the read as it stood. "How the Lines reads have done" replays every game that way (it was in-sample before), grouped by strength.
+* Replay on the backup, each game read from earlier days only. Old rules: winner picks shown 20 of 26 (77%), of which plays (Strong and Medium) 7 of 9; total picks shown 13 of 21 (62%). New rules: winner plays 29 of 37 (78%), Strong 22 of 26 (85%), Medium 7 of 11, Weak 3 of 6; total plays 9 of 14 (64%). Same hit rate on four times as many winner plays, and Strong now means something. These groups are small: a guide, not proof.
+* The Lines card shows the chance beside the pick ("EDM -218 · 72%"), "Pass · coin flip" under 53%, and each situation's points in the details.
+
+### Tracked-only situations (Nov 11, 2026)
+
+124 candidate spots (streaks, rest, road trips, schedule density, price buckets, model and Forebet agreement, price moves, goalies, recent scoring, time and day) were checked on the same 178 graded games against the chance going in. Only 8 cleared |z| 1.5, and checking 124 by luck alone gives about 14, so **none is proven**. The five kept pointed the same way in both halves of the sample and have a plain reason behind them:
+
+| Situation | Record found | Expected |
+|---|---|---|
+| Home favorite at 55-60% chance: home team | 26-8 | 19.6 wins |
+| Forebet gives the home team 60%+: home team | 30-9 | 24.3 wins |
+| Home team in its first game back from the road: home team | 40-23 | 34.0 wins |
+| Road team on its 4th+ straight road game: road team | 15-7 | 10.6 wins |
+| A team in its 3rd game in 4 nights: Over | 22-12 | 16.7 |
+
+* They are in `SITUATIONS` with `watch: true`: counted, shown on the Results tab under "Tracking" and in a game's "Tap for details", but they move no read and no strength.
+* "Since found" (`fresh`) counts only games from Nov 10, 2026 on, the first day after the sample. That record is the fair test. To move one into the read, drop its `watch` flag once it has held on 20+ fresh games.
+* `withContext` now also gives each card `aroad` (straight road games the road team has just played), `hback` (home team's last game was away) and `hin4` / `ain4` (games in the 3 days before).
 
 ## Soccer Trends tab (Nov 8, 2026)
 
