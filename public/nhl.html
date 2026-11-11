@@ -238,7 +238,7 @@ button:focus-visible{outline:2px solid var(--blue)}
 .evl{margin-top:8px;display:flex;flex-direction:column}
 .evr{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:6px;padding:5px 0;border-top:1px solid var(--line);font-size:12px;color:var(--mut);align-items:baseline}
 .evr:first-child{border-top:0}
-.evr.sx{grid-template-columns:42px minmax(0,1fr) auto}.evr .tg{font-size:9.5px;font-weight:800;letter-spacing:.02em;padding:1px 0;border-radius:4px;text-align:center}.evr .tg.y{background:rgba(94,224,143,.14);color:var(--good)}.evr .tg.n{background:rgba(255,123,107,.12);color:var(--bad)}
+.evr.sx{grid-template-columns:42px minmax(0,1fr) auto}.evr .tg{font-size:9.5px;font-weight:800;letter-spacing:.02em;padding:1px 0;border-radius:4px;text-align:center}.evr .tg.y{background:rgba(94,224,143,.14);color:var(--good)}.evr .tg.n{background:rgba(255,123,107,.12);color:var(--bad)}.evr .tg.w{background:rgba(255,255,255,.08);color:var(--mut)}
 .evr em{font-style:normal;color:var(--faint);font-size:11px;white-space:nowrap}
 .chs{display:flex;flex-wrap:wrap;margin-top:6px}
 .cal td small{display:block}.cal td:nth-child(2){white-space:nowrap}
@@ -533,7 +533,9 @@ function lnCard(g, dc) {
   const title = f ? `${esc(a)} <span class="sco">${f.a}–${f.h}</span> ${esc(h)}` : `${esc(a)} @ ${esc(h)}`;
   // Details: the situations behind the read, then the Movement card (prices, goalies, rest), else just the goalies
   const ev = [...(ml ? ml.ev.map(x => trendEv(x, ml.side === 'H', h, a)) : []), ...(ou ? ou.ev.map(x => trendEv(x, ou.side === 'Over', 'Over', 'Under')) : [])];
-  const mvc = dc && hm ? movesView(g.id) : dc ? gkRestTags(dc) : '';
+  const wt = (g.watch || []).map(x => `<div class="evr sx"><span class="tg w" aria-label="so far backs ${esc(x.backs)}">${esc(tcase(x.backs))}</span><span class="et">${esc(x.label)}</span><em>${x.w}-${x.l}</em></div>`);
+  const wth = wt.length ? `<div class="lnh">Tracking · not in the read</div><div class="evl">${wt.join('')}</div>` : '';
+  const mvc = wth + (dc && hm ? movesView(g.id) : dc ? gkRestTags(dc) : '');
   const det = `${ev.length ? `<div class="lnh">Why · ${ev.length} situation${ev.length === 1 ? '' : 's'}</div><div class="evl">${ev.join('')}</div>` : `<div class="pxl" style="margin-top:4px">No situation matches this game, or the ones that do have not been counted long enough (10 games) to move the read.</div>`}${mvc}`;
   return `<div class="sc${fl.level ? ' lv-' + fl.level : ''}${f ? ' done' : ''}"><div class="sh">${crest(a)}<div class="mm"><b>${title}</b><small>${esc(g.ko)} CT</small></div>${crest(h)}${tag}</div>${r1}${r2}${pills.length ? `<div class="ag3">${pills.join('')}</div>` : ''}
   <details class="lnd" data-lnid="${esc(g.id)}"${S.lnOpen && S.lnOpen[g.id] ? ' open' : ''}><summary>Tap for details</summary>${det}</details></div>`;
@@ -700,9 +702,12 @@ function calView() {
 }
 function trendSituations() {
   if (!trends) return '';
-  const rows = (trends.situations || []).map(x => `<tr><td>${esc(x.label)}<small>${x.kind === 'ou' ? 'Over' : esc(x.who)} · ${x.exp != null ? 'expected ' + x.exp + ' wins' : ''}</small></td><td>${x.w}-${x.l}<small>n=${x.n}${x.lift ? ' · ' + (x.lift > 0 ? '+' : '−') + Math.abs(x.lift) + ' pts' : ''}</small></td><td><span class="chp ${x.tag === 'lean' ? 's' : x.tag === 'watch' ? 'sp' : 'n'}">${TREND_TAG[x.tag]}</span>${x.tag !== 'noise' ? `<small>${x.dir === 'with' ? 'better' : 'worse'} than its chance</small>` : ''}</td></tr>`).join('');
+  const tr = x => `<tr><td>${esc(x.label)}<small>${x.kind === 'ou' ? 'Over' : esc(x.who)} · ${x.exp != null ? 'expected ' + x.exp + ' wins' : ''}</small></td><td>${x.w}-${x.l}<small>n=${x.n}${x.lift ? ' · ' + (x.lift > 0 ? '+' : '−') + Math.abs(x.lift) + ' pts' : ''}</small></td><td><span class="chp ${x.tag === 'lean' ? 's' : x.tag === 'watch' ? 'sp' : 'n'}">${TREND_TAG[x.tag]}</span>${x.tag !== 'noise' ? `<small>${x.dir === 'with' ? 'better' : 'worse'} than its chance</small>` : ''}</td></tr>`;
+  const all = trends.situations || [], rows = all.filter(x => !x.watch).map(tr).join(''), wrows = all.filter(x => x.watch).map(x => `<tr><td>${esc(x.label)}<small>${x.kind === 'ou' ? 'Over' : esc(x.who)} · expected ${x.exp} wins</small></td><td>${x.w}-${x.l}<small>n=${x.n}</small></td><td>${x.fresh && x.fresh.n ? `${x.fresh.w}-${x.fresh.l}<small>expected ${x.fresh.exp} wins</small>` : '–<small>no games yet</small>'}</td></tr>`).join('');
+  const wt = wrows ? `<h4>Tracking</h4><table class="cal"><tr><th>Found on Nov 11, not in any read</th><th>Record</th><th>Since found</th></tr>${wrows}</table>
+  <div class="nt">Five spots that stood out when 124 were checked on the games through Nov 9. Checking that many always turns up a few good-looking records by luck (8 cleared the bar; luck alone would give about 14), so none is proven. "Since found" counts only the games after the check: that is the fair test. One that holds on 20+ new games can be moved into the read.</div>` : '';
   return `<h4>Situations</h4><table class="cal"><tr><th>${trends.games} graded games, ${trends.days} days</th><th>Record</th><th>Read</th></tr>${rows}</table>
-  <div class="nt">n is how many graded games were in that spot. The record is how the first team named (or the Over) did. Each record is judged against the chance the price gave (your model's chance on a game with no price), not against 50%. Lean needs 20+ games and a clear gap, Watch is a smaller gap, Noise is too few games or no gap. The pts are how far the situation moves a game read: its gap per game, held back until it has more games. A game read starts from the price's chance, adds the pts of the situations the game is in (12 at most, from the days before that game), picks the side above 50% and grades it by that chance. A model on the other side makes it a Pass. It is a read of past results, not a model bet, and it changes no pick.</div>`;
+  <div class="nt">n is how many graded games were in that spot. The record is how the first team named (or the Over) did. Each record is judged against the chance the price gave (your model's chance on a game with no price), not against 50%. Lean needs 20+ games and a clear gap, Watch is a smaller gap, Noise is too few games or no gap. The pts are how far the situation moves a game read: its gap per game, held back until it has more games. A game read starts from the price's chance, adds the pts of the situations the game is in (12 at most, from the days before that game), picks the side above 50% and grades it by that chance. A model on the other side makes it a Pass. It is a read of past results, not a model bet, and it changes no pick.</div>${wt}`;
 }
 // Results tab: how the Trends reads have done on the saved games (src/trends.js track)
 function trendTrack() {

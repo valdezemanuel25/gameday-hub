@@ -199,6 +199,22 @@ What changed in `src/trends.js`:
 * Replay on the backup, each game read from earlier days only. Old rules: winner picks shown 20 of 26 (77%), of which plays (Strong and Medium) 7 of 9; total picks shown 13 of 21 (62%). New rules: winner plays 29 of 37 (78%), Strong 22 of 26 (85%), Medium 7 of 11, Weak 3 of 6; total plays 9 of 14 (64%). Same hit rate on four times as many winner plays, and Strong now means something. These groups are small: a guide, not proof.
 * The Lines card shows the chance beside the pick ("EDM -218 · 72%"), "Pass · coin flip" under 53%, and each situation's points in the details.
 
+### Tracked-only situations (Nov 11, 2026)
+
+124 candidate spots (streaks, rest, road trips, schedule density, price buckets, model and Forebet agreement, price moves, goalies, recent scoring, time and day) were checked on the same 178 graded games against the chance going in. Only 8 cleared |z| 1.5, and checking 124 by luck alone gives about 14, so **none is proven**. The five kept pointed the same way in both halves of the sample and have a plain reason behind them:
+
+| Situation | Record found | Expected |
+|---|---|---|
+| Home favorite at 55-60% chance: home team | 26-8 | 19.6 wins |
+| Forebet gives the home team 60%+: home team | 30-9 | 24.3 wins |
+| Home team in its first game back from the road: home team | 40-23 | 34.0 wins |
+| Road team on its 4th+ straight road game: road team | 15-7 | 10.6 wins |
+| A team in its 3rd game in 4 nights: Over | 22-12 | 16.7 |
+
+* They are in `SITUATIONS` with `watch: true`: counted, shown on the Results tab under "Tracking" and in a game's "Tap for details", but they move no read and no strength.
+* "Since found" (`fresh`) counts only games from Nov 10, 2026 on, the first day after the sample. That record is the fair test. To move one into the read, drop its `watch` flag once it has held on 20+ fresh games.
+* `withContext` now also gives each card `aroad` (straight road games the road team has just played), `hback` (home team's last game was away) and `hin4` / `ain4` (games in the 3 days before).
+
 ## Soccer Trends tab (Nov 8, 2026)
 
 * **A Trends tab sits right of Analyst** on the soccer page (Board, Movement, Analyst, Trends, Results, ...). Club logos are the same as on the Board. It lists only the games of the day that are in a trend situation, with a count of the rest; the league chips filter it.

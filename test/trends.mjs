@@ -130,4 +130,27 @@ ok('65%+ is Strong, 58%+ Medium, 53%+ Weak, under that a Pass', rate(65, true) =
   ok('a lift under 1 point does not make a read', !gameReads([{ ...g, hrest: 1 }], S2(st('roadb2b', -0.6), st('resthome', 0)), '2026-11-09')[0].ml);
   ok('no price and no model: no moneyline read', !gameReads([{ ...g, v4: undefined }], S2(st('roadb2b', -6), st('resthome', 6)), '2026-11-09')[0].ml);
 }
+// 8. tracked-only situations (Nov 11, 2026): counted, listed on the game, never part of the read
+{
+  const fin = (h, a) => ({ final: { h, a, total: h + a }, grade: true });
+  const ctx = withContext([
+    day('2026-11-01', [card('1', '2026-11-01T19:00', 'RRR', 'AAA', fin(1, 3))]),
+    day('2026-11-02', [card('2', '2026-11-02T19:00', 'RRR', 'BBB', fin(1, 3))]),
+    day('2026-11-03', [card('3', '2026-11-03T19:00', 'RRR', 'CCC', fin(1, 3))]),
+    day('2026-11-04', [card('4', '2026-11-04T19:00', 'RRR', 'HHH', { ...fin(5, 2), v4: { w: 57, o: 50 }, fb: { p: [61, 39], pick: 'H' }, ln: { v: 5.5 } })]),
+    day('2026-11-06', [card('5', '2026-11-06T19:00', 'CCC', 'RRR')]),
+  ]);
+  const g4 = ctx.find(c => c.id === '4'), g5 = ctx.find(c => c.id === '5'), g2 = ctx.find(c => c.id === '2');
+  ok('straight road games are counted for the road team', g2.aroad === 1 && g4.aroad === 3, JSON.stringify([g2.aroad, g4.aroad]));
+  ok('a 3rd game in 4 nights is flagged; a 2nd is not', g4.ain4 === 3 && g2.ain4 === 1 && g4.hin4 === 0, JSON.stringify([g4.ain4, g2.ain4]));
+  ok('first game back from the road is flagged for the home team only after road games', g5.hback === true && g4.hback === false && g5.aroad === 0);
+  const st = situations(ctx), by = id => st.find(s => s.id === id);
+  ok('the five tracked situations exist and are marked watch', ['homefav55', 'fbhome60', 'homeback', 'roadtrip4', 'tired3in4'].every(id => by(id) && by(id).watch === true && by(id).fresh));
+  ok('game 4 is counted in road trip, 3-in-4, Forebet 60+ and home favorite 55-60', by('roadtrip4').n === 1 && by('roadtrip4').l === 1 && by('tired3in4').n === 1 && by('tired3in4').w === 1 && by('fbhome60').w === 1 && by('homefav55').w === 1, JSON.stringify(st.filter(s => s.watch)));
+  ok('games before the scan date are not in the fresh record', by('roadtrip4').fresh.n === 0);
+  const late = situations(withContext([day('2026-11-20', [card('a', '2026-11-20T19:00', 'AAA', 'BBB', { ...fin(4, 1), fb: { p: [65, 35], pick: 'H' } })])])).find(s => s.id === 'fbhome60');
+  ok('games after it are', late.n === 1 && late.fresh.n === 1 && late.fresh.w === 1, JSON.stringify(late));
+  const big = { id: 'roadtrip4', lift: 9, dir: 'with', w: 15, l: 7, n: 22 }, r = gameReads([{ ...g4, final: undefined }], [big], '2026-11-04')[0];
+  ok('a tracked situation is listed on the game with the side it backs, and makes no read', r.watch.length === 1 && r.watch[0].backs === 'RRR' && !r.ml && !r.ou, JSON.stringify(r));
+}
 console.log(fails ? `\n${fails} FAILED` : '\nall trends checks pass'); process.exit(fails ? 1 : 0);

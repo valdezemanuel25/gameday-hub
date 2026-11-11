@@ -26,6 +26,7 @@ import { hockeyMove } from './moves.js';
 const MIN_N = 10, LEAN_N = 20, LEAN_Z = 1.5, WATCH_Z = 0.8;
 export const SHRINK = 30, CAP = 12, MIN_LIFT = 1; // games added at the chance; most points the lifts may move a read; smallest lift that counts
 export const BANDS = { Strong: 65, Medium: 58, Weak: 53 };
+const WATCH_SINCE = '2026-11-10'; // the backup the scan ran on had results through Nov 9, 2026
 export const SITUATIONS = [
   { id: 'roadb2b', kind: 'ml', subject: 'A', who: 'road team', label: 'Road team on a back-to-back, home team rested', base: 0.45 },
   { id: 'homefav60', kind: 'ml', subject: 'H', who: 'home team', label: 'Home favorite at 60%+ implied', base: 0.64 },
@@ -35,6 +36,16 @@ export const SITUATIONS = [
   { id: 'resthome', kind: 'ml', subject: 'H', who: 'home team', label: 'Home team 2+ days rested, road team on a back-to-back', base: 0.58 },
   { id: 'b2bover', kind: 'ou', subject: 'O', who: 'Over', label: 'A team on a back-to-back, over', base: 0.5 },
   { id: 'firstover', kind: 'ou', subject: 'O', who: 'Over', label: 'First game of the day, over', base: 0.5 },
+  // Tracked only (Nov 11, 2026). Found by scanning 124 candidate spots on the 178 graded games of Oct 15 to Nov 9, 2026. Only 8 of the 124
+  // cleared |z| 1.5 where chance alone would give about 14, so none of these is proven: they are the ones that pointed the same way in both
+  // halves of the sample and have a plain reason behind them. watch: true = counted and shown, but it moves no read. `since` is the first
+  // day after the scan: the record from that day on (fresh) is the honest test. Move one into the read (drop watch) only once it has held
+  // on 20+ fresh games.
+  { id: 'homefav55', kind: 'ml', subject: 'H', who: 'home team', label: 'Home favorite at 55-60% chance', base: 0.57, watch: true, since: WATCH_SINCE },
+  { id: 'fbhome60', kind: 'ml', subject: 'H', who: 'home team', label: 'Forebet gives the home team 60%+', base: 0.62, watch: true, since: WATCH_SINCE },
+  { id: 'homeback', kind: 'ml', subject: 'H', who: 'home team', label: 'Home team in its first game back from the road', base: 0.55, watch: true, since: WATCH_SINCE },
+  { id: 'roadtrip4', kind: 'ml', subject: 'A', who: 'road team', label: 'Road team on its 4th+ straight road game', base: 0.45, watch: true, since: WATCH_SINCE },
+  { id: 'tired3in4', kind: 'ou', subject: 'O', who: 'Over', label: 'A team in its 3rd game in 4 nights, over', base: 0.5, watch: true, since: WATCH_SINCE },
 ];
 const imp = o => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
 const two = (h, a) => { if (!Number.isFinite(h) || !Number.isFinite(a)) return null; const x = imp(h), y = imp(a), t = x + y; return [x / t, y / t]; };
@@ -44,16 +55,20 @@ export const lineOf = c => (c.ln && Number.isFinite(c.ln.v) ? c.ln.v : c.px && N
 // first saved game) and whether it is the first game of its day. Rest is an honest null, not 0, when the days before were not saved.
 export function withContext(days) {
   const out = [], last = new Map(), losses = new Map(); // losses: a team's current run of straight losses in the saved graded games
+  const sched = new Map(); // a team's saved games so far, oldest first: { D, home }
+  const run = (ab, home) => { const h = sched.get(ab) || []; let n = 0; for (let i = h.length - 1; i >= 0 && h[i].home === home; i--) n++; return n; };
   const sorted = (days || []).filter(d => d && d.date && Array.isArray(d.cards)).slice().sort((a, b) => a.date.localeCompare(b.date));
   for (const d of sorted) {
     const D = Date.parse(d.date + 'T12:00:00Z'), cards = d.cards.filter(c => c && c.kickoff).slice().sort((a, b) => a.kickoff.localeCompare(b.kickoff));
     const first = cards.length ? cards[0].kickoff : null;
     for (const c of cards) {
       const rest = ab => (last.has(ab) ? Math.round((D - last.get(ab)) / 86400000) - 1 : null);
-      out.push({ ...c, date: d.date, hrest: rest(c.hAbbr), arest: rest(c.aAbbr), firstGame: c.kickoff === first, hloss: losses.get(c.hAbbr) || 0, aloss: losses.get(c.aAbbr) || 0 });
+      const in4 = ab => (sched.get(ab) || []).filter(x => D - x.D <= 3 * 86400000).length; // games in the 3 days before this one
+      // aroad: straight road games the road team has just played. hback: the home team's last game was on the road. hin4 / ain4: 2 = this is a 3rd game in 4 nights.
+      out.push({ ...c, date: d.date, hrest: rest(c.hAbbr), arest: rest(c.aAbbr), firstGame: c.kickoff === first, hloss: losses.get(c.hAbbr) || 0, aloss: losses.get(c.aAbbr) || 0, aroad: run(c.aAbbr, false), hback: sched.has(c.hAbbr) && run(c.hAbbr, true) === 0, hin4: in4(c.hAbbr), ain4: in4(c.aAbbr) });
     }
     for (const c of cards) { if (!c.final || !c.grade) continue; const hw = c.final.h > c.final.a; losses.set(c.hAbbr, hw ? 0 : (losses.get(c.hAbbr) || 0) + 1); losses.set(c.aAbbr, hw ? (losses.get(c.aAbbr) || 0) + 1 : 0); }
-    for (const c of cards) { last.set(c.hAbbr, D); last.set(c.aAbbr, D); }
+    for (const c of cards) { last.set(c.hAbbr, D); last.set(c.aAbbr, D); for (const [ab, home] of [[c.hAbbr, true], [c.aAbbr, false]]) { if (!sched.has(ab)) sched.set(ab, []); sched.get(ab).push({ D, home }); } }
   }
   return out;
 }
@@ -80,6 +95,11 @@ function inSpot(s, c) {
   if (s.id === 'homefav50') return hp != null && hp > ap && hp >= 50 && hp < 55 ? hit : false;
   if (s.id === 'b2bover') return c.arest === 0 || c.hrest === 0 ? hit : false;
   if (s.id === 'firstover') return c.firstGame ? hit : false;
+  if (s.id === 'homefav55') return ch != null && ch >= 0.55 && ch < 0.6 ? hit : false;
+  if (s.id === 'fbhome60') return c.fb && Array.isArray(c.fb.p) && c.fb.p[0] >= 60 ? hit : false;
+  if (s.id === 'homeback') return c.hback ? hit : false;
+  if (s.id === 'roadtrip4') return c.aroad >= 3 ? hit : false;
+  if (s.id === 'tired3in4') return c.hin4 >= 2 || c.ain4 >= 2 ? hit : false;
   return false;
 }
 // Did the subject win? true / false, or null when the game is not graded or has no line to grade an Over against (a push is null too).
@@ -98,14 +118,15 @@ export function tagOf(n, z) {
 // The record of every situation over the saved days (ctx = withContext(days)).
 export function situations(ctx) {
   return SITUATIONS.map(s => {
-    let n = 0, w = 0, exp = 0, v = 0;
+    let n = 0, w = 0, exp = 0, v = 0; const fresh = { w: 0, n: 0, exp: 0 };
     for (const c of ctx) {
       const sp = inSpot(s, c); if (!sp) continue;
       const won = subjectWon(s, c); if (won == null) continue;
       n++; if (won) w++; exp += sp.exp; v += sp.exp * (1 - sp.exp);
+      if (s.since && c.date >= s.since) { fresh.n++; if (won) fresh.w++; fresh.exp += sp.exp; }
     }
     const z = v > 0 ? (w - exp) / Math.sqrt(v) : 0, tag = tagOf(n, z), lift = n >= MIN_N ? Math.round(1000 * (w - exp) / (n + SHRINK)) / 10 : 0;
-    return { id: s.id, kind: s.kind, label: s.label, who: s.who, w, l: n - w, n, exp: Math.round(10 * exp) / 10, z: Math.round(100 * z) / 100, tag, dir: z >= 0 ? 'with' : 'against', lift };
+    return { id: s.id, kind: s.kind, label: s.label, who: s.who, w, l: n - w, n, exp: Math.round(10 * exp) / 10, z: Math.round(100 * z) / 100, tag, dir: z >= 0 ? 'with' : 'against', lift, ...(s.watch ? { watch: true, since: s.since, fresh: { w: fresh.w, l: fresh.n - fresh.w, n: fresh.n, exp: Math.round(10 * fresh.exp) / 10 } } : {}) };
   });
 }
 // Strength of a read from the pick's chance (0-100). A model on the other side makes it a Conflict (no play).
@@ -125,9 +146,11 @@ function readOf(base, ev) {
 export function gameReads(ctx, stats, date) {
   const byId = Object.fromEntries(stats.map(s => [s.id, s]));
   return ctx.filter(c => c.date === date).map(c => {
-    const ml = [], ou = [];
+    const ml = [], ou = [], watch = [];
     for (const s of SITUATIONS) {
       if (!inSpot(s, c)) continue;
+      // tracked only: listed on the game (the side its record backs so far), never part of the read
+      if (s.watch) { const t = byId[s.id]; if (t) watch.push({ id: s.id, kind: s.kind, label: s.label, w: t.w, l: t.l, n: t.n, dir: t.dir, backs: s.kind === 'ou' ? (t.dir === 'with' ? 'Over' : 'Under') : (s.subject === 'H') === (t.dir === 'with') ? c.hAbbr : c.aAbbr }); continue; }
       const st = byId[s.id], lift = st && Number.isFinite(st.lift) ? st.lift : 0; if (Math.abs(lift) < MIN_LIFT) continue;
       const toward = s.kind === 'ml' && s.subject !== 'H' ? -lift : lift;
       (s.kind === 'ml' ? ml : ou).push({ id: s.id, label: s.label, w: st.w, l: st.l, n: st.n, who: s.who, tag: st.tag, dir: lift >= 0 ? 'with' : 'against', toward });
@@ -136,7 +159,7 @@ export function gameReads(ctx, stats, date) {
     // only the stronger one is kept (a tie keeps resthome, the narrower spot).
     const rb = ml.findIndex(x => x.id === 'roadb2b'), rh = ml.findIndex(x => x.id === 'resthome');
     if (rb >= 0 && rh >= 0) ml.splice(Math.abs(ml[rb].toward) > Math.abs(ml[rh].toward) ? rh : rb, 1);
-    const m = c.v4 || c.v2, hm = c.px ? hockeyMove(c.px) : null, line = lineOf(c), out = { id: c.id, date: c.date, kickoff: c.kickoff, ko: c.ko, aAbbr: c.aAbbr, hAbbr: c.hAbbr, away: c.away, home: c.home, line, hrest: c.hrest, arest: c.arest };
+    const m = c.v4 || c.v2, hm = c.px ? hockeyMove(c.px) : null, line = lineOf(c), out = { id: c.id, date: c.date, kickoff: c.kickoff, ko: c.ko, aAbbr: c.aAbbr, hAbbr: c.hAbbr, away: c.away, home: c.home, line, hrest: c.hrest, arest: c.arest, watch };
     const a = readOf(chanceHome(c), ml);
     if (a) {
       const home = a.up, team = home ? c.hAbbr : c.aAbbr, price = c.px ? (home ? c.px.h : c.px.a) : null;
