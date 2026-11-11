@@ -24,15 +24,17 @@ const S = Object.fromEntries(SITUATIONS.map(s => [s.id, s]));
 const o = (h, d, a, extra = {}) => ({ h, d, a, tl: 2.5, to: -120, tu: 100, ...extra });
 {
   const road3 = { ...card('r', '2026-11-05T15:00Z', 'H', 'A'), al: 3, hl: 0, odds: o(-120, 275, 310) };
-  const sp = inSpot(S.roadloss3, road3);
+  const sp = inSpot(S.roadloss2, road3);
   ok('road team on 3 straight losses is in the draw situation, priced at the draw price', sp && sp.price === 275 && sp.breakeven === 27, JSON.stringify(sp));
-  ok('two straight losses is not', inSpot(S.roadloss3, { ...road3, al: 2 }) === false);
-  const short = { ...card('s', '2026-11-05T15:00Z', 'H', 'A'), al: 0, hl: 0, odds: o(-150, 300, 400, { op: { h: -120, d: 270, a: 330 } }) };
+  ok('two straight losses is in it too (Nov 11, 2026: the edge starts at 2), one is not', !!inSpot(S.roadloss2, { ...road3, al: 2 }) && inSpot(S.roadloss2, { ...road3, al: 1 }) === false);
+  const short = { ...card('s', '2026-11-05T15:00Z', 'H', 'A'), al: 0, hl: 0, odds: o(-150, 300, 400, { op: { h: -120, d: 270, a: 330 }, to: -150, tu: 120 }) }; // Over priced at 57%
   const sh = inSpot(S.homeshort, short);
-  ok('home price up 3+ points since the open is the Over situation', sh && sh.moved >= 3 && sh.price === -120, JSON.stringify(sh));
-  ok('a home price that drifted out is not', inSpot(S.homeshort, { ...short, odds: o(-110, 270, 330, { op: { h: -150, d: 300, a: 400 } }) }) === false);
+  ok('home price up 3+ points since the open is the Over situation', sh && sh.moved >= 3 && sh.price === -150, JSON.stringify(sh));
+  ok('the same move with Over priced under 55% is not (Nov 11, 2026)', inSpot(S.homeshort, { ...short, odds: { ...short.odds, to: -120, tu: 100 } }) === false);
+  ok('no Over price: no read', inSpot(S.homeshort, { ...short, odds: { ...short.odds, to: undefined, tu: undefined } }) === false);
+  ok('a home price that drifted out is not', inSpot(S.homeshort, { ...short, odds: o(-110, 270, 330, { op: { h: -150, d: 300, a: 400 }, to: -150, tu: 120 }) }) === false);
   ok('another total line is not (tested on 2.5 only)', inSpot(S.homeshort, { ...short, odds: { ...short.odds, tl: 3 } }) === false);
-  ok('no opening price: no read', inSpot(S.homeshort, { ...short, odds: o(-150, 300, 400) }) === false);
+  ok('no opening price: no read', inSpot(S.homeshort, { ...short, odds: o(-150, 300, 400, { to: -150, tu: 120 }) }) === false);
 }
 // 2b. BTTS No: only when Yes is priced at 65%+ AND v4's No chance reaches the No breakeven
 {
