@@ -258,7 +258,7 @@ button:focus-visible{outline:2px solid var(--blue)}
 .pk .k{font-size:10.5px;font-weight:700;color:var(--faint);letter-spacing:.04em}
 .pk .v{font-size:16px;font-weight:750;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk .v.dim{color:var(--mut);font-weight:600;font-size:14px}
 .pk .pass{font-size:12.5px;color:var(--bad);font-weight:650}
-.lc{color:var(--amber);font-size:14px}
+.lc{color:var(--amber);font-size:14px}.pk .v .pc{font-size:12px;font-weight:650;color:var(--mut);margin-left:2px}
 .str{display:inline-flex;gap:3px}.str i{width:7px;height:16px;border-radius:2px;background:rgba(255,255,255,.12)}.str.s i.f{background:var(--blue)}.str.m i.f{background:var(--gold)}.str.w i.f{background:rgba(255,255,255,.5)}
 .pk .mv{font-size:13px;font-weight:750;min-width:48px;text-align:right;white-space:nowrap}.pk .mv.y{color:var(--good)}.pk .mv.n{color:var(--bad)}.pk .mv.z{color:var(--faint);font-weight:600;font-size:12px}
 .rs{font-size:10px;font-weight:800;letter-spacing:.05em;padding:3px 7px;border-radius:6px}.rs.w{background:rgba(94,224,143,.16);color:var(--good)}.rs.l{background:rgba(255,123,107,.14);color:var(--bad)}.rs.p{background:rgba(255,255,255,.08);color:var(--mut)}
@@ -470,15 +470,19 @@ const TREND_TAG = { lean: 'Lean', watch: 'Watch', noise: 'Noise' };
 const trendRec = x => `${x.w}-${x.l} · n=${x.n}`;
 // Hit rate of the side this situation points to: the subject's record when it did better than its price, the other side's when it did worse.
 const trendHit = x => `${x.n ? Math.round(100 * (x.dir === 'with' ? x.w : x.l) / x.n) : 0}% of ${x.n}`;
+const trendPts = x => (Number.isFinite(x.toward) ? ` · +${Math.round(Math.abs(x.toward))}` : ''); // the points the situation adds to the side it backs
 // One situation row: tagged with the side it backs (the home team or Over when it points up, else the away team or Under), written
 // "Van", "Over". Green when that is the card's pick, red when it backs the other side.
 const tcase = t => String(t).charAt(0).toUpperCase() + String(t).slice(1).toLowerCase();
-function trendEv(x, pickUp, upName, downName) { const up = x.toward > 0, yes = up === pickUp, side = tcase(up ? upName : downName); return `<div class="evr sx"><span class="tg ${yes ? 'y' : 'n'}" aria-label="backs ${esc(side)}${yes ? ', the pick' : ', against the pick'}">${esc(side)}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}</em></div>`; }
+function trendEv(x, pickUp, upName, downName) { const up = x.toward > 0, yes = up === pickUp, side = tcase(up ? upName : downName); return `<div class="evr sx"><span class="tg ${yes ? 'y' : 'n'}" aria-label="backs ${esc(side)}${yes ? ', the pick' : ', against the pick'}">${esc(side)}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}${trendPts(x)}</em></div>`; }
 // ---------- Lines tab (Nov 9, 2026): replaces the Trends cards. One short card per game: the trend's pick on the winner and the total, its
 // strength as bars, how far the price moved since the opening and whether that was toward the pick (✓) or against it (✕), a changed total
 // line in amber, the result once the game is final. Plays (Strong or Medium) come first; finished games drop to the bottom. "Tap for
 // details" opens the situations behind the read and the game's Movement card (prices, goalies) in place. The Movement tab stays as it is.
-const LN_ORDER = { Strong: 0, Medium: 1, Weak: 2, Conflict: 3 };
+// Nov 11, 2026: the pick is the side the read gives the better chance, shown beside it ("EDM -218 · 72%"); the bars are that chance
+// (Strong 65%+, Medium 58%+, Weak 53%+). Under 53% is "Pass · coin flip", a model on the other side "Pass · mixed signals".
+const LN_ORDER = { Strong: 0, Medium: 1, Weak: 2, Conflict: 3, Pass: 3 };
+const lnNoPlay = x => x.lab === 'Conflict' || x.lab === 'Pass', lnPass = x => `<span class="pass" title="${x.lab === 'Pass' ? 'The read gives neither side 53%' : 'The model is on the other side'}">Pass · ${x.lab === 'Pass' ? 'coin flip' : 'mixed signals'}</span>`, lnPct = x => (Number.isFinite(x.chance) ? ` <small class="pc" title="The read's chance for this pick: ${x.base}% going in, ${x.shift >= 0 ? '+' : '−'}${Math.abs(x.shift)} from the situations">${x.chance}%</small>` : '');
 const lnBars = lab => { const n = { Strong: 3, Medium: 2, Weak: 1 }[lab] || 0, k = { Strong: 's', Medium: 'm', Weak: 'w' }[lab] || ''; return `<span class="str ${k}" role="img" aria-label="${lab} trend" title="${lab} trend">${[0, 1, 2].map(i => `<i${i < n ? ' class="f"' : ''}></i>`).join('')}</span>`; };
 const lnPlay = g => [g.ml, g.ou].some(x => x && (x.lab === 'Strong' || x.lab === 'Medium'));
 const lnBest = g => Math.min(...[g.ml, g.ou].filter(x => x && x.lab !== 'None').map(x => LN_ORDER[x.lab] ?? 4), 4);
@@ -494,11 +498,11 @@ const lnRes = r => r == null ? '' : `<span class="rs ${r === 'push' ? 'p' : r ? 
 function lnCard(g, dc) {
   const px = dc && dc.px, hm = dc ? hockeyMove(px) : null, f = dc && dc.final, a = g.aAbbr, h = g.hAbbr;
   const ml = g.ml && g.ml.lab !== 'None' ? g.ml : null, ou = g.ou && g.ou.lab !== 'None' ? g.ou : null;
-  const row = (k, pick, lab, mv, res) => `<div class="pk${res ? ' fin' : ''}"><span class="k">${k}</span>${pick}${lab && lab !== 'Conflict' ? lnBars(lab) : '<span></span>'}${mv}${res}</div>`;
+  const row = (k, pick, lab, mv, res) => `<div class="pk${res ? ' fin' : ''}"><span class="k">${k}</span>${pick}${lab && lab !== 'Conflict' && lab !== 'Pass' ? lnBars(lab) : '<span></span>'}${mv}${res}</div>`;
   // Winner
   let r1;
   if (ml) {
-    const c = ml.lab === 'Conflict', pick = c ? `<span class="pass">Pass · mixed signals</span>` : `<span class="v">${esc(ml.team)}${ml.price != null ? ' ' + fmtOdds(ml.price) : ''}</span>`;
+    const c = lnNoPlay(ml), pick = c ? lnPass(ml) : `<span class="v">${esc(ml.team)}${ml.price != null ? ' ' + fmtOdds(ml.price) : ''}${lnPct(ml)}</span>`;
     const res = f && !c ? ((ml.side === 'H') === (f.h > f.a)) : null;
     r1 = row('ML', pick, ml.lab, lnMove(hm && hm.ml ? hm.ml.d : null, ml.side === 'H', h, a), lnRes(res));
   } else r1 = row('ML', '<span class="v dim">No trend</span>', '', lnMove(hm && hm.ml ? hm.ml.d : null, null, h, a), '');
@@ -506,8 +510,8 @@ function lnCard(g, dc) {
   const ot = px && (px.opt || (px.f && px.f.tl != null ? px.f : null)), lnMoved = ot && px.tl != null && ot.tl !== px.tl;
   let r2;
   if (ou) {
-    const c = ou.lab === 'Conflict', lineTxt = lnMoved && px.tl === ou.line ? `${ot.tl} <span class="lc">→ ${ou.line}</span>` : String(ou.line);
-    const pick = c ? `<span class="pass">Pass · mixed signals</span>` : `<span class="v">${esc(ou.side)} ${lineTxt}</span>`;
+    const c = lnNoPlay(ou), lineTxt = lnMoved && px.tl === ou.line ? `${ot.tl} <span class="lc">→ ${ou.line}</span>` : String(ou.line);
+    const pick = c ? lnPass(ou) : `<span class="v">${esc(ou.side)} ${lineTxt}${lnPct(ou)}</span>`;
     const res = f && !c ? (f.total === ou.line ? 'push' : (f.total > ou.line) === (ou.side === 'Over')) : null;
     r2 = row('O/U', pick, ou.lab, lnMove(hm && hm.ou ? hm.ou.d : null, ou.side === 'Over', 'Over', 'Under'), lnRes(res));
   } else r2 = row('O/U', `<span class="v dim">No trend${lnMoved ? ` <span class="lc">${ot.tl} → ${px.tl}</span>` : ''}</span>`, '', lnMove(hm && hm.ou ? hm.ou.d : null, null, 'Over', 'Under'), '');
@@ -530,7 +534,7 @@ function lnCard(g, dc) {
   // Details: the situations behind the read, then the Movement card (prices, goalies, rest), else just the goalies
   const ev = [...(ml ? ml.ev.map(x => trendEv(x, ml.side === 'H', h, a)) : []), ...(ou ? ou.ev.map(x => trendEv(x, ou.side === 'Over', 'Over', 'Under')) : [])];
   const mvc = dc && hm ? movesView(g.id) : dc ? gkRestTags(dc) : '';
-  const det = `${ev.length ? `<div class="lnh">Why · ${ev.length} situation${ev.length === 1 ? '' : 's'}</div><div class="evl">${ev.join('')}</div>` : `<div class="pxl" style="margin-top:4px">No situation matches this game, or the ones that do have not been counted long enough to point a way.</div>`}${mvc}`;
+  const det = `${ev.length ? `<div class="lnh">Why · ${ev.length} situation${ev.length === 1 ? '' : 's'}</div><div class="evl">${ev.join('')}</div>` : `<div class="pxl" style="margin-top:4px">No situation matches this game, or the ones that do have not been counted long enough (10 games) to move the read.</div>`}${mvc}`;
   return `<div class="sc${fl.level ? ' lv-' + fl.level : ''}${f ? ' done' : ''}"><div class="sh">${crest(a)}<div class="mm"><b>${title}</b><small>${esc(g.ko)} CT</small></div>${crest(h)}${tag}</div>${r1}${r2}${pills.length ? `<div class="ag3">${pills.join('')}</div>` : ''}
   <details class="lnd" data-lnid="${esc(g.id)}"${S.lnOpen && S.lnOpen[g.id] ? ' open' : ''}><summary>Tap for details</summary>${det}</details></div>`;
 }
@@ -543,7 +547,7 @@ function trendsView() {
   const inF = (r, k) => k === 'up' ? !r.f && new Date(r.g.kickoff).getTime() > Date.now() : k === 'plays' ? lnPlay(r.g) : k === 'big' ? !!(r.hm && r.hm.big) : true;
   const f = S.lnf || (all.some(r => inF(r, 'up')) ? 'up' : 'all');
   const seg = `<div class="mvseg">${[['up', 'Upcoming'], ['plays', 'Plays'], ['big', 'Big moves'], ['all', 'All']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-lnf="${k}">${l}<i>${all.filter(r => inF(r, k)).length}</i></button>`).join('')}</div>`;
-  const key = `<div class="lg2"><span>${lnBars('Medium').replace(/role="img" aria-label="[^"]*" title="[^"]*"/, 'aria-hidden="true"')} strength</span><span><b class="y">✓</b> price moved toward pick</span><span><b class="x">✕</b> against</span></div>`;
+  const key = `<div class="lg2"><span>${lnBars('Medium').replace(/role="img" aria-label="[^"]*" title="[^"]*"/, 'aria-hidden="true"')} pick's chance: 65%+, 58%+, 53%+</span><span><b class="y">✓</b> price moved toward pick</span><span><b class="x">✕</b> against</span></div>`;
   const shown = all.filter(r => inF(r, f)), byKo = (x, y) => x.g.kickoff.localeCompare(y.g.kickoff);
   const live = shown.filter(r => !r.f).sort((x, y) => (lnPlay(y.g) - lnPlay(x.g)) || (lnBest(x.g) - lnBest(y.g)) || byKo(x, y)), done = shown.filter(r => r.f).sort(byKo);
   const grp = (t, rs) => rs.length ? `<div class="grp">${t}</div>${rs.map(r => lnCard(r.g, r.dc)).join('')}` : '';
@@ -696,14 +700,14 @@ function calView() {
 }
 function trendSituations() {
   if (!trends) return '';
-  const rows = (trends.situations || []).map(x => `<tr><td>${esc(x.label)}<small>${x.kind === 'ou' ? 'Over' : esc(x.who)} · ${x.exp != null ? 'price expected ' + x.exp + ' wins' : ''}</small></td><td>${x.w}-${x.l}<small>n=${x.n}</small></td><td><span class="chp ${x.tag === 'lean' ? 's' : x.tag === 'watch' ? 'sp' : 'n'}">${TREND_TAG[x.tag]}</span>${x.tag !== 'noise' ? `<small>${x.dir === 'with' ? 'better' : 'worse'} than its price</small>` : ''}</td></tr>`).join('');
+  const rows = (trends.situations || []).map(x => `<tr><td>${esc(x.label)}<small>${x.kind === 'ou' ? 'Over' : esc(x.who)} · ${x.exp != null ? 'expected ' + x.exp + ' wins' : ''}</small></td><td>${x.w}-${x.l}<small>n=${x.n}${x.lift ? ' · ' + (x.lift > 0 ? '+' : '−') + Math.abs(x.lift) + ' pts' : ''}</small></td><td><span class="chp ${x.tag === 'lean' ? 's' : x.tag === 'watch' ? 'sp' : 'n'}">${TREND_TAG[x.tag]}</span>${x.tag !== 'noise' ? `<small>${x.dir === 'with' ? 'better' : 'worse'} than its chance</small>` : ''}</td></tr>`).join('');
   return `<h4>Situations</h4><table class="cal"><tr><th>${trends.games} graded games, ${trends.days} days</th><th>Record</th><th>Read</th></tr>${rows}</table>
-  <div class="nt">n is how many graded games were in that spot. The record is how the first team named (or the Over) did. Each record is judged against what the price expected, not against 50%. Lean needs 20+ games and a clear gap, Watch is a smaller gap, Noise is too few games or no gap. A game read adds up the situations it is in, then checks your winner and total models and how the price moved. It is a read of past results, not a model bet, and it changes no pick.</div>`;
+  <div class="nt">n is how many graded games were in that spot. The record is how the first team named (or the Over) did. Each record is judged against the chance the price gave (your model's chance on a game with no price), not against 50%. Lean needs 20+ games and a clear gap, Watch is a smaller gap, Noise is too few games or no gap. The pts are how far the situation moves a game read: its gap per game, held back until it has more games. A game read starts from the price's chance, adds the pts of the situations the game is in (12 at most, from the days before that game), picks the side above 50% and grades it by that chance. A model on the other side makes it a Pass. It is a read of past results, not a model bet, and it changes no pick.</div>`;
 }
 // Results tab: how the Trends reads have done on the saved games (src/trends.js track)
 function trendTrack() {
   if (!trends) return '';
-  return (trends.track || []).length ? `<h4>How the Trends reads have done</h4><table class="cal"><tr><th>Past games, read replayed</th><th>Trend won</th><th>Model won</th></tr>${trends.track.map(x => `<tr><td>${esc(x.label)}</td><td>${Math.round(100 * x.w / x.n)}%<small>${x.w}-${x.n - x.w} · n=${x.n}</small></td><td>${x.hasModel ? Math.round(100 * x.mw / x.n) + '%<small>' + x.mw + '-' + (x.n - x.mw) + '</small>' : '–'}</td></tr>`).join('')}</table><div class="nt">Every graded game replayed through today's reads. The situations were found in these same games, so these are better than a fresh run would be: use them as a guide, not proof. Model won is only shown where the model took the other side.</div>` : '';
+  return (trends.track || []).length ? `<h4>How the Lines reads have done</h4><table class="cal"><tr><th>Past games, read replayed</th><th>Pick won</th><th>Model won</th></tr>${trends.track.map(x => `<tr><td>${esc(x.label)}</td><td>${Math.round(100 * x.w / x.n)}%<small>${x.w}-${x.n - x.w} · n=${x.n}</small></td><td>${x.hasModel ? Math.round(100 * x.mw / x.n) + '%<small>' + x.mw + '-' + (x.n - x.mw) + '</small>' : '–'}</td></tr>`).join('')}</table><div class="nt">Every graded game read with only the games of the days before it, so no read knew its own result. Strength is the pick's chance: Strong 65%+, Medium 58%+, Weak 53%+, Pass under that. The groups are small: a guide, not proof. Model won is only shown where the model took the other side.</div>` : '';
 }
 function results() {
   if (!tally) return `<div class="empty">Loading…</div>`;
