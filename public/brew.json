@@ -1,6 +1,71 @@
 {
-  "updated": "2026-11-10T21:09:09Z",
+  "updated": "2026-11-11T11:17:08Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-11",
+      "title": "Rate hike for Xmas",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,066",
+          "change": -0.74
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,521",
+          "change": -0.38
+        },
+        {
+          "label": "Dow",
+          "value": "52,232",
+          "change": -0.3
+        },
+        {
+          "label": "10-yr",
+          "value": "4.983%",
+          "change": 12.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$73,873",
+          "change": -1.41
+        },
+        {
+          "label": "Hims & Hers",
+          "value": "$19.13",
+          "change": -16.61
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Hot CPI",
+          "t": "October CPI rose 0.4% versus September's 0.6%, with food up 0.5% and shelter up 0.3%, still above what the Fed wants."
+        },
+        {
+          "h": "Rate hike",
+          "t": "Core CPI gained 0.3%, so a quarter-point December hike looks very likely and Waller flagged a half-point as possible."
+        },
+        {
+          "h": "Energy",
+          "t": "Energy costs rose 0.7% after September's 5.2% jump, and gas averaged $4.32 a gallon in October."
+        },
+        {
+          "h": "Anthropic IPO",
+          "t": "Anthropic reportedly seeks a $1.4 trillion valuation, selling 825 million Nasdaq shares at $70 to $78 under ticker ANT."
+        },
+        {
+          "h": "Nvidia suit",
+          "t": "Shareholders filed a class action over Jensen Huang's undisclosed ties, and Nvidia hired Wachtell Lipton for an independent probe."
+        },
+        {
+          "h": "Stocks and Hims",
+          "t": "Stocks slipped on the inflation data and Hims & Hers fell 16.61% to $19.13 after missing earnings."
+        }
+      ],
+      "note": "Market numbers are the Tuesday close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-10",
@@ -64,71 +129,6 @@
           "t": "Take-Two rose 8.31% on strong GTA VI preorders, AAON jumped 19.31% on record revenue, and Digital Turbine plunged 35.84% on AI spending plans."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-10",
-      "title": "Everyone's problem",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,253",
-          "change": 2.74
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,550",
-          "change": 2.35
-        },
-        {
-          "label": "Dow",
-          "value": "52,390",
-          "change": 2.15
-        },
-        {
-          "label": "10-yr",
-          "value": "4.864%",
-          "change": 0,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$75,218",
-          "change": 1.12
-        },
-        {
-          "label": "AMD",
-          "value": "$508.58",
-          "change": 13.26
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Nvidia fallout",
-          "t": "Nvidia fell 4.3%, wiping out nearly $230 billion, after CEO Jensen Huang admitted an affair with an alleged Chinese spy."
-        },
-        {
-          "h": "AI exposure",
-          "t": "Nvidia has put about $500 billion into AI infrastructure, including roughly $165 billion lent to neoclouds, so trouble there could spread across the industry."
-        },
-        {
-          "h": "Tech rebound",
-          "t": "The Nasdaq rose 2.74% as Amazon, Alphabet, Microsoft, AMD (up 13.26%) and Broadcom bounced while oil prices fell."
-        },
-        {
-          "h": "Data centers",
-          "t": "Investors were already wary after Democrats won Congress on promises to halt new data center construction."
-        },
-        {
-          "h": "Seed-oil free",
-          "t": "Sales of seed-oil-free products jumped 72% to $1 billion in a year, with PepsiCo and Utz adding tallow-cooked snacks."
-        },
-        {
-          "h": "Deals and moves",
-          "t": "Honda plans a $3 billion Ohio assembly plant, and PwC will put 85,000 employees through a six-month critical-thinking program."
-        }
-      ],
-      "note": "Market numbers are the Monday close."
     },
     {
       "source": "Brew Markets",
