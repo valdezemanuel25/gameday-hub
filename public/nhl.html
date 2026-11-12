@@ -468,7 +468,9 @@ const trendPts = x => (Number.isFinite(x.toward) ? ` · +${Math.round(Math.abs(x
 // One situation row: tagged with the side it backs (the home team or Over when it points up, else the away team or Under), written
 // "Van", "Over". Green when that is the card's pick, red when it backs the other side.
 const tcase = t => String(t).charAt(0).toUpperCase() + String(t).slice(1).toLowerCase();
-function trendEv(x, pickUp, upName, downName) { const up = x.toward > 0, yes = up === pickUp, side = tcase(up ? upName : downName); return `<div class="evr sx"><span class="tg ${yes ? 'y' : 'n'}" aria-label="backs ${esc(side)}${yes ? ', the pick' : ', against the pick'}">${esc(side)}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}${trendPts(x)}</em></div>`; }
+// A situation whose own side has done worse than its chance backs the OTHER side (dir 'against'): the row says 'Fade:' so the tag (the side
+// backed) is not read as the team the label describes (Nov 12, 2026: COL tagged on OTT's 'Slight home favorite').
+function trendEv(x, pickUp, upName, downName) { const up = x.toward > 0, yes = up === pickUp, side = tcase(up ? upName : downName); return `<div class="evr sx"><span class="tg ${yes ? 'y' : 'n'}" aria-label="backs ${esc(side)}${yes ? ', the pick' : ', against the pick'}">${esc(side)}</span><span class="et">${x.dir === 'against' ? '<b>Fade:</b> ' : ''}${esc(x.label)}</span><em>${trendHit(x)}${trendPts(x)}</em></div>`; }
 // ---------- Lines tab (Nov 9, 2026): replaces the Trends cards. One short card per game: the trend's pick on the winner and the total, its
 // strength as bars, how far the price moved since the opening and whether that was toward the pick (✓) or against it (✕), a changed total
 // line in amber, the result once the game is final. Plays (Strong or Medium) come first; finished games drop to the bottom. "Tap for
