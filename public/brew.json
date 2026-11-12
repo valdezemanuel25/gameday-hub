@@ -1,70 +1,70 @@
 {
-  "updated": "2026-11-11T11:17:08Z",
+  "updated": "2026-11-12T11:10:55Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-11",
-      "title": "Rate hike for Xmas",
+      "date": "2026-11-12",
+      "title": "Where the chips fall",
       "markets": [
         {
           "label": "Nasdaq",
-          "value": "25,066",
-          "change": -0.74
+          "value": "25,466",
+          "change": 1.6
         },
         {
           "label": "S&P 500",
-          "value": "7,521",
-          "change": -0.38
+          "value": "7,619",
+          "change": 1.31
         },
         {
           "label": "Dow",
-          "value": "52,232",
-          "change": -0.3
+          "value": "52,486",
+          "change": 0.49
         },
         {
           "label": "10-yr",
-          "value": "4.983%",
-          "change": 12.0,
+          "value": "4.998%",
+          "change": 2.0,
           "unit": "bps"
         },
         {
           "label": "Bitcoin",
-          "value": "$73,873",
-          "change": -1.41
+          "value": "$73,870",
+          "change": 0.39
         },
         {
-          "label": "Hims & Hers",
-          "value": "$19.13",
-          "change": -16.61
+          "label": "CoreWeave",
+          "value": "$60.77",
+          "change": 24.71
         }
       ],
       "takeaways": [
         {
-          "h": "Hot CPI",
-          "t": "October CPI rose 0.4% versus September's 0.6%, with food up 0.5% and shelter up 0.3%, still above what the Fed wants."
+          "h": "Nvidia CEO",
+          "t": "Nvidia's board met to weigh replacing Jensen Huang after a second reported affair, and the stock fell almost 9% after hours."
         },
         {
-          "h": "Rate hike",
-          "t": "Core CPI gained 0.3%, so a quarter-point December hike looks very likely and Waller flagged a half-point as possible."
+          "h": "AI stakes",
+          "t": "Nvidia is a $4 trillion company with about 90% of AI chip sales, and Huang owns roughly 3.5% with no succession plan."
         },
         {
-          "h": "Energy",
-          "t": "Energy costs rose 0.7% after September's 5.2% jump, and gas averaged $4.32 a gallon in October."
+          "h": "Stocks rally",
+          "t": "The S&P 500 rose 1.31% to 7,619 and the Nasdaq gained 1.60%, fully erasing its post-election losses."
         },
         {
-          "h": "Anthropic IPO",
-          "t": "Anthropic reportedly seeks a $1.4 trillion valuation, selling 825 million Nasdaq shares at $70 to $78 under ticker ANT."
+          "h": "CoreWeave",
+          "t": "CoreWeave jumped 24.71% to $60.77, reviving investor optimism about AI."
         },
         {
-          "h": "Nvidia suit",
-          "t": "Shareholders filed a class action over Jensen Huang's undisclosed ties, and Nvidia hired Wachtell Lipton for an independent probe."
+          "h": "Yields, Bitcoin",
+          "t": "The 10-year yield edged up 2 bps to 4.998% while Bitcoin added 0.39% to $73,870."
         },
         {
-          "h": "Stocks and Hims",
-          "t": "Stocks slipped on the inflation data and Hims & Hers fell 16.61% to $19.13 after missing earnings."
+          "h": "Mississippi",
+          "t": "Democrat Scott Colom narrowly beat Sen. Cindy Hyde-Smith, 49.18% to 48.72%, flipping a seat held by Republicans since 1982."
         }
       ],
-      "note": "Market numbers are the Tuesday close."
+      "note": "Market numbers are the Wednesday close."
     },
     {
       "source": "Brew Markets",
