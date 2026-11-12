@@ -637,7 +637,7 @@ export async function nhlTally(env) {
   const REST = { n: 0, llP: 0, llA: 0, d: 0, d2: 0, won: 0, exp: 0 };
   const MV = { ml: { n: 0, follow: 0, big: 0, bigFollow: 0 }, ou: { n: 0, follow: 0, big: 0, bigFollow: 0 } };
   // Model bets: every card's headline pick, locked when the game was graded. A total exactly on the line is a push (no result).
-  const LB = { n: 0, hits: 0, push: 0, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, over: 0, overN: 0 }, recent: [] }, lbAdd = (o, k, hit, pk) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; if (pk) (x.ks || (x.ks = {}))[pk] = (x.ks[pk] || 0) + 1; }; // ks: which kinds of pick are inside, so the page can work out what chance alone would score
+  const LB = { n: 0, hits: 0, push: 0, r2: { n: 0, hits: 0, best: { n: 0, hits: 0 } }, byKind: {}, byKey: {}, byBack: {}, base: { home: 0, over: 0, overN: 0 }, recent: [] }, lbAdd = (o, k, hit, pk) => { const x = o[k] || (o[k] = { n: 0, hits: 0 }); x.n++; x.hits += hit ? 1 : 0; if (pk) (x.ks || (x.ks = {}))[pk] = (x.ks[pk] || 0) + 1; }; // ks: which kinds of pick are inside, so the page can work out what chance alone would score
   for (const d of days.filter(Boolean).sort((a, b) => b.date.localeCompare(a.date))) {
     for (const c of d.cards.filter(x => x.final && x.grade).sort((a, b) => b.kickoff.localeCompare(a.kickoff))) {
       // Price moves: did the result go the way the price moved, on the moneyline and on the total (a push is left out)?
@@ -657,12 +657,13 @@ export async function nhlTally(env) {
         const L = c.lean;
         if (L.hit == null) LB.push++;
         else {
-          LB.n++; LB.hits += L.hit ? 1 : 0; lbAdd(LB.byKind, L.k, L.hit, L.key); lbAdd(LB.byKey, L.key, L.hit);
+          LB.n++; LB.hits += L.hit ? 1 : 0; if (L.r === 2) { LB.r2.n++; LB.r2.hits += L.hit ? 1 : 0; if (L.k === 'best') { LB.r2.best.n++; LB.r2.best.hits += L.hit ? 1 : 0; } } // r2: picks made by the Nov 12, 2026 rule (src/pick.js)
+          lbAdd(LB.byKind, L.k, L.hit, L.key); lbAdd(LB.byKey, L.key, L.hit);
           if (L.ep != null) { const E = LB.ep || (LB.ep = { n: 0, plain: 0, hits: 0, saved: 0 }); E.n++; E.plain += L.hit ? 1 : 0; E.hits += L.ep ? 1 : 0; E.saved += L.ep && !L.hit ? 1 : 0; }
           if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.y} of ${L.a}`, L.hit, L.key);
           LB.base.home += c.final.h > c.final.a ? 1 : 0;
           if (c.ln && c.final.total !== c.ln.v) { LB.base.overN++; LB.base.over += c.final.total > c.ln.v ? 1 : 0; }
-          if (LB.recent.length < 40) LB.recent.push({ date: d.date, kickoff: c.kickoff, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, k: L.k, key: L.key, line: L.line ?? null, p: L.p, y: L.y, a: L.a, hit: !!L.hit, ...(L.ep != null ? { ep: L.ep } : {}) });
+          if (LB.recent.length < 40) LB.recent.push({ date: d.date, kickoff: c.kickoff, home: c.home, away: c.away, hAbbr: c.hAbbr, aAbbr: c.aAbbr, final: c.final, k: L.k, key: L.key, line: L.line ?? null, p: L.p, y: L.y, a: L.a, hit: !!L.hit, ...(L.r ? { r: L.r } : {}), ...(L.ep != null ? { ep: L.ep } : {}) });
         }
       }
       if (g.v5 && c.v5) {

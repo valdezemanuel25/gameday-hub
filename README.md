@@ -187,6 +187,31 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * The button calls `POST /api/nhl/forebet` (`nhlForebet` in `src/nhl.js`): one read of Forebet's NHL page for those games only. No new games, prices, goalies or grading run, and the cron's 3 / 6 hour wait between Forebet reads does not apply to a tap. With nothing missing it does not fetch.
 * It reports how many were filled and which are still missing (a game Forebet has not listed yet stays missing), or the reason the read failed.
 
+### Hockey models cleaned up (Nov 12, 2026)
+
+On the Results tab of Nov 12, 2026 (192 graded games): v4 picked 117 winners (61%, Brier 0.229), Forebet 113 of 181 (62%), v2 109 (57%, Brier 0.234), and always picking the home team also 109. On v5's own 97 games it picked 57 winners to v4's 59, and on the 60 where rest or a backup goalie moved it, 35 to v4's 37. Every gap is inside the ±7 margin, so this is a direction, not proof.
+
+* **The hockey card shows v4 and Forebet.** The win % bar, the Board tile and the finished-game mark read v4 (v2 only on a game with no v4, labelled "v2 (no v4)").
+* **v2 is off the card** and marked "v2 retired" on the Results table, where its record keeps counting.
+* **The v5 shadow row and its Results section are gone.** v5 is still worked out and graded in the background, because its back-to-back and backup flags feed the goalie tags, the rest-against-the-price check and the Analyst's rested-team rule.
+* **Not changed:** the Analyst's "Price over v2" rule still reads v2 (it bets against it).
+
+**New headline pick (same day, `hockeyPick` in `src/pick.js`).** Three votes on the winner: v4, Forebet and the DraftKings moneyline with the margin removed. v2 no longer votes, and Over/Under is no longer picked.
+
+* **Best pick** = all three agree and the price gives the side 55%+. **Lean** = a majority (all three under 55% included; v4 and Forebet alone before a price). **Split** = two votes, one each (the price's side, else v4's).
+* The pick's % is the price's chance for it (the models' average with no price).
+* The card's Consensus badge, the Board's "All agree" tag, the home page and the notification all follow the Best pick.
+* **Replay on the Nov 12 backup (192 graded games, 115 priced):**
+
+| Rule | Winner picks | Best picks | Over/Under picks |
+|---|---|---|---|
+| Old (v2, v4, Forebet) | 67 of 110 (61%) | 60 of 98 (61%) | 16 of 36 (44%) |
+| New (v4, Forebet, price) | 125 of 192 (65%) | 44 of 58 (76%; halves 20 of 29, 24 of 29) | none |
+
+* All three agreeing with the price under 55% went 6 of 18, which is why that is only a Lean. The price alone at 55%+ went 53 of 71, so most of the Best pick's strength is the price; at the closing price the 58 Best picks returned +8.3 units.
+* **Limits.** The 55% line was chosen on these same games, the replay uses the closing price (a pick seen hours earlier uses the price at that time), and 58 picks is a small sample.
+* **Record.** Picks graded before the change keep the old rule. New ones carry `r: 2` and get their own line at the top of Model bets.
+
 ### Lines reads rebuilt as a chance (Nov 11, 2026)
 
 Checked against the hockey backup of Nov 11, 2026 (178 graded games, Oct 15 to Nov 9, 101 of them with a price). What it showed:
