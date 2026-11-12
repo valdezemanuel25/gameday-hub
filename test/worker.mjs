@@ -31,6 +31,7 @@ const entry = (id, name, gp, gf, ga) => ({
 });
 
 let fixtureDone = false, elDone = false, fx2Done = false;
+let movedOn = false; // a game ESPN moved to the next day (Nov 12, 2026)
 const history = [];
 // Arsenal (359) last 5: 2-1, 0-3, 2-0, 2-1, 1-0 (7 scored, 5 conceded). Brighton (331): 7 scored, 4 conceded.
 [[2, 1], [0, 3], [2, 0], [2, 1], [1, 0]].forEach(([f, a], i) =>
@@ -53,7 +54,8 @@ globalThis.fetch = async url => {
     return send({ children: [{ standings: { entries } }] });
   }
   if (u.includes('/eng.1/scoreboard')) {
-    return send({ events: [...history, ev('fx1', FX1_KO, [359, 'Arsenal'], [331, 'Brighton'], 2, 1, fixtureDone), ev('fx2', '2026-10-15T19:00:00Z', [359, 'Arsenal'], [331, 'Brighton'], 0, 0, fx2Done)] });
+    return send({ events: [...history, ev('fx1', FX1_KO, [359, 'Arsenal'], [331, 'Brighton'], 2, 1, fixtureDone), ev('fx2', '2026-10-15T19:00:00Z', [359, 'Arsenal'], [331, 'Brighton'], 0, 0, fx2Done),
+      ...(movedOn ? [ev('mv1', '2026-10-21T19:00:00Z', [359, 'Arsenal'], [331, 'Brighton'], 2, 0, true)] : [])] });
   }
   if (u.includes('/uefa.champions/scoreboard')) {
     return send({ events: [
@@ -277,6 +279,25 @@ ok('form excludes the match itself and later games', ff.n === 3 && ff.gf === 3 &
   const t = await (await worker.fetch(new Request('https://hub.test/api/tally', { headers: { 'x-admin-token': 'secret' } }), env)).json();
   const tot = t.calibration.reduce((a, b) => a + b.n, 0);
   ok('calibration groups cover every graded v4 winner pick (v2 is retired)', t.calibration.length === 4 && tot === t.v4.n && tot > 0, `${tot} vs ${t.v4.n}`);
+}
+// ---- a game moved to the next day (Nov 12, 2026: Las Palmas v Eldense, Nov 8 -> Nov 9) is still graded, and its Analyst bet settled ----
+{
+  const base = JSON.parse(kv.get('day:2026-10-14')).cards.find(c => c.league === 'eng.1' && c.v4);
+  const card = { ...base, id: 'mv1', kickoff: '2026-10-20T19:00:00Z', final: null, grade: undefined, lean: undefined, smGrade: undefined };
+  kv.set('day:2026-10-20', JSON.stringify({ date: '2026-10-20', cards: [card] }));
+  const an0 = kv.get('analyst');
+  kv.set('analyst', JSON.stringify({ v: 1, items: [{ id: 'bmv', rule: 'bttsNo', key: 'N', price: -120, kickoff: '2026-10-20T19:00:00Z', mins: 200, date: '2026-10-20', gid: 'mv1', league: 'eng.1', home: 'Arsenal', away: 'Brighton' }] }));
+  const at = new Date('2026-10-22T05:00:00Z');
+  const before = calls.fetch;
+  const none = await gradeLeague('2026-10-20', 'eng.1', env, {}, at);
+  ok('moved game: not finished on its new day yet, nothing graded or saved', none.graded === 0 && none.pending === 1 && !JSON.parse(kv.get('day:2026-10-20')).cards[0].final, JSON.stringify(none));
+  ok('moved game: the next days are read only while a card past kickoff is waiting', calls.fetch > before);
+  movedOn = true;
+  const g = await gradeLeague('2026-10-20', 'eng.1', env, {}, at);
+  const c = JSON.parse(kv.get('day:2026-10-20')).cards[0], b = JSON.parse(kv.get('analyst')).items.find(x => x.id === 'bmv');
+  ok('moved game: graded from the day ESPN moved it to', g.graded === 1 && c.final && c.final.h === 2 && c.final.a === 0 && c.grade && c.grade.v4, JSON.stringify(g));
+  ok('moved game: the Analyst bet on it is settled (Both score No wins at 2-0)', b && b.res === 'win' && b.score === '2-0', JSON.stringify(b));
+  movedOn = false; if (an0 == null) kv.delete('analyst'); else kv.set('analyst', an0); kv.delete('day:2026-10-20');
 }
 console.log(fails ? `\n${fails} FAILED` : '\nAll wiring checks passed (incl. pre-kickoff form)');
 process.exit(fails ? 1 : 0);

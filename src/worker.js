@@ -4,7 +4,7 @@ import { scoreCard } from './v6core.js';
 import { usualOverSide, supports as v4Supports, resolve as v4Resolve, predict as v4Predict, getRatings, refreshRatings, cupForecast } from './v4.js';
 import {
   TZ, LEAGUES, UNTRACKED, isCounted, FIRST_DIV, VISIBLE, DOMESTIC, CUP_MODEL, leagueBySlug, localDate, localTime, syncLeague,
-  findTeam, getContext, missingContexts, backfillShots, fixturesForLeague, rawOdds, oddsWhy, shotsCoverage, PRICED,
+  findTeam, getContext, missingContexts, backfillShots, fixturesForLeague, scoreboard, rawOdds, oddsWhy, shotsCoverage, PRICED,
 } from './data.js';
 import { parseForebet, mergeSeed, fbGrade } from './forebet.js';
 import { forebetStep, forebetFetch, FB_PAGES, matchRows, is as isName } from './forebetpage.js';
@@ -678,6 +678,17 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   }
   const fx = await fixturesForLeague(league, date, []);
   const finals = new Map(fx.filter(f => f.done).map(f => [f.id, f]));
+  // Moved games (Nov 12, 2026): ESPN files a game moved to a later day (Las Palmas v Eldense, Nov 8 -> Nov 9) under its new date, so this
+  // day's scoreboard no longer lists it and its card (and any Analyst bet on it) was never graded. A card past kickoff that this day does not
+  // list as finished is looked up by its ESPN id on the next 3 days' scoreboards. Only read while such a card is waiting, so no extra
+  // requests on a normal day, and nothing is saved unless a game is graded.
+  const moved = open.filter(c => !finals.has(c.id) && now.getTime() > new Date(c.kickoff).getTime() + 2 * 3600000);
+  if (moved.length) {
+    const d1 = new Date(`${addDays(date, 1)}T12:00:00Z`);
+    const later = await scoreboard(league.slug, d1, new Date(d1.getTime() + 3 * 86400000), []).catch(() => []);
+    const want = new Set(moved.map(c => c.id));
+    for (const f of later) if (f.done && want.has(f.id)) finals.set(f.id, f);
+  }
   let graded = 0, pending = 0;
   for (const c of open) {
     const f = finals.get(c.id);
