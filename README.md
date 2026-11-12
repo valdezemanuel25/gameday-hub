@@ -187,6 +187,16 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * The button calls `POST /api/nhl/forebet` (`nhlForebet` in `src/nhl.js`): one read of Forebet's NHL page for those games only. No new games, prices, goalies or grading run, and the cron's 3 / 6 hour wait between Forebet reads does not apply to a tap. With nothing missing it does not fetch.
 * It reports how many were filled and which are still missing (a game Forebet has not listed yet stays missing), or the reason the read failed.
 
+### Hockey models cleaned up (Nov 12, 2026)
+
+On the Results tab of Nov 12, 2026 (192 graded games): v4 picked 117 winners (61%, Brier 0.229), Forebet 113 of 181 (62%), v2 109 (57%, Brier 0.234), and always picking the home team also 109. On v5's own 97 games it picked 57 winners to v4's 59, and on the 60 where rest or a backup goalie moved it, 35 to v4's 37. Every gap is inside the ±7 margin, so this is a direction, not proof.
+
+* **The hockey card shows v4 and Forebet.** The win % bar, the Board tile and the finished-game mark read v4 (v2 only on a game with no v4, labelled "v2 (no v4)").
+* **v2 is off the card** and marked "v2 retired" on the Results table, where its record keeps counting.
+* **The v5 shadow row and its Results section are gone.** v5 is still worked out and graded in the background, because its back-to-back and backup flags feed the goalie tags, the rest-against-the-price check and the Analyst's rested-team rule.
+* **Not changed:** the headline pick and the Consensus badge still count v2's vote with v4 and Forebet, and the Analyst's "Price over v2" rule still reads v2 (it bets against it). Changing either would break the Model bets and Analyst records.
+* Only `public/nhl.html` changed.
+
 ### Lines reads rebuilt as a chance (Nov 11, 2026)
 
 Checked against the hockey backup of Nov 11, 2026 (178 graded games, Oct 15 to Nov 9, 101 of them with a price). What it showed:

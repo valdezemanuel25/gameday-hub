@@ -119,7 +119,7 @@ table.mvx{width:100%;margin:6px 0 0;border:0;background:none;border-radius:0}.mv
 .neon,.mvx td.neon b{color:#ff2d55;font-weight:750;text-shadow:0 0 6px rgba(255,45,85,.75),0 0 14px rgba(255,45,85,.45)}.mvx tr.won td.n{color:var(--good);font-weight:650}
 .mvseg{display:flex;gap:6px;margin:12px 18px 0;flex-wrap:wrap}.mvseg button{font-size:12px;padding:6px 11px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}.mvseg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}.mvseg i{font-style:normal;opacity:.7;margin-left:4px}
 .ag.y{background:rgba(var(--acc-rgb),.16);color:var(--acc-hi)}.ag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
-.ml{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.ml{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.ml.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .gl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}.gl>div{min-width:0}.gl>div:last-child{text-align:right}
 .gl small{display:block;font-size:10.5px;color:var(--faint);font-weight:650;letter-spacing:.02em}.gl b{display:block;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gc{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;border:1px solid var(--line);margin:3px 3px 0 0;color:var(--mut)}.gl>div:last-child .gc{margin:3px 0 0 3px}
@@ -336,8 +336,8 @@ const LGO = { NJD: 'nj', SJS: 'sj', TBL: 'tb', LAK: 'la', UTA: 'utah' };
 const logo = a => `https://a.espncdn.com/i/teamlogos/nhl/500/${LGO[a] || String(a).toLowerCase()}.png`;
 const crest = (a, win) => `<i class="cr${win ? ' win' : ''}" style="--tc:${tcol(a)}">${esc(a)}<img src="${logo(a)}" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('lg')" onerror="this.remove()"></i>`;
 function sideOf(m, c, kind) { return kind === 'fb' ? m.pick : (m.w >= 50 ? 'H' : 'A'); }
-// MIN_CARD (Nov 9, 2026): the open game card keeps the win % bar, the three model boxes (pick, Over/Under, score, result marks), the goalies (name, Confirmed /
-// Expected, Backup, Back-to-back), a one-line v5 shadow and a one-line Shots + goalie read. Left out: 'likeliest' / 'predicted' wording, push %, days-rest chips,
+// MIN_CARD (Nov 9, 2026): the open game card keeps the win % bar, the two model boxes (v4 and Forebet) (pick, Over/Under, score, result marks), the goalies (name, Confirmed /
+// Expected, Backup, Back-to-back), a one-line Shots + goalie read. Left out: 'likeliest' / 'predicted' wording, push %, days-rest chips,
 // the 'vs v4' and 'tracking only' notes, the Big price move and All-say pills, and the pre-game note. Set MIN_CARD = false to bring all of it back.
 const MIN_CARD = true;
 function tile(label, m, c, g, kind) {
@@ -416,12 +416,6 @@ function gkStrip(c) {
   };
   return `<div class="gl">${side('a', c.aAbbr, 1)}${side('h', c.hAbbr, 0)}</div>`;
 }
-// v5 shadow: v4 with rest and backup-goalie adjustments. Tracked next to v2 and v4 from the first card made with it; it never feeds them.
-function v5Row(c, g) {
-  const m = c.v5; if (!m) return '';
-  const w = pickWin(m, c), o = pickOu(m), d = c.v4 ? m.w - c.v4.w : 0, i = m.in || {}, on = [...(i.b2b || []), ...(i.bk || [])].some(x => x === 1);
-  return `<div class="v5r"><span class="lb">v5 shadow</span><b>${esc(w.team)} ${w.p}%</b>${mark(g && g.win)}<span>${o.side} ${lineOf(c)} ${o.p}%${mark(g && g.ou)}</span>${m.sc ? `<span>${m.sc.a}–${m.sc.h}${MIN_CARD ? '' : ' likeliest'}${mark(g && g.sc)}</span>` : ''}${MIN_CARD ? '' : `<span class="df">${on ? `${d === 0 ? 'same winner chance as v4' : (d > 0 ? '+' : '') + d + ' pts home vs v4'}` : 'nothing to adjust: same as v4'}</span>`}</div>`;
-}
 // Shots + goalie read (src/nhlshots.js, Nov 3, 2026): tracking only. Both clubs' recent shots on goal and the starting goalies' save %, at
 // the game's DraftKings line when it is 5.5 or 6.5. Saved with the line and price so it can be tested on prices later; it bets nothing.
 // Shots + goalie read at any total line (Nov 5, 2026): it is fitted on Over 5.5 and Over 6.5 only. At another line (5, 6, 7, 7.5...)
@@ -448,7 +442,7 @@ function sgRow(c) {
   return `<div class="v5r sgr"><span class="lb">${MIN_CARD ? 'Shots + goalie' : 'Shots + goalie · tracking only'}</span><b${hot ? ' class="sghot" title="Shots + goalie rates Over at or above DraftKings"' : ''}>Over ${line} ${Math.round(p)}%</b>${dk != null ? `<span>${MIN_CARD ? 'DK' : 'DraftKings'} ${Math.round(dk)}%</span>` : ''}${MIN_CARD ? '' : `<span class="df">${gw}${s.cl ? ' · lineup read' : ''}${at.est ? ' · estimated: fitted on 5.5 and 6.5, carried to this line by the goals average' : ''}</span>`}</div>`;
 }
 function card(c) {
-  const g = c.grade || {}, f = c.final, m0 = c.v2 || c.v4;
+  const g = c.grade || {}, f = c.final, m0 = c.v4 || c.v2; // v4 leads since Nov 12, 2026 (v2 retired from the card)
   const hp = m0 ? m0.w : null, ap = hp == null ? null : 100 - hp;
   const hf = hp != null && hp >= 50;
   const mid = f ? `<div class="mid sc">${f.a}–${f.h}${f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : '<small>FINAL</small>'}</div>` : `<div class="mid">@</div>`;
@@ -462,7 +456,7 @@ function card(c) {
   const lnrow = pre && S.ln === c.id ? `<div class="lnrow"><label>Total line</label><input type="number" inputmode="decimal" step="0.5" min="3.5" max="9.5" id="ln-${esc(c.id)}" value="${ln}"><button type="button" class="btn sm" data-saveln="${esc(c.id)}">Save</button>${c.ln && c.ln.how === 'manual' ? `<button type="button" class="btn sm ghost" data-clrln="${esc(c.id)}">Use ESPN</button>` : ''}<button type="button" class="btn sm ghost" data-setln="">Cancel</button></div>` : '';
   return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
   ${split}${MIN_CARD ? '' : (hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${MIN_CARD ? '' : goalsPill(c)}
-  <div class="ml">${tile('v2', c.v2, c, g.v2)}${tile('v4 shadow', c.v4, c, g.v4)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>${gkStrip(c)}${v5Row(c, g.v5)}${sgRow(c)}
+  <div class="ml two">${c.v4 || !c.v2 ? tile('v4', c.v4, c, g.v4) : tile('v2 (no v4)', c.v2, c, g.v2)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>${gkStrip(c)}${sgRow(c)}
   ${MIN_CARD && !f ? '' : `<div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Scores are away–home · blue = confident pick${c.ln ? '' : ` · O/U ${ln} is the default line`}`}</div>`}</div>`;
 }
 // ---------- Trends: how each situation has done in the saved days, and a read on each game of the day (src/trends.js) ----------
@@ -557,15 +551,15 @@ function trendsView() {
 }
 // Board tile: a price that moved 3+ points since the opening shows as a small +/- beside each team (moneyline) and beside the O/U line (total).
 function tileOf(c, on) {
-  const f = c.final, g = c.grade || {}, m0 = c.v2 || c.v4, hp = m0 ? m0.w : null, hf = hp != null && hp >= 50, cs = consensus(c);
+  const f = c.final, g = c.grade || {}, m0 = c.v4 || c.v2, mk = c.v4 ? 'v4' : 'v2', hp = m0 ? m0.w : null, hf = hp != null && hp >= 50, cs = consensus(c);
   const tag = f ? `<i class="fin">${f.last !== 'REG' ? esc(f.last) : 'Final'}</i>` : cs.same ? '<i>All agree</i>' : cs.split ? '<i class="sp">Split</i>' : '';
   const gs = f ? null : goalsSide(c), gw = !f && cs.same;
   const hm = hockeyMove(c.px), mlHot = hm && hm.ml && hot(hm.ml.d); // price move of 3+ points: shown small beside each team (riser +, other side -)
   const row = (ab, side) => { const fav = !f && hp != null && (side === 'h') === hf; const v = f ? (side === 'h' ? f.h : f.a) : hp == null ? '–' : (side === 'h' ? hp : 100 - hp) + '%';
     const d = mlHot ? Math.round(side === 'h' ? hm.ml.d : -hm.ml.d) : 0, mvt = d ? ` <small class="mvtag${d > 0 ? ' neon' : ''}" title="Moneyline price move since the opening price">${sgn(d)}</small><small class="mvpc">${Math.round(side === 'h' ? hm.ml.p0 : 100 - hm.ml.p0)}→${Math.round(side === 'h' ? hm.ml.p1 : 100 - hm.ml.p1)}%</small>` : '';
     return `<div class="r${fav ? ' fv' : ''}">${crest(ab)}<b>${esc(ab)}${mvt}</b><span${fav && gw ? ' class="gd"' : ''}>${v}</span></div>`; };
-  const ln = lineOf(c), ou = c.v2 ? pickOu(c.v2) : null;
-  const foot = f ? `<span>Total ${f.total}</span><span>${g.v2 ? 'v2 ' + (g.v2.win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}${hm && hm.ou && hot(hm.ou.d) ? ` <small class="mvtag neon" title="Total price move since the opening price">${hm.ou.d > 0 ? 'Over' : 'Under'} ${sgn(Math.round(Math.abs(hm.ou.d)))}</small>` : ''}</span>${ou ? `<span${gs ? ' class="gd"' : ''}><b${gs ? ' class="gd"' : ''}>${ou.side}</b> ${ou.p}%</span>` : ''}`;
+  const ln = lineOf(c), ou = m0 ? pickOu(m0) : null;
+  const foot = f ? `<span>Total ${f.total}</span><span>${g[mk] ? mk + ' ' + (g[mk].win ? '✓' : '✗') : ''}</span>` : `<span>O/U <b>${ln}</b>${c.ln ? '' : ' (default)'}${hm && hm.ou && hot(hm.ou.d) ? ` <small class="mvtag neon" title="Total price move since the opening price">${hm.ou.d > 0 ? 'Over' : 'Under'} ${sgn(Math.round(Math.abs(hm.ou.d)))}</small>` : ''}</span>${ou ? `<span${gs ? ' class="gd"' : ''}><b${gs ? ' class="gd"' : ''}>${ou.side}</b> ${ou.p}%</span>` : ''}`;
   return `<button type="button" class="bt${on ? ' on' : ''}" data-sel="${esc(c.id)}"><div class="m"><span>${esc(c.ko)}</span>${tag}</div>${row(c.aAbbr, 'a')}${row(c.hAbbr, 'h')}${hp == null || f ? '' : `<div class="pb"><i class="a" style="flex:${100 - hp}"></i><i class="h" style="flex:${hp}"></i></div>`}<div class="ou">${foot}</div></button>`;
 }
 // ---------- Movement: every priced game of the day, opening -> close ----------
@@ -652,8 +646,8 @@ function board() {
   if (done.length) list = list.filter(c => !ended(c));
   if (S.sel && !list.find(c => c.id === S.sel)) S.sel = null;
   const cols = Math.ceil(list.length / 4);
-  const frow = c => { const f = c.final, g = c.grade || {};
-    return `<div class="fr"><b>${esc(c.aAbbr)} ${f ? `${f.a}–${f.h}` : '@'} ${esc(c.hAbbr)}</b>${f && f.last && f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : ''}${!f ? '<i class="pend">result pending</i>' : g.v2 ? `<i class="${g.v2.win ? 'ok' : 'no'}">v2 ${g.v2.win ? '✓' : '✗'}</i>` : ''}</div>`; };
+  const frow = c => { const f = c.final, g = c.grade || {}, mk = g.v4 ? 'v4' : 'v2';
+    return `<div class="fr"><b>${esc(c.aAbbr)} ${f ? `${f.a}–${f.h}` : '@'} ${esc(c.hAbbr)}</b>${f && f.last && f.last !== 'REG' ? `<small>${esc(f.last)}</small>` : ''}${!f ? '<i class="pend">result pending</i>' : g[mk] ? `<i class="${g[mk].win ? 'ok' : 'no'}">${mk} ${g[mk].win ? '✓' : '✗'}</i>` : ''}</div>`; };
   const fin = done.length ? `<div class="finb"><button type="button" class="fh" data-fin="1" aria-expanded="${!!S.fin}">Finished <b>${done.length}</b><span>${S.fin ? 'Hide' : 'Show'}</span></button>${S.fin ? done.map(c => `<div class="fcard" id="fc-${esc(c.id)}">${card(c)}</div>`).join('') : done.map(frow).join('')}</div>` : '';
   const flipRow = `<div class="fliprow"><button type="button" class="flipall${window.FlipCard && FlipCard.allOn() ? ' on' : ''}" data-flipall="1" title="Flip every game to its other side">⟲ Flip</button></div>`;
   return `${flipRow}<div class="bgrid" id="bgrid">${list.map(c => tileOf(c, c.id === S.sel)).join('')}</div>${cols > 2 ? `<div class="bdots">${Array.from({ length: cols - 1 }, (_, i) => `<i data-dot="${i}"></i>`).join('')}</div>` : ''}${S.sel ? `<div class="dt" id="dt">${card(list.find(c => c.id === S.sel))}</div>` : ''}${fin}`;
@@ -669,21 +663,6 @@ function bestOf(models, key) {
 }
 function nbAge() { try { const t = localStorage.getItem('hubBackupNhl'); return t ? Math.floor((Date.now() - new Date(t).getTime()) / 86400000) : null; } catch (e) { return null; } }
 function nbLine() { const b = nbAge(); return b == null ? 'No hockey export made from this device yet.' : b === 0 ? 'Last hockey export from this device: today.' : `Last hockey export from this device: ${b} day${b === 1 ? '' : 's'} ago.`; }
-// v5 shadow on its own games (each model on the same games), and whether rest or a backup goalie was what moved it.
-function v5View() {
-  const V = tally.v5;
-  if (!V) return `<h4>v5 shadow (rest and backup goalies)</h4><div class="nt">v5 is tracked from the first game it was made for. Nothing graded yet; it appears here once those games finish.</div>`;
-  const cl = (m, o) => { const v = pct(m.hit, m.n); return v == null ? '<td>–</td>' : `<td${o}>${v}%<small>${m.hit}/${m.n}</small></td>`; };
-  const best = (g, ks) => { const v = ks.map(k => g[k].n ? g[k].hit / g[k].n : -1), mx = Math.max(...v); return v.map(x => (x === mx && mx >= 0 && v.filter(y => y === mx).length < v.length ? ' class="best"' : '')); };
-  const bw = best(V.win, ['v2', 'v4', 'v5']), bo = best(V.ou, ['v2', 'v4', 'v5']), sit = (x, lab) => `<tr><td>${lab}</td><td>${x.n}</td>${x.n ? `<td>${Math.round(100 * x.v4 / x.n)}%<small>${x.v4}/${x.n}</small></td><td>${Math.round(100 * x.v5 / x.n)}%<small>${x.v5}/${x.n}</small></td>` : '<td>–</td><td>–</td>'}</tr>`;
-  return `<h4>v5 shadow (rest and backup goalies)</h4><table><tr><th>${V.n} game${V.n === 1 ? '' : 's'}</th><th>v2</th><th>v4</th><th>v5</th></tr>
-  <tr><td>Winner</td>${['v2', 'v4', 'v5'].map((k, i) => cl(V.win[k], bw[i])).join('')}</tr>
-  <tr><td>Over/Under</td>${['v2', 'v4', 'v5'].map((k, i) => cl(V.ou[k], bo[i])).join('')}</tr>
-  <tr><td>Always home</td><td colspan="3" class="hm">${V.win.home.n ? Math.round(100 * V.win.home.hit / V.win.home.n) + '% <small>' + V.win.home.hit + '/' + V.win.home.n + '</small>' : '–'}</td></tr>
-  <tr><td>Brier (winner)</td><td>${V.brier.v2 ?? '–'}</td><td>${V.brier.v4 ?? '–'}</td><td>${V.brier.v5 ?? '–'}</td></tr></table>
-  <table class="cal"><tr><th>Winner, v4 vs v5</th><th>Games</th><th>v4</th><th>v5</th></tr>${sit(V.sit.adj, 'Rest or a backup moved v5')}${sit(V.sit.plain, 'Nothing to adjust')}</table>
-  <div class="nt">v5 is v4 with the measured effect of a back-to-back (about 6 points on the winner chance) and a backup goalie in net (2 to 3 points, and about 0.16 more goals against), from 14,347 games. It starts at zero and only counts games it was made for before puck drop. It never feeds v2, v4, a pick or a bet. The bottom table is the real test: v5 can only beat v4 in the first row.</div>`;
-}
 // Rest against the price: does DraftKings' closing moneyline already account for a back-to-back? (src/nhl.js restAdd)
 const REST_V = { missing: 'The price is missing it: adding the back-to-back shift scores better', overdone: 'The shift makes the price worse: the price already has it (or more)', priced: 'No difference yet: the price looks to have it already', early: 'Too few games to say' };
 function restView() {
@@ -692,7 +671,7 @@ function restView() {
   <tr><td>The rested team won</td><td>${R.won}<small>price expected ${R.expected}</small></td></tr>
   <tr><td>Log loss, closing price</td><td>${R.llPrice.toFixed(3)}</td></tr>
   <tr><td>Log loss, price + back-to-back shift</td><td>${R.llRest.toFixed(3)}<small>${R.diff > 0 ? '+' : ''}${R.diff.toFixed(3)} ± ${(2 * R.se).toFixed(3)}</small></td></tr></table>
-  <div class="nt">${esc(REST_V[R.verdict] || '')}. v5 adds about 6 points to the rested team for a back-to-back (measured on 14,347 games). This checks whether DraftKings' price already does: lower log loss is better, and the shift only helps if its row is lower by more than the ± range over ${40}+ games.</div>`;
+  <div class="nt">${esc(REST_V[R.verdict] || '')}. A back-to-back is worth about 6 points to the rested team (measured on 14,347 games). This checks whether DraftKings' price already has it: lower log loss is better, and the shift only helps if its row is lower by more than the ± range over ${40}+ games.</div>`;
 }
 function calView() {
   const C = tally.cal; if (!C) return '';
@@ -722,14 +701,14 @@ function results() {
   const bw = bestOf(B.win, 'win'), bo = bestOf(B.ou, 'ou');
   const bb = B.brier.n ? (B.brier.v4 < B.brier.v2 ? [ '', ' class="best"', '' ] : B.brier.v2 < B.brier.v4 ? [' class="best"', '', ''] : ['', '', '']) : ['', '', ''];
   const b = nbAge(), nag = b != null && b >= 14 ? `<div class="nt" style="color:#e0a040"><b>Last hockey export was ${b} days ago.</b> Export it on the Status tab.</div>` : '';
-  return `${seg}${nag}<table><tr><th></th><th>v2</th><th>v4 shadow</th><th>Forebet</th></tr>
+  return `${seg}${nag}<table><tr><th></th><th>v2 retired</th><th>v4</th><th>Forebet</th></tr>
   <tr><td>Winner</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.win[k], 'win', bw[i])).join('')}</tr>
   <tr><td>Over/Under at the line</td>${['v2', 'v4', 'fb'].map((k, i) => cell(B.ou[k], 'ou', bo[i])).join('')}</tr>
   <tr><td>Always pick home</td><td colspan="3" class="hm">${B.home && B.home.n ? `${Math.round(B.home.hit / B.home.n * 100)}% <small>${B.home.hit}/${B.home.n} · ±${Math.round(196 * Math.sqrt((B.home.hit / B.home.n) * (1 - B.home.hit / B.home.n) / B.home.n))}</small>` : '–'}</td></tr>
   <tr><td>Brier (winner)</td><td${bb[0]}>${B.brier.v2 ?? '–'}</td><td${bb[1]}>${B.brier.v4 ?? '–'}</td><td>–</td></tr></table>
-  <div class="nt">${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. ± is the 95% margin: the true rate probably sits within that many points, and it shrinks as games pile up. Over/Under is graded only at the game's DraftKings line: ${tally.lined || 0} of ${tally.graded} graded games had one, and the ${tally.graded - (tally.lined || 0)} without a line are left out of the Over/Under row. \"Always pick home\" is the baseline a winner pick has to beat. A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
+  <div class="nt">Since Nov 12, 2026 the card shows v4 and Forebet. v2 is retired from the card (it matched always picking the home team, 109 of 192) and the v5 shadow is dropped (on 60 games where rest or a backup goalie moved it, it picked 35 winners to v4's 37); both are still worked out and graded in the background. ${S.scope === 'same' ? 'Only games all three models picked.' : 'Every graded game, each model on its own games.'} Blue marks the best in a row. ± is the 95% margin: the true rate probably sits within that many points, and it shrinks as games pile up. Over/Under is graded only at the game's DraftKings line: ${tally.lined || 0} of ${tally.graded} graded games had one, and the ${tally.graded - (tally.lined || 0)} without a line are left out of the Over/Under row. \"Always pick home\" is the baseline a winner pick has to beat. A total exactly on a whole-number line is a push and is not counted. Forebet's Over/Under is its predicted total against the same line. No model reads the odds: the line only sets what Over means.</div>
   ${(Mv => Mv && (Mv.ml.n || Mv.ou.n) ? `<div class="nt">Price moves (opening → close): the winner went the way of the moneyline move in ${Mv.ml.n ? Math.round(100 * Mv.ml.follow / Mv.ml.n) + '% of ' + Mv.ml.n : '–'} games${Mv.ml.big ? ` (big moves ${Math.round(100 * Mv.ml.bigFollow / Mv.ml.big)}% of ${Mv.ml.big})` : ''}; the total went the way of its move in ${Mv.ou.n ? Math.round(100 * Mv.ou.follow / Mv.ou.n) + '% of ' + Mv.ou.n : '–'}${Mv.ou.big ? ` (big moves ${Math.round(100 * Mv.ou.bigFollow / Mv.ou.big)}% of ${Mv.ou.big})` : ''}. See the Movement tab for each game.</div>` : '')(tally.moves)}
-  ${v5View()}${restView()}${calView()}${trendSituations()}${trendTrack()}
+  ${restView()}${calView()}${trendSituations()}${trendTrack()}
   <h4>Recent games</h4><div class="rl"><div class="rg"><span>Game</span><span>Score</span><span>v2</span><span>v4</span><span>Forebet</span></div>${tally.recent.map(r => {
     const f = r.final, gr = r.grade, one = (m, g, c) => m ? `${esc(m.w >= 50 ? c.h : c.a)}${mark(g && g.win)}<br>${r.ln ? `${m.o >= 50 ? 'Over' : 'Under'} ${r.ln.v}${mark(g && g.ou)}` : '<small>no line</small>'}` : '–';
     const c = { h: r.hAbbr, a: r.aAbbr };
