@@ -40,11 +40,12 @@ ok('agreement below 60% is only a Lean: no alert', soccerAlert(soc({ v2: { pick:
 ok('two models agreeing is not enough', soccerAlert(soc({ fb: null, sm: null })) === null);
 ok('second divisions get no alert', soccerAlert(soc({ leagueKey: 'laliga2' })) === null);
 ok('finished games get no alert', soccerAlert(soc({ final: { h: 1, a: 0 } })) === null);
-const hk = (o = {}) => ({ id: 'h1', home: 'Calgary Flames', away: 'Minnesota Wild', ko: '7:00 PM', kickoff: new Date(T0 + 30 * 60000).toISOString(), final: null, ln: { v: 5.5 }, v2: { w: 40, o: 40 }, v4: { w: 42, o: 44 }, fb: { pick: 'A', p: [43, 57], score: { h: 2, a: 3 } }, ...o });
+const hk = (o = {}) => ({ id: 'h1', home: 'Calgary Flames', away: 'Minnesota Wild', ko: '7:00 PM', kickoff: new Date(T0 + 30 * 60000).toISOString(), final: null, ln: { v: 5.5 }, v2: { w: 40, o: 40 }, v4: { w: 42, o: 44 }, fb: { pick: 'A', p: [43, 57], score: { h: 2, a: 3 } }, px: { h: 130, a: -150 }, ...o });
 const ha = hockeyAlert(hk());
-ok('hockey: all three take the away side and the Under: both are in the alert', ha && /Minnesota Wild to win/.test(ha.title) && /Under 5\.5/.test(ha.body), JSON.stringify(ha));
-ok('hockey: split winners and a split total: no alert', hockeyAlert(hk({ fb: { pick: 'H', p: [55, 45], score: { h: 4, a: 3 } } })) === null);
-ok('hockey: needs all three models', hockeyAlert(hk({ fb: null })) === null);
+ok('hockey: v4, Forebet and the price take the away side at 55%+: a Best pick alert, winner only', ha && /^Best pick: Minnesota Wild to win/.test(ha.title) && /price 58%/.test(ha.body) && !/Under/.test(ha.body), JSON.stringify(ha));
+ok('hockey: Forebet on the other side: no alert', hockeyAlert(hk({ fb: { pick: 'H', p: [55, 45], score: { h: 4, a: 3 } } })) === null);
+ok('hockey: needs all three votes', hockeyAlert(hk({ fb: null })) === null && hockeyAlert(hk({ px: null })) === null);
+ok('hockey: all three agree but the price is under 55%: no alert', hockeyAlert(hk({ px: { h: 100, a: -120 } })) === null);
 // timing
 const at = (min, c) => dueAlerts({ soccer: [{ ...c, kickoff: new Date(T0 + min * 60000).toISOString() }] }, {}, T0).length;
 ok('alert window: 30 minutes before is due, 60 is too early, after kickoff is too late', at(30, soc()) === 1 && at(60, soc()) === 0 && at(-5, soc()) === 0 && at(45, soc()) === 1);

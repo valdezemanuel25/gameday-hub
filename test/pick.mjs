@@ -58,26 +58,30 @@ const nhlHtml = fs.readFileSync(new URL('../public/nhl.html', import.meta.url), 
 const grabN = n => nhlHtml.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
 const hpage = new Function(`${['hockeyPick', 'hockeyHit'].map(grabN).join('\n')}; return { hockeyPick, hockeyHit };`)();
 const hk = (o = {}) => ({ id: 'h1', home: 'Calgary Flames', away: 'Minnesota Wild', hAbbr: 'CGY', aAbbr: 'MIN', ln: { v: 5.5, src: 'DraftKings' }, v2: { w: 40, o: 40 }, v4: { w: 42, o: 44 }, fb: { pick: 'A', p: [43, 57], score: { h: 2, a: 3 } }, ...o });
-{ const l = hockeyPick(hk());
-  ok('hockey: all three back the away team and the Under: a Best pick', l.k === 'best' && l.a === 3 && l.y === 3 && (l.key === 'A' || l.key === 'U'), JSON.stringify(l));
-  const u = hockeyPick(hk({ v2: { w: 40, o: 40 }, v4: { w: 55, o: 50 }, fb: { pick: 'A', p: [43, 57], score: { h: 4, a: 3 } } }));
-  ok('hockey: 2 of 3 on the winner is a Lean', u.k === 'lean' && u.y === 2 && u.a === 3 && u.key === 'A', JSON.stringify(u));
-  const o = hockeyPick(hk({ v2: { w: 55, o: 60 }, v4: { w: 45, o: 58 }, fb: { pick: 'H', p: [52, 48], score: { h: 4, a: 3 } } }));
-  ok('hockey: Over at the card line carries the line', o.key === 'O' && o.line === 5.5 && o.k === 'best', JSON.stringify(o));
-  const nl = hockeyPick(hk({ ln: null, v2: { w: 60, o: 70 }, v4: { w: 58, o: 70 }, fb: { pick: 'H', p: [57, 43], score: { h: 5, a: 4 } } }));
-  ok('hockey: with no sportsbook line only the winner can be picked', nl.key === 'H' && nl.line === undefined, JSON.stringify(nl));
-  const sp = hockeyPick(hk({ v2: { w: 60, o: 50 }, v4: { w: 40, o: 50 }, fb: null }));
-  ok('hockey: 1-1 is a Split with v2\'s own side', sp.k === 'split' && sp.key === 'H', JSON.stringify(sp));
-  ok('hockey: v2 alone is solo', hockeyPick(hk({ v4: null, fb: null, ln: null })).k === 'solo');
-  ok('hockey: skipped or v2-less cards get no pick', hockeyPick(hk({ skipped: 'x' })) === null && hockeyPick(hk({ v2: null })) === null);
-  ok('hockey: a total exactly on the line casts no Forebet vote', hockeyPick(hk({ ln: { v: 5 }, fb: { pick: 'A', p: [43, 57], score: { h: 3, a: 2 } } })).a >= 2);
+{ const P = { h: 130, a: -150 }, l = hockeyPick(hk({ px: P })); // price: away 58%
+  ok('hockey: v4, Forebet and the price back the away team at 55%+: a Best pick on the winner, chance from the price', l.k === 'best' && l.a === 3 && l.y === 3 && l.key === 'A' && l.p === 58 && l.r === 2 && l.line === undefined, JSON.stringify(l));
+  const lo = hockeyPick(hk({ px: { h: 100, a: -120 } }));
+  ok('hockey: all three agree but the price gives it under 55%: only a Lean', lo.k === 'lean' && lo.y === 3 && lo.a === 3 && lo.key === 'A' && lo.p === 52, JSON.stringify(lo));
+  const u = hockeyPick(hk({ px: P, v4: { w: 55, o: 50 } }));
+  ok('hockey: 2 of 3 on the winner is a Lean, v4 named as the one against', u.k === 'lean' && u.y === 2 && u.a === 3 && u.key === 'A' && u.no.join() === 'v4', JSON.stringify(u));
+  const ag = hockeyPick(hk({ px: { h: -200, a: 170 } }));
+  ok('hockey: v4 and Forebet outvote the price', ag.k === 'lean' && ag.key === 'A' && ag.no.join() === 'Price' && ag.p === 36, JSON.stringify(ag));
+  ok('hockey: v2 no longer votes and Over/Under is never picked', hockeyPick(hk({ px: P, v2: { w: 90, o: 95 }, v4: { w: 42, o: 95 }, fb: { pick: 'A', p: [43, 57], score: { h: 6, a: 5 } } })).k === 'best' && ['H', 'A'].includes(hockeyPick(hk({ v2: { w: 55, o: 60 }, v4: { w: 45, o: 58 }, fb: { pick: 'H', p: [52, 48], score: { h: 4, a: 3 } } })).key));
+  const np = hockeyPick(hk());
+  ok('hockey: no price yet: v4 and Forebet agreeing is a Lean at most, chance from the models', np.k === 'lean' && np.y === 2 && np.a === 2 && np.key === 'A' && np.p === 58, JSON.stringify(np));
+  const sp = hockeyPick(hk({ fb: { pick: 'H', p: [55, 45] } }));
+  ok('hockey: v4 against Forebet with no price is a Split with v4\'s side', sp.k === 'split' && sp.key === 'A' && sp.by.join() === 'v4' && sp.no.join() === 'Forebet', JSON.stringify(sp));
+  const spx = hockeyPick(hk({ fb: null, px: { h: -150, a: 130 } }));
+  ok('hockey: v4 against the price is a Split with the price\'s side', spx.k === 'split' && spx.key === 'H' && spx.by.join() === 'Price' && spx.p === 58, JSON.stringify(spx));
+  ok('hockey: one vote is solo; v2 stands in only when v4 has no numbers', hockeyPick(hk({ fb: null })).k === 'solo' && hockeyPick(hk({ v4: null, fb: null })).by.join() === 'v2');
+  ok('hockey: skipped or model-less cards get no pick', hockeyPick(hk({ skipped: 'x' })) === null && hockeyPick(hk({ v2: null, v4: null })) === null);
 }
 ok('hockey: winners count overtime, no draws', hockeyHit('H', { h: 4, a: 3, total: 7 }, 5.5) === true && hockeyHit('A', { h: 4, a: 3, total: 7 }, 5.5) === false);
 ok('hockey: Over/Under at the line, and a push has no result', hockeyHit('O', { h: 4, a: 3, total: 7 }, 5.5) === true && hockeyHit('U', { h: 4, a: 3, total: 7 }, 6.5) === false && hockeyHit('O', { h: 4, a: 2, total: 6 }, 6) === null);
-for (const [i, c] of [hk(), hk({ ln: null }), hk({ v2: { w: 55, o: 60 }, v4: { w: 45, o: 58 }, fb: { pick: 'H', p: [52, 48], score: { h: 4, a: 3 } } }), hk({ v4: null, fb: null }), hk({ v2: { w: 60, o: 50 }, v4: { w: 40, o: 50 }, fb: null })].entries())
+for (const [i, c] of [hk({ px: { h: 130, a: -150 } }), hk({ px: { h: -200, a: 170 } }), hk({ px: { h: 100, a: -120 }, fb: null }), hk(), hk({ ln: null }), hk({ v2: { w: 55, o: 60 }, v4: { w: 45, o: 58 }, fb: { pick: 'H', p: [52, 48], score: { h: 4, a: 3 } } }), hk({ v4: null, fb: null }), hk({ v2: { w: 60, o: 50 }, v4: { w: 40, o: 50 }, fb: null })].entries())
   ok(`hockey case ${i + 1}: page and server give the same pick`, JSON.stringify(hockeyPick(c)) === JSON.stringify(hpage.hockeyPick(c)), JSON.stringify([hockeyPick(c), hpage.hockeyPick(c)]));
 { const c = hk({ final: { h: 2, a: 4, last: 'REG', total: 6 } }); gradeCard(c);
-  ok('grading a hockey card locks its pick and scores it', c.lean && c.lean.hit === true && c.lean.k === 'best', JSON.stringify(c.lean));
+  ok('grading a hockey card locks its pick and scores it', c.lean && c.lean.hit === true && c.lean.k === 'lean' && c.lean.r === 2, JSON.stringify(c.lean));
   const before = JSON.stringify(c.lean); c.ln = { v: 9, src: 'x' }; c.final = { h: 5, a: 0, last: 'REG', total: 5 }; gradeCard(c);
   ok('regrading never changes the locked pick', JSON.stringify(c.lean) === before); }
 console.log(fails ? `\n${fails} FAILED` : '\nAll pick checks passed'); process.exit(fails ? 1 : 0);

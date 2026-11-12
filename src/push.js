@@ -4,7 +4,7 @@
 //   Hockey: v2, v4 and Forebet take the same side (the Top tab's "All agree"), and/or all three land on the same side of the game's line.
 //   Second divisions and untracked leagues are left out, like every other record.
 // Storage: KV key 'push' holds { subs, sent } (one write when a device is added or removed, or when alerts go out) and 'push:vapid' holds the signing key.
-import { consensusPick } from './pick.js';
+import { consensusPick, hockeyPick } from './pick.js';
 
 const enc = new TextEncoder();
 export const b64u = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -89,18 +89,9 @@ export function soccerAlert(c) {
   return { title: `Best pick: ${KIND[L.key](c)}`, body: `${c.home} vs ${c.away} · ${c.ko || ''} · all ${L.a} models agree, ${L.p}%` };
 }
 export function hockeyAlert(c) {
-  if (!c || !c.v2 || c.final || c.skipped) return null;
-  const sides = [c.v2 && (c.v2.w >= 50 ? 'H' : 'A'), c.v4 && (c.v4.w >= 50 ? 'H' : 'A'), c.fb && c.fb.pick].filter(Boolean), parts = [];
-  let title = null;
-  if (sides.length >= 3 && sides.every(x => x === sides[0])) {
-    const H = sides[0] === 'H', pv = [c.v2.w, c.v4.w, c.fb.p ? (H ? c.fb.p[0] : c.fb.p[1]) : null].map((x, i) => (x == null ? null : i < 2 ? (H ? x : 100 - x) : x)).filter(x => x != null);
-    title = `All models: ${H ? c.home : c.away} to win`; parts.push(`winner, ${Math.round(pv.reduce((a, b) => a + b, 0) / pv.length)}% on average`);
-  }
-  if (c.ln && c.v4 && c.fb && c.fb.score && c.fb.score.a + c.fb.score.h !== c.ln.v) {
-    const vals = [c.v2.o >= 50, c.v4.o >= 50, c.fb.score.a + c.fb.score.h > c.ln.v];
-    if (vals.every(x => x === vals[0])) { const t = `${vals[0] ? 'Over' : 'Under'} ${c.ln.v}`; title = title || `All models: ${t}`; parts.push(`${t} goals`); }
-  }
-  return title ? { title, body: `${c.away} at ${c.home} · ${c.ko || ''} · ${parts.join(' · ')}` } : null;
+  if (!c || c.final || c.skipped) return null;
+  const L = hockeyPick(c); if (!L || L.k !== 'best') return null; // v4, Forebet and the price agree, and the price gives the side 55%+ (src/pick.js)
+  return { title: `Best pick: ${L.key === 'H' ? c.home : c.away} to win`, body: `${c.away} at ${c.home} · ${c.ko || ''} · v4, Forebet and the price agree · price ${L.p}%` };
 }
 const LEAD_MIN = 45;
 // cards: { soccer: [...], hockey: [...] } for the day(s) near now. Returns the alerts not sent yet.

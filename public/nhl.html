@@ -356,13 +356,13 @@ function tile(label, m, c, g, kind) {
     <div class="o${o.strong ? ' hi' : ''}"><b class="${go.trim()}">${o.side} ${lineOf(c)}</b><span class="l2">${o.p}%${mark(g && g.ou)}${m.push && !MIN_CARD ? `<span class="sc3">push ${m.push}%</span>` : ''}</span></div>
     ${m.sc ? `<div class="sr"><b>${m.sc.a}–${m.sc.h}</b><span>${MIN_CARD ? '' : 'likeliest '}${m.sc.p}%</span>${mark(g && g.sc)}</div>` : ''}</div>`;
 }
-function sidesOf(c) { return [c.v2 && sideOf(c.v2, c), c.v4 && sideOf(c.v4, c), c.fb && c.fb.pick].filter(Boolean); }
-function consensus(c) { const p = sidesOf(c); return { n: p.length, same: p.length >= 3 && p.every(x => x === p[0]), side: p[0], split: p.length >= 2 && !p.every(x => x === p[0]) }; }
-// 'Over' / 'Under' when v2, v4 and Forebet's predicted total all fall on the same side of this game's line, else null.
+// The card's badge follows the headline pick (hockeyPick): Consensus = a Best pick (v4, Forebet and the price agree, price at 55%+), Split = the votes disagree.
+function consensus(c) { const L = hockeyPick(c); return L ? { n: L.a, same: L.k === 'best', side: L.key, split: L.a >= 2 && L.no.length > 0 } : { n: 0, same: false, side: null, split: false }; }
+// 'Over' / 'Under' when v4 and Forebet's predicted total fall on the same side of this game's line, else null.
 function goalsSide(c) {
   if (!c.ln) return null; // no sportsbook line yet, so no Over/Under pick to grade
-  const ln = lineOf(c), vals = [c.v2 ? c.v2.o >= 50 : null, c.v4 ? c.v4.o >= 50 : null, c.fb && c.fb.score ? (c.fb.score.a + c.fb.score.h) > ln : null].filter(x => x !== null);
-  if (vals.length < 3 || (c.fb && c.fb.score && c.fb.score.a + c.fb.score.h === ln)) return null;
+  const ln = lineOf(c), vals = [c.v4 ? c.v4.o >= 50 : null, c.fb && c.fb.score ? (c.fb.score.a + c.fb.score.h) > ln : null].filter(x => x !== null);
+  if (vals.length < 2 || (c.fb && c.fb.score && c.fb.score.a + c.fb.score.h === ln)) return null;
   return vals.every(Boolean) ? 'Over' : vals.every(x => !x) ? 'Under' : null;
 }
 function goalsPill(c) { const g = goalsSide(c); return g ? `<div class="ag gl">All say ${g} ${lineOf(c)}</div>` : ''; }
@@ -449,7 +449,7 @@ function card(c) {
   const go = hp != null && hockeyMove(c.px) ? ` data-gomove="${esc(c.id)}" role="button" tabindex="0" title="Flip to this game's Movement card"` : ''; // the win %: this game's Movement card
   const split = hp == null ? '' : `<div class="sp"><div class="nums${go ? ' pgo' : ''}"${go}><span class="${hf ? 'dim' : ''}"><b>${ap}%</b> ${esc(c.aAbbr)}</span><span class="${hf ? '' : 'dim'}">${esc(c.hAbbr)} <b>${hp}%</b></span></div>
     <div class="bar"><i class="${hf ? '' : 'fav'}" style="flex:${ap};--c:${tcol(c.aAbbr)}"></i><i class="${hf ? 'fav' : ''}" style="flex:${hp};--c:${tcol(c.hAbbr)}"></i></div></div>`;
-  const all = c.v2 && c.v4 && c.fb, cs = consensus(c);
+  const cs = consensus(c), all = cs.same;
   const lab = cs.same ? '<span class="cfx s">Consensus</span>' : cs.split ? '<span class="cfx sp">Split</span>' : '';
   const ln = lineOf(c), pre = !f && new Date(c.kickoff).getTime() > Date.now();
   const lnc = `<span class="lnc${c.ln ? '' : ' none'}">O/U ${ln}${c.ln ? ' · ' + esc(c.ln.src || 'sportsbook') : ' · no line yet'}</span>`;
@@ -756,29 +756,25 @@ function pushBox() {
     : pushSt.s === 'denied' ? '<div class="note">Notifications are blocked for this app. Allow them in your device settings, then come back.</div>'
     : pushSt.s === 'on' ? `<div class="note">On for this device.</div>${b('test', 'Send a test')}${b('off', 'Turn off')}`
     : pushSt.s === 'busy' ? '<div class="note">Working…</div>' : `${b('on', 'Turn on notifications')}`;
-  return `<div class="note" style="margin-top:14px"><b>Notifications</b><br>A heads-up about 45 minutes before a game where every model agrees on its best pick: soccer Best picks (all models agree at 60% or more) and hockey games where v2, v4 and Forebet agree.</div>
+  return `<div class="note" style="margin-top:14px"><b>Notifications</b><br>A heads-up about 45 minutes before a game where every model agrees on its best pick: soccer Best picks (all models agree at 60% or more) and hockey Best picks (v4, Forebet and the DraftKings price agree, and the price gives the side 55% or more).</div>
     <div>${body}${pushSt.msg ? `<div class="note" style="margin-top:6px">${esc(pushSt.msg)}</div>` : ''}</div>`;
 }
 // ---------- Model bets: each card's headline pick, tracked as one fixed bet ----------
 // (hockeyPick and hockeyHit are the same code the server uses to lock and score the pick; test/pick.mjs keeps the two copies identical.)
 function hockeyPick(c) {
-  if (!c || !c.v2 || c.skipped || c.v2.w == null) return null;
-  const f = c.fb || {}, line = c.ln ? c.ln.v : null, tot = f.score ? f.score.h + f.score.a : null;
-  const M = [{ n: 'v2', w: c.v2.w >= 50 ? 'H' : 'A', ph: c.v2.w, o: line != null ? c.v2.o : null }];
-  if (c.v4 && c.v4.w != null) M.push({ n: 'v4', w: c.v4.w >= 50 ? 'H' : 'A', ph: c.v4.w, o: line != null ? c.v4.o : null });
-  if (f.pick) M.push({ n: 'Forebet', w: f.pick, ph: f.p ? f.p[0] : null, o: line != null && tot != null && tot !== line ? (tot > line ? 100 : 0) : null, fbo: true });
-  const O = [['H', m => m.w === 'H', m => m.ph], ['A', m => m.w === 'A', m => (m.ph == null ? null : 100 - m.ph)],
-    ['O', m => m.o != null && m.o > 50, m => (m.fbo ? null : m.o)], ['U', m => m.o != null && m.o < 50, m => (m.fbo || m.o == null ? null : 100 - m.o)]];
-  const asked = k => M.filter(m => (k === 'H' || k === 'A') ? true : m.o != null);
-  const rows = O.map(([key, back, pr]) => { const a = asked(key), yes = a.filter(back), ps = a.map(pr).filter(x => typeof x === 'number'); return { key, a, yes, no: a.filter(m => !back(m)), p: ps.length ? Math.round(ps.reduce((x, y) => x + y, 0) / ps.length) : null }; });
-  const score = r => [r.a.length ? r.yes.length / r.a.length : 0, r.yes.length, r.p == null ? 0 : r.p];
-  const best = rows.filter(r => r.a.length >= 2).sort((x, y) => { const a = score(x), b = score(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; })[0];
-  const ln = key => (key === 'O' || key === 'U' ? { line } : {});
-  const own = c.v2.w >= 50 ? ['H', c.v2.w] : ['A', 100 - c.v2.w];
-  if (!best) return { k: 'solo', key: own[0], p: Math.round(own[1]), y: 1, a: 1, by: ['v2'], no: [] };
-  const maj = best.yes.length * 2 > best.a.length, all = best.yes.length === best.a.length;
-  if (!maj) return { k: 'split', key: own[0], p: Math.round(own[1]), y: best.yes.length, a: best.a.length, by: ['v2'], no: [] };
-  return { k: all && best.a.length >= 3 ? 'best' : 'lean', key: best.key, p: best.p, y: best.yes.length, a: best.a.length, by: best.yes.map(m => m.n), no: best.no.map(m => m.n), ...ln(best.key) };
+  if (!c || c.skipped) return null;
+  const m = c.v4 && c.v4.w != null ? ['v4', c.v4.w] : c.v2 && c.v2.w != null ? ['v2', c.v2.w] : null; if (!m) return null;
+  const f = c.fb || {}, px = c.px || {}, im = x => (x < 0 ? -x / (100 - x) : 100 / (x + 100));
+  const q = Number.isFinite(px.h) && Number.isFinite(px.a) && px.h && px.a ? 100 * im(px.h) / (im(px.h) + im(px.a)) : null; // the price's home chance, margin removed
+  const M = [{ n: m[0], w: m[1] >= 50 ? 'H' : 'A', ph: m[1] }];
+  if (f.pick) M.push({ n: 'Forebet', w: f.pick, ph: f.p ? f.p[0] : null });
+  if (q != null && q !== 50) M.push({ n: 'Price', w: q > 50 ? 'H' : 'A', ph: q });
+  const lead = M.find(x => x.n === 'Price') || M[0], nH = M.filter(x => x.w === 'H').length;
+  const key = nH * 2 === M.length ? lead.w : nH * 2 > M.length ? 'H' : 'A', yes = M.filter(x => x.w === key), no = M.filter(x => x.w !== key);
+  const ch = x => (x.ph == null ? null : key === 'H' ? x.ph : 100 - x.ph), own = M.map(ch).filter(x => x != null);
+  const pc = q != null ? (key === 'H' ? q : 100 - q) : own.length ? own.reduce((a, b) => a + b, 0) / own.length : null; // the pick's chance: the price's when there is one
+  const k = M.length === 1 ? 'solo' : !no.length && M.length === 3 && pc >= 55 ? 'best' : yes.length * 2 > M.length ? 'lean' : 'split';
+  return { k, key, p: pc == null ? null : Math.round(pc), y: k === 'split' ? 1 : yes.length, a: M.length, by: k === 'split' ? [lead.n] : yes.map(x => x.n), no: k === 'split' ? M.filter(x => x !== lead).map(x => x.n) : no.map(x => x.n), r: 2 };
 }
 // true / false, or null when an Over/Under pick lands exactly on a whole-number line (a push: no result).
 function hockeyHit(key, f, line) {
@@ -786,7 +782,7 @@ function hockeyHit(key, f, line) {
   return key === 'H' ? f.h > f.a : key === 'A' ? f.h < f.a : t === line ? null : key === 'O' ? t > line : t < line;
 }
 
-const LEAN_KIND = { best: 'Best pick', lean: 'Lean', split: 'Split', solo: 'v2 alone' };
+const LEAN_KIND = { best: 'Best pick', lean: 'Lean', split: 'Split', solo: 'One vote' };
 const leanName = (c, L) => ({ H: `${c.home} to win`, A: `${c.away} to win`, O: `Over ${L.line} goals`, U: `Under ${L.line} goals` })[L.key];
 const MB_PLAIN = { H: 'Home win', A: 'Away win', O: 'Over', U: 'Under' };
 const moe = (h, n) => (n >= 5 ? Math.round(196 * Math.sqrt((h / n) * (1 - h / n) / n)) : null);
@@ -804,9 +800,9 @@ function mbRow(label, sub, x, base) {
   const n = x ? x.n : 0, h = x ? x.hits : 0, m = n ? moe(h, n) : null, e = n && base != null ? edgeOf(x, base) : null;
   return `<div class="mbr"><div class="mbl">${label}${sub ? `<small>${sub}</small>` : ''}${e ? `<span class="edg ${e.t}">${e.label}</span>` : ''}</div><div class="mbv">${n ? `<b>${Math.round(100 * h / n)}%</b><small>${h} of ${n}${m != null ? ` · ±${m}` : ''}${base != null ? ` · chance ${Math.round(base)}%` : ''}${e && e.t !== 'early' ? ` · edge ${e.d > 0 ? '+' : ''}${e.d}` : ''}</small>` : '<small>none yet</small>'}</div></div>`;
 }
-function agreeText(L) { return L.k === 'split' ? 'no majority, v2\'s own pick' : L.k === 'solo' ? 'only v2 had numbers' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`; }
+function agreeText(L) { const who = esc((L.by && L.by[0]) || 'v2'); return L.k === 'split' ? `no majority, ${who}'s side` : L.k === 'solo' ? `only ${who} had numbers` : L.r === 2 && L.k === 'lean' && L.y === L.a && L.a === 3 ? 'all 3 agree, but the price gives it under 55%' : L.y === L.a ? `all ${L.a} models agree` : `${L.y} of ${L.a} back it (${esc(L.by.join(', '))})`; }
 function mbetsToday() {
-  const rows = (day.cards || []).filter(c => c.v2 && !c.skipped).map(c => ({ c, L: c.lean || (c.final ? null : hockeyPick(c)) })).filter(x => x.L || x.c.final).sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
+  const rows = (day.cards || []).filter(c => (c.v4 || c.v2) && !c.skipped).map(c => ({ c, L: c.lean || (c.final ? null : hockeyPick(c)) })).filter(x => x.L || x.c.final).sort((a, b) => new Date(a.c.kickoff) - new Date(b.c.kickoff));
   if (!rows.length) return `<div class="note">No picks for this day yet.</div>`;
   return rows.map(({ c, L }) => {
     if (!L) return `<div class="mbg"><div class="mbt"><b>${esc(c.home)} vs ${esc(c.away)}</b><span class="mbs">No pick recorded</span></div><div class="note">This game was already over when the Hub first saw it.</div></div>`;
@@ -830,12 +826,12 @@ function mbetsView() {
   const chance = { H: homeP, A: homeP == null ? null : 100 - homeP, O: overP, U: overP == null ? null : 100 - overP };
   const expect = x => { if (!x || !x.ks || !x.n) return null; let t = 0, c = 0; for (const [k, q] of Object.entries(x.ks)) if (chance[k] != null) { t += q * chance[k]; c += q; } return c ? t / c : null; };
   const backs = Object.keys(T.byBack).sort((a, b) => { const [ay, aa] = a.split(' of ').map(Number), [by, ba] = b.split(' of ').map(Number); return (ay === aa ? 0 : 1) - (by === ba ? 0 : 1) || ba - aa || by - ay; });
-  const head = T.n ? `<div class="mbh"><b>${T.hits}</b> of <b>${T.n}</b> model bets hit (<b>${pct(T.hits, T.n)}%</b>${moe(T.hits, T.n) != null ? ` ± ${moe(T.hits, T.n)}` : ''}). One pick per game, graded when it ends${T.push ? `; ${T.push} push${T.push === 1 ? '' : 'es'} not counted` : ''}.</div>` : `<div class="mbh">No model bets are graded yet. Each game's headline pick is recorded when the game is graded, so the record starts with the next games that finish.</div>`;
+  const head = T.n ? `<div class="mbh"><b>${T.hits}</b> of <b>${T.n}</b> model bets hit (<b>${pct(T.hits, T.n)}%</b>${moe(T.hits, T.n) != null ? ` ± ${moe(T.hits, T.n)}` : ''}). One pick per game, graded when it ends${T.push ? `; ${T.push} push${T.push === 1 ? '' : 'es'} not counted` : ''}.${T.r2 && T.r2.n ? ` Under the Nov 12 rule (v4, Forebet and the price, winner only): <b>${T.r2.hits}</b> of <b>${T.r2.n}</b>${T.r2.best.n ? `, Best picks ${T.r2.best.hits} of ${T.r2.best.n}` : ''}.` : ''}</div>` : `<div class="mbh">No model bets are graded yet. Each game's headline pick is recorded when the game is graded, so the record starts with the next games that finish.</div>`;
   const recent = (T.recent || []).slice(0, 15).map(r => `<div class="mbg"><div class="mbt"><b>${esc(r.key === 'H' ? r.home + ' to win' : r.key === 'A' ? r.away + ' to win' : (r.key === 'O' ? 'Over ' : 'Under ') + r.line)}</b><span class="mbs ${r.hit || r.ep ? 'hit' : 'miss'}">${r.hit ? 'Hit ✓' : r.ep ? 'Paid early ✓' : 'Missed ✗'}</span></div><div class="note">${esc(r.away)} at ${esc(r.home)} · ${r.final.a}–${r.final.h}${r.final.last && r.final.last !== 'REG' ? ' ' + esc(r.final.last) : ''}</div><div class="note"><span class="mbk ${r.k}">${LEAN_KIND[r.k]}</span>${r.p != null ? ` ${r.p}%` : ''}${r.k === 'best' || r.k === 'lean' ? ` · ${r.y === r.a ? 'all ' + r.a + ' agree' : r.y + ' of ' + r.a + ' back it'}` : ''}</div></div>`).join('');
-  return `<div class="pad"><div class="note" style="margin:0 0 10px">Every game's headline pick (the side most of v2, v4 and Forebet back: the winner, or Over/Under at that game's DraftKings line) is one fixed bet. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. No odds are used. Over/Under needs a real line; a total exactly on the line is a push.</div>${head}
+  return `<div class="pad"><div class="note" style="margin:0 0 10px">Every game's headline pick is one fixed bet on the winner: the side most of v4, Forebet and the DraftKings price back. It is recorded when the game is graded and scored on the final score, so you can see which kinds of picks are actually strongest. Picks graded before Nov 12, 2026 used the old rule (v2, v4 and Forebet, winner or Over/Under) and stay in the record as they were.</div>${head}
     ${earlyLine(T)}
     <div class="mbsec">Today's model bets<small>${esc(S.date)}. Picks still update until the game starts.</small></div><div class="mbx">${mbetsToday()}</div>
-    ${T.n ? `<div class="mbsec">By strength<small>Best pick: all three models agree. Lean: two of three. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k], expect(T.byKind[k]))).join('')}</div>
+    ${T.n ? `<div class="mbsec">By strength<small>Best pick: v4, Forebet and the price agree, and the price gives it 55%+. Lean: a majority. Split: no majority.</small></div><div class="mbx">${kinds.map(k => mbRow(LEAN_KIND[k], '', T.byKind[k], expect(T.byKind[k]))).join('')}</div>
     <div class="mbsec">By kind of pick<small>Chance = how often it happens in all these games. Edge = the hit rate minus chance.</small></div><div class="mbx">${keys.map(k => mbRow(MB_PLAIN[k], '', T.byKey[k], chance[k])).join('')}</div>
     ${backs.length ? `<div class="mbsec">By how many models agree</div><div class="mbx">${backs.map(k => mbRow(k, 'models back it', T.byBack[k], expect(T.byBack[k]))).join('')}</div>` : ''}
     <div class="mbsec">Recent model bets</div><div class="mbx">${recent}</div>
