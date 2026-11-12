@@ -19,6 +19,7 @@
 //   one (clvPin: what the bet paid over Pinnacle's fair chance), else DraftKings' closing price (clv). Bets on the same game count as
 //   one game (an Over 2.5 and a Both score Yes on one game mostly win or lose together). Second divisions (La Liga 2, 2. Bundesliga)
 //   are kept on the record but left out of the bench check: thinner markets, and they have not shown they beat the close yet.
+//   A rule with keep: '<date>' is kept live by hand: its bench check is still worked out and shown, but it is never benched.
 //   Stale price (rule 'stale', first in RULES): DraftKings' price against a sharp book's price at the same moment (Pinnacle, else the
 //   Betfair or Matchbook exchange, src/btts.js fetchSharp), margin removed. When DraftKings pays STALE.ev or more above the sharp book's
 //   fair chance, DraftKings has not caught up with the market: bet DraftKings. No model is read. It needs the ODDS_API_KEY secret and
@@ -102,7 +103,9 @@ export const RULES = [
     // close: 439 bets, -19% / -1% (-10% overall). Retired Nov 1, 2026: on the Hub's games (Oct 25-31, close) it went 1 of 10, mostly long
     // shots (e.g. Levante +410 v Atlético), and the further v4 sat above the price the worse the Hub's bets did. Back Nov 1 in Analyst 1.
     pick: V => { const i = pickIdx(V.e, i => i !== 1 && V.e[i] >= 5 && V.d[i] > -1); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'v4 sees value and the money is not fighting it') }; } },
-  { id: 'fade', set: 1, mk: ['1x2'], name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
+  // Kept on by hand Nov 12, 2026 (Manny): the close-value bench check put it on the bench Nov 7 (49 top-division games, close value
+  // -2.52) while it was +28% ROI; keep: it stays live and the bench check is still shown, but never benches it.
+  { id: 'fade', set: 1, mk: ['1x2'], keep: '2026-11-12', name: 'Fade the drift, v4 disagrees with it', rule: 'A result\'s chance fell 4+ points since the opening price but v4 still rates it at or above the price now',
     // close: 218 bets, -3% / -14% (-9% overall). Retired Nov 1, 2026: on the Hub's games (Oct 25-31, close) 6 of 29, -19%, half of them
     // long shots. Same reason as 'value': v4 above the price has been the losing side. Back Nov 1 in Analyst 1.
     pick: V => { const i = pickIdx(V.d.map(x => -x), i => V.d[i] <= -4 && V.e[i] >= 0); return i < 0 ? null : { key: K[i], price: V.px[i], why: why1(V, i, 'the price drifted but v4 says it went too far') }; } },
@@ -374,7 +377,7 @@ export function summary(items0, old = [], rules0 = RULES, since = SINCE) {
     add(all, b); if (per[b.rule]) add(per[b.rule], b); if (top[b.rule] && tierOf(b) === 'top') { add(top[b.rule], b); track(top[b.rule], b); } add(when[WHEN.find(w => w[2](b.mins))[0]], b); add(mk[MKT(b.key)], b);
     if (b.res === 'win' || b.res === 'loss') { cum += b.units; curve.push([b.kickoff.slice(0, 10), +cum.toFixed(2)]); }
   }
-  const rules = rules0.map(r => { const s = done(per[r.id]), t = done(top[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benchCheck: { n: BENCH.n, games: t.games, cv: t.cv, cvN: t.cvN, ...(!r.bench && !r.retired && isBenched(t) && top[r.id].since ? { since: top[r.id].since } : {}) }, benched: !r.retired && (!!r.bench || isBenched(t)), ...(r.bench ? { benchedOn: r.bench } : {}), ...(r.retired ? { retired: r.retired } : {}) }; });
+  const rules = rules0.map(r => { const s = done(per[r.id]), t = done(top[r.id]); return { id: r.id, name: r.name, rule: r.rule, ...s, benchCheck: { n: BENCH.n, games: t.games, cv: t.cv, cvN: t.cvN, ...(!r.bench && !r.keep && !r.retired && isBenched(t) && top[r.id].since ? { since: top[r.id].since } : {}) }, benched: !r.retired && (!!r.bench || (!r.keep && isBenched(t))), ...(r.bench ? { benchedOn: r.bench } : {}), ...(r.keep ? { keptOn: r.keep } : {}), ...(r.retired ? { retired: r.retired } : {}) }; });
   return { since, bench: BENCH, all: done(all), rules, when: WHEN.map(w => ({ id: w[0], name: w[1], ...done(when[w[0]]) })), markets: { '1x2': done(mk['1x2']), ou: done(mk.ou), btts: done(mk.btts) }, curve, verdict: verdict(done(all)) };
 }
 // The Analyst's own read of its record, in one line. CLV first: it settles in tens of bets, profit needs hundreds.

@@ -1796,7 +1796,7 @@ function analystView() {
     <div class="zsum">${esc(S2.verdict)}</div>${tiles}${anCurve(S2.curve)}
     ${hockey || set === '2' ? '' : `<div class="sec">Stale price check<small>DraftKings against a sharp book at the same moment. Looks at a league at most every 3 hours, 15 looks a day, 2 credits each.</small></div>${anSharp()}`}
     ${mseg}<div class="sec">Rules<small>${rulesNote}</small></div>
-    <div class="mbx">${S2.rules.map(r => anRow(esc(r.name), esc(r.rule), r, r.retired ? ' <span class="pv no">retired</span>' : r.benched ? ' <span class="pv no">benched</span>' : '')).join('')}</div>
+    <div class="mbx">${S2.rules.map(r => anRow(esc(r.name), esc(r.rule), r, r.retired ? ' <span class="pv no">retired</span>' : r.benched ? ' <span class="pv no">benched</span>' : r.keptOn ? ' <span class="pv fair" title="Kept live by hand: the bench check is shown but does not bench it">kept on</span>' : '')).join('')}</div>
     ${hockey ? '' : `<div class="sec">Price shopping<small>Off for now: every bet is at DraftKings.</small></div>${anShop(A.shop)}`}
     <div class="sec">When it bet</div><div class="mbx">${S2.when.map(w => anRow(esc(w.name[0].toUpperCase() + w.name.slice(1)), '', w)).join('')}</div>
     <div class="sec">Open bets<small>${open.length ? `Closing price fills in at ${hockey ? 'puck drop' : 'kickoff'}, the result after grading.` : 'None right now.'}</small></div><div class="mbl2">${open.map(anBet).join('')}</div>

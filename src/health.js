@@ -44,7 +44,7 @@ export function analystChecks(doc, now) {
   }
   const rec = (its, ol, rules, since) => summary(its, ol, rules, since).rules.map(r => ({ id: r.id, ...(rules === RULES ? { set: setOf({ rule: r.id }) } : {}), name: r.name, bets: r.n, settled: r.settled, games: r.games, hit: r.hit, units: r.units, roi: r.roi, clv: r.clv, cv: r.cv, cvN: r.cvN, clvPin: r.clvPin, pinN: r.pinN,
     // the bench check counts top-division games (one per game) and judges on close value (Pinnacle's fair close first): src/analyst.js isBenched
-    benched: r.benched, retired: r.retired || null, benchCheck: r.benchCheck, toBench: r.retired || r.benched ? null : Math.max(0, BENCH.n - r.benchCheck.games) }));
+    benched: r.benched, retired: r.retired || null, ...(r.keptOn ? { keptOn: r.keptOn } : {}), benchCheck: r.benchCheck, toBench: r.retired || r.benched || r.keptOn ? null : Math.max(0, BENCH.n - r.benchCheck.games) })); // keptOn: kept live by hand, never benched
   const soccer = rec(items.filter(b => b.sport !== 'nhl'), old.filter(b => b[10] !== 'nhl'), RULES, SINCE),
     nhl = rec(items.filter(b => b.sport === 'nhl'), old.filter(b => b[10] === 'nhl'), NHL_RULES, NHL_SINCE);
   // Rules benched by the close-value check (not by hand), with the kickoff of the bet that tipped each one over: Sweep calls out the

@@ -154,6 +154,10 @@ ok('summary: compact old rows still count', sf.settled === 2 && sf.wins === 2);
   ok('bench: the check says how many games it needs, and the date the rule was benched', r1.benchCheck.n === BENCH.n && rd.benched && rd.benchCheck.since === dated[39].kickoff && rd41.benchCheck.since === dated[39].kickoff, JSON.stringify([rd.benchCheck, rd41.benchCheck]));
   const back = summary(dated.slice(0, 40).concat(Array.from({ length: 30 }, (_, i) => mk(100 + i, { kickoff: new Date(Date.UTC(2026, 10, 15 + i, 15)).toISOString(), clv: 5 })))).rules.find(r => r.id === 'follow');
   ok('bench: a rule that climbs back above the close is off the bench, with no date', !back.benched && back.benchCheck.since === undefined, JSON.stringify(back.benchCheck));
+  { // Nov 12, 2026: Fade the drift is kept live by hand; the same record that benches Follow the move leaves it betting
+    const fd = summary(win40.map(b => ({ ...b, rule: 'fade' }))).rules.find(r => r.id === 'fade');
+    ok('bench: a rule kept by hand is never benched, and its check is still shown', !fd.benched && fd.keptOn === '2026-11-12' && fd.benchCheck.games === 40 && fd.benchCheck.cv === -1 && fd.benchCheck.since === undefined, JSON.stringify(fd));
+    ok('bench: the kept rule is not in the benched set the Analyst bets with', !new Set(summary(win40.map(b => ({ ...b, rule: 'fade' }))).rules.filter(r => r.benched).map(r => r.id)).has('fade')); }
   ok('bench: a rule benched by hand carries no close-value date', summary([]).rules.find(r => r.id === 'under').benchCheck.since === undefined);
   // losing money but beating the close: not benched
   const r2 = summary(Array.from({ length: 40 }, (_, i) => mk(i, { res: 'loss', units: -1, clv: 2 }))).rules.find(r => r.id === 'follow');
