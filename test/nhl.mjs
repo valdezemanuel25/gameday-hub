@@ -1,6 +1,6 @@
 // NHL section: model sanity, finished games teaching the ratings, cards, Forebet hockey reader, grading, Results board.
 import { readFileSync } from 'node:fs';
-import { fbOu, freshState, predict, applyGame, nhlStep, nhlTally, parseForebetHockey, fbFor, probs, TIE, OT_GOAL } from '../src/nhl.js';
+import { nhlForebet, nhlStatus, fbOu, freshState, predict, applyGame, nhlStep, nhlTally, parseForebetHockey, fbFor, probs, TIE, OT_GOAL } from '../src/nhl.js';
 
 const kv = new Map(), writes = [];
 const env = { HUB: {
@@ -61,6 +61,25 @@ const d1 = JSON.parse(kv.get(dayKey));
 ok('card has v2, v4 and a stored time', d1.cards[0].v2 && d1.cards[0].v4 && d1.cards[0].ko);
 ok('Forebet filled onto the card in the same run', d1.cards[0].fb && d1.cards[0].fb.pick === 'H', JSON.stringify(r1.forebet));
 ok('soccer keys are never touched', [...kv.keys()].every(k => k.startsWith('nhl:')));
+{ // Update Forebet (Nov 12, 2026, Status tab): Forebet only, for the upcoming games that still lack its numbers
+  const keep = kv.get(dayKey), keepMeta = kv.get('nhl:fbmeta');
+  const strip = () => { const d = JSON.parse(keep); for (const c of d.cards) delete c.fb; kv.set(dayKey, JSON.stringify(d)); };
+  let calls = [];
+  const only = body => async (url, o) => { calls.push(url); if (!url.includes('forebet')) throw new Error('Forebet-only read must not call ' + url); return body; };
+  const full = await nhlForebet(env, new Date(), only({ ok: true, text: async () => FB2 }));
+  ok('Update Forebet: nothing missing, nothing fetched', full.missing === 0 && full.saved === 0 && calls.length === 0 && /already/.test(full.note), JSON.stringify(full));
+  strip(); kv.set('nhl:fbmeta', JSON.stringify({ at: new Date().toISOString(), ok: false, hv: 'old', msg: 'HTTP 403' })); // a read that failed a minute ago
+  const st0 = await nhlStatus(env);
+  ok('status lists the upcoming games without Forebet', st0.fbMissing.length === 1 && /@/.test(st0.fbMissing[0]), JSON.stringify(st0.fbMissing));
+  const bad = await nhlForebet(env, new Date(), only({ ok: false, status: 403, text: async () => '' }));
+  ok('Update Forebet: a failed read says so and the game stays missing', bad.error === 'HTTP 403' && bad.saved === 0 && bad.left.length === 1 && calls.length === 1, JSON.stringify(bad));
+  calls = [];
+  const got = await nhlForebet(env, new Date(), only({ ok: true, text: async () => FB2 }));
+  const dd = JSON.parse(kv.get(dayKey));
+  ok('Update Forebet: reads right after a failure (no 6 hour wait), Forebet only, and fills the game', got.missing === 1 && got.saved === 1 && got.left.length === 0 && calls.length === 1 && dd.cards[0].fb && dd.cards[0].fb.pick === 'H', JSON.stringify(got));
+  ok('Update Forebet: the card keeps everything else and the status is up to date', dd.cards[0].v2 && dd.cards[0].v4 && JSON.parse(kv.get('nhl:fbmeta')).ok === true && (await nhlStatus(env)).fbMissing.length === 0);
+  kv.set(dayKey, keep); if (keepMeta) kv.set('nhl:fbmeta', keepMeta);
+}
 // Depending on the time of day the ratings can move once more after tonight's card is made (the card is then
 // refreshed on the next run), so let one run settle and check the run after it.
 const r2 = await nhlStep(env, new Date(), fetchFn2);

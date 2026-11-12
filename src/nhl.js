@@ -556,17 +556,33 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
   let fb = null;
   const meta = (await env.HUB.get('nhl:fbmeta', 'json')) || {};
   if (mode !== 'results' && (force || !meta.at || (!meta.ok && meta.hv !== FB_HV) || now.getTime() - new Date(meta.at).getTime() >= (meta.ok ? 3 : 6) * HOUR)) {
-    const work = [];
-    for (const d of [t, addDays(t, 1)]) {
-      const day = await env.HUB.get(`nhl:day:${d}`, 'json');
-      const open = (day?.cards || []).filter(c => !c.final && !c.fb && new Date(c.kickoff).getTime() > now.getTime());
-      if (open.length) work.push({ date: d, day, open });
-    }
+    const work = await fbWork(env, t, now);
     if (work.length) fb = await forebetRead(env, work, now, fetchFn);
   }
   return { job: 'nhl', ...out, ...(fb ? { forebet: fb } : {}), ...(debug.length ? { debug } : {}) };
 }
 
+// Today's and tomorrow's games that have not started and still lack their Forebet numbers: [{ date, day, open }].
+async function fbWork(env, t, now) {
+  const work = [];
+  for (const d of [t, addDays(t, 1)]) {
+    const day = await env.HUB.get(`nhl:day:${d}`, 'json');
+    const open = (day?.cards || []).filter(c => !c.final && !c.fb && new Date(c.kickoff).getTime() > now.getTime());
+    if (open.length) work.push({ date: d, day, open });
+  }
+  return work;
+}
+const fbNames = work => work.flatMap(w => w.open.map(c => `${c.aAbbr} @ ${c.hAbbr}`));
+// Forebet only (Nov 12, 2026): the Status tab's "Update Forebet" button. One read of Forebet's NHL page for the games of today and tomorrow
+// that have not started and have no Forebet numbers yet, whenever the last read was (the 3 / 6 hour wait is for the cron, not for a tap).
+// Nothing else runs: no new games, prices, goalies or grading. With nothing missing it does not fetch.
+// { missing (before), saved, rows, left: [games still without numbers], error | note }.
+export async function nhlForebet(env, now = new Date(), fetchFn = fetch) {
+  const work = await fbWork(env, localDate(now.toISOString()), now), missing = fbNames(work);
+  if (!work.length) return { job: 'nhl-forebet', missing: 0, saved: 0, left: [], note: 'Every upcoming game of today and tomorrow already has its Forebet numbers.' };
+  const r = await forebetRead(env, work, now, fetchFn);
+  return { job: 'nhl-forebet', missing: missing.length, saved: r.saved || 0, rows: r.rows || 0, left: fbNames(work.map(w => ({ ...w, open: w.open.filter(c => !c.fb) }))), ...(r.error ? { error: r.error } : {}), ...(r.note ? { note: r.note } : {}) };
+}
 async function forebetRead(env, work, now, fetchFn) {
   let html;
   try {
@@ -671,8 +687,9 @@ export async function nhlTally(env) {
   const v5 = V5.n ? { ...V5, brier: Object.fromEntries(['v2', 'v4', 'v5'].map(m => [m, V5.win[m].n ? +(V5.brier[m] / V5.win[m].n).toFixed(3) : null])) } : null;
   return { graded, lined, all: fix(all), same: fix(same), cal: calOut, recent, leans: LB, moves: MV, v5, rest: restFinish(REST) };
 }
-export async function nhlStatus(env) {
+export async function nhlStatus(env, now = new Date()) {
   const [S, fb] = await Promise.all([env.HUB.get('nhl:state', 'json'), env.HUB.get('nhl:fbmeta', 'json')]);
   const s = S || freshState();
-  return { through: s.through, gamesThisSeason: s.lg.n, teams: Object.keys(s.teams).length, forebet: fb || null, line: LINE, saved: !!S };
+  // fbMissing: the upcoming games of today and tomorrow still without Forebet numbers (what "Update Forebet" would go and get)
+  return { through: s.through, gamesThisSeason: s.lg.n, teams: Object.keys(s.teams).length, forebet: fb || null, fbMissing: fbNames(await fbWork(env, localDate(now.toISOString()), now)), line: LINE, saved: !!S };
 }

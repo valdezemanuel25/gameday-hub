@@ -181,6 +181,12 @@ The free Workers plan allows 10 ms of CPU per request, 1,000 KV writes a day, an
 * "How the Trends reads have done" (`track` in `src/trends.js`), shown on the Results tab, replays every saved graded game through the reads and shows how often the trend pick won, and the model's pick where it disagreed (moneyline and total), plus underdog and favorite picks with 2+ trends. (Nov 11, 2026: no longer in-sample, see below.)
 * Test: `node test/trends.mjs`.
 
+### Update Forebet button (Nov 12, 2026)
+
+* The hockey Status tab has an **Update Forebet** button and a count (with the games named) of the upcoming games of today and tomorrow that still have no Forebet numbers.
+* The button calls `POST /api/nhl/forebet` (`nhlForebet` in `src/nhl.js`): one read of Forebet's NHL page for those games only. No new games, prices, goalies or grading run, and the cron's 3 / 6 hour wait between Forebet reads does not apply to a tap. With nothing missing it does not fetch.
+* It reports how many were filled and which are still missing (a game Forebet has not listed yet stays missing), or the reason the read failed.
+
 ### Lines reads rebuilt as a chance (Nov 11, 2026)
 
 Checked against the hockey backup of Nov 11, 2026 (178 graded games, Oct 15 to Nov 9, 101 of them with a price). What it showed:

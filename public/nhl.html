@@ -864,12 +864,16 @@ function mbetsView() {
 }
 function statusView() {
   if (!status) return `<div class="empty">Loading…</div>`;
-  const fb = status.forebet;
+  const fb = status.forebet, miss = status.fbMissing || [];
   return `<div class="pad"><div class="card"><div class="kv"><span>Ratings include games through</span><span>${esc(status.through)}</span></div>
   <div class="kv"><span>2026-27 games in the ratings</span><span>${status.gamesThisSeason}</span></div>
   <div class="kv"><span>Teams rated</span><span>${status.teams}</span></div>
   <div class="kv"><span>Forebet last read</span><span>${fb ? (fb.ok ? `${fb.rows} games, ${fb.saved} saved` : 'failed') : 'not yet'}</span></div>
   ${fb && fb.msg ? `<div class="note">${esc(fb.msg)}</div>` : ''}
+  <div class="kv"><span>Upcoming games without Forebet</span><span>${miss.length}</span></div>
+  ${miss.length ? `<div class="note">${miss.map(esc).join(' · ')}</div>` : ''}
+  <button type="button" class="btn" id="fbrun" style="margin-top:10px">Update Forebet</button>
+  <div class="note" id="fbst">${S.fbMsg ? esc(S.fbMsg) : 'Reads Forebet\'s NHL page now for the games of today and tomorrow that have not started and have no Forebet numbers yet. Nothing else runs: no prices, goalies or grading.'}</div>
   <div class="note">Backtest on 2,428 games from 3 seasons: winner picks hit about 55% (v2) and 56% (v4) against 54% for always picking the home team. Over/Under at 5.5 only beat the 55% Over rate when the model was confident. Goalie ratings did not help, so they are not used yet.</div>
   <div class="note" style="${nbAge() == null || nbAge() >= 7 ? 'color:#e0a040' : ''}">${nbLine()}</div>
   ${pushBox()}
@@ -896,7 +900,7 @@ document.addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== '
 // Lines tab: an opened "Tap for details" stays open when the page redraws
 document.addEventListener('toggle', e => { const d = e.target; if (d && d.matches && d.matches('details.lnd')) (S.lnOpen = S.lnOpen || {})[d.dataset.lnid] = d.open; }, true);
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-gomove],[data-goboard],[data-flipall],[data-d],[data-tab],[data-sc],#run,#run-res,#xp,[data-push],[data-setln],[data-saveln],[data-clrln],[data-sel],[data-mvf],[data-lnf],[data-getclose],[data-fin]'); if (!t) return;
+  const t = e.target.closest('[data-gomove],[data-goboard],[data-flipall],[data-d],[data-tab],[data-sc],#run,#run-res,#xp,#fbrun,[data-push],[data-setln],[data-saveln],[data-clrln],[data-sel],[data-mvf],[data-lnf],[data-getclose],[data-fin]'); if (!t) return;
   if (t.dataset.getclose) {
     if (t.disabled) return; const t0 = t.textContent; t.disabled = true; t.textContent = 'Reading the price…';
     try { const r = await (await fetch('/api/nhl/close', { method: 'POST', body: JSON.stringify({ date: S.date, id: t.dataset.getclose }) })).json(); if (r.error) throw new Error(r.error); await load(); }
@@ -939,6 +943,14 @@ document.addEventListener('click', async e => {
     try { localStorage.setItem('hubBackupNhl', new Date().toISOString()); } catch (e) { /* ignore */ }
     if (S.tab === 'status') render();
     window.location.href = '/api/nhl/export';
+  }
+  else if (t.id === 'fbrun') {
+    // Status tab (Nov 12, 2026): Forebet only, for the games still without its numbers (/api/nhl/forebet)
+    t.disabled = true; t.textContent = 'Reading Forebet…';
+    try { const r = await (await fetch('/api/nhl/forebet', { method: 'POST' })).json(), left = r.left || [];
+      S.fbMsg = r.error ? `Forebet read failed: ${r.error}` : !r.missing ? r.note
+        : `${r.saved} of ${r.missing} game${r.missing === 1 ? '' : 's'} filled${left.length ? `. Still missing: ${left.join(', ')}${r.rows ? ' (not on Forebet\'s page yet)' : ''}` : ''}${r.note ? '. ' + r.note : ''}`;
+      await load(); } catch (err) { S.fbMsg = err.message; if (S.tab === 'status') render(); }
   }
   else if (t.id === 'run' || t.id === 'run-res') {
     // Two buttons (Nov 9, 2026): Analyze this day = new games, prices and price moves, goalies / lineups, Forebet; Update results = grade finished
