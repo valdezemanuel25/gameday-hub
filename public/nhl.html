@@ -387,7 +387,10 @@ function hockeyMove(px) {
   if (ot && px.tl != null && ot.tl === px.tl) { const x = devigP(ot.to, ot.tu), y = devigP(px.to, px.tu); if (x && y) ou = { line: px.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
   if (!ml && !ou) return null;
   const top = !ou || (ml && Math.abs(ml.d) >= Math.abs(ou.d)) ? 'ml' : 'ou', size = Math.abs((top === 'ml' ? ml : ou).d);
-  return { from, ml, ou, top, size, big: size >= BIG_MOVE };
+  // The total's line itself moved (opened 6.5, now 5.5): no price move to compare, so show the line shift. Display only: it does not touch
+  // size / big, which the Analyst and the trends read. A shift of a full goal or more is lineBig (flagged on the page).
+  const ouShift = !ou && ot && px.tl != null && ot.tl != null && ot.tl !== px.tl ? { l0: ot.tl, l1: px.tl, d: r1(px.tl - ot.tl), o0: ot.to, u0: ot.tu, lineBig: Math.abs(px.tl - ot.tl) >= 1 } : null;
+  return { from, ml, ou, top, size, big: size >= BIG_MOVE, ouShift };
 }
 const fmtOdds = m => (m > 0 ? '+' : '') + m, sgn = x => (x > 0 ? '+' : '') + x;
 const faStamp = iso => iso ? `<span class="fa" title="When the Hub first grabbed this game's price">${new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)).replace(', ', ' · ')}</span>` : '';
@@ -455,7 +458,7 @@ function card(c) {
   const lnc = `<span class="lnc${c.ln ? '' : ' none'}">O/U ${ln}${c.ln ? ' · ' + esc(c.ln.src || 'sportsbook') : ' · no line yet'}</span>`;
   const lnrow = pre && S.ln === c.id ? `<div class="lnrow"><label>Total line</label><input type="number" inputmode="decimal" step="0.5" min="3.5" max="9.5" id="ln-${esc(c.id)}" value="${ln}"><button type="button" class="btn sm" data-saveln="${esc(c.id)}">Save</button>${c.ln && c.ln.how === 'manual' ? `<button type="button" class="btn sm ghost" data-clrln="${esc(c.id)}">Use ESPN</button>` : ''}<button type="button" class="btn sm ghost" data-setln="">Cancel</button></div>` : '';
   return `<div class="card${all ? ' all' : ''}"><div class="xh"><span>NHL ${lnc}${pre ? `<button type="button" class="lnb" data-setln="${esc(c.id)}">${c.ln ? 'Change' : 'Set line'}</button>` : ''}</span>${lab}</div>${lnrow}<div class="mu"><div class="tm">${crest(c.aAbbr, cs.same && cs.side === 'A')}<div><b>${esc(c.aAbbr)}</b><small>${esc(c.away)}</small></div></div>${mid}<div class="tm r"><div><b>${esc(c.hAbbr)}</b><small>${esc(c.home)}</small></div>${crest(c.hAbbr, cs.same && cs.side === 'H')}</div></div>
-  ${split}${MIN_CARD ? '' : (hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : '')(hockeyMove(c.px))}${MIN_CARD ? '' : goalsPill(c)}
+  ${split}${MIN_CARD ? '' : (hm => hm && hm.big ? `<div class="ag mv">Big price move · ${esc(mvWord(c, hm))}</div>` : hm && hm.ouShift && hm.ouShift.lineBig ? `<div class="ag mv">Big total move · ${hm.ouShift.l0} → ${hm.ouShift.l1}</div>` : '')(hockeyMove(c.px))}${MIN_CARD ? '' : goalsPill(c)}
   <div class="ml two">${c.v4 || !c.v2 ? tile('v4', c.v4, c, g.v4) : tile('v2 (no v4)', c.v2, c, g.v2)}${tile('Forebet', c.fb, c, g.fb, 'fb')}</div>${gkStrip(c)}${sgRow(c)}
   ${MIN_CARD && !f ? '' : `<div class="note">${f ? `Total ${f.total} · graded at ${ln}${f.total === ln ? ' (push, not counted)' : ''}${c.ln ? '' : ' (no line was saved)'}` : c.skipped ? esc(c.skipped) : `Scores are away–home · blue = confident pick${c.ln ? '' : ` · O/U ${ln} is the default line`}`}</div>`}</div>`;
 }
@@ -573,7 +576,7 @@ var MV_ALL = '\u0000all';
 function movesView(onlyId) {
   const rows = day.cards.filter(c => hockeyMove(c.px)).sort((a, b) => a.kickoff.localeCompare(b.kickoff)).map(c => ({ c, hm: hockeyMove(c.px), st: closeState(c) }));
   // Upcoming = puck hasn't dropped yet. It opens first; a day with none (a past day) opens on All unless you picked a filter.
-  const inF = (r, k) => k === 'big' ? r.hm.big : k === 'up' ? !r.c.final && new Date(r.c.kickoff).getTime() > Date.now() : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
+  const inF = (r, k) => k === 'big' ? r.hm.big || !!(r.hm.ouShift && r.hm.ouShift.lineBig) : k === 'up' ? !r.c.final && new Date(r.c.kickoff).getTime() > Date.now() : k === 'closed' ? r.st.k === 'ok' || r.st.k === 'miss' : true;
   const none = day.cards.length - rows.length, f = S.mvf || (rows.some(r => inF(r, 'up')) ? 'up' : 'all');
   const seg = `<div class="mvseg">${[['up', 'Upcoming'], ['big', 'Big moves'], ['all', 'All'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" class="${f === k ? 'on' : ''}" data-mvf="${k}">${l}<i>${rows.filter(r => inF(r, k)).length}</i></button>`).join('')}</div>`;
   const head = `<div class="nt">DraftKings prices from ESPN, margin removed. Opening is the book's opening line (or the first price the Hub saw); the closing price is read from 45 minutes before puck drop (after the morning skate and starting goalies), every 10 minutes, and locked 20 minutes before (Update NHL now re-reads the price and the starting goalies up to puck drop). A move of ${BIG_MOVE}+ points is a big move: news reaching the price, not a bet.${none ? ` ${none} game${none === 1 ? '' : 's'} on this day ha${none === 1 ? 's' : 've'} no price yet.` : ''}</div>`;
@@ -590,6 +593,7 @@ function movesView(onlyId) {
     return `<div class="mvg${fl.level ? ' lv-' + fl.level : ''}"><div class="mvt"><button type="button" class="mvgo" data-goboard="${esc(c.id)}" title="Show this game card"><b>${esc(c.aAbbr)} @ ${esc(c.hAbbr)}</b></button>${st.act ? `<button type="button" class="cs ${st.k} act" data-getclose="${esc(c.id)}">${st.t}</button>` : `<span class="cs ${st.k}">${st.t}</span>`}</div>${flagLine(fl)}${gkRestTags(c)}
       <small>${esc(c.away)} at ${esc(c.home)} · ${esc(c.ko || '')}${fin ? ` · final ${fin.a}–${fin.h}${fin.last !== 'REG' ? ' ' + esc(fin.last) : ''}${follow ? ' · ' + follow : ''}` : ''}${hm.big ? ` · <span class="mvf">big move: ${esc(mvWord(c, hm))}</span>` : ''}</small>
       <table class="mvx"><tr><th></th><th>${faStamp(c.px.fa)}${hm.from === 'open' ? 'Opening' : 'First seen'}</th><th>${pxLocked(c) ? 'Close' : 'Now'}</th><th>Chance</th><th>Move</th></tr>${rowsHtml}</table>
+      ${hm.ouShift ? `<small class="mvn${hm.ouShift.lineBig ? ' mvf' : ''}">Total line moved: opened ${hm.ouShift.l0} (Over ${fmtOdds(hm.ouShift.o0)} / Under ${fmtOdds(hm.ouShift.u0)}), now ${hm.ouShift.l1}: ${hm.ouShift.d < 0 ? 'down' : 'up'} ${Math.abs(hm.ouShift.d)} goal${Math.abs(hm.ouShift.d) === 1 ? '' : 's'}. Prices on different lines are not compared.</small>` : ''}
       ${px.ts ? `<small class="mvn">Price last changed ${tmCT(px.ts)}</small>` : ''}</div>`;
   };
   // MV_ALL: a lookup id -> that game's Movement card from one pass over the day (FlipCard.sync asks once per card on the Board)
@@ -620,6 +624,7 @@ function cardFlags(c, hm, nowMs) {
   if (open.length && mins > 0 && mins <= 60) add('a', `${open.join(' and ')} goalie not confirmed`);
   if (hm && hm.ml && mvLv(hm.ml.d)) add(mvLv(hm.ml.d), `${mvLv(hm.ml.d) === 'r' ? 'Big move' : 'Move'}: ${hm.ml.d > 0 ? c.hAbbr : c.aAbbr} ${sgn(Math.round(Math.abs(hm.ml.d)))}`);
   if (hm && hm.ou && mvLv(hm.ou.d)) add(mvLv(hm.ou.d), `Total: ${hm.ou.d > 0 ? 'Over' : 'Under'} ${sgn(Math.round(Math.abs(hm.ou.d)))}`);
+  if (hm && hm.ouShift && hm.ouShift.lineBig) add('r', `Total line: ${hm.ouShift.l0} → ${hm.ouShift.l1}`);
   const level = items.some(x => x.lv === 'r') ? 'r' : items.some(x => x.lv === 'a') ? 'a' : '';
   return { level, items };
 }

@@ -115,7 +115,13 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
   const page = new Function(`${['BIG_MOVE', 'devigP', 'hockeyMove'].map(grab).join('\n')}; return hockeyMove;`)();
   const cases = [px, { ...px, op: null, f: { h: -140, a: 120, tl: 6.5, to: -110, tu: -110 } }, { h: -110, a: -110 }, { tl: 5.5, to: -120, tu: 100, opt: { tl: 6.5, to: 100, tu: -120 } }];
-  ok('hockey: page and server agree', cases.every(o => JSON.stringify(page(o)) === JSON.stringify(hockeyMove(o))), JSON.stringify(cases.map(o => [page(o), hockeyMove(o)])));
+  // total line moved (opened 6.5, now 5.5): no price move, but the line shift shows; size / big (read by the Analyst and trends) are untouched
+  const extra = [];
+  const sh = hockeyMove({ h: 110, a: -130, op: { h: -135, a: 114 }, tl: 5.5, to: -135, tu: 114, opt: { tl: 6.5, to: -110, tu: -110 } });
+  ok('hockey: line 6.5 to 5.5 gives a line shift of a full goal, no price move, and big stays on the moneyline only', sh.ou === null && sh.ouShift && sh.ouShift.l0 === 6.5 && sh.ouShift.l1 === 5.5 && sh.ouShift.d === -1 && sh.ouShift.lineBig && sh.ouShift.o0 === -110 && sh.size === Math.abs(sh.ml.d) && sh.top === 'ml', JSON.stringify(sh));
+  ok('hockey: a half-goal line shift shows but is not lineBig; same line gives no shift', hockeyMove({ ...px, tl: 6, opt: { tl: 6.5, to: 105, tu: -125 } }).ouShift.lineBig === false && hm.ouShift === null);
+  extra.push({ h: 110, a: -130, op: { h: -135, a: 114 }, tl: 5.5, to: -135, tu: 114, opt: { tl: 6.5, to: -110, tu: -110 } }, { ...px, tl: 6, opt: { tl: 6.5, to: 105, tu: -125 } });
+  ok('hockey: page and server agree', [...cases, ...extra].every(o => JSON.stringify(page(o)) === JSON.stringify(hockeyMove(o))), JSON.stringify([...cases, ...extra].map(o => [page(o), hockeyMove(o)])));
   // schedule: first sight, not due again for 6 hours, hourly in the last 3, the pre-game read, then locked
   const ko = Date.parse('2026-10-26T23:00:00Z'), at = m => new Date(ko - m * 60000), c = { kickoff: new Date(ko).toISOString() };
   const p0 = { h: -150, a: 130, tl: 6.5, to: -115, tu: -105 };

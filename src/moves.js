@@ -40,7 +40,10 @@ export function hockeyMove(px) {
   if (ot && px.tl != null && ot.tl === px.tl) { const x = devig(ot.to, ot.tu), y = devig(px.to, px.tu); if (x && y) ou = { line: px.tl, p0: r1(100 * x[0]), p1: r1(100 * y[0]), d: r1(100 * (y[0] - x[0])) }; }
   if (!ml && !ou) return null;
   const top = !ou || (ml && Math.abs(ml.d) >= Math.abs(ou.d)) ? 'ml' : 'ou', size = Math.abs((top === 'ml' ? ml : ou).d);
-  return { from, ml, ou, top, size, big: size >= BIG_MOVE };
+  // The total's line itself moved (opened 6.5, now 5.5): no price move to compare, so show the line shift. Display only: it does not touch
+  // size / big, which the Analyst and the trends read. A shift of a full goal or more is lineBig (flagged on the page).
+  const ouShift = !ou && ot && px.tl != null && ot.tl != null && ot.tl !== px.tl ? { l0: ot.tl, l1: px.tl, d: r1(px.tl - ot.tl), o0: ot.to, u0: ot.tu, lineBig: Math.abs(px.tl - ot.tl) >= 1 } : null;
+  return { from, ml, ou, top, size, big: size >= BIG_MOVE, ouShift };
 }
 
 // Both score (book prices from The Odds API, src/btts.js): the first both-score price seen (odds.bf) against now / the close (odds.by,
