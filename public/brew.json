@@ -1,6 +1,71 @@
 {
-  "updated": "2026-11-13T22:10:35Z",
+  "updated": "2026-11-14T11:08:59Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-14",
+      "title": "Grounded",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "25,136",
+          "change": -0.91
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,562",
+          "change": -0.41
+        },
+        {
+          "label": "Dow",
+          "value": "52,348",
+          "change": 0.1
+        },
+        {
+          "label": "10-yr",
+          "value": "5.154%",
+          "change": 5.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$68,278",
+          "change": -3.89
+        },
+        {
+          "label": "Nvidia",
+          "value": "$162.85",
+          "change": -2.01
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Stocks",
+          "t": "Indexes ended mixed, but the Nasdaq still posted its best week since August despite a 0.91% Friday drop."
+        },
+        {
+          "h": "Nvidia slide",
+          "t": "Nvidia fell 2.01% for a sixth straight weekly loss, its worst streak since 2012, and has shed about $1.7 trillion in value."
+        },
+        {
+          "h": "Ground stop",
+          "t": "The FAA halted all US departures for about four hours, only the second national ground stop since 9/11, and over 6,600 Friday flights were canceled."
+        },
+        {
+          "h": "Air traffic costs",
+          "t": "Officials blamed tech upgrades overwhelming aging systems, with Transportation Secretary Duffy asking Congress for $50 billion and Cirium estimating 1.5 million travelers stranded."
+        },
+        {
+          "h": "Microsoft outage",
+          "t": "Thursday's outage hit users in over 70 countries and could cost at least $7 billion in lost productivity, per a Michigan think tank."
+        },
+        {
+          "h": "Nvidia CEO search",
+          "t": "Nvidia is still picking a search firm for a permanent CEO after Huang's exit, with CFO Colette Kress as interim chief."
+        }
+      ],
+      "note": "Market numbers are the Friday close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-13",
@@ -65,71 +130,6 @@
         }
       ],
       "note": "Market numbers are the Friday close."
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-13",
-      "title": "Jensen’s out",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,366",
-          "change": -0.39
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,593",
-          "change": -0.35
-        },
-        {
-          "label": "Dow",
-          "value": "52,297",
-          "change": -0.36
-        },
-        {
-          "label": "10-yr",
-          "value": "5.103%",
-          "change": 10.0,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$71,405",
-          "change": -3.9
-        },
-        {
-          "label": "Nvidia",
-          "value": "$166.19",
-          "change": -4.34
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Nvidia CEO",
-          "t": "Jensen Huang resigned after 33 years amid affair reports, CFO Colette Kress is interim CEO, and the stock fell 4.34% to sit over 30% below its peak."
-        },
-        {
-          "h": "AI financing",
-          "t": "Nvidia has guaranteed $100 billion in data center leases and holds over $110 billion in stakes, so a weaker Nvidia could raise AI funding costs."
-        },
-        {
-          "h": "Stocks",
-          "t": "Indexes rose in the morning but closed lower, with the Nasdaq down 0.39% and the Dow down 0.36%."
-        },
-        {
-          "h": "Housing",
-          "t": "Existing home sales fell 5.5% in October to a 3.75 million annual rate, a 16-year low, with mortgage rates above 7%."
-        },
-        {
-          "h": "Burberry",
-          "t": "Comparable sales rose 4% last quarter, with China up 5% and US up 11%, on half-year revenue of about $1.46 billion."
-        },
-        {
-          "h": "College football",
-          "t": "ESPN will pay about $1.7 billion over five years for the playoff as it expands to 24 teams in 2027-28."
-        }
-      ],
-      "note": "Market numbers are the Thursday close."
     },
     {
       "source": "Brew Markets",
