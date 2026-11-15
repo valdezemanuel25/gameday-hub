@@ -1,70 +1,38 @@
 {
-  "updated": "2026-11-14T11:08:59Z",
+  "updated": "2026-11-15T13:10:37Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-14",
-      "title": "Grounded",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,136",
-          "change": -0.91
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,562",
-          "change": -0.41
-        },
-        {
-          "label": "Dow",
-          "value": "52,348",
-          "change": 0.1
-        },
-        {
-          "label": "10-yr",
-          "value": "5.154%",
-          "change": 5.0,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$68,278",
-          "change": -3.89
-        },
-        {
-          "label": "Nvidia",
-          "value": "$162.85",
-          "change": -2.01
-        }
-      ],
+      "date": "2026-11-15",
+      "title": "Book Brew",
+      "markets": [],
       "takeaways": [
         {
-          "h": "Stocks",
-          "t": "Indexes ended mixed, but the Nasdaq still posted its best week since August despite a 0.91% Friday drop."
+          "h": "Print holds up",
+          "t": "Print made up three-quarters of US book sales last year, and 2025 print sales were up 10% from 2019 per Circana BookScan."
         },
         {
-          "h": "Nvidia slide",
-          "t": "Nvidia fell 2.01% for a sixth straight weekly loss, its worst streak since 2012, and has shed about $1.7 trillion in value."
+          "h": "Bookstore comeback",
+          "t": "Indie bookstores grew by 422 last year (up 31%), and Barnes & Noble plans 60 new stores this year."
         },
         {
-          "h": "Ground stop",
-          "t": "The FAA halted all US departures for about four hours, only the second national ground stop since 9/11, and over 6,600 Friday flights were canceled."
+          "h": "Reading recession",
+          "t": "Daily pleasure reading fell from 28% of Americans in 2004 to 16% in 2023, though 75% still open a book each year."
         },
         {
-          "h": "Air traffic costs",
-          "t": "Officials blamed tech upgrades overwhelming aging systems, with Transportation Secretary Duffy asking Congress for $50 billion and Cirium estimating 1.5 million travelers stranded."
+          "h": "AI book flood",
+          "t": "A Stony Brook study found over a third of 14,419 self-published genre novels had at least 20% AI text, cutting revenue for human authors."
         },
         {
-          "h": "Microsoft outage",
-          "t": "Thursday's outage hit users in over 70 countries and could cost at least $7 billion in lost productivity, per a Michigan think tank."
+          "h": "Book-driven travel",
+          "t": "57% of travelers have booked or would consider a literature-inspired trip, and hotel 'library' filter searches jumped 70%."
         },
         {
-          "h": "Nvidia CEO search",
-          "t": "Nvidia is still picking a search firm for a permanent CEO after Huang's exit, with CFO Colette Kress as interim chief."
+          "h": "Celebrity book clubs",
+          "t": "Reese's club sold a category-best 1.6 million copies in 12 months, and Silent Book Club now has 2,300+ chapters in 74 countries."
         }
       ],
-      "note": "Market numbers are the Friday close."
+      "note": "Sunday special edition: no market numbers today."
     },
     {
       "source": "Brew Markets",
