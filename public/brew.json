@@ -1,38 +1,65 @@
 {
-  "updated": "2026-11-15T13:10:37Z",
+  "updated": "2026-11-16T11:09:53Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-15",
-      "title": "Book Brew",
-      "markets": [],
-      "takeaways": [
+      "date": "2026-11-16",
+      "title": "Cue the music",
+      "markets": [
         {
-          "h": "Print holds up",
-          "t": "Print made up three-quarters of US book sales last year, and 2025 print sales were up 10% from 2019 per Circana BookScan."
+          "label": "Nasdaq",
+          "value": "25,136",
+          "change": -0.91
         },
         {
-          "h": "Bookstore comeback",
-          "t": "Indie bookstores grew by 422 last year (up 31%), and Barnes & Noble plans 60 new stores this year."
+          "label": "S&P 500",
+          "value": "7,562",
+          "change": -0.41
         },
         {
-          "h": "Reading recession",
-          "t": "Daily pleasure reading fell from 28% of Americans in 2004 to 16% in 2023, though 75% still open a book each year."
+          "label": "Dow",
+          "value": "52,348",
+          "change": 0.1
         },
         {
-          "h": "AI book flood",
-          "t": "A Stony Brook study found over a third of 14,419 self-published genre novels had at least 20% AI text, cutting revenue for human authors."
+          "label": "10-yr",
+          "value": "5.154%",
+          "change": 5.0,
+          "unit": "bps"
         },
         {
-          "h": "Book-driven travel",
-          "t": "57% of travelers have booked or would consider a literature-inspired trip, and hotel 'library' filter searches jumped 70%."
-        },
-        {
-          "h": "Celebrity book clubs",
-          "t": "Reese's club sold a category-best 1.6 million copies in 12 months, and Silent Book Club now has 2,300+ chapters in 74 countries."
+          "label": "Bitcoin",
+          "value": "$64,838",
+          "change": -5.46
         }
       ],
-      "note": "Sunday special edition: no market numbers today."
+      "takeaways": [
+        {
+          "h": "Nvidia CEO saga",
+          "t": "A petition with 160,000+ signers, plus Musk and big Nvidia holders, backs ex-CEO Jensen Huang's return days after his resignation."
+        },
+        {
+          "h": "Anthropic IPO",
+          "t": "Anthropic is set to price Wednesday and debut on Nasdaq Thursday as ANT, at a valuation seen near $1.3T-$1.45T versus the $2T first floated."
+        },
+        {
+          "h": "Earnings week",
+          "t": "Disney reports tomorrow, alongside Home Depot and October retail sales, then Target, Lowe's and TJX Wednesday and Walmart Thursday."
+        },
+        {
+          "h": "Fed minutes",
+          "t": "Investors await the October Fed meeting minutes on Wednesday, with the 10-year yield at 5.154%, up 99 bps year to date."
+        },
+        {
+          "h": "Year to date",
+          "t": "Nasdaq is up 8.15%, the S&P 500 10.46% and the Dow 8.91%, while Bitcoin is down 25.91% at about $64,838."
+        },
+        {
+          "h": "GTA VI",
+          "t": "Grand Theft Auto VI launches Thursday with 12 million+ preorders and a reported development cost above $1B."
+        }
+      ],
+      "note": "Market numbers are the Friday close; Bitcoin is as of Sunday 9pm ET and its change is vs. Friday's report."
     },
     {
       "source": "Brew Markets",
