@@ -24,6 +24,7 @@ import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { homeSummary } from './home.js';
 import { hubHealth } from './health.js';
+import { sweepStep } from './sweepdata.js';
 import { buildTrends } from './trends.js';
 import { buildSoccerTrends } from './trendssoccer.js';
 import { nhlStep, nhlForebet, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
@@ -150,6 +151,13 @@ const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', 
 // deep: the nightly sweep's read (token route) also gets the hockey rest-vs-price check, which lists and reads every saved hockey day. The
 // signed-in read (Sweep on every page load) leaves it out, so a page load costs no extra KV list call.
 const health = (env, deep = false) => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState, nhlRest: deep ? e => nhlTally(e).then(t => t && t.rest) : null });
+// Nightly stats files for the sweep (src/sweepdata.js): the Results summaries, the last two weeks of gaps and the health report, saved
+// to the separate data repo just after midnight Central. Reads only. Does nothing without SWEEP_GH_TOKEN and SWEEP_REPO.
+export const SWEEP_DAYS = 14;
+const lastDays = async (env, prefix, now) => { const t = localDate(new Date(now).toISOString()), ds = Array.from({ length: SWEEP_DAYS }, (_, i) => addDays(t, -i));
+  const got = await Promise.all(ds.map(d => env.HUB.get(`${prefix}${d}`, 'json'))); return Object.fromEntries(ds.map((d, i) => [d, got[i]?.cards]).filter(([, c]) => c && c.length)); };
+export const sweepData = (env, now = new Date(), f = fetch) => sweepStep(env, { soccerTotals: () => tally(env), nhlTotals: () => nhlTally(env), soccerDays: () => lastDays(env, 'day:', now),
+  nhlDays: () => lastDays(env, 'nhl:day:', now), health: () => health(env, true), priced: PRICED }, now, f);
 // Scout was removed (Nov 5, 2026): its old log (KV 'scout') is deleted by the first cron run that finds it. A delete is not a write, so
 // it costs nothing from the write budget; after DROP_SCOUT_UNTIL the check stops (not even a read), and this can be taken out.
 export const DROP_SCOUT_UNTIL = '2026-11-12';
@@ -1309,7 +1317,10 @@ const hub = {
       // (a heavy soccer job) used to drop them. The rotating job runs after.
       try { await nhlLineupStep(c.env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }
       try { await oddsStep(c.env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
-      try { await runSlot(c.env); }
+      // The sweep's stats file, when one is due (three runs a night, src/sweepdata.js), takes this run's turn in place of the rotating
+      // job, so the run stays inside the free plan's CPU limit. Nothing due (or not set up): the rotating job runs as always.
+      let sw = null; try { sw = await sweepData(c.env); } catch (e) { /* never allowed to break the background job */ }
+      try { if (!sw) await runSlot(c.env); }
       finally {
         // Alerts for games about to start. Never allowed to break the background job.
         try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(c.env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
