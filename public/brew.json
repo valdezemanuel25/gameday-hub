@@ -1,65 +1,70 @@
 {
-  "updated": "2026-11-16T21:08:37Z",
+  "updated": "2026-11-17T11:11:14Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-16",
-      "title": "Cue the music",
+      "date": "2026-11-17",
+      "title": "Her majesty's not-so-secret service",
       "markets": [
         {
           "label": "Nasdaq",
-          "value": "25,136",
-          "change": -0.91
+          "value": "24,510",
+          "change": -2.49
         },
         {
           "label": "S&P 500",
-          "value": "7,562",
-          "change": -0.41
+          "value": "7,417",
+          "change": -1.92
         },
         {
           "label": "Dow",
-          "value": "52,348",
-          "change": 0.1
+          "value": "51,608",
+          "change": -1.41
         },
         {
           "label": "10-yr",
-          "value": "5.154%",
-          "change": 5.0,
+          "value": "5.121%",
+          "change": -3.0,
           "unit": "bps"
         },
         {
           "label": "Bitcoin",
-          "value": "$64,838",
-          "change": -5.46
+          "value": "$65,394",
+          "change": 0.3
+        },
+        {
+          "label": "Nvidia",
+          "value": "$156.14",
+          "change": -4.12
         }
       ],
       "takeaways": [
         {
-          "h": "Nvidia CEO saga",
-          "t": "A petition with 160,000+ signers, plus Musk and big Nvidia holders, backs ex-CEO Jensen Huang's return days after his resignation."
+          "h": "Monday selloff",
+          "t": "Nasdaq fell 2.49% and the S&P 1.92% as investors braced for Nvidia earnings and Anthropic's expected Thursday IPO."
         },
         {
-          "h": "Anthropic IPO",
-          "t": "Anthropic is set to price Wednesday and debut on Nasdaq Thursday as ANT, at a valuation seen near $1.3T-$1.45T versus the $2T first floated."
+          "h": "Chip export curbs",
+          "t": "Commerce closed a loophole letting Chinese firms reach Nvidia chips via overseas data centers, and Nvidia fell 4.12% to $156.14."
         },
         {
-          "h": "Earnings week",
-          "t": "Disney reports tomorrow, alongside Home Depot and October retail sales, then Target, Lowe's and TJX Wednesday and Walmart Thursday."
+          "h": "Next Bond",
+          "t": "Amazon MGM named Robert Pattinson the new 007, after paying $8.5B for MGM and about $1B more for Bond creative control."
         },
         {
-          "h": "Fed minutes",
-          "t": "Investors await the October Fed meeting minutes on Wednesday, with the 10-year yield at 5.154%, up 99 bps year to date."
+          "h": "Fed on AI",
+          "t": "Fed Chair Kevin Warsh said AI could lift productivity but may also disappoint, which would hurt stocks."
         },
         {
-          "h": "Year to date",
-          "t": "Nasdaq is up 8.15%, the S&P 500 10.46% and the Dow 8.91%, while Bitcoin is down 25.91% at about $64,838."
+          "h": "Rates and crypto",
+          "t": "The 10-year yield slipped 3 bps to 5.121% while Bitcoin edged up 0.30% to about $65,394."
         },
         {
-          "h": "GTA VI",
-          "t": "Grand Theft Auto VI launches Thursday with 12 million+ preorders and a reported development cost above $1B."
+          "h": "Bank glitch",
+          "t": "JPMorgan Chase fixed a software-related outage that slowed transactions, and said it was not a cyberattack."
         }
       ],
-      "note": "Market numbers are the Friday close; Bitcoin is as of Sunday 9pm ET and its change is vs. Friday's report."
+      "note": "Market numbers are the Monday close."
     },
     {
       "source": "Brew Markets",
