@@ -66,27 +66,42 @@ export async function buildPart(part, deps, now = Date.now()) {
 const toB64 = s => { const b = new TextEncoder().encode(s); let bin = ''; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(bin); };
 const fromB64 = s => new TextDecoder().decode(Uint8Array.from(atob(String(s).replace(/\s/g, '')), ch => ch.charCodeAt(0)));
 
+const ghHeaders = token => ({ authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'gameday-hub', 'content-type': 'application/json' });
+const ghUrl = (repo, path) => `https://api.github.com/repos/${repo}/contents/${path}`;
+
+// What the data repo holds for one file now: { sha, fresh } (fresh = saved in the last FRESH_MIN minutes), { sha: null } when there is
+// no file yet, or { status } when GitHub refused the read.
+export async function fileState({ repo, path, token, now = Date.now() }, f = fetch) {
+  const cur = await f(ghUrl(repo, path), { headers: ghHeaders(token) });
+  if (cur.status === 404) return { sha: null, fresh: false };
+  if (!cur.ok) return { status: cur.status };
+  const j = await cur.json(); let fresh = false;
+  try { const at = Date.parse(JSON.parse(fromB64(j.content)).exportedAt); fresh = Number.isFinite(at) && now - at < FRESH_MIN * 60000; } catch (e) { /* unreadable: replace it */ }
+  return { sha: j.sha || null, fresh };
+}
+
 // Save one JSON file to the data repo (GitHub contents API): read the current file for its sha, leave it alone when it was saved in the
-// last FRESH_MIN minutes, else create or replace it. Never throws on a refusal: { saved: false, status }.
-export async function putFile({ repo, path, token, obj, now = Date.now() }, f = fetch) {
-  const url = `https://api.github.com/repos/${repo}/contents/${path}`;
-  const headers = { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'gameday-hub', 'content-type': 'application/json' };
-  let sha = null;
-  const cur = await f(url, { headers });
-  if (cur.ok) { const j = await cur.json(); sha = j.sha || null;
-    try { const at = Date.parse(JSON.parse(fromB64(j.content)).exportedAt); if (Number.isFinite(at) && now - at < FRESH_MIN * 60000) return { saved: false, fresh: true }; } catch (e) { /* unreadable: replace it */ } }
-  else if (cur.status !== 404) return { saved: false, status: cur.status };
-  const body = { message: `Sweep data ${new Date(now).toISOString().slice(0, 10)} ${path}`, content: toB64(JSON.stringify(obj)), ...(sha ? { sha } : {}) };
-  const r = await f(url, { method: 'PUT', headers, body: JSON.stringify(body) });
+// last FRESH_MIN minutes, else create or replace it. Never throws on a refusal: { saved: false, status }. state: a fileState() answer
+// already in hand (the cron step reads it first, so a fresh file costs no build).
+export async function putFile({ repo, path, token, obj, now = Date.now(), state = null }, f = fetch) {
+  const st = state || await fileState({ repo, path, token, now }, f);
+  if (st.status) return { saved: false, status: st.status };
+  if (st.fresh) return { saved: false, fresh: true };
+  const body = { message: `Sweep data ${new Date(now).toISOString().slice(0, 10)} ${path}`, content: toB64(JSON.stringify(obj)), ...(st.sha ? { sha: st.sha } : {}) };
+  const r = await f(ghUrl(repo, path), { method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body) });
   return r.ok ? { saved: true } : { saved: false, status: r.status };
 }
 
-// One cron run: null when nothing is due or the secret / repo name is missing; else what happened. Never throws.
+// One cron run: null when nothing is due, the secret / repo name is missing, or the file is already fresh (the second try after a good
+// first one: nothing is built and the rotating job keeps its turn); else what happened. Never throws.
 export async function sweepStep(env, deps, now = new Date(), f = fetch) {
   if (!env.SWEEP_GH_TOKEN || !env.SWEEP_REPO) return null;
   const part = partDue(now); if (!part) return null;
+  const at = new Date(now).getTime(), file = { repo: env.SWEEP_REPO, path: `${part}.json`, token: env.SWEEP_GH_TOKEN, now: at };
   try {
-    const obj = await buildPart(part, deps, new Date(now).getTime());
-    return { job: 'sweepdata', part, ...(await putFile({ repo: env.SWEEP_REPO, path: `${part}.json`, token: env.SWEEP_GH_TOKEN, obj, now: new Date(now).getTime() }, f)) };
+    const state = await fileState(file, f);
+    if (state.fresh) return null;
+    if (state.status) return { job: 'sweepdata', part, saved: false, status: state.status };
+    return { job: 'sweepdata', part, built: true, ...(await putFile({ ...file, obj: await buildPart(part, deps, at), state }, f)) };
   } catch (e) { return { job: 'sweepdata', part, saved: false, error: String(e && e.message || e) }; }
 }

@@ -106,6 +106,26 @@ const gh = (existing) => { const calls = []; const f = async (url, init = {}) =>
   const r = await sweepStep({ SWEEP_GH_TOKEN: 'T', SWEEP_REPO: 'me/data' }, d3, cst('00:10'), f);
   ok('step: a read that fails is reported, not thrown (the background job carries on)', r && r.part === 'soccer' && r.saved === false && /KV down/.test(r.error), JSON.stringify(r));
 }
+{
+  // Nov 16, 2026 (found by the sweep's first run): the second try used to build the whole file before seeing it was already saved, and
+  // still took the rotating job's turn. A fresh file now means: nothing is built, and the step answers null so the rotating job runs.
+  const { f, calls } = gh({ exportedAt: new Date(cst('00:35').getTime() - 15 * 60000).toISOString() }); let built = 0; const d4 = { ...deps, health: async () => { built++; return {}; } };
+  const r = await sweepStep({ SWEEP_GH_TOKEN: 'T', SWEEP_REPO: 'me/data' }, d4, cst('00:35'), f);
+  ok('step: when the file was saved minutes ago the second try builds nothing, saves nothing and hands the turn back', r === null && built === 0 && calls.length === 1 && !calls.some(c => c.init.method === 'PUT'), JSON.stringify({ r, built, n: calls.length }));
+}
+{
+  const { f, calls } = gh({ exportedAt: new Date(cst('00:20').getTime() - 26 * H).toISOString() }); let built = 0; const d5 = { ...deps, health: async () => { built++; return {}; } };
+  const r = await sweepStep({ SWEEP_GH_TOKEN: 'T', SWEEP_REPO: 'me/data' }, d5, cst('00:20'), f);
+  ok("step: yesterday's file is rebuilt once and replaced with one read and one save", r && r.saved === true && built === 1 && calls.length === 2 && JSON.parse(calls[1].init.body).sha === 'abc', JSON.stringify({ r, built, n: calls.length }));
+}
+{
+  // The rotating job gives up its turn only to a run that really built a file (scheduled() in src/worker.js reads `built`).
+  const refuse = async () => new Response('{"message":"Bad credentials"}', { status: 401 }); let built = 0; const d6 = { ...deps, health: async () => { built++; return {}; } };
+  const r = await sweepStep({ SWEEP_GH_TOKEN: 'T', SWEEP_REPO: 'me/data' }, d6, cst('00:20'), refuse);
+  ok('step: a refused read builds nothing and is not marked as built', r && r.saved === false && r.status === 401 && !r.built && built === 0, JSON.stringify(r));
+  const { f } = gh(null); const r2 = await sweepStep({ SWEEP_GH_TOKEN: 'T', SWEEP_REPO: 'me/data' }, deps, cst('00:20'), f);
+  ok('step: a run that built and saved a file is marked as built', r2 && r2.built === true && r2.saved === true, JSON.stringify(r2));
+}
 
 // --- wired into the Worker: the real Results summary and saved days, in-memory KV ---
 {

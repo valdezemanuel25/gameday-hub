@@ -1318,9 +1318,10 @@ const hub = {
       try { await nhlLineupStep(c.env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }
       try { await oddsStep(c.env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
       // The sweep's stats file, when one is due (three runs a night, src/sweepdata.js), takes this run's turn in place of the rotating
-      // job, so the run stays inside the free plan's CPU limit. Nothing due (or not set up): the rotating job runs as always.
+      // job, so the run stays inside the free plan's CPU limit. Nothing due, not set up, or the file is already saved (nothing was built): the
+      // rotating job runs as always.
       let sw = null; try { sw = await sweepData(c.env); } catch (e) { /* never allowed to break the background job */ }
-      try { if (!sw) await runSlot(c.env); }
+      try { if (!(sw && sw.built)) await runSlot(c.env); }
       finally {
         // Alerts for games about to start. Never allowed to break the background job.
         try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(c.env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
