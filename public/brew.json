@@ -1,6 +1,70 @@
 {
-  "updated": "2026-11-18T11:09:39Z",
+  "updated": "2026-11-18T21:08:37Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-18",
+      "title": "Should you get in on Anthropic’s IPO?",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "24,430",
+          "change": 0.42
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,324",
+          "change": -0.23
+        },
+        {
+          "label": "Dow",
+          "value": "50,198",
+          "change": -1.11
+        },
+        {
+          "label": "10-yr",
+          "value": "5.066%",
+          "change": -4.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$62,476",
+          "change": -2.79
+        },
+        {
+          "label": "Oil",
+          "value": "$82.01",
+          "change": -3.12
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Mixed close",
+          "t": "Nasdaq rose 0.42% but the Dow fell 1.11% and the S&P slipped 0.23%, even after Nvidia's strong earnings (shares -2.89%)."
+        },
+        {
+          "h": "Tech fatigue",
+          "t": "BofA's survey shows net tech overweight among fund managers dropped from 37% to 12%, the biggest monthly fall since 2006."
+        },
+        {
+          "h": "Anthropic IPO",
+          "t": "Trading may start tomorrow at a $1.5T-$1.6T valuation, after an offering aimed at up to $64.4B; Vanda sees about $250M of retail buying on day one."
+        },
+        {
+          "h": "IPO history",
+          "t": "15 of the 20 largest IPOs since 1990 fell below their offer price within a year, with a median drawdown of 40.9%."
+        },
+        {
+          "h": "Retail beats",
+          "t": "Target raised guidance on 5.6% same-store sales growth and TJX beat on 4% comps; shares gained 3.97% and 8.12%."
+        },
+        {
+          "h": "Movers",
+          "t": "UnitedHealth fell 10.21% on tougher fraud rules, Newmont dropped 6.05% as gold sank, and Take-Two rose 6.22% ahead of GTA VI."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-11-18",
@@ -765,66 +829,6 @@
         {
           "h": "Marriott",
           "t": "Marriott beat estimates with $7B revenue, $3.02 adjusted EPS and raised 2026 RevPAR growth guidance to 4.5%-5%; shares rose 4.26%."
-        }
-      ]
-    },
-    {
-      "source": "Brew Markets",
-      "date": "2026-10-30",
-      "title": "A crypto heist like no other",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,445",
-          "change": -2.83
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,559",
-          "change": -2.09
-        },
-        {
-          "label": "Dow",
-          "value": "51,680",
-          "change": -1.26
-        },
-        {
-          "label": "10-yr",
-          "value": "4.915%",
-          "change": -7,
-          "unit": "bps"
-        },
-        {
-          "label": "Oil",
-          "value": "$104.32",
-          "change": 2.27
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$76,717",
-          "change": -4.99
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Markets",
-          "t": "The tech selloff deepened, with the Nasdaq down 2.83% (off as much as 3.7% intraday) and the S&P 500 down 2.09%, while the 10-year yield eased 7 bps to 4.915%."
-        },
-        {
-          "h": "Tech wreck",
-          "t": "Intel plunged 28.58% on a weak Q4 outlook despite 21% revenue growth to $16.5B, and Amazon slipped 1.41% as free cash flow hit negative $42.4B with $220B of planned capex."
-        },
-        {
-          "h": "Crypto",
-          "t": "Hackers drained about $6.3B from Binance, the largest crypto heist ever, sending Bitcoin down 4.99% to $76,717, a six-week low."
-        },
-        {
-          "h": "Big Oil",
-          "t": "Chevron earned $9.9B (+~200%) and Exxon $15.4B (doubled) on refining, lifting shares 1.75% and 2.25% with oil up 2.27% to $104.32."
-        },
-        {
-          "h": "Big movers",
-          "t": "Reddit fell 29.34%, Roblox 18.13% and Twilio 15.48%, while FedEx Freight rose 14.91%, Regeneron 13.33% and AstraZeneca 6.78%."
         }
       ]
     },
