@@ -196,6 +196,22 @@ ok('a pick priced at DraftKings carries no book label', card('g2').lean && card(
   ok('SportsMole button (force): nothing to do once the games have started', r2.idle === true && !card('g1').sm, JSON.stringify(r2));
 }
 
+// ---- 12. a save from an older read does not erase what a save in between added ----
+{
+  const { putDay } = await import('../src/worker.js');
+  reset();
+  await analyzeLeague(DATE, 'eng.1', env, before);
+  const stale = day(); // a button read the day...
+  patch('g1', c => { c.odds = { ...c.odds, h: -170, cl: '2026-11-21T14:35:00Z', pn: { h: -160 }, pcl: '2026-11-21T14:35:00Z' }; c.sm = { h: 2, a: 1 }; }); // ...the cron then saved the lineup read
+  patch('g2', c => { c.final = { h: 1, a: 1 }; c.grade = { v2: { outcomeHit: 0 } }; c.lean = { k: 'lean', key: 'H', hit: false }; });
+  stale.cards.find(c => c.id === 'g1').fb = { p: [40, 30, 30] }; // ...and the button saves its own change from the older read
+  await putDay(env, DATE, stale);
+  const g1 = card('g1'), g2b = card('g2');
+  ok('merge on save: the lineup-window close and Pinnacle\'s close survive a save from an older read', g1.odds.cl && g1.odds.h === -170 && g1.odds.pcl && g1.odds.pn.h === -160 && g1.sm, JSON.stringify(g1.odds));
+  ok('merge on save: the button\'s own change is saved too', g1.fb && g1.fb.p[0] === 40);
+  ok('merge on save: a graded result and its locked pick survive', g2b.final && g2b.grade && g2b.lean && g2b.lean.key === 'H');
+}
+
 // ---- 13. hockey: a postponed game is void, not left waiting ----
 {
   const { nhlStep } = await import('../src/nhl.js');

@@ -190,6 +190,33 @@ async function limited(binding, key) {
 }
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 
+// Saving a soccer day without losing what another save put there (Nov 18, 2026 audit). The cron and the buttons each read the whole day,
+// change it and write it back, so a save made from an older read could erase what a save in between added: a lineup-window close, a
+// graded result and its locked pick, Forebet or SportsMole. Just before writing, the stored day is read again and anything of that kind
+// it has and this copy lacks is carried over. It narrows the window (KV can still serve a read up to about 60 seconds old, so two saves
+// from different places that close together can still clash) and costs one read per save, no write.
+const CLOSE_GROUPS = { cl: ['h', 'd', 'a', 'tl', 'to', 'tu', 'op', 'opt', 'src', 'ts', 'cl', 'cby', 'cls'], pcl: ['pn', 'pcl'], bcl: ['by', 'bn', 'bk', 'bcl'] };
+export function keepSaved(saved, mine) {
+  if (!saved || !Array.isArray(saved.cards) || !mine || !Array.isArray(mine.cards)) return mine;
+  const at = new Map(mine.cards.map(c => [`${c.league}|${c.id}`, c]));
+  for (const s of saved.cards) {
+    const c = at.get(`${s.league}|${s.id}`);
+    if (!c) { if (s.final) mine.cards.push(s); continue; } // a graded card is never lost; other cards may be dropped on purpose (moved games)
+    if (s.final && !c.final) for (const k of ['final', 'grade', 'lean', 'smGrade']) { if (s[k] !== undefined) c[k] = s[k]; }
+    if (s.void && !c.void && !c.final) c.void = s.void;
+    for (const k of ['fb', 'sm', 'sx']) if (s[k] && !c[k]) c[k] = s[k];
+    if (s.odds) {
+      if (!c.odds) c.odds = s.odds;
+      else for (const [mark, keys] of Object.entries(CLOSE_GROUPS)) if (s.odds[mark] && !c.odds[mark]) for (const k of keys) { if (s.odds[k] === undefined) delete c.odds[k]; else c.odds[k] = s.odds[k]; }
+    }
+  }
+  return mine;
+}
+export async function putDay(env, date, day) {
+  let saved = null; try { saved = await env.HUB.get(`day:${date}`, 'json'); } catch (e) { /* write what we have */ }
+  return env.HUB.put(`day:${date}`, JSON.stringify(keepSaved(saved, day)));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Analyze ONE league for ONE date: fixtures -> v2 + v4 (official since 2026-10-26) cards.
 // ---------------------------------------------------------------------------------------------
@@ -209,7 +236,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     if (debug.length) return { fixtures: 0, cards: 0, skipped: 0, feedError: true, debug };
     day.cards = day.cards.filter(c => c.league !== slug || c.final);
     day.analyzed[slug] = now.getTime();
-    await env.HUB.put(`day:${date}`, JSON.stringify(day));
+    await putDay(env, date, day);
     return { fixtures: 0, cards: 0, skipped: 0, debug };
   }
 
@@ -324,7 +351,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   day.cards = day.cards.filter(c => c.league !== slug || (c.final && !listed.has(c.id))).concat(cards, kept);
   day.analyzed[slug] = now.getTime();
   day.analyzedAt = now.getTime();
-  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  await putDay(env, date, day);
   return { fixtures: fx.length, cards: cards.length, skipped: cards.filter(c => c.skipped).length, debug };
 }
 
@@ -556,7 +583,7 @@ export async function refreshCardClose(env, date, slug, id, now = new Date(), f 
     const n = withOdds(c.odds, fx.oddsDone, now); if (sameJson(n, c.odds) === false) n.ts = now.toISOString();
     n.cl = c.kickoff; n.cls = 'espn'; delete n.cby; c.odds = n;
   } else return { error: fx.done ? "ESPN no longer lists a closing line for this finished game, so the last price stands as the close" : "The game has started: ESPN's price may be an in-play one, so the Hub will not take it as the close. Try again after the final." };
-  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  await putDay(env, date, day);
   return { ok: true, price: { h: c.odds.h, d: c.odds.d, a: c.odds.a, tl: c.odds.tl ?? null, to: c.odds.to ?? null, tu: c.odds.tu ?? null }, source: started ? 'espn-close' : 'now' };
 }
 // The Movement tab's "No price" button: why one game has no price, in plain words, from ESPN's feed read now. When ESPN does have a
@@ -575,7 +602,7 @@ export async function priceWhy(env, date, slug, id, now = new Date(), why = odds
   if (!espnHas && priceOpen(c, now) && env.PINNODDS_KEY) {
     if (c.odds) delete c.odds.pat; delete c.pnat;
     let ch = await addPinn(env, [c], now, pinnFetch); if (pinnStandIn(c, now)) { setV6(c, c, now); ch++; }
-    if (ch) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+    if (ch) await putDay(env, date, day);
     if (c.odds && c.odds.src === 'pinnacle') return { kind: 'saved', title: 'Pinnacle price used', detail: `ESPN ${bk ? `lists ${bk} but without a full home / draw / away price` : 'has no price on this game'}, so the card takes Pinnacle's (${[c.odds.h, c.odds.d, c.odds.a].map(m => (m > 0 ? '+' : '') + m).join(' / ')}) as a stand-in. The Analyst sits stand-in games out; DraftKings replaces it if ESPN posts one.` };
   }
   if (r.parsed && [r.parsed.h, r.parsed.d, r.parsed.a].every(Number.isFinite)) {
@@ -615,7 +642,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
   changed += await addPinn(env, open, now, f); // first: its both-score price is the first choice of addBtts
   for (const c of open) if (pinnStandIn(c, now)) { if (setV6(c, c, now)) {} changed++; } // no ESPN price: Pinnacle's stands in
   changed += await addBtts(env, open, slug, now, f);
-  if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  if (changed) await putDay(env, date, day);
   const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f), analystSharp(env, slug, f, now)); // the Analyst reads the same prices (src/analyst.js)
   return { games: open.length, priced, changed, analyst: an };
 }
@@ -635,14 +662,14 @@ export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) 
     const withPx = need.filter(c => c.odds);
     for (const c of withPx) if (c.odds.pat) delete c.odds.pat; // asked by hand: try Pinnacle now, not after the retry wait
     let changed = await addPinn(env, withPx, now, f); changed += await addBtts(env, withPx, slug, now, f);
-    if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+    if (changed) await putDay(env, date, day);
     const got = need.filter(c => c.odds && c.odds.by != null);
     return { games: open.length, priced: have + got.length, skipped: need.filter(c => !(c.odds && c.odds.by != null)).map(c => `${c.home} v ${c.away}${c.odds ? '' : ' (no ESPN price yet)'}`), left: null, source: 'pinnacle' };
   }
   const r = await viaOddsKey(env, key => fetchBtts(key, slug, need, f), { now }); if (r.error) return { error: r.error };
   let changed = 0;
   for (const c of need) { const p = r.prices.get(c.id); if (p && (!c.odds || c.odds.by !== p.by || c.odds.bn !== p.bn)) { c.odds = { ...(c.odds || {}), by: p.by, bn: p.bn, bk: p.bk }; if (!c.odds.bf) c.odds.bf = { by: p.by, bn: p.bn }; changed++; } }
-  if (changed) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  if (changed) await putDay(env, date, day);
   return { games: open.length, priced: have + r.prices.size, skipped: r.skipped, left: r.left };
 }
 // For checking by hand (/api/pinn-check?league=bra.1): one request to PinnOdds, then how today's and tomorrow's games of the league
@@ -755,7 +782,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   // block the others: the cron rotates by least-recently-tried.
   // Saved only when something was graded: a league still waiting on ESPN used to cost a KV write on every
   // try. The cron now rotates through due leagues by the clock instead (see slot 1), so nothing is stored.
-  if (graded || voided) { await env.HUB.put(`day:${date}`, JSON.stringify(day)); await analystLook(env, date, day.cards.filter(c => c.league === slug), now); }
+  if (graded || voided) { await putDay(env, date, day); await analystLook(env, date, day.cards.filter(c => c.league === slug), now); }
   return { graded, pending, ...(voided ? { voided } : {}) };
 }
 
@@ -796,7 +823,7 @@ export async function smLeague(date, slug, env, now = new Date(), { force = fals
       .forEach(({ l, t }) => unm.items.push({ src: 'sm', key: `sm|${c.id}|${l.id}`, cardId: c.id, date, slug, title: `${t.home} vs ${t.away}`, url: l.url }));
   }
   await saveUnm(env, unm, before, today());
-  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  await putDay(env, date, day);
   return { found, missed, listed: links.length, ...(errors.length ? { errors } : {}) };
 }
 
@@ -1018,7 +1045,7 @@ export async function forebetPaste(date, slug, text, env, now = new Date(), kind
   const open = cards.filter(c => !has(c) && !started(c));
   const { found, missing } = parseForebet(text, open, kind);
   for (const [id, fb] of found) { const c = cards.find(x => x.id === id); c.fb = { ...(c.fb || {}), ...fb, at: c.fb?.at || now.toISOString(), how: c.fb?.how || fb.how }; }
-  if (found.size) await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  if (found.size) await putDay(env, date, day);
   return {
     saved: found.size,
     alreadyHad: cards.filter(c => has(c) && !found.has(c.id)).length,
@@ -1053,7 +1080,7 @@ export async function assignCandidate(date, slug, id, key, env, now = new Date()
     c.sm = { h: w.h, a: w.a, text: w.text, url: it.url, how: 'assigned by you' };
   }
   unm.items = unm.items.filter(i => !(i.cardId === id && i.src === it.src && (it.src === 'sm' || i.kind === it.kind)));
-  await env.HUB.put(`day:${date}`, JSON.stringify(day));
+  await putDay(env, date, day);
   await saveUnm(env, unm, before, today());
   return { assigned: true, src: it.src, title: it.title };
 }
