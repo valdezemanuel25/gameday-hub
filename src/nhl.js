@@ -14,6 +14,7 @@ import { hockeyMove } from './moves.js';
 import { analystNhl } from './analyst.js';
 import { goalSeq, maxLead, earlyPaid } from './early.js';
 import { devig } from './v6core.js';
+import { loadDays } from './summaries.js';
 
 // Rest against the price (Nov 5, 2026): v5 already carries the measured back-to-back effect; the open question is whether DraftKings'
 // moneyline already has it. On every graded game where exactly one side was on the second night of a back-to-back (v5's flags), the
@@ -628,9 +629,10 @@ export async function nhlSetLine(env, date, id, line, now = new Date()) {
 
 // ---- results board -----------------------------------------------------------------------------
 const mk = () => ({ n: 0, hit: 0 });
-export async function nhlTally(env) {
-  const list = await env.HUB.list({ prefix: 'nhl:day:' });
-  const days = await Promise.all(list.keys.map(k => env.HUB.get(k.name, 'json')));
+// days: the saved hockey days when the caller has read them already (the cached summary and the backup, src/summaries.js); else every
+// nhl:day: key is listed, page by page (list() stops at 1,000 keys a call), and read.
+export async function nhlTally(env, days = null) {
+  if (!days) days = await loadDays(env.HUB, 'nhl:day:');
   const M = ['v2', 'v4', 'fb'], mkB = () => ({ win: Object.fromEntries(M.map(m => [m, mk()])), ou: Object.fromEntries(M.map(m => [m, mk()])), brier: { n: 0, v2: 0, v4: 0 }, home: mk() });
   const all = mkB(), same = mkB(), recent = [];
   // v5 shadow: only games that carry a v5 (made before puck drop, from approval onward), each model on those same games. adj = games where
