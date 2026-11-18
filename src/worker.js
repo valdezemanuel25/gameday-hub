@@ -17,7 +17,7 @@ import { analystLook, listAnalyst, getAnalyst } from './analyst.js';
 import { shotsAt, matchup as shotsMatchup, shotsOver, SHOTS, SHOTS2, LEAGUES as SHOTS_LEAGUES, WATCH as SHOTS_WATCH, LEAGUES2 as SHOTS_LEAGUES2 } from './shots.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP, SPORT } from './btts.js';
-import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
+import { leanPick, leanHit, priceFor, unitsWon, verdictOf, priceVerdict, bandOf } from './pick.js';
 import { goalSeq, maxLead, earlyPaid, regScore } from './early.js';
 import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn, countReq as countPinnReq } from './pinn.js';
 import { same as sameName } from './names.js';
@@ -981,7 +981,7 @@ async function tally(env) {
         if (L.ep != null) { const E = LB.ep || (LB.ep = { n: 0, plain: 0, hits: 0, saved: 0, pn: 0, won: 0, wonPlain: 0 }); E.n++; E.plain += L.hit ? 1 : 0; E.hits += L.ep ? 1 : 0; E.saved += L.ep && !L.hit ? 1 : 0; if (L.price != null) { E.pn++; E.won += unitsWon(L.price, L.ep); E.wonPlain += unitsWon(L.price, L.hit); } }
         if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.src === 'market' ? 'market, models ' : ''}${L.y} of ${L.a}`, L.hit, L.key);
         LB.base.home += c.final.h > c.final.a ? 1 : 0; LB.base.draw += c.final.h === c.final.a ? 1 : 0; LB.base.away += c.final.h < c.final.a ? 1 : 0; LB.base.over += c.final.h + c.final.a >= 3 ? 1 : 0; LB.base.btts += c.final.h > 0 && c.final.a > 0 ? 1 : 0;
-        if (L.price != null) { const P = LB.pl || (LB.pl = { n: 0, won: 0, byKind: {}, byVerdict: {}, byCombo: {}, byBand: {} }), u = unitsWon(L.price, L.hit), add = (o, k) => { const x = o[k] || (o[k] = { n: 0, hits: 0, won: 0 }); x.n++; x.hits += L.hit ? 1 : 0; x.won += u; }; P.n++; P.won += u; add(P.byKind, L.k); add(P.byBand, bandOf(L.price)); if (L.vd) { add(P.byVerdict, L.vd); add(P.byCombo, `${L.k}|${L.vd}`); } }
+        if (L.price != null) { const P = LB.pl || (LB.pl = { n: 0, won: 0, byKind: {}, byVerdict: {}, byCombo: {}, byBand: {} }), u = unitsWon(L.price, L.hit), add = (o, k) => { const x = o[k] || (o[k] = { n: 0, hits: 0, won: 0 }); x.n++; x.hits += L.hit ? 1 : 0; x.won += u; }; P.n++; P.won += u; add(P.byKind, L.k); add(P.byBand, bandOf(L.price)); const vd = priceVerdict(c, L); if (vd) { add(P.byVerdict, vd); add(P.byCombo, `${L.k}|${vd}`); } } // vd: v4 against the DraftKings price (src/pick.js)
         LB.recent.push({ date: day.date, kickoff: c.kickoff, home: c.home, away: c.away, leagueName: c.leagueName, final: c.final, k: L.k, key: L.key, p: L.p, y: L.y, a: L.a, hit: !!L.hit, ...(L.ep != null ? { ep: L.ep } : {}) });
       }
       live.push({ date: day.date, ...c });
