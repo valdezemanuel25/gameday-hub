@@ -102,3 +102,37 @@ hockey tile and card.
    flash, but no sign it is loading either).
 7. Sweep's SVG uses blur filters on animated groups; a pre-blurred image or no filter would make his idle loops much cheaper.
 8. A light theme does not exist; if one is wanted, the colours are already tokens on `:root`, but the neon overrides would need a second set.
+
+## Follow-up Nov 18: one number per tile
+
+Proposal 5 above, approved. A soccer tile showed two numbers for one result: the big % was v4's (Real Madrid 74%) and the headline
+pick under it was the market's (Real Madrid to win 77%). Base: bcb1c53. Only `public/index.html` and `test/pages.mjs` changed.
+
+**Rule.** The big chances come from the same source as the headline pick, worked out with the same `leanPick` call `headline()` uses,
+so they cannot drift apart and the recorded pick is untouched (`test/pick.mjs` and `test/headline.mjs` still pass):
+
+- Priced game (the headline is the v6 score card, from the price): the big home / draw / away %, the bar and the goals number are the
+  market's, labelled **market**.
+- Not priced yet, or the headline fell back to the models: v4's, labelled **v4** (**v2** on the rare game v4 has no numbers for).
+- The label is small and quiet, like the league tag: 11px, the theme's faint grey (6.8:1 on a tile, 7.0:1 on the page, AA).
+  On a tile it sits at the right of the line under the bar, below the % column; on the open card it sits under "Draw x%".
+
+**When the headline is about another outcome** (Over / Under 2.5, both score), the team chances cannot be the headline's number. They
+still come from the headline's source, so nothing on the tile disagrees with it, and the goals number on the line under the bar now
+names the side the headline picks: "U2.5 60%" beside "Under 2.5 goals 60%" (it used to say "O2.5 40%", or v4's Over % beside the
+market's Over pick, e.g. "O2.5 66%" over "Over 2.5 goals 68%"); a both-score headline shows "BTTS 58%" there. A result headline keeps
+"O2.5". This keeps one layout for every tile and puts the headline's own number on the tile in all cases.
+
+**Where.** Board tiles (`tileOf`), the open card's chance line (`game()`, which also draws the Finished list's cards). Top picks has no
+button since Nov 9 and ranks v4's own numbers with the model named on each row, so it already shows one source; under it the open
+card falls back to v4. There is no separate By Kickoff view any more (the Board is sorted by kickoff). The NHL page has no headline pick
+on its tiles or cards (the pick only appears in the Model bets list, without a big %), so there was nothing to match there.
+
+**Checked** in Chromium at iPhone 13 (390 × 664) on the local Worker with stand-in days, before and after: no console errors, no
+horizontal scroll, every tile's big % equals its headline % for result picks and its goals number equals the headline % for goals
+picks; finished cards and the Top picks fallback render. New browser checks in `test/pages.mjs` (priced result pick, priced Under
+pick, unpriced v4 pick, open card matches the tile, label ≥ 11px) fail on the old page and pass now. `npm test`: all pass.
+
+Left as is: the small "44→50%" price-move line under a team is the book's own chance (margin removed by the power method), while the
+market's big % comes from the score card fitted to that price, so the two can differ by a point. The "✓ correct" beside a final score
+on the open card is still v4's result.
