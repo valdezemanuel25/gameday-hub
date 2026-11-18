@@ -95,6 +95,8 @@
     if (pn && np >= 3) out.push(np + ' recent Analyst bets had no Pinnacle closing read (the bench check fell back to DraftKings)');
     // a rule the close-value check benched in the last 3 days (one benched long ago is on the Analyst table, not news)
     var nowMs = h.at ? Date.parse(h.at) : Date.now(), nb = ((h.analyst && h.analyst.closeBenched) || []).filter(function (r) { return nowMs - Date.parse(r.since) <= 3 * 86400000; });
+    // Nov 18, 2026: the sign-in password is short (it is never sent here, nor its length); a warning only, nothing is blocked
+    if (h.signIn && h.signIn.weakPassword) out.push('the sign-in password is weak: change ADMIN_TOKEN to 16+ random characters (README, Sign-in sessions)');
     if (nb.length) out.push('Analyst benched ' + nb.map(function (r) { return (r.sport === 'nhl' ? 'hockey ' : r.set ? 'set ' + r.set + ' ' : '') + r.name.split(':')[0]; }).join(', ') + ' (behind the closing price over ' + nb[0].games + ' games)');
     return out;
   }

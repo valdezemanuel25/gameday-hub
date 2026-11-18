@@ -48,7 +48,7 @@ r = await go('/logout'); ok('signing out from the Hub itself still works', r.sta
 r = await go('/login', { method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'application/x-www-form-urlencoded' }, body: 'password=secret' });
 ok('a sign-in form posted from another site is refused (no cookie)', r.status === 403 && !r.headers.get('set-cookie'), r.status);
 r = await go('/login', { method: 'POST', headers: { origin: 'https://hub.test', 'content-type': 'application/x-www-form-urlencoded' }, body: 'password=secret' });
-ok('the sign-in page itself still signs in', r.status === 303 && /hub_s=/.test(r.headers.get('set-cookie') || ''), r.status);
+ok('the sign-in page itself still signs in', r.status === 303 && /__Host-hub_s=v2\./.test(r.headers.get('set-cookie') || ''), r.status);
 
 // ---- ?date= ----
 r = await go('/api/day?date=x%3Ay', { headers: tok }); ok('a ?date= that is not YYYY-MM-DD is refused before it becomes a storage key', r.status === 400, r.status);
