@@ -1098,20 +1098,34 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   }
 
   // slot 2: analyze. Domestic leagues first, cups last (cups need domestic data).
+  // Turns (Nov 18, 2026): re-analyzing 15 leagues x 2 days every 6 hours needs about 120 runs a day and this slot has 72, so it never had
+  // a spare run and the hockey job (nhlStep: new games, grading, the 6-hourly / hourly prices) only got slot 0's few, about 6 a day.
+  // Now: a league not yet analyzed for the day always goes first; a re-analysis gives every other turn to hockey; and a league with no
+  // games that day is looked at again after NO_GAMES_RECHECK_H hours instead of 6 (it used to cost a run and a write every 6 hours).
   const ordered = [...DOMESTIC.filter(l => !l.support), ...LEAGUES.filter(l => l.cup)];
-  let tries = 0;
+  const todo = [];
   for (const date of [t, addDays(t, 1)]) {
     const day = await env.HUB.get(`day:${date}`, 'json');
     for (const lg of ordered) {
       const at = day?.analyzed?.[lg.slug];
-      if (at && (env.SAVER || now.getTime() - at < 6 * HOUR)) continue; // saver mode: only leagues not yet analyzed today
-      const r = await analyzeLeague(date, lg.slug, env, now);
-      if (r.needsSync) { if (++tries >= 3) return { job: 'analyze', waiting: 'data sync' }; continue; }
-      return { job: 'analyze', league: lg.slug, date, ...r };
+      if (!at) { todo.push({ date, lg, first: true }); continue; }
+      if (env.SAVER) continue; // saver mode: only leagues not yet analyzed today
+      const empty = !(day.cards || []).some(c => c.league === lg.slug);
+      if (now.getTime() - at >= (empty ? NO_GAMES_RECHECK_H : 6) * HOUR) todo.push({ date, lg, first: false });
     }
+  }
+  todo.sort((a, b) => b.first - a.first); // stable: today before tomorrow, league order kept
+  const nhlTurn = Math.floor(now.getTime() / 1200000) % 2 === 1; // every other slot-2 run
+  let tries = 0;
+  for (const { date, lg, first } of todo) {
+    if (!first && nhlTurn) break; // a re-analysis can wait 20 minutes: hockey's turn
+    const r = await analyzeLeague(date, lg.slug, env, now);
+    if (r.needsSync) { if (++tries >= 3) return { job: 'analyze', waiting: 'data sync' }; continue; }
+    return { job: 'analyze', league: lg.slug, date, ...r };
   }
   return await safeNhl(env, now);
 }
+export const NO_GAMES_RECHECK_H = 12;
 
 // NHL work only runs in spare slots, and a failure there can never break the soccer jobs.
 const safeNhl = async (env, now) => { try { return await nhlStep(env, now); } catch (e) { return { job: 'nhl', error: String(e && e.message || e).slice(0, 120) }; } };

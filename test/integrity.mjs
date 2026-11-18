@@ -1,7 +1,7 @@
 // Data-integrity checks (Nov 18, 2026 audit, docs/audit-2026-11-18/agent1-data-integrity.md): a game must not lose a step of its
 // lifecycle (card, models, prices, pick, result) to a feed hiccup, a re-analysis or the cron's turns, and the records and the backups
 // must count and carry each game once. Real Worker code, fake ESPN-shaped answers, in-memory KV.
-import worker, { analyzeLeague, gradeLeague } from '../src/worker.js';
+import worker, { analyzeLeague, gradeLeague, runSlot, NO_GAMES_RECHECK_H } from '../src/worker.js';
 
 let fails = 0;
 const ok = (name, cond, extra = '') => { if (!cond) fails++; console.log(`${cond ? 'PASS' : 'FAIL'}  ${name} ${cond ? '' : extra}`); };
@@ -116,6 +116,30 @@ ok('a pick priced at DraftKings carries no book label', card('g2').lean && card(
   const t1 = await (await worker.fetch(new Request('https://hub.test/api/tally', { headers: { 'x-admin-token': 'secret' } }), env)).json();
   ok('tally: a graded game saved on two days (moved by ESPN) counts once', t1.newlyGraded === t0.newlyGraded && t1.v2.n === t0.v2.n && t1.leans.n === t0.leans.n, `${t0.newlyGraded} -> ${t1.newlyGraded}`);
   kv.delete('day:2026-11-22');
+}
+
+// ---- 8. the cron's analyze slot: first analyses first, hockey gets every other turn, empty leagues are looked at less often ----
+{
+  const slot2 = (nhlTurn, base = Date.parse('2026-11-21T18:00:00Z')) => { let t = base; while ((Math.floor(t / 1200000) % 2 === 1) !== nhlTurn) t += 1200000; return new Date(t); };
+  const LGS = ['eng.1', 'ger.1', 'esp.1', 'esp.2', 'ita.1', 'ned.1', 'ger.2', 'fra.1', 'eng.2', 'usa.1', 'mex.1', 'bra.1', 'uefa.champions', 'uefa.europa', 'uefa.nations'];
+  const seed = (now, ago, skip = null) => { for (const d of ['2026-11-21', '2026-11-22']) kv.set(`day:${d}`, JSON.stringify({ date: d, analyzed: Object.fromEntries(LGS.filter(l => l !== skip).map(l => [l, now.getTime() - ago])),
+    cards: d === '2026-11-21' ? [{ id: 'z1', league: 'eng.1', kickoff: '2026-11-22T01:00:00Z', v2: { p: [40, 30, 30] }, final: null }] : [] })); };
+  let now = slot2(true); seed(now, 7 * H);
+  const r1 = await runSlot(env, now, 2);
+  ok('analyze slot: a re-analysis gives every other turn to the hockey job', r1.job === 'nhl', JSON.stringify(r1));
+  now = slot2(false); seed(now, 7 * H);
+  const r2 = await runSlot(env, now, 2);
+  ok('analyze slot: on the other turn the re-analysis runs (the league with games)', r2.job === 'analyze' && r2.league === 'eng.1' && r2.date === '2026-11-21', JSON.stringify(r2));
+  now = slot2(true); seed(now, 7 * H, 'fra.1');
+  const r3 = await runSlot(env, now, 2);
+  ok('analyze slot: a league never analyzed for the day goes first, even on hockey\'s turn', r3.job === 'analyze' && r3.league === 'fra.1', JSON.stringify(r3));
+  now = slot2(false); seed(now, 7 * H); kv.set('day:2026-11-21', JSON.stringify({ ...JSON.parse(kv.get('day:2026-11-21')), cards: [] }));
+  const r4 = await runSlot(env, now, 2);
+  ok(`analyze slot: a league with no games that day waits ${NO_GAMES_RECHECK_H} hours, not 6`, r4.job === 'nhl', JSON.stringify(r4));
+  now = slot2(false); seed(now, (NO_GAMES_RECHECK_H + 1) * H); kv.set('day:2026-11-21', JSON.stringify({ ...JSON.parse(kv.get('day:2026-11-21')), cards: [] }));
+  const r5 = await runSlot(env, now, 2);
+  ok('analyze slot: ...and is looked at again after that', r5.job === 'analyze' && r5.league === 'eng.1', JSON.stringify(r5));
+  for (const d of ['2026-11-21', '2026-11-22']) kv.delete(`day:${d}`);
 }
 
 console.log(fails ? `\n${fails} FAILED` : '\nAll data-integrity checks passed');
