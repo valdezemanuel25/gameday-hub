@@ -139,7 +139,17 @@ ok('a pick priced at DraftKings carries no book label', card('g2').lean && card(
   now = slot2(false); seed(now, (NO_GAMES_RECHECK_H + 1) * H); kv.set('day:2026-11-21', JSON.stringify({ ...JSON.parse(kv.get('day:2026-11-21')), cards: [] }));
   const r5 = await runSlot(env, now, 2);
   ok('analyze slot: ...and is looked at again after that', r5.job === 'analyze' && r5.league === 'eng.1', JSON.stringify(r5));
+  // slot 3: SportsMole retries filled every run on busy days and Forebet's pages waited for a free one; every other run is Forebet's now
+  const s3 = fbTurn => { let t = Date.parse('2026-11-21T08:00:00Z'); while ((Math.floor(t / 1200000) % 2 === 0) !== fbTurn) t += 1200000; return new Date(t); };
+  for (const d of ['2026-11-21', '2026-11-22']) kv.set(`day:${d}`, JSON.stringify({ date: d, analyzed: {}, cards: [{ id: `f${d}`, league: 'esp.2', home: 'Racing Santander', away: 'Cadiz', kickoff: `${d}T20:00:00Z`, v2: { p: [40, 30, 30] }, final: null }] }));
+  kv.set('sm:list', JSON.stringify({ at: s3(true).getTime(), links: [] })); kv.delete('meta:fb');
+  const f1 = await runSlot(env, s3(true), 3);
+  ok('SportsMole slot: on Forebet\'s turn a due Forebet page is read first', f1.job === 'forebet' && f1.slug === 'esp.2', JSON.stringify(f1));
+  kv.delete('meta:fb');
+  const f2 = await runSlot(env, s3(false), 3);
+  ok('SportsMole slot: on the other turn SportsMole goes first as before', f2.job === 'sportsmole' && !f2.idle, JSON.stringify(f2));
   for (const d of ['2026-11-21', '2026-11-22']) kv.delete(`day:${d}`);
+  kv.delete('meta:fb'); kv.delete('sm:list'); kv.delete('meta:unm');
 }
 
 // ---- 9. the backups carry the records kept outside the day cards ----

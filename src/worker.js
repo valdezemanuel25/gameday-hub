@@ -1128,6 +1128,11 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
 
   if (slot === 3) { // SportsMole "We say" for today / tomorrow, one league per run
     if (env.SAVER) return await safeNhl(env, now); // saver mode: no SportsMole / Forebet / ratings saves
+    // Forebet's turn (Nov 18, 2026): SportsMole retries every league whose games have no preview yet every 3 hours, which on a busy
+    // weekend fills every run of this slot, and Forebet's pages (a vote on the headline pick) were only read when it had nothing to do.
+    // Every other run now offers Forebet the turn first; with no page due, SportsMole runs as before.
+    const fbFirst = Math.floor(now.getTime() / 1200000) % 2 === 0;
+    if (fbFirst) { const fbr = await forebetStep(env, now); if (fbr) return { job: 'forebet', ...fbr }; }
     try { await getListing(env, now.getTime()); } catch (e) { /* keep going; retried next run */ }
     for (const date of [t, addDays(t, 1)]) {
       const day = await env.HUB.get(`day:${date}`, 'json');
@@ -1136,7 +1141,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
         if (need) return { job: 'sportsmole', league: lg.slug, date, ...(await smLeague(date, lg.slug, env, now)) };
       }
     }
-    const fbr = await forebetStep(env, now); // Forebet's own pages: one page per run, never read by a model
+    const fbr = fbFirst ? null : await forebetStep(env, now); // Forebet's own pages: one page per run, never read by a model
     if (fbr) return { job: 'forebet', ...fbr };
     return { job: 'sportsmole', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
   }
