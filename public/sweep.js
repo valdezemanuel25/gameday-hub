@@ -59,7 +59,9 @@
     + '@keyframes swk{0%,46%,52%,100%{transform:scaleY(1)}49%{transform:scaleY(.08)}}@keyframes swl{0%,30%,100%{transform:translateX(0)}38%,48%{transform:translateX(-6px)}58%,68%{transform:translateX(6px)}76%{transform:translateX(0)}}'
     + '@keyframes swr{0%,100%{transform:rotate(-13deg)}50%{transform:rotate(15deg)}}@keyframes swd{0%{opacity:0;transform:translate(0,0)}20%{opacity:.85}100%{opacity:0;transform:translate(-30px,-16px)}}'
     + '@keyframes swo{0%,100%{transform:scale(.9) translateY(0)}50%{transform:scale(1.08) translateY(-4px)}}@keyframes sww{0%,100%{transform:rotate(0)}50%{transform:rotate(-16deg)}}'
-    + '@media (prefers-reduced-motion:reduce){.sw *{animation:none!important}}';
+    + '@media (prefers-reduced-motion:reduce){.sw *{animation:none!important}}'
+    // tucked away (scrolled down) he is invisible: pause his loops so the page is not repainting a blurred SVG nobody can see
+    + '#sweep[data-tuck] .sw *,#sweep.away .sw *{animation-play-state:paused}';
 
   var PANEL_CSS = '#sweep.away{opacity:0;transform:translate(-30px,10px) rotate(-12deg)}'
     + '#sweep-panel{position:fixed;left:max(10px,env(safe-area-inset-left,0px));z-index:902;width:min(340px,calc(100vw - 20px));max-height:min(70vh,560px);overflow:auto;background:#0b0e09;color:#e8eee0;border:1px solid rgba(200,255,46,.45);border-radius:16px;padding:12px 14px 14px;font:500 13px/1.45 "DM Sans",system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.7)}'
@@ -150,7 +152,8 @@
   window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
   var show = function () {
     if (el) return;
-    var st = document.createElement('style'); st.textContent = css + PANEL_CSS; document.head.appendChild(st);
+    // the stylesheet goes in once per page: he leaves at "Got it" and comes back for the next shift without adding another copy
+    if (!document.getElementById('sweep-css')) { var st = document.createElement('style'); st.id = 'sweep-css'; st.textContent = css + PANEL_CSS; document.head.appendChild(st); }
     el = document.createElement('button'); el.id = 'sweep'; el.type = 'button'; el.className = 'out'; el.setAttribute('aria-label', 'Sweep, the night janitor');
     el.addEventListener('click', function () {
       if (panel) { panel.remove(); panel = null; return; }
@@ -158,7 +161,7 @@
       if (mood === 'work' && !swept()) { tip = document.createElement('div'); tip.id = 'sweep-tip'; tip.setAttribute('role', 'status'); tip.innerHTML = note; document.body.appendChild(tip); return place(); }
       openPanel(); place();
     });
-    document.body.appendChild(el); decide(); place(); tuck(); requestAnimationFrame(function () { el.className = 'in'; });
+    document.body.appendChild(el); decide(); place(); tuck(); requestAnimationFrame(function () { if (el) el.className = 'in'; });
   };
   var hide = function () { if (tip) { tip.remove(); tip = null; } if (panel) { panel.remove(); panel = null; } if (el) { el.remove(); el = null; } mood = null; };
   var last = null;

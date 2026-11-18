@@ -32,7 +32,7 @@
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
   var back = null, raf = 0;
   function close() {
-    if (!back) return; var b = back; back = null; cancelAnimationFrame(raf);
+    if (!back) return; var b = back; back = null; cancelAnimationFrame(raf); raf = 0;
     b.classList.remove('on'); b.classList.add('off'); setTimeout(function () { b.remove(); }, 220);
     document.removeEventListener('keydown', onKey); document.documentElement.style.overflow = '';
   }
@@ -51,11 +51,14 @@
     document.addEventListener('keydown', onKey);
     // pointer light, smoothed (smoothing 0.3: each frame moves 70% of the way to the pointer)
     var tx = -999, ty = -999, x = -999, y = -999, on = false;
-    var move = function (e) { var p = e.touches ? e.touches[0] : e, r = card.getBoundingClientRect(); tx = p.clientX - r.left; ty = p.clientY - r.top; if (x < -900) { x = tx; y = ty; } on = true; };
+    // The frame loop runs only while the light is moving or fading (Nov 18, 2026): before, it ran every frame for as long as the
+    // pop-up was open, rewriting the same style values, even with no pointer on the card.
+    var wake = function () { if (!raf && back) raf = requestAnimationFrame(tick); };
+    var move = function (e) { var p = e.touches ? e.touches[0] : e, r = card.getBoundingClientRect(); tx = p.clientX - r.left; ty = p.clientY - r.top; if (x < -900) { x = tx; y = ty; } on = true; wake(); };
     card.addEventListener('pointermove', move); card.addEventListener('touchmove', move, { passive: true }); card.addEventListener('touchstart', move, { passive: true });
-    card.addEventListener('pointerleave', function () { on = false; });
+    card.addEventListener('pointerleave', function () { on = false; wake(); });
     var tick = function () {
-      if (!back) return;
+      raf = 0; if (!back) return;
       x += (tx - x) * (1 - O.smoothing); y += (ty - y) * (1 - O.smoothing);
       card.style.setProperty('--sx', x + 'px'); card.style.setProperty('--sy', y + 'px'); card.style.setProperty('--sa', on ? 1 : 0);
       // border: glow fades in within 80px of the nearest edge; the flare sits on that edge
@@ -63,9 +66,9 @@
       card.style.setProperty('--ga', g.toFixed(3));
       var e2 = [[x, 0, 0], [x, h, 0], [0, y, 90], [w, y, 90]][[y, h - y, x, w - x].indexOf(d)] || [x, 0, 0];
       card.style.setProperty('--fx', e2[0] + 'px'); card.style.setProperty('--fy', e2[1] + 'px'); card.style.setProperty('--fr', e2[2] + 'deg');
-      raf = requestAnimationFrame(tick);
+      if (Math.abs(tx - x) > 0.3 || Math.abs(ty - y) > 0.3) raf = requestAnimationFrame(tick); // settled: sleep until the next move
     };
-    raf = requestAnimationFrame(tick);
+    wake();
   }
   window.Spotlight = { open: open, close: close };
 })();
