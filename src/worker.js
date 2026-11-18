@@ -17,7 +17,7 @@ import { analystLook, listAnalyst, getAnalyst } from './analyst.js';
 import { shotsAt, matchup as shotsMatchup, shotsOver, SHOTS, SHOTS2, LEAGUES as SHOTS_LEAGUES, WATCH as SHOTS_WATCH, LEAGUES2 as SHOTS_LEAGUES2 } from './shots.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP, SPORT } from './btts.js';
-import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
+import { leanPick, leanHit, priceFor, unitsWon, priceVerdict, bandOf } from './pick.js';
 import { goalSeq, maxLead, earlyPaid, regScore } from './early.js';
 import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn, countReq as countPinnReq } from './pinn.js';
 import { same as sameName } from './names.js';
@@ -27,11 +27,16 @@ import { hubHealth } from './health.js';
 import { sweepStep } from './sweepdata.js';
 import { buildTrends } from './trends.js';
 import { buildSoccerTrends } from './trendssoccer.js';
+import { summary, valueOf, stampPut, listKeys, readKeys, loadDays } from './summaries.js';
 import { nhlStep, nhlForebet, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
+import { withFixes, keepSaved, foldStep, getDay, listDays } from './fixes.js';
+export { keepSaved, getDay, listDays, withFixes };
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+// A summary() answer (src/summaries.js) as sent: its kept text, and x-hub-cache saying where it came from (mem / edge / miss / off).
+const jsonText = s => new Response(s.text, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-hub-cache': s.cache } });
 
 const HOUR = 3600000;
 const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
@@ -42,7 +47,7 @@ const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
 // bookkeeping split by record (Nov 2, 2026), so the sweep can see which one costs saves
 const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games' };
 const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
-export const writeKind = k => { const s = String(k); return s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
+export const writeKind = k => { const s = String(k); return s.startsWith('fix:') ? 'button saves' : s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
   : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
 const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
 export function counted(env) { // exported for test/writes.mjs
@@ -50,7 +55,10 @@ export function counted(env) { // exported for test/writes.mjs
   const hub = Object.create(base);
   hub.get = (...a) => base.get(...a);
   hub.list = (...a) => base.list(...a);
-  hub.put = (...a) => { n++; const k = writeKind(a[0]); by[k] = (by[k] || 0) + 1; return base.put(...a); };
+  if (typeof base.getWithMetadata === 'function') hub.getWithMetadata = (...a) => base.getWithMetadata(...a);
+  // A saved day also gets a write id as KV metadata (src/summaries.js stampPut): the cached Results and Trends summaries see from the
+  // key listing which days changed. No extra write.
+  hub.put = (...a) => { n++; const k = writeKind(a[0]); by[k] = (by[k] || 0) + 1; const o = stampPut(a[0], a[2]); return o === undefined ? base.put(a[0], a[1]) : base.put(a[0], a[1], o); };
   return { env: { ...env, HUB: hub }, flush: async () => {
     if (!n) return;
     const d = new Date().toISOString().slice(0, 10);
@@ -156,13 +164,17 @@ async function authed(req, env) {
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
 // deep: the nightly sweep's read (token route) also gets the hockey rest-vs-price check, which lists and reads every saved hockey day. The
 // signed-in read (Sweep on every page load) leaves it out, so a page load costs no extra KV list call.
-const health = (env, deep = false) => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState, nhlRest: deep ? e => nhlTally(e).then(t => t && t.rest) : null });
+const health = (env, deep = false) => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState, nhlRest: deep ? e => nhlTotals(e).then(valueOf).then(t => t && t.rest) : null });
+// The Results summaries over every saved day, kept in the edge cache while no finished game they count has changed (src/summaries.js).
+// tally() and nhlTally() are unchanged; they are handed the days the cache check already read. values: hockey days already read.
+const soccerTotals = env => summary(env, { kind: 'tally', prefix: 'day:', build: days => tally(env, days) });
+const nhlTotals = (env, values = null) => summary(env, { kind: 'nhltally', prefix: 'nhl:day:', build: days => nhlTally(env, days), values });
 // Nightly stats files for the sweep (src/sweepdata.js): the Results summaries, the last two weeks of gaps and the health report, saved
 // to the separate data repo just after midnight Central. Reads only. Does nothing without SWEEP_GH_TOKEN and SWEEP_REPO.
 export const SWEEP_DAYS = 14;
 const lastDays = async (env, prefix, now) => { const t = localDate(new Date(now).toISOString()), ds = Array.from({ length: SWEEP_DAYS }, (_, i) => addDays(t, -i));
-  const got = await Promise.all(ds.map(d => env.HUB.get(`${prefix}${d}`, 'json'))); return Object.fromEntries(ds.map((d, i) => [d, got[i]?.cards]).filter(([, c]) => c && c.length)); };
-export const sweepData = (env, now = new Date(), f = fetch) => sweepStep(env, { soccerTotals: () => tally(env), nhlTotals: () => nhlTally(env), soccerDays: () => lastDays(env, 'day:', now),
+  const got = await Promise.all(ds.map(d => getDay(env, d, prefix === 'nhl:day:' ? 'nhl' : 'soccer'))); return Object.fromEntries(ds.map((d, i) => [d, got[i]?.cards]).filter(([, c]) => c && c.length)); };
+export const sweepData = (env, now = new Date(), f = fetch) => sweepStep(env, { soccerTotals: () => soccerTotals(env).then(valueOf), nhlTotals: () => nhlTotals(env).then(valueOf), soccerDays: () => lastDays(env, 'day:', now),
   nhlDays: () => lastDays(env, 'nhl:day:', now), health: () => health(env, true), priced: PRICED }, now, f);
 // Scout was removed (Nov 5, 2026): its old log (KV 'scout') is deleted by the first cron run that finds it. A delete is not a write, so
 // it costs nothing from the write budget; after DROP_SCOUT_UNTIL the check stops (not even a read), and this can be taken out.
@@ -215,27 +227,13 @@ const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 // Saving a soccer day without losing what another save put there (Nov 18, 2026 audit). The cron and the buttons each read the whole day,
 // change it and write it back, so a save made from an older read could erase what a save in between added: a lineup-window close, a
 // graded result and its locked pick, Forebet or SportsMole. Just before writing, the stored day is read again and anything of that kind
-// it has and this copy lacks is carried over. It narrows the window (KV can still serve a read up to about 60 seconds old, so two saves
-// from different places that close together can still clash) and costs one read per save, no write.
-const CLOSE_GROUPS = { cl: ['h', 'd', 'a', 'tl', 'to', 'tu', 'op', 'opt', 'src', 'ts', 'cl', 'cby', 'cls'], pcl: ['pn', 'pcl'], bcl: ['by', 'bn', 'bk', 'bcl'] };
-export function keepSaved(saved, mine) {
-  if (!saved || !Array.isArray(saved.cards) || !mine || !Array.isArray(mine.cards)) return mine;
-  const at = new Map(mine.cards.map(c => [`${c.league}|${c.id}`, c]));
-  for (const s of saved.cards) {
-    const c = at.get(`${s.league}|${s.id}`);
-    if (!c) { if (s.final) mine.cards.push(s); continue; } // a graded card is never lost; other cards may be dropped on purpose (moved games)
-    if (s.final && !c.final) for (const k of ['final', 'grade', 'lean', 'smGrade']) { if (s[k] !== undefined) c[k] = s[k]; }
-    if (s.void && !c.void && !c.final) c.void = s.void;
-    for (const k of ['fb', 'sm', 'sx']) if (s[k] && !c[k]) c[k] = s[k];
-    if (s.odds) {
-      if (!c.odds) c.odds = s.odds;
-      else for (const [mark, keys] of Object.entries(CLOSE_GROUPS)) if (s.odds[mark] && !c.odds[mark]) for (const k of keys) { if (s.odds[k] === undefined) delete c.odds[k]; else c.odds[k] = s.odds[k]; }
-    }
-  }
-  return mine;
-}
+// it has and this copy lacks is carried over (keepSaved, src/fixes.js). It costs one read per save, no write.
+// Round 2 (Nov 18, 2026): a button no longer writes the day at all. Its changes go to a side record (fix:day:<date>) that every read lays
+// on top and the cron's next save carries in (src/fixes.js), so a button can neither erase a cron save nor be erased by one. A button's
+// save is compared with the day as that request read it, so it is written as it is here (no second read).
 export async function putDay(env, date, day) {
-  let saved = null; try { saved = await env.HUB.get(`day:${date}`, 'json'); } catch (e) { /* write what we have */ }
+  if (env.HUB.button) return env.HUB.put(`day:${date}`, JSON.stringify(day));
+  let saved = null; try { saved = await getDay(env, date); } catch (e) { /* write what we have */ }
   return env.HUB.put(`day:${date}`, JSON.stringify(keepSaved(saved, day)));
 }
 
@@ -246,7 +244,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   const league = leagueBySlug(slug);
   if (!league) return { error: `Unknown league ${slug}` };
   const debug = [], memo = new Map();
-  const day = (await env.HUB.get(`day:${date}`, 'json')) || { date, cards: [], analyzed: {} };
+  const day = (await getDay(env, date)) || { date, cards: [], analyzed: {} };
   day.analyzed = day.analyzed || {};
 
   const fx = await fixturesForLeague(league, date, debug);
@@ -590,7 +588,7 @@ export function pinnStandIn(c, now = new Date()) {
 // in-play one, so it is not taken. One KV write.
 export async function refreshCardClose(env, date, slug, id, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
-  const day = await env.HUB.get(`day:${date}`, 'json'); const c = (day?.cards || []).find(x => x.id === id && x.league === slug);
+  const day = await getDay(env, date); const c = (day?.cards || []).find(x => x.id === id && x.league === slug);
   if (!c) return { error: 'That game is not saved for this day' };
   if (!c.odds) return { error: 'This game has no saved price to update' };
   const fx = (await fixturesForLeague(lg, date, [])).find(x => x.id === id); if (!fx) return { error: "ESPN no longer lists this game, so there is no price to take" };
@@ -613,7 +611,7 @@ export async function refreshCardClose(env, date, slug, id, now = new Date(), f 
 // -> { kind: 'saved' | 'none' | 'partial' | 'gone' | 'locked' | 'unpriced' | 'error', title, detail }
 export async function priceWhy(env, date, slug, id, now = new Date(), why = oddsWhy, pinnFetch = fetch) {
   if (!PRICED.has(slug)) return { kind: 'unpriced', title: 'League not priced', detail: 'The Hub does not read prices for this league.' };
-  const day = await env.HUB.get(`day:${date}`, 'json'), c = (day?.cards || []).find(x => x.id === id && x.league === slug);
+  const day = await getDay(env, date), c = (day?.cards || []).find(x => x.id === id && x.league === slug);
   if (!c) return { kind: 'error', title: 'Game not found', detail: 'This game is not saved for that day any more. Reload the page.' };
   const r = await why(slug, date, id);
   if (r.error) return { kind: 'error', title: 'ESPN did not answer', detail: `The check could not reach ESPN (${String(r.error).slice(0, 80)}). Try again in a minute.` };
@@ -632,7 +630,7 @@ export async function priceWhy(env, date, slug, id, now = new Date(), why = odds
     if (!priceOpen(c, now)) return { kind: 'locked', title: 'Price came too late', detail: `ESPN has a price now (${px}), but prices lock 20 minutes before kickoff, so it was not taken for this game.` };
     const s = await refreshOdds(env, date, slug, now);
     // "saved" only when the card really has a home / draw / away price now: the second ESPN read can fail or miss the game
-    const d2 = await env.HUB.get(`day:${date}`, 'json'), c2 = (d2?.cards || []).find(x => x.id === id && x.league === slug), o2 = c2 && c2.odds;
+    const d2 = await getDay(env, date), c2 = (d2?.cards || []).find(x => x.id === id && x.league === slug), o2 = c2 && c2.odds;
     if (!(o2 && [o2.h, o2.d, o2.a].every(Number.isFinite))) return { kind: 'error', title: 'Price seen but not saved', detail: `ESPN showed a price (${px}), but the Hub's read of the league ${s && s.error ? `failed (${String(s.error).slice(0, 80)})` : 'did not pick it up'}, so nothing was saved. Try again in a minute.` };
     return { kind: 'saved', title: 'Price found and saved', detail: `ESPN has a price now (${px}). It was missing at the Hub's last read; it is saved now${s && s.analyst && s.analyst.placed ? ` and the Analyst placed ${s.analyst.placed} bet${s.analyst.placed === 1 ? '' : 's'}` : ''}.` };
   }
@@ -641,7 +639,7 @@ export async function priceWhy(env, date, slug, id, now = new Date(), why = odds
 }
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
-  const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
+  const day = await getDay(env, date); if (!day) return { games: 0, priced: 0, changed: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && !c.void && priceOpen(c, now));
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
   const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
@@ -672,7 +670,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
 // KV writes). Display only; no model reads a price.
 export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) {
   if (!PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
-  const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0 };
+  const day = await getDay(env, date); if (!day) return { games: 0, priced: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && new Date(c.kickoff).getTime() > now.getTime());
   if (!open.length) return { games: 0, priced: 0 };
   const need = open.filter(c => !(c.odds && c.odds.by != null)), have = open.length - need.length; // already-priced games cost no credit
@@ -700,7 +698,7 @@ export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
   if (!env.PINNODDS_KEY) return { error: 'PINNODDS_KEY is not set' };
   const r = await fetchPinn(env.PINNODDS_KEY, f); await countPinnReq(now, (Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000); if (r.error) return { error: r.error, limited: !!r.limited };
   const t = localDate(now.toISOString()), cards = [];
-  for (const d of [t, addDays(t, 1)]) for (const c of ((await env.HUB.get(`day:${d}`, 'json'))?.cards || [])) if (!slug || c.league === slug) cards.push(c);
+  for (const d of [t, addDays(t, 1)]) for (const c of ((await getDay(env, d))?.cards || [])) if (!slug || c.league === slug) cards.push(c);
   const lgs = {}; for (const e of r.events) lgs[e.lg] = (lgs[e.lg] || 0) + 1;
   return { requests: 1, fixtures: r.events.length, bothScorePrices: r.events.filter(e => e.bty != null).length, specials: r.specials, bytes: r.bytes, dataAgeMs: r.age, dataStatus: r.status, leagueNames: Object.entries(lgs).sort((a, b) => b[1] - a[1]).slice(0, 25),
     // A game with no match lists the fixtures near its kickoff where either team's name fits, so a spelling that differs, a game that has
@@ -717,7 +715,7 @@ export const LINEUP_BURST = 3;
 export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
   const t = localDate(now.toISOString()), urgent = [], normal = [];
   for (const date of [t, addDays(t, 1)]) {
-    const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) continue;
+    const day = await getDay(env, date); if (!day) continue;
     for (const lg of LEAGUES.filter(l => PRICED.has(l.slug))) {
       const live = (day.cards || []).filter(c => c.league === lg.slug && (c.v2 || c.v4) && !c.final && !c.void && priceOpen(c, now));
       if (!live.length) continue;
@@ -746,7 +744,7 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
 // ---------------------------------------------------------------------------------------------
 export async function gradeLeague(date, slug, env, { force = false } = {}, now = new Date()) {
   const league = leagueBySlug(slug);
-  const day = await env.HUB.get(`day:${date}`, 'json');
+  const day = await getDay(env, date);
   const open = (day?.cards || []).filter(c => c.league === slug && !c.final && !c.void && (c.v2 || c.v4));
   if (!league || !open.length) return { graded: 0, pending: 0 };
 
@@ -771,7 +769,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     const want = new Set(moved.map(c => c.id));
     for (const f of later) if (f.done && !f.off && want.has(f.id)) finals.set(f.id, f);
   }
-  let graded = 0, pending = 0, voided = 0;
+  let graded = 0, pending = 0, voided = 0, closed = 0;
   for (const c of open) {
     if (off.has(c.id)) { c.void = off.get(c.id).off; voided++; continue; }
     const f = finals.get(c.id);
@@ -786,7 +784,8 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
       c.final = { h: r.h, a: r.a, et: f.et, ft: [f.home.score, f.away.score] }; seq = r.seq;
     } else { c.final = { h: f.home.score, a: f.away.score }; seq = goalSeq(f.plays, f.home.id, f.away.id, c.final.h, c.final.a); }
     // The biggest lead each side had at any moment (bet365 early payout); left off when ESPN's goal list does not add up.
-    const ld = maxLead(seq); if (ld) c.final.lead = ld;
+    // Not known now (ESPN's goal list missing or not adding up): this was try 1 of LEAD_TRIES; leadStep tries again later (Nov 18, 2026).
+    const ld = maxLead(seq); if (ld) c.final.lead = ld; else c.final.ldt = 1;
     mergeSeed(c, date);
     c.grade = {};
     if (c.v2) c.grade.v2 = grade(toPred(c.v2), c.final);
@@ -797,7 +796,15 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     if (c.sm && c.v2) c.smGrade = smGrade(c.sm, c.final);
     // The card's headline pick is locked here, from what the card held when it finished, and scored on the final score.
     // pbk: the book of the saved price when it is not DraftKings (a Bet365 / Pinnacle stand-in, Pinnacle's both-score price), so a backup can tell them apart.
-    if (c.v2 && !c.lean) { const l = leanPick(c); if (l) { l.hit = leanHit(l.key, c.final); const m = FIRST_DIV.has(c.league) ? priceFor(c.odds, l.key) : null; if (m != null) { l.price = m; l.vd = verdictOf(l.p, m); const bk = 'BN'.includes(l.key) ? c.odds.bk : c.odds.src; if (bk && bk !== 'draftkings') l.pbk = bk; } const ep = earlyPaid(l.key, l.hit, c.final.lead); if (ep != null) l.ep = ep; c.lean = l; } }
+    // DraftKings only in Model bets (Nov 18, 2026, round 2): such a price is kept as spx (shown, never counted) and price / vd, which the
+    // profit record counts, are set only for a DraftKings price. Picks locked before then keep the price they were saved with.
+    // vd: the same price tag the Results tab works out from the card (priceVerdict, src/pick.js: v4 against DraftKings' break-even), so a backup matches the page.
+    if (c.v2 && !c.lean) { const l = leanPick(c); if (l) { l.hit = leanHit(l.key, c.final); const m = FIRST_DIV.has(c.league) ? priceFor(c.odds, l.key) : null;
+      if (m != null) { const bk = 'BN'.includes(l.key) ? c.odds.bk || 'unknown' : c.odds.src; if (bk && bk !== 'draftkings') { l.pbk = bk; l.spx = m; } else { l.price = m; const vd = priceVerdict(c, l); if (vd) l.vd = vd; } }
+      const ep = earlyPaid(l.key, l.hit, c.final.lead); if (ep != null) l.ep = ep; c.lean = l; } }
+    // ESPN's close for a card that missed its lineup read (Nov 18, 2026, round 2): after the pick locked above, so its price stays the one
+    // shown when it locked. For the Movement tab and closing-line value only.
+    if (espnCloseSoccer(c, f.oddsDone, now)) closed++;
     graded++;
   }
   // Remember the attempt so a league whose games aren't final yet (postponed, feed lagging) can't
@@ -805,7 +812,50 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   // Saved only when something was graded: a league still waiting on ESPN used to cost a KV write on every
   // try. The cron now rotates through due leagues by the clock instead (see slot 1), so nothing is stored.
   if (graded || voided) { await putDay(env, date, day); await analystLook(env, date, day.cards.filter(c => c.league === slug), now); }
-  return { graded, pending, ...(voided ? { voided } : {}) };
+  return { graded, pending, ...(voided ? { voided } : {}), ...(closed ? { closed } : {}) };
+}
+// A finished soccer game that has no lineup read (odds.cl) takes the book's closing line from ESPN's odds for the finished game, as hockey's
+// espnClose does: cl = kickoff, cls = 'espn' (the Movement tab says "ESPN close"). DraftKings only: a card priced by DraftKings takes
+// DraftKings' close, so a game's open and close stay with one book; a stand-in (Bet365, Pinnacle) is never taken as a close, and its card
+// keeps the price shown when the pick locked. The parts ESPN's close lacks keep the card's last price. -> true when the card changed.
+export function espnCloseSoccer(c, done, now = new Date()) {
+  const o = c.odds; if (!o || o.cl || o.src || !done || done.src || o.h == null) return false;
+  const hda = [done.h, done.d, done.a].every(Number.isFinite), tot = done.tl != null && Number.isFinite(done.to) && Number.isFinite(done.tu);
+  if (!hda && !tot) return false;
+  const n = { ...o, ...(hda ? { h: done.h, d: done.d, a: done.a } : {}), ...(tot ? { tl: done.tl, to: done.to, tu: done.tu } : {}), ...(done.op ? { op: done.op } : {}), ...(done.opt ? { opt: done.opt } : {}) };
+  if (!sameJson(n, o)) n.ts = now.toISOString();
+  n.cl = c.kickoff; n.cls = 'espn'; delete n.cby;
+  c.odds = n; return true;
+}
+// The early-payout lead again (Nov 18, 2026, round 2): a graded card whose lead could not be read at grading (ESPN's goal list missing or
+// not adding up) is tried again, like hockey: up to LEAD_TRIES tries in all (final.ldt counts them; grading was the first), one league
+// and day per idle grading turn, each at least an hour after the last (edge cache, no write), from today back to today -3. Two ESPN
+// requests and at most one write a try. days: the days the grading turn just read ({ date: day }).
+export const LEAD_TRIES = 3;
+export async function leadStep(env, now = new Date(), days = {}, cache = typeof caches !== 'undefined' ? caches.default : null) {
+  for (const date of Object.keys(days).sort()) {
+    const day = days[date]; if (!day) continue;
+    const want = (day.cards || []).filter(c => c.final && !c.void && !c.final.lead && (c.final.ldt || 0) < LEAD_TRIES);
+    for (const slug of [...new Set(want.map(c => c.league))].sort()) {
+      const lg = leagueBySlug(slug), cards = want.filter(c => c.league === slug); if (!lg) continue;
+      if (now.getTime() < Math.max(...cards.map(c => new Date(c.kickoff).getTime())) + gradeDelayMs(env) + HOUR) continue; // graded just now
+      const ck = new Request(`https://hub.local/lead/${date}/${slug}`);
+      try { if (cache && await cache.match(ck)) continue; if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': 'max-age=3600' } })); } catch (e) { /* no cache: try */ }
+      const dbg = [], fx = await fixturesForLeague(lg, date, dbg);
+      if (!fx.length && dbg.length) return { job: 'lead', league: slug, date, error: dbg[0] }; // ESPN did not answer: not a try
+      const byId = new Map(fx.filter(f => f.done).map(f => [f.id, f]));
+      let found = 0;
+      for (const c of cards) {
+        const f = byId.get(c.id), r = f && f.et ? regScore(f.plays, f.home.id, f.away.id, f.home.score, f.away.score) : null;
+        const seq = !f ? null : f.et ? (r ? r.seq : null) : goalSeq(f.plays, f.home.id, f.away.id, c.final.h, c.final.a), ld = maxLead(seq);
+        if (ld) { c.final.lead = ld; delete c.final.ldt; found++; if (c.lean) { const ep = earlyPaid(c.lean.key, c.lean.hit, ld); if (ep != null) c.lean.ep = ep; } }
+        else c.final.ldt = (c.final.ldt || 0) + 1;
+      }
+      await putDay(env, date, day);
+      return { job: 'lead', league: slug, date, tried: cards.length, found };
+    }
+  }
+  return null;
 }
 
 
@@ -813,7 +863,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
 // SportsMole "We say" for ONE league / ONE date. Best effort: a miss just leaves the card without it.
 // ---------------------------------------------------------------------------------------------
 export async function smLeague(date, slug, env, now = new Date(), { force = false } = {}) {
-  const day = await env.HUB.get(`day:${date}`, 'json');
+  const day = await getDay(env, date);
   day && (day.smTried = day.smTried || {});
   // Only games that have not started (Nov 18, 2026): a "We say" read after kickoff changed the agree / disagree count, and so the Best /
   // Lean / Split kind, of a pick that locks at grading. Forebet already waits for nothing after kickoff.
@@ -859,8 +909,10 @@ function blank() { return { n: 0, outcome: 0, ou: 0, btts: 0, brier: 0 }; }
 function add(t, g) { t.n++; t.outcome += g.outcomeHit; t.ou += g.ouHit; t.btts += g.bttsHit; t.brier += g.brier; }
 function fin(t) { return { ...t, brier: t.n ? +(t.brier / t.n).toFixed(3) : null }; }
 
-async function tally(env) {
-  const list = await env.HUB.list({ prefix: 'day:' });
+// days: the saved days, oldest first, when the caller has read them already (the cached summary, src/summaries.js); else every day:
+// key is listed, page by page (list() stops at 1,000 keys a call), and read.
+async function tally(env, days = null) {
+  if (!days) days = await loadDays(env.HUB, 'day:');
   const promoV2 = blank(), promoV4 = blank(), v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [];
   // Shots read against the results (Nov 3, 2026): every finished card with shots numbers and a DraftKings Over/Under 2.5 price, scored at
@@ -923,8 +975,7 @@ async function tally(env) {
   // A game saved on two days (moved by ESPN after its card was made: both cards end up graded) counts once, on the earlier day, as
   // tools/score-backup.py counts it. KV lists keys in order, so the earlier day comes first.
   const once = new Set();
-  for (const k of list.keys) {
-    const day = await env.HUB.get(k.name, 'json');
+  for (const day of days) {
     for (const c of day?.cards || []) {
       if (c.final) { const g = `${c.league}|${c.id}`; if (once.has(g)) continue; once.add(g); }
       if (c.sx && c.final) shAdd(c); // before the counted-league check: second divisions are scored here too
@@ -981,7 +1032,7 @@ async function tally(env) {
         if (L.ep != null) { const E = LB.ep || (LB.ep = { n: 0, plain: 0, hits: 0, saved: 0, pn: 0, won: 0, wonPlain: 0 }); E.n++; E.plain += L.hit ? 1 : 0; E.hits += L.ep ? 1 : 0; E.saved += L.ep && !L.hit ? 1 : 0; if (L.price != null) { E.pn++; E.won += unitsWon(L.price, L.ep); E.wonPlain += unitsWon(L.price, L.hit); } }
         if (L.k === 'best' || L.k === 'lean') lbAdd(LB.byBack, `${L.src === 'market' ? 'market, models ' : ''}${L.y} of ${L.a}`, L.hit, L.key);
         LB.base.home += c.final.h > c.final.a ? 1 : 0; LB.base.draw += c.final.h === c.final.a ? 1 : 0; LB.base.away += c.final.h < c.final.a ? 1 : 0; LB.base.over += c.final.h + c.final.a >= 3 ? 1 : 0; LB.base.btts += c.final.h > 0 && c.final.a > 0 ? 1 : 0;
-        if (L.price != null) { const P = LB.pl || (LB.pl = { n: 0, won: 0, byKind: {}, byVerdict: {}, byCombo: {}, byBand: {} }), u = unitsWon(L.price, L.hit), add = (o, k) => { const x = o[k] || (o[k] = { n: 0, hits: 0, won: 0 }); x.n++; x.hits += L.hit ? 1 : 0; x.won += u; }; P.n++; P.won += u; add(P.byKind, L.k); add(P.byBand, bandOf(L.price)); if (L.vd) { add(P.byVerdict, L.vd); add(P.byCombo, `${L.k}|${L.vd}`); } }
+        if (L.price != null) { const P = LB.pl || (LB.pl = { n: 0, won: 0, byKind: {}, byVerdict: {}, byCombo: {}, byBand: {} }), u = unitsWon(L.price, L.hit), add = (o, k) => { const x = o[k] || (o[k] = { n: 0, hits: 0, won: 0 }); x.n++; x.hits += L.hit ? 1 : 0; x.won += u; }; P.n++; P.won += u; add(P.byKind, L.k); add(P.byBand, bandOf(L.price)); const vd = priceVerdict(c, L); if (vd) { add(P.byVerdict, vd); add(P.byCombo, `${L.k}|${vd}`); } } // vd: v4 against the DraftKings price (src/pick.js)
         LB.recent.push({ date: day.date, kickoff: c.kickoff, home: c.home, away: c.away, leagueName: c.leagueName, final: c.final, k: L.k, key: L.key, p: L.p, y: L.y, a: L.a, hit: !!L.hit, ...(L.ep != null ? { ep: L.ep } : {}) });
       }
       live.push({ date: day.date, ...c });
@@ -1059,7 +1110,7 @@ async function tally(env) {
 // Forebet picks pasted from its league table. Only games that have not kicked off, and only once per game.
 export async function forebetPaste(date, slug, text, env, now = new Date(), kind = '1x2') {
   if (!['1x2', 'ou', 'btts'].includes(kind)) return { saved: 0, error: 'Unknown table type' };
-  const day = await env.HUB.get(`day:${date}`, 'json');
+  const day = await getDay(env, date);
   const cards = (day?.cards || []).filter(c => c.league === slug);
   if (!cards.length) return { saved: 0, error: 'No games on that day for this league. Analyze the day first.' };
   const has = c => kind === '1x2' ? !!c.fb?.p : kind === 'ou' ? c.fb?.over != null : c.fb?.btts != null;
@@ -1086,7 +1137,7 @@ export async function assignCandidate(date, slug, id, key, env, now = new Date()
   const it = unm.items.find(i => i.key === key && i.cardId === id && i.date === date);
   if (!it) return { error: 'That suggestion is no longer available. Reload the day.' };
   if (dismiss) { unm.items = unm.items.filter(i => i.key !== key); await saveUnm(env, unm, before, today()); return { dismissed: true }; }
-  const day = await env.HUB.get(`day:${date}`, 'json');
+  const day = await getDay(env, date);
   const c = day?.cards?.find(x => x.league === slug && x.id === id);
   if (!c) return { error: 'Game not found on that day' };
   if (c.final || new Date(c.kickoff).getTime() <= now.getTime()) return { error: 'That game has already started, so a new prediction is not recorded.' };
@@ -1127,9 +1178,11 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   }
 
   if (slot === 1) {
-    const due = [];
-    for (const date of [t, addDays(t, -1), addDays(t, -2)]) {
-      const day = await env.HUB.get(`day:${date}`, 'json');
+    // Grading reach (Nov 18, 2026, round 2): back to today -3, so a league ESPN kept from grading for two days is still graded before the
+    // Analyst voids its open bets at 4 days.
+    const due = [], days = {};
+    for (const date of [t, addDays(t, -1), addDays(t, -2), addDays(t, -3)]) {
+      const day = days[date] = await getDay(env, date);
       for (const lg of LEAGUES) {
         const open = (day?.cards || []).filter(c => c.league === lg.slug && !c.final && !c.void && (c.v2 || c.v4));
         if (!open.length) continue;
@@ -1139,7 +1192,9 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     }
     due.sort((a, b) => a.last - b.last || (a.slug < b.slug ? -1 : 1)); // oldest games first, then rotate by the clock
     if (!due.length) {
+      const lr = await leadStep(env, now, days); if (lr) return lr; // part of grading: runs in saver mode too
       if (env.SAVER) return { job: 'grade', idle: true, saver: true };
+      const fr = await foldDue(env, now); if (fr) return { job: 'fold', ...fr }; // a button's patches no cron save has carried in yet (src/fixes.js)
       const fbr = await forebetStep(env, now);
       if (fbr) return { job: 'forebet', ...fbr };
       return { job: 'grade', idle: true, ratings: await refreshRatings(env, now) }; // spare slot: keep v4 ratings fresh
@@ -1157,7 +1212,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     if (fbFirst) { const fbr = await forebetStep(env, now); if (fbr) return { job: 'forebet', ...fbr }; }
     try { await getListing(env, now.getTime()); } catch (e) { /* keep going; retried next run */ }
     for (const date of [t, addDays(t, 1)]) {
-      const day = await env.HUB.get(`day:${date}`, 'json');
+      const day = await getDay(env, date);
       for (const lg of VISIBLE) {
         const need = (day?.cards || []).some(c => c.league === lg.slug && c.v2 && !c.sm && !c.final && new Date(c.kickoff).getTime() > now.getTime() && now.getTime() - (day.smTried?.[c.id] || 0) > 3 * HOUR);
         if (need) return { job: 'sportsmole', league: lg.slug, date, ...(await smLeague(date, lg.slug, env, now)) };
@@ -1176,7 +1231,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   const ordered = [...DOMESTIC.filter(l => !l.support), ...LEAGUES.filter(l => l.cup)];
   const todo = [];
   for (const date of [t, addDays(t, 1)]) {
-    const day = await env.HUB.get(`day:${date}`, 'json');
+    const day = await getDay(env, date);
     for (const lg of ordered) {
       const at = day?.analyzed?.[lg.slug];
       if (!at) { todo.push({ date, lg, first: true }); continue; }
@@ -1197,6 +1252,13 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   return await safeNhl(env, now);
 }
 export const NO_GAMES_RECHECK_H = 12;
+// The fold looks (one KV list) at most every 30 minutes when the last look found nothing (edge cache, no write).
+async function foldDue(env, now) {
+  const ck = 'https://hub.local/fold-idle';
+  if (await cacheGet(ck)) return null;
+  const r = await foldStep(env, now); if (!r) await cachePut(ck, 1, 1800);
+  return r;
+}
 
 // The Analyst's paper bets for a backup, as saved (open and settled bets in full, older settled ones as short rows), one sport at a time.
 // They live in their own record ('analyst'), not on the day cards, so the day-by-day export alone left them out.
@@ -1217,7 +1279,8 @@ const hub = {
       u.protocol = 'https:';
       return withSecurity(new Response(null, { status: 301, headers: { location: u.toString(), 'cache-control': 'no-store' } }));
     }
-    const c = counted(env0), env = c.env;
+    // Every request is a button's (or a page's): its saves to a day or to the Analyst's record become side patches (src/fixes.js).
+    const c = counted(env0), env = withFixes(c.env, { button: true });
     try { return withSecurity(await hub.handle(req, env)); }
     catch (e) {
       // A route with no catch of its own (a storage hiccup, say) answers in the Hub's own words instead of Cloudflare's error page.
@@ -1298,13 +1361,11 @@ const hub = {
       const date = q('date') || today();
       return json((await env.HUB.get(`day:${date}`, 'json')) || { date, cards: [] });
     }
-    if (p === '/api/trends') { // soccer Trends tab: the two situations, and a read on each game of the date that is in one
-      const names = []; let cursor;
-      do { const r = await env.HUB.list({ prefix: 'day:', cursor }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
-      const days = (await Promise.all(names.sort().map(n => env.HUB.get(n, 'json')))).filter(Boolean);
-      return json(buildSoccerTrends(days, q('date') || today()));
+    if (p === '/api/trends') { // soccer Trends tab: the two situations, and a read on each game of the date that is in one (kept: src/summaries.js)
+      const date = q('date') || today();
+      return jsonText(await summary(env, { kind: 'trends', prefix: 'day:', date, build: days => buildSoccerTrends(days, date) }));
     }
-    if (p === '/api/tally') return json(await tally(env));
+    if (p === '/api/tally') return jsonText(await soccerTotals(env));
     if (p === '/api/brew') { // newsletter summaries: public/brew.json is rewritten daily by a scheduled task
       try { const r = await env.ASSETS.fetch(new Request(new URL('/brew.json', url.origin))); const j = r.ok ? await r.json() : null; return json({ updated: j && j.updated || null, issues: Array.isArray(j && j.issues) ? j.issues : [] }); } catch (e) { return json({ updated: null, issues: [] }); }
     }
@@ -1349,19 +1410,16 @@ const hub = {
       return json({ days: out.sort() });
     }
     if (p === '/api/nhl/export') { // one request returns the whole hockey backup as a file download
-      const names = []; let cursor;
-      do { const r = await env.HUB.list({ prefix: 'nhl:day:', cursor }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
-      names.sort(); const days = await Promise.all(names.map(n => env.HUB.get(n, 'json')));
-      const data = { exportedAt: new Date().toISOString(), note: 'Game Day Hub hockey backup. days = every saved NHL day (cards with model picks and results); totals = hockey results summary; analyst = the Analyst\'s hockey paper bets as saved.', days: days.filter(Boolean), totals: await nhlTally(env), analyst: await backupAnalyst(env, 'nhl') };
+      // each day is read and parsed once: the totals are built from (or found kept for) the same days
+      const values = await readKeys(env.HUB, (await listKeys(env.HUB, 'nhl:day:')).map(k => k.name));
+      const data = { exportedAt: new Date().toISOString(), note: 'Game Day Hub hockey backup. days = every saved NHL day (cards with model picks and results); totals = hockey results summary; analyst = the Analyst\'s hockey paper bets as saved.', days: values.map(v => v.day).filter(Boolean), totals: valueOf(await nhlTotals(env, values)), analyst: await backupAnalyst(env, 'nhl') };
       return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'content-disposition': `attachment; filename="gameday-hub-hockey-${new Date().toISOString().slice(0, 10)}.json"`, 'cache-control': 'no-store' } });
     }
     if (p === '/api/backup-extra') return json({ analyst: await backupAnalyst(env, 'soccer'), bets: await getBets(env) }); // the soccer Export button: records kept outside the day cards
-    if (p === '/api/nhl/tally') return json(await nhlTally(env));
-    if (p === '/api/nhl/trends') { // Trends tab: how each situation has done over every saved hockey day, and a read on each game of the date
-      const names = []; let cursor;
-      do { const r = await env.HUB.list({ prefix: 'nhl:day:', cursor }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
-      const days = (await Promise.all(names.sort().map(n => env.HUB.get(n, 'json')))).filter(Boolean);
-      return json(buildTrends(days, q('date') || today()));
+    if (p === '/api/nhl/tally') return jsonText(await nhlTotals(env));
+    if (p === '/api/nhl/trends') { // Trends tab: how each situation has done over every saved hockey day, and a read on each game of the date (kept: src/summaries.js)
+      const date = q('date') || today();
+      return jsonText(await summary(env, { kind: 'nhltrends', prefix: 'nhl:day:', date, build: days => buildTrends(days, date) }));
     }
     if (req.method === 'POST' && p === '/api/nhl/line') { try { const b = await req.json(); return json(await nhlSetLine(env, String(b.date || ''), String(b.id || ''), b.line, new Date())); } catch (e) { return json({ error: `Line: ${e && e.message ? e.message : e}` }, 500); } }
     if (p === '/api/nhl/status') return json(await nhlStatus(env));
@@ -1436,22 +1494,22 @@ const hub = {
   },
 
   async scheduled(event, env0, ctx) {
-    const c = counted(env0);
+    const c = counted(env0), env = withFixes(c.env); // the cron reads days with the buttons' patches laid on, and its saves carry them in
     ctx.waitUntil((async () => {
       await dropScout(env0.HUB); // one-time clean-up of the removed Scout's log (stops itself after DROP_SCOUT_UNTIL)
-      try { c.env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
+      try { env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit
       // (a heavy soccer job) used to drop them. The rotating job runs after.
-      try { await nhlLineupStep(c.env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }
-      try { await oddsStep(c.env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
+      try { await nhlLineupStep(env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }
+      try { await oddsStep(env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
       // The sweep's stats file, when one is due (three runs a night, src/sweepdata.js), takes this run's turn in place of the rotating
       // job, so the run stays inside the free plan's CPU limit. Nothing due, not set up, or the file is already saved (nothing was built): the
       // rotating job runs as always.
-      let sw = null; try { sw = await sweepData(c.env); } catch (e) { /* never allowed to break the background job */ }
-      try { if (!(sw && sw.built)) await runSlot(c.env); }
+      let sw = null; try { sw = await sweepData(env); } catch (e) { /* never allowed to break the background job */ }
+      try { if (!(sw && sw.built)) await runSlot(env); }
       finally {
         // Alerts for games about to start. Never allowed to break the background job.
-        try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(c.env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
+        try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
         await c.flush();
       }
     })());

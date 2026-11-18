@@ -32,6 +32,7 @@ import { shotsOver, SHOTS, SHOTS2, LEAGUES as SHOTS_LEAGUES, LEAGUES2 as SHOTS_L
 import { leanHit, hockeyHit } from './pick.js';
 import { hockeyMove } from './moves.js';
 import { SECOND_PRICED } from './data.js';
+import { readMerged } from './fixes.js';
 
 export const SINCE = '2026-10-27';
 export const STALE = { ev: 0.02, maxPrice: 400 }; // stale price: DraftKings pays 2%+ over the sharp fair price; nothing longer than +400
@@ -402,7 +403,7 @@ const RULES_NOV1 = '2026-11-01T04:00:00Z';
 const DROP = [b => b.rule === 'under' && b.date === '2026-10-31' && /Colorado Rapids/.test(b.home || '') && /Chicago Fire/.test(b.away || '') && b.mins > LATE,
   b => b.sport !== 'nhl' && !!b.at && b.at < RULES_NOV1 && !!b.kickoff && b.kickoff > RULES_NOV1];
 export async function getAnalyst(env, { readOnly = false } = {}) {
-  const doc = (await env.HUB.get('analyst', 'json')) || { v: 1, items: [] }, n = doc.items.length;
+  const doc = (await readMerged(env, 'analyst')) || { v: 1, items: [] }, n = doc.items.length; // with the bets buttons placed (src/fixes.js)
   doc.items = doc.items.filter(b => !DROP.some(f => f(b)));
   if (!readOnly && doc.items.length !== n) await env.HUB.put('analyst', JSON.stringify(doc));
   return doc;
@@ -474,7 +475,7 @@ export function tiers(items, old = [], rules = RULES) {
 export async function listAnalyst(env, now = new Date()) {
   const doc = await getAnalyst(env), open = doc.items.filter(b => !b.res);
   if (open.length) {
-    const days = [...new Set(open.map(b => `${b.sport === 'nhl' ? 'nhl:day:' : 'day:'}${b.date}`))], got = await Promise.all(days.map(d => env.HUB.get(d, 'json'))), m = new Map();
+    const days = [...new Set(open.map(b => `${b.sport === 'nhl' ? 'nhl:day:' : 'day:'}${b.date}`))], got = await Promise.all(days.map(d => readMerged(env, d))), m = new Map();
     days.forEach((d, i) => { const h = d.startsWith('nhl:'), dt = d.slice(h ? 8 : 4); for (const c of got[i]?.cards || []) m.set(cardKey(dt, h ? 'nhl' : c.league, c.id), c); });
     let dirty = false; for (const b of open) if (settle(b, m.get(cardKey(b.date, b.league, b.gid)), now)) dirty = true;
     if (dirty) await save(env, doc);
