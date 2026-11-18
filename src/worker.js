@@ -201,6 +201,9 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   day.analyzed = day.analyzed || {};
 
   const fx = await fixturesForLeague(league, date, debug);
+  // A local day is two ESPN requests (src/data.js fixturesForLeague). When one failed, the games it would have listed (evening games in the
+  // Americas, on the next UTC day) are missing from fx: their cards must not be dropped below as if ESPN no longer listed them.
+  const partialFeed = debug.length > 0;
   if (!fx.length) {
     // A failed feed is not "no games": report it and don't mark the league analyzed.
     if (debug.length) return { fixtures: 0, cards: 0, skipped: 0, feedError: true, debug };
@@ -232,6 +235,12 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     const a0 = await findTeam(f.away.id, env, memo, hint);
     const h = h0 && { ...h0, team: { ...h0.team, form: formAt(h0.team, f.date) } };
     const a = a0 && { ...a0, team: { ...a0.team, form: formAt(a0.team, f.date) } };
+    // A card that already had its models (and so its prices, Forebet and SportsMole) is kept as it was when a club cannot be found or has
+    // too few results on this run (a league's data being rebuilt, a winter break): rebuilding it as a "skipped" card would wipe all of that.
+    if (old?.v2 && (!h || !a || h.team.form.n < 3 || a.team.form.n < 3)) {
+      if ((!h || !a) && needsSync.length) notReady++;
+      cards.push({ ...old, kickoff: f.date, ko: localTime(f.date) }); continue;
+    }
     const card = {
       id: f.id, kickoff: f.date, ko: localTime(f.date),
       league: slug, leagueKey: league.key, leagueName: league.name,
@@ -278,6 +287,8 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
     // Once the game has kicked off the v4 made before it stands: a later re-analysis must not wipe it.
     if (old?.v4 && new Date(f.date).getTime() <= now.getTime()) { card.v4 = old.v4; why = null; if (old.v4why) delete card.v4why; }
     if (new Date(f.date).getTime() <= now.getTime() && old && 'v5' in old) card.v5 = old.v5; // likewise v5
+    // likewise the shots numbers (the Shots read and the Results tab's Shots record read them): a finished game gets none of its own here
+    if (old?.sx && (!card.sx || new Date(f.date).getTime() <= now.getTime())) card.sx = old.sx;
     if (!card.v4 && why) card.v4why = why;
     keepOdds(card, old, f, slug, now);
     setV6(card, old, now);
@@ -302,7 +313,12 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
 
   // Forebet picks are recorded by hand (never read by a model). Keep them across re-analysis; add the saved ones.
   for (const c of cards) { if (!c.fb && prior.get(c.id)?.fb) c.fb = prior.get(c.id).fb; mergeSeed(c, date); }
-  day.cards = day.cards.filter(c => c.league !== slug).concat(cards);
+  // Cards ESPN did not list on this run are kept when the feed answered only in part, or when the game has already kicked off (a game
+  // moved after kickoff is graded from its new day by gradeLeague; dropping it lost its prices, pick and the Analyst's bets on it).
+  // A game not yet started that ESPN no longer lists for this day was moved: its card goes, and the new day gets it.
+  const listed = new Set(fx.map(f => f.id));
+  const kept = [...prior.values()].filter(c => !listed.has(c.id) && !c.final && (partialFeed || new Date(c.kickoff).getTime() <= now.getTime()));
+  day.cards = day.cards.filter(c => c.league !== slug || (c.final && !listed.has(c.id))).concat(cards, kept);
   day.analyzed[slug] = now.getTime();
   day.analyzedAt = now.getTime();
   await env.HUB.put(`day:${date}`, JSON.stringify(day));
@@ -325,9 +341,12 @@ function setV6(card, old, now = new Date()) {
   return JSON.stringify([card.v6 ?? null, card.v6o ?? null]) !== was;
 }
 // Attach the price to a card being (re)built; from PRICE_LOCK minutes before kickoff the price read before then stands.
+// A game past the lock never takes ESPN's price at all: during the game it is an in-play price, and on a card with no price before then
+// it was saved as both the opening (f) and the closing price (and so as the Model bets price at grading).
 function keepOdds(card, old, f, slug, now) {
-  if (PRICED.has(slug) && f.odds) card.odds = withOdds(old?.odds, f.odds, now);
-  if (old?.odds && (!card.odds || new Date(f.date).getTime() - now.getTime() <= PRICE_LOCK * 60000)) card.odds = old.odds; // locked from PRICE_LOCK minutes before kickoff
+  const open = new Date(f.date).getTime() - now.getTime() > PRICE_LOCK * 60000;
+  if (PRICED.has(slug) && f.odds && open) card.odds = withOdds(old?.odds, f.odds, now);
+  if (old?.odds && (!card.odds || !open)) card.odds = old.odds; // locked from PRICE_LOCK minutes before kickoff
 }
 // A fresh price for a card: keeps the both-score prices (they come from another source) and `f`, the first home / draw / away price the
 // Hub saw for this game. `f` is what a bet placed when the pick first showed would have got; the price at kickoff is the closing one.
@@ -700,7 +719,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   let graded = 0, pending = 0;
   for (const c of open) {
     const f = finals.get(c.id);
-    if (!f) { pending++; continue; }
+    if (!f || !Number.isFinite(f.home.score) || !Number.isFinite(f.away.score)) { pending++; continue; } // no usable score yet: wait, never grade on NaN
     c.final = { h: f.home.score, a: f.away.score };
     // The biggest lead each side had at any moment (bet365 early payout); left off when ESPN's goal list does not add up.
     const ld = maxLead(goalSeq(f.plays, f.home.id, f.away.id, c.final.h, c.final.a)); if (ld) c.final.lead = ld;
@@ -713,7 +732,8 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     if (c.v6) c.grade.v6 = grade(toPred(c.v6), c.final);
     if (c.sm && c.v2) c.smGrade = smGrade(c.sm, c.final);
     // The card's headline pick is locked here, from what the card held when it finished, and scored on the final score.
-    if (c.v2 && !c.lean) { const l = leanPick(c); if (l) { l.hit = leanHit(l.key, c.final); const m = FIRST_DIV.has(c.league) ? priceFor(c.odds, l.key) : null; if (m != null) { l.price = m; l.vd = verdictOf(l.p, m); } const ep = earlyPaid(l.key, l.hit, c.final.lead); if (ep != null) l.ep = ep; c.lean = l; } }
+    // pbk: the book of the saved price when it is not DraftKings (a Bet365 / Pinnacle stand-in, Pinnacle's both-score price), so a backup can tell them apart.
+    if (c.v2 && !c.lean) { const l = leanPick(c); if (l) { l.hit = leanHit(l.key, c.final); const m = FIRST_DIV.has(c.league) ? priceFor(c.odds, l.key) : null; if (m != null) { l.price = m; l.vd = verdictOf(l.p, m); const bk = 'BN'.includes(l.key) ? c.odds.bk : c.odds.src; if (bk && bk !== 'draftkings') l.pbk = bk; } const ep = earlyPaid(l.key, l.hit, c.final.lead); if (ep != null) l.ep = ep; c.lean = l; } }
     graded++;
   }
   // Remember the attempt so a league whose games aren't final yet (postponed, feed lagging) can't
