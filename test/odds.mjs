@@ -34,7 +34,10 @@ ok('bands: -500 and -300 short, -200 and -150 next, -110 and +140 middle, +150 l
   ok('a game that already started is left alone', !day.cards[1].odds);
   ok('a second division is not touched', !day.cards[2].odds);
   const w0 = writes.length, c0 = calls, r2 = await oddsStep(env, now, cache);
-  ok('the same league is not looked at again for hours, and nothing is written', calls === c0 && writes.length === w0 && !(r2 && r2.league === 'eng.1'));
+  // La Liga 2 is priced too since Nov 2, 2026 (src/data.js SECOND_PRICED), so the next run reads that league instead; eng.1 is not read again
+  ok('the same league is not looked at again for hours, and nothing is written', r2 && r2.league === 'esp.2' && writes.length === w0, JSON.stringify(r2));
+  const c1 = calls, r2b = await oddsStep(env, now, cache);
+  ok('with every priced league looked at, the next run reads nothing and writes nothing', r2b === null && calls === c1 && writes.length === w0);
   seen.clear(); const r3 = await oddsStep(env, now, cache);
   ok('an unchanged price writes nothing', r3 && r3.changed === 0 && writes.length === w0);
   globalThis.fetch = realFetch;
