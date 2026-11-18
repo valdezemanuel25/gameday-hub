@@ -69,4 +69,12 @@ ok('push: plain http, a bare IP, or user:password in the address is refused', !v
 ok('push: keys of the wrong size or alphabet are refused', !validSub(sub('https://fcm.googleapis.com/x', 'abc')) && !validSub(sub('https://fcm.googleapis.com/x', key, 'x'.repeat(200))) && !validSub(sub('https://fcm.googleapis.com/x', key.slice(0, 80) + '<>"\'abc')));
 ok('push: a huge address is refused', !validSub(sub('https://fcm.googleapis.com/' + 'a'.repeat(2000))));
 
+// ---- bet analyzer: the pick limit comes before the reads ----
+{
+  let reads = 0; const envR = { ...env, HUB: { ...env.HUB, get: async (...a) => { reads++; return env.HUB.get(...a); } } };
+  const legs = Array.from({ length: 500 }, (_, i) => ({ date: `2026-${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}`, league: 'eng.1', id: String(i), market: '1x2', sel: 'H' }));
+  r = await go('/api/bets/analyze', { method: 'POST', headers: { ...tok, 'content-type': 'application/json' }, body: JSON.stringify({ legs }) }, envR);
+  ok('a 500-pick bet is refused before any of its days is read (it used to cost a KV read per date first)', r.status === 400 && reads === 0, `${r.status} reads ${reads}`);
+}
+
 console.log(fail ? `\n${fail} security checks FAILED` : '\nAll security checks passed'); process.exit(fail ? 1 : 0);

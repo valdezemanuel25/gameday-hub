@@ -1232,6 +1232,8 @@ const hub = {
         if (req.method === 'GET' && p === '/api/bets') return json(await listBets(env));
         if (req.method !== 'POST') return json({ error: 'Not found' }, 404);
         const b = await req.json();
+        // the 12-pick limit (src/bets.js analyze) is checked before the days are read: each leg's date used to cost a KV read first
+        if (Array.isArray(b.legs) && b.legs.length > 12) return json({ error: 'A bet can have up to 12 picks.' }, 400);
         if (p === '/api/bets/analyze') return json(analyzeBet(await betCards(env, Array.isArray(b.legs) ? b.legs : []), b.legs));
         if (p === '/api/bets') return json(await addBet(env, b.legs, new Date(), b.source === 'model' ? 'model' : null));
         if (p === '/api/bets/delete' || p === '/api/bets/void') return json(await changeBet(env, String(b.id || ''), p.endsWith('delete') ? 'delete' : 'void'));
