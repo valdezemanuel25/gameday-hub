@@ -1,6 +1,71 @@
 {
-  "updated": "2026-11-17T21:08:32Z",
+  "updated": "2026-11-18T11:09:39Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-18",
+      "title": "Buttloads of cash",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "24,328",
+          "change": -0.74
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,341",
+          "change": -1.03
+        },
+        {
+          "label": "Dow",
+          "value": "50,759",
+          "change": -1.65
+        },
+        {
+          "label": "10-yr",
+          "value": "5.103%",
+          "change": -2.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$64,230",
+          "change": -1.55
+        },
+        {
+          "label": "Nike",
+          "value": "$35.85",
+          "change": -6.3
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Tuesday slide",
+          "t": "The Dow fell 1.65%, the S&P 1.03% and the Nasdaq 0.74% as traders waited on Nvidia earnings."
+        },
+        {
+          "h": "Anthropic IPO",
+          "t": "Anthropic prices today at $70-$78 a share, a raise of up to $90.4B at a $1.4T valuation, with orders about 7x the shares offered."
+        },
+        {
+          "h": "Nvidia results",
+          "t": "Nvidia's Q3 revenue rose 20% from the prior quarter, Q4 guidance is 12% growth, and shares rose after hours in the first quarter without Jensen Huang."
+        },
+        {
+          "h": "Nike drops",
+          "t": "Nike fell 6.30% to $35.85 after saying it doesn't expect sales growth until 2029."
+        },
+        {
+          "h": "Food stocks",
+          "t": "Investors rotating out of tech lifted Tyson 8% in a week and Campbell's 22% in a month, while the Nasdaq is down 8% over the past month."
+        },
+        {
+          "h": "Rates and crypto",
+          "t": "The 10-year yield eased 2 bps to 5.103% and Bitcoin slid 1.55% to about $64,230."
+        }
+      ],
+      "note": "Market numbers are the Tuesday close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-17",
@@ -65,71 +130,6 @@
         }
       ],
       "note": "Market numbers are the Tuesday close."
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-17",
-      "title": "Her majesty's not-so-secret service",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "24,510",
-          "change": -2.49
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,417",
-          "change": -1.92
-        },
-        {
-          "label": "Dow",
-          "value": "51,608",
-          "change": -1.41
-        },
-        {
-          "label": "10-yr",
-          "value": "5.121%",
-          "change": -3.0,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$65,394",
-          "change": 0.3
-        },
-        {
-          "label": "Nvidia",
-          "value": "$156.14",
-          "change": -4.12
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Monday selloff",
-          "t": "Nasdaq fell 2.49% and the S&P 1.92% as investors braced for Nvidia earnings and Anthropic's expected Thursday IPO."
-        },
-        {
-          "h": "Chip export curbs",
-          "t": "Commerce closed a loophole letting Chinese firms reach Nvidia chips via overseas data centers, and Nvidia fell 4.12% to $156.14."
-        },
-        {
-          "h": "Next Bond",
-          "t": "Amazon MGM named Robert Pattinson the new 007, after paying $8.5B for MGM and about $1B more for Bond creative control."
-        },
-        {
-          "h": "Fed on AI",
-          "t": "Fed Chair Kevin Warsh said AI could lift productivity but may also disappoint, which would hurt stocks."
-        },
-        {
-          "h": "Rates and crypto",
-          "t": "The 10-year yield slipped 3 bps to 5.121% while Bitcoin edged up 0.30% to about $65,394."
-        },
-        {
-          "h": "Bank glitch",
-          "t": "JPMorgan Chase fixed a software-related outage that slowed transactions, and said it was not a cyberattack."
-        }
-      ],
-      "note": "Market numbers are the Monday close."
     },
     {
       "source": "Brew Markets",
