@@ -854,9 +854,13 @@ async function tally(env) {
   const lb = (p, y) => -Math.log(Math.max(1e-6, y ? p : 1 - p));
   const add6 = (t, m, g, f) => { const r = f.h > f.a ? 0 : f.h === f.a ? 1 : 2, s = scoreOne(m.p, r); t.n++; t.outcome += g.outcomeHit; t.ou += g.ouHit; t.btts += g.bttsHit; t.rps += s.rps; t.ll += s.ll; t.llO += lb(m.over / 100, f.h + f.a >= 3); t.llB += lb(m.btts / 100, f.h > 0 && f.a > 0); };
   const add5 = (t, p, g, r) => { const s = scoreOne(p, r); t.n++; t.outcome += g.outcomeHit; t.ou += g.ouHit; t.btts += g.bttsHit; t.rps += s.rps; t.ll += s.ll; };
+  // A game saved on two days (moved by ESPN after its card was made: both cards end up graded) counts once, on the earlier day, as
+  // tools/score-backup.py counts it. KV lists keys in order, so the earlier day comes first.
+  const once = new Set();
   for (const k of list.keys) {
     const day = await env.HUB.get(k.name, 'json');
     for (const c of day?.cards || []) {
+      if (c.final) { const g = `${c.league}|${c.id}`; if (once.has(g)) continue; once.add(g); }
       if (c.sx && c.final) shAdd(c); // before the counted-league check: second divisions are scored here too
       if (!c.grade || day.date <= LEGACY_THROUGH || !isCounted(c.league, day.date)) continue;
       addMarket(MKT, c); // model vs market: every counted game with a price, v4-only cup games included

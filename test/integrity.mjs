@@ -109,5 +109,14 @@ const L = card('g1').lean;
 ok('a pick priced from a stand-in book is labelled with that book (pbk)', L && (L.price == null || L.pbk === 'bet365'), JSON.stringify(L));
 ok('a pick priced at DraftKings carries no book label', card('g2').lean && card('g2').lean.pbk === undefined, JSON.stringify(card('g2').lean));
 
+// ---- 7. a game saved on two days counts once in the records ----
+{
+  const t0 = await (await worker.fetch(new Request('https://hub.test/api/tally', { headers: { 'x-admin-token': 'secret' } }), env)).json();
+  const d = day(); kv.set('day:2026-11-22', JSON.stringify({ date: '2026-11-22', cards: d.cards.filter(c => c.id === 'g1') }));
+  const t1 = await (await worker.fetch(new Request('https://hub.test/api/tally', { headers: { 'x-admin-token': 'secret' } }), env)).json();
+  ok('tally: a graded game saved on two days (moved by ESPN) counts once', t1.newlyGraded === t0.newlyGraded && t1.v2.n === t0.v2.n && t1.leans.n === t0.leans.n, `${t0.newlyGraded} -> ${t1.newlyGraded}`);
+  kv.delete('day:2026-11-22');
+}
+
 console.log(fails ? `\n${fails} FAILED` : '\nAll data-integrity checks passed');
 process.exit(fails ? 1 : 0);
