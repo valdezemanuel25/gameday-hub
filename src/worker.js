@@ -18,7 +18,7 @@ import { shotsAt, matchup as shotsMatchup, shotsOver, SHOTS, SHOTS2, LEAGUES as 
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP, SPORT } from './btts.js';
 import { leanPick, leanHit, priceFor, unitsWon, verdictOf, bandOf } from './pick.js';
-import { goalSeq, maxLead, earlyPaid } from './early.js';
+import { goalSeq, maxLead, earlyPaid, regScore } from './early.js';
 import { pinnEvents, matchPinn, pinnPrice, pinnState, fetchPinn, countReq as countPinnReq } from './pinn.js';
 import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
@@ -227,6 +227,7 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   for (const f of fx) {
     const old = prior.get(f.id);
     if (old?.final && date > LEGACY_THROUGH) { cards.push(old); continue; } // never overwrite a graded card
+    if (old?.void && (f.off || f.done) && date > LEGACY_THROUGH) { cards.push(old); continue; } // nor one closed as void (postponed, no 90-minute score)
     // 'Analyze leftover': keep finished predictions as they are. A card saved before v4 existed (no v4 key yet) still gets analyzed.
     if (leftover && old?.v2 && 'v4' in old && ('v5' in old || league.cupModel || f.done) && !(league.cupModel && old.v4 === null)) { cards.push(old); continue; } // a card from before v5 gets it now
 
@@ -313,6 +314,8 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
 
   // Forebet picks are recorded by hand (never read by a model). Keep them across re-analysis; add the saved ones.
   for (const c of cards) { if (!c.fb && prior.get(c.id)?.fb) c.fb = prior.get(c.id).fb; mergeSeed(c, date); }
+  // A game ESPN lists as postponed, canceled or abandoned is void (no new prices or bets; never graded); it clears if ESPN lists it again
+  for (const f of fx) if (f.off) { const c = cards.find(x => x.id === f.id); if (c && !c.final) c.void = f.off; }
   // Cards ESPN did not list on this run are kept when the feed answered only in part, or when the game has already kicked off (a game
   // moved after kickoff is graded from its new day by gradeLeague; dropping it lost its prices, pick and the Analyst's bets on it).
   // A game not yet started that ESPN no longer lists for this day was moved: its card goes, and the new day gets it.
@@ -590,7 +593,7 @@ export async function priceWhy(env, date, slug, id, now = new Date(), why = odds
 export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
   const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) return { games: 0, priced: 0, changed: 0 };
-  const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && priceOpen(c, now));
+  const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && !c.void && priceOpen(c, now));
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
   const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
   // Shots numbers (src/shots.js) for a card made before they existed, or before its clubs had 5 games with shots: filled in here from the
@@ -667,7 +670,7 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
   for (const date of [t, addDays(t, 1)]) {
     const day = await env.HUB.get(`day:${date}`, 'json'); if (!day) continue;
     for (const lg of LEAGUES.filter(l => PRICED.has(l.slug))) {
-      const live = (day.cards || []).filter(c => c.league === lg.slug && (c.v2 || c.v4) && !c.final && priceOpen(c, now));
+      const live = (day.cards || []).filter(c => c.league === lg.slug && (c.v2 || c.v4) && !c.final && !c.void && priceOpen(c, now));
       if (!live.length) continue;
       // When this league is looked at again: every 6 hours as a rule, every hour in the last 3 hours before its next kickoff, and always
       // once in the window from LINEUP_READ to PRICE_LOCK minutes before it (the wait never runs past LINEUP_READ minutes before).
@@ -695,7 +698,7 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
 export async function gradeLeague(date, slug, env, { force = false } = {}, now = new Date()) {
   const league = leagueBySlug(slug);
   const day = await env.HUB.get(`day:${date}`, 'json');
-  const open = (day?.cards || []).filter(c => c.league === slug && !c.final && (c.v2 || c.v4));
+  const open = (day?.cards || []).filter(c => c.league === slug && !c.final && !c.void && (c.v2 || c.v4));
   if (!league || !open.length) return { graded: 0, pending: 0 };
 
   if (!force) {
@@ -704,25 +707,37 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     if (now.getTime() < dueAt) return { graded: 0, pending: open.length, waiting: true, dueAt };
   }
   const fx = await fixturesForLeague(league, date, []);
-  const finals = new Map(fx.filter(f => f.done).map(f => [f.id, f]));
+  const finals = new Map(fx.filter(f => f.done && !f.off).map(f => [f.id, f]));
+  // Postponed, canceled or abandoned (ESPN's status, src/data.js OFF): the card is closed as void (c.void = the status), never graded, and
+  // bets on it are void. It used to wait as "pending" for good, keeping its league due in the grading slot for two days.
+  const off = new Map(fx.filter(f => f.off).map(f => [f.id, f]));
   // Moved games (Nov 12, 2026): ESPN files a game moved to a later day (Las Palmas v Eldense, Nov 8 -> Nov 9) under its new date, so this
   // day's scoreboard no longer lists it and its card (and any Analyst bet on it) was never graded. A card past kickoff that this day does not
   // list as finished is looked up by its ESPN id on the next 3 days' scoreboards. Only read while such a card is waiting, so no extra
   // requests on a normal day, and nothing is saved unless a game is graded.
-  const moved = open.filter(c => !finals.has(c.id) && now.getTime() > new Date(c.kickoff).getTime() + 2 * 3600000);
+  const moved = open.filter(c => !finals.has(c.id) && !off.has(c.id) && now.getTime() > new Date(c.kickoff).getTime() + 2 * 3600000);
   if (moved.length) {
     const d1 = new Date(`${addDays(date, 1)}T12:00:00Z`);
     const later = await scoreboard(league.slug, d1, new Date(d1.getTime() + 3 * 86400000), []).catch(() => []);
     const want = new Set(moved.map(c => c.id));
-    for (const f of later) if (f.done && want.has(f.id)) finals.set(f.id, f);
+    for (const f of later) if (f.done && !f.off && want.has(f.id)) finals.set(f.id, f);
   }
-  let graded = 0, pending = 0;
+  let graded = 0, pending = 0, voided = 0;
   for (const c of open) {
+    if (off.has(c.id)) { c.void = off.get(c.id).off; voided++; continue; }
     const f = finals.get(c.id);
     if (!f || !Number.isFinite(f.home.score) || !Number.isFinite(f.away.score)) { pending++; continue; } // no usable score yet: wait, never grade on NaN
-    c.final = { h: f.home.score, a: f.away.score };
+    // Extra time (MLS playoffs, cup knockouts): bets and the models are on the 90 minutes, and ESPN's score includes extra time. The card is
+    // graded on the 90-minute score worked out from ESPN's goal list (final.et = 'aet' / 'pen', final.ft = ESPN's score). When the goal list
+    // cannot give it, the card is closed as void rather than graded on the wrong score.
+    let seq;
+    if (f.et) {
+      const r = regScore(f.plays, f.home.id, f.away.id, f.home.score, f.away.score);
+      if (!r) { c.void = `${f.et}: no 90-minute score`; c.ft = [f.home.score, f.away.score]; voided++; continue; }
+      c.final = { h: r.h, a: r.a, et: f.et, ft: [f.home.score, f.away.score] }; seq = r.seq;
+    } else { c.final = { h: f.home.score, a: f.away.score }; seq = goalSeq(f.plays, f.home.id, f.away.id, c.final.h, c.final.a); }
     // The biggest lead each side had at any moment (bet365 early payout); left off when ESPN's goal list does not add up.
-    const ld = maxLead(goalSeq(f.plays, f.home.id, f.away.id, c.final.h, c.final.a)); if (ld) c.final.lead = ld;
+    const ld = maxLead(seq); if (ld) c.final.lead = ld;
     mergeSeed(c, date);
     c.grade = {};
     if (c.v2) c.grade.v2 = grade(toPred(c.v2), c.final);
@@ -740,8 +755,8 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   // block the others: the cron rotates by least-recently-tried.
   // Saved only when something was graded: a league still waiting on ESPN used to cost a KV write on every
   // try. The cron now rotates through due leagues by the clock instead (see slot 1), so nothing is stored.
-  if (graded) { await env.HUB.put(`day:${date}`, JSON.stringify(day)); await analystLook(env, date, day.cards.filter(c => c.league === slug), now); }
-  return { graded, pending };
+  if (graded || voided) { await env.HUB.put(`day:${date}`, JSON.stringify(day)); await analystLook(env, date, day.cards.filter(c => c.league === slug), now); }
+  return { graded, pending, ...(voided ? { voided } : {}) };
 }
 
 
@@ -751,7 +766,9 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
 export async function smLeague(date, slug, env, now = new Date(), { force = false } = {}) {
   const day = await env.HUB.get(`day:${date}`, 'json');
   day && (day.smTried = day.smTried || {});
-  const todo = (day?.cards || []).filter(c => c.league === slug && c.v2 && !c.sm && (force || now.getTime() - (day.smTried[c.id] || 0) > 3 * HOUR));
+  // Only games that have not started (Nov 18, 2026): a "We say" read after kickoff changed the agree / disagree count, and so the Best /
+  // Lean / Split kind, of a pick that locks at grading. Forebet already waits for nothing after kickoff.
+  const todo = (day?.cards || []).filter(c => c.league === slug && c.v2 && !c.sm && !c.final && new Date(c.kickoff).getTime() > now.getTime() && (force || now.getTime() - (day.smTried[c.id] || 0) > 3 * HOUR));
   if (!todo.length) return { idle: true, found: 0 };
   let links;
   try { links = await getListing(env, now.getTime()); } catch (e) { return { error: `SportsMole list: ${e.message}`, found: 0 }; }
@@ -1065,7 +1082,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     for (const date of [t, addDays(t, -1), addDays(t, -2)]) {
       const day = await env.HUB.get(`day:${date}`, 'json');
       for (const lg of LEAGUES) {
-        const open = (day?.cards || []).filter(c => c.league === lg.slug && !c.final && (c.v2 || c.v4));
+        const open = (day?.cards || []).filter(c => c.league === lg.slug && !c.final && !c.void && (c.v2 || c.v4));
         if (!open.length) continue;
         const last = Math.max(...open.map(c => new Date(c.kickoff).getTime()));
         if (now.getTime() >= last + gradeDelayMs(env)) due.push({ date, slug: lg.slug, last });
@@ -1088,7 +1105,7 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
     for (const date of [t, addDays(t, 1)]) {
       const day = await env.HUB.get(`day:${date}`, 'json');
       for (const lg of VISIBLE) {
-        const need = (day?.cards || []).some(c => c.league === lg.slug && c.v2 && !c.sm && now.getTime() - (day.smTried?.[c.id] || 0) > 3 * HOUR);
+        const need = (day?.cards || []).some(c => c.league === lg.slug && c.v2 && !c.sm && !c.final && new Date(c.kickoff).getTime() > now.getTime() && now.getTime() - (day.smTried?.[c.id] || 0) > 3 * HOUR);
         if (need) return { job: 'sportsmole', league: lg.slug, date, ...(await smLeague(date, lg.slug, env, now)) };
       }
     }

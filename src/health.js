@@ -17,7 +17,7 @@ export const noSoccerPrice = c => !c.odds || ![c.odds.h, c.odds.d, c.odds.a].eve
 export function gameChecks(days, now, { graceH, priced = null, needPrice = noSoccerPrice }) {
   const ungraded = [], unpriced = [], standIn = [];
   for (const [date, cards] of Object.entries(days)) for (const c of cards || []) {
-    if (!c || c.skipped) continue;
+    if (!c || c.skipped || c.void) continue; // void: postponed / canceled / abandoned, or no 90-minute score (closed on purpose, not stuck)
     const ko = new Date(c.kickoff).getTime(); if (!Number.isFinite(ko)) continue;
     if (!c.final && now - ko > graceH * HOUR) ungraded.push({ date, game: lbl(c), hoursPast: Math.round((now - ko) / HOUR) });
     // a game with a model pick, starting in the next 1 to 24 hours, in a league that is priced, with no price yet

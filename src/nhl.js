@@ -352,7 +352,8 @@ async function scoreboard(date, fetchFn, debug) {
       // Probable starting goalie per side ("expected", or "confirmed" once the team names him). Display and the v5 shadow only.
       const gkOf = t => { const p = (t.probables || []).find(x => /starting goalie/i.test(x.displayName || x.name || '') || x.abbreviation === 'SG'), a = p && p.athlete; return a && a.displayName ? { n: String(a.displayName).slice(0, 40), ...(a.id ? { id: String(a.id) } : {}), st: /confirm/i.test(p.status?.type || p.status?.name || '') ? 'c' : 'e' } : null; };
       const gkh = done ? null : gkOf(h), gka = done ? null : gkOf(a);
-      out.push({ id: String(ev.id), date: ev.date, done, last, line, gk: gkh || gka ? { h: gkh, a: gka } : null, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
+      const off = /POSTPONED|CANCEL|ABANDON|FORFEIT/.test(String(t.name || '')) ? String(t.name).replace(/^STATUS_/, '').toLowerCase() : null; // not played as listed
+      out.push({ id: String(ev.id), date: ev.date, done, last, ...(off ? { off } : {}), line, gk: gkh || gka ? { h: gkh, a: gka } : null, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
     }
     return out;
   } catch (e) { debug.push(`scoreboard ${date}: ${e.message}`); return null; }
@@ -447,7 +448,7 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
   const t = localDate(now.toISOString()), out = [];
   for (const date of [addDays(t, -1), t, addDays(t, 1)]) {
     const day = await env.HUB.get(`nhl:day:${date}`, 'json'); if (!day) continue;
-    const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
+    const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && !c.void && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
     if (!due.length) continue;
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
     let dirty = false; const st = { S5: null, cache: {}, budget: { n: 8 } };
@@ -488,8 +489,12 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
     if (!day) day = { date, cards: [] };
     for (const e of evs) {
       const ld = localDate(e.date);
+      // Postponed or canceled (Nov 18, 2026): its card is closed as void (no grade; the Analyst's and tracked bets on it are void) instead
+      // of waiting for a result for good. Not marked as seen: if ESPN also lists the game on its new day, that day gets its own card.
+      if (e.off) { const c0 = day.cards.find(x => x.id === e.id); if (c0 && !c0.final && c0.void !== e.off) { c0.void = e.off; dirty = true; out.voided = (out.voided || 0) + 1; } continue; }
       if (seen.has(e.id)) continue; seen.add(e.id); // a game is filed under the day ESPN lists it
       let c = day.cards.find(x => x.id === e.id);
+      if (c && c.void) { delete c.void; dirty = true; } // listed as on again
       if (e.done && mode === 'analyze') continue; // Analyze reads prices and lineups only; finished games are Update results' job
       if (e.done) {
         if (c && !c.final) {

@@ -20,7 +20,7 @@ const H = 3600000, DATE = '2026-11-21';
 const KO1 = '2026-11-21T15:00:00Z', KO2 = '2026-11-22T01:00:00Z';
 const team = (id, name) => ({ id, displayName: name, abbreviation: name.slice(0, 3).toUpperCase() });
 const DK = { provider: { name: 'DraftKings' }, moneyline: { home: { close: { odds: '-150' } }, draw: { close: { odds: '+260' } }, away: { close: { odds: '+400' } } } };
-const ev = (id, date, h, a, { done = false, hs = 0, as = 0, odds = [DK], score = true } = {}) => ({ id, date, competitions: [{ status: { type: { completed: done } }, odds,
+const ev = (id, date, h, a, { done = false, hs = 0, as = 0, odds = [DK], score = true, st = null, details = undefined } = {}) => ({ id, date, competitions: [{ status: { type: { completed: done, ...(st ? { name: st } : {}) } }, odds, ...(details ? { details } : {}),
   competitors: [{ homeAway: 'home', team: team(...h), ...(score ? { score: String(hs) } : {}) }, { homeAway: 'away', team: team(...a), ...(score ? { score: String(as) } : {}) }] }] });
 const ARS = [359, 'Arsenal'], BHA = [331, 'Brighton'], CHE = [363, 'Chelsea'], LIV = [364, 'Liverpool'];
 let feed = {}, down = new Set(), hits = 0; // feed: 'YYYYMMDD' -> events; down: dates that answer 500
@@ -153,6 +153,59 @@ ok('a pick priced at DraftKings carries no book label', card('g2').lean && card(
   ok('soccer backup: the Analyst\'s soccer bets (open and short rows) and the tracked bets', x.analyst.items.length === 1 && x.analyst.items[0].id === 's1' && x.analyst.old.length === 1 && x.analyst.old[0][1] === 'move' && x.analyst.oldFields.length === 14 && x.bets.items[0].id === 'b1', JSON.stringify(x));
   const n = await (await get('/api/nhl/export')).json();
   ok('hockey backup: the Analyst\'s hockey bets only', n.analyst.items.length === 1 && n.analyst.items[0].id === 'h1' && n.analyst.old.length === 1 && n.analyst.old[0][10] === 'nhl' && n.days.length === 1, JSON.stringify(n.analyst));
+}
+
+// ---- 10. extra time is graded on the 90 minutes; postponed games are void (Agent 3's findings) ----
+{
+  const goal = (team, disp, value) => ({ scoringPlay: true, team: { id: team }, clock: { displayValue: disp, value } });
+  reset();
+  await analyzeLeague(DATE, 'eng.1', env, before);
+  kv.set('analyst', JSON.stringify({ v: 1, items: [{ id: 'pp', rule: 'move', key: 'H', price: -150, kickoff: KO2, mins: 200, date: DATE, gid: 'g2', league: 'eng.1', home: 'Chelsea', away: 'Liverpool' }] }));
+  // g1: 1-1 after 90 minutes (the equaliser in stoppage time), 2-1 after extra time. g2: postponed.
+  setFeed(ev('g1', KO1, ARS, BHA, { done: true, hs: 2, as: 1, st: 'STATUS_FINAL_AET', details: [goal(359, "12'", 720), goal(331, "90'+4'", 5640), goal(359, "104'", 6240)] }),
+    ev('g2', KO2, CHE, LIV, { st: 'STATUS_POSTPONED' }));
+  const g = await gradeLeague(DATE, 'eng.1', env, { force: true }, new Date(Date.parse(KO2) + 6 * H));
+  const c1 = card('g1'), c2 = card('g2'), b = JSON.parse(kv.get('analyst')).items.find(x => x.id === 'pp');
+  ok('after extra time: graded on the 90-minute score (1-1, a draw), ESPN\'s 2-1 kept as ft', c1.final && c1.final.h === 1 && c1.final.a === 1 && c1.final.et === 'aet' && c1.final.ft.join() === '2,1' && c1.grade && c1.lean && c1.lean.hit === (c1.lean.key === 'D' || c1.lean.key === 'B' || c1.lean.key === 'U'), JSON.stringify(c1.final));
+  ok('after extra time: the early-payout lead is the 90 minutes\' lead', c1.final.lead && c1.final.lead.join() === '1,0', JSON.stringify(c1.final.lead));
+  ok('postponed: the card is closed as void, not graded and not left pending', c2.void === 'postponed' && !c2.final && g.voided === 1 && g.pending === 0, JSON.stringify(g));
+  ok('postponed: the Analyst\'s bet on it is void', b && b.res === 'void' && b.units === 0, JSON.stringify(b));
+  const due = await runSlot(env, new Date(Date.parse(KO2) + 7 * H), 1);
+  ok('postponed: the league is no longer due in the grading slot', due.league !== 'eng.1' || due.date !== DATE, JSON.stringify(due));
+  await analyzeLeague(DATE, 'eng.1', env, new Date(Date.parse(KO2) + 8 * H));
+  ok('postponed: a re-analysis keeps the card void', card('g2').void === 'postponed');
+  // penalties with a goal whose minute cannot be told: void, never graded on the wrong score
+  reset();
+  await analyzeLeague(DATE, 'eng.1', env, before);
+  setFeed(ev('g1', KO1, ARS, BHA, { done: true, hs: 1, as: 1, st: 'STATUS_FINAL_PEN', details: [goal(359, undefined, 5700), goal(331, "30'", 1800)] }), ev('g2', KO2, CHE, LIV, { done: true, hs: 0, as: 0 }));
+  await gradeLeague(DATE, 'eng.1', env, { force: true }, new Date(Date.parse(KO2) + 6 * H));
+  ok('penalties, 90-minute score unknown: void with ESPN\'s score kept, not graded', card('g1').void && /pen/.test(card('g1').void) && !card('g1').final && card('g1').ft.join() === '1,1', JSON.stringify(card('g1')));
+  ok('a normal final in the same league is graded as always', card('g2').final && card('g2').final.h === 0 && !card('g2').final.et);
+  kv.delete('analyst');
+}
+
+// ---- 11. SportsMole is not attached to a game that has started ----
+{
+  reset();
+  await analyzeLeague(DATE, 'eng.1', env, before);
+  kv.set('sm:list', JSON.stringify({ at: Date.parse(KO1), links: [] }));
+  const r = await runSlot(env, new Date(Date.parse(KO2) + 30 * 60000), 3); // both games under way
+  ok('SportsMole slot: games under way are not looked up', r.job !== 'sportsmole' || r.idle, JSON.stringify(r));
+  const { smLeague } = await import('../src/worker.js');
+  const r2 = await smLeague(DATE, 'eng.1', env, new Date(Date.parse(KO2) + 30 * 60000), { force: true });
+  ok('SportsMole button (force): nothing to do once the games have started', r2.idle === true && !card('g1').sm, JSON.stringify(r2));
+}
+
+// ---- 13. hockey: a postponed game is void, not left waiting ----
+{
+  const { nhlStep } = await import('../src/nhl.js');
+  const nd = '2026-11-20', nkey = `nhl:day:${nd}`;
+  kv.set(nkey, JSON.stringify({ date: nd, cards: [{ id: '9101', kickoff: '2026-11-21T00:00:00Z', home: 'Edmonton Oilers', away: 'Detroit Red Wings', hAbbr: 'EDM', aAbbr: 'DET', final: null, v2: { w: 55, o: 50 } }] }));
+  const hev = { id: '9101', date: '2026-11-21T00:00:00Z', competitions: [{ status: { type: { completed: false, name: 'STATUS_POSTPONED', shortDetail: 'Postponed' } },
+    competitors: [{ homeAway: 'home', team: { abbreviation: 'EDM', displayName: 'Edmonton Oilers' }, score: '0' }, { homeAway: 'away', team: { abbreviation: 'DET', displayName: 'Detroit Red Wings' }, score: '0' }] }] };
+  const fetchH = async u => new Response(JSON.stringify({ events: String(u).includes('dates=20261120') ? [hev] : [] }));
+  const r = await nhlStep(env, new Date('2026-11-21T12:00:00Z'), fetchH, { mode: 'results' });
+  ok('hockey: a postponed game\'s card is closed as void', JSON.parse(kv.get(nkey)).cards[0].void === 'postponed' && r.voided === 1, JSON.stringify(r));
 }
 
 console.log(fails ? `\n${fails} FAILED` : '\nAll data-integrity checks passed');
