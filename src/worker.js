@@ -11,9 +11,9 @@ import { forebetStep, forebetFetch, FB_PAGES, matchRows, is as isName } from './
 import legacy from './legacy.js';
 import legacySm from './legacy_sm.js';
 import { getUnm, saveUnm, likeness, slugTitle } from './verify.js';
-import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet } from './bets.js';
+import { analyze as analyzeBet, loadCards as betCards, addBet, listBets, changeBet, getBets } from './bets.js';
 import { addStrats } from './strats.js';
-import { analystLook, listAnalyst } from './analyst.js';
+import { analystLook, listAnalyst, getAnalyst } from './analyst.js';
 import { shotsAt, matchup as shotsMatchup, shotsOver, SHOTS, SHOTS2, LEAGUES as SHOTS_LEAGUES, WATCH as SHOTS_WATCH, LEAGUES2 as SHOTS_LEAGUES2 } from './shots.js';
 import { blankMarket, addMarket, finishMarket, scoreOne } from './market.js';
 import { fetchBtts, fetchBest, fetchSharp, BOOKS, SHARP, SPORT } from './btts.js';
@@ -1127,6 +1127,14 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
 }
 export const NO_GAMES_RECHECK_H = 12;
 
+// The Analyst's paper bets for a backup, as saved (open and settled bets in full, older settled ones as short rows), one sport at a time.
+// They live in their own record ('analyst'), not on the day cards, so the day-by-day export alone left them out.
+export async function backupAnalyst(env, sport) {
+  const doc = await getAnalyst(env, { readOnly: true }), isNhl = (x, packed) => (packed ? x[10] : x.sport) === 'nhl', want = (x, packed) => (sport === 'nhl') === isNhl(x, packed);
+  return { items: (doc.items || []).filter(b => want(b, false)), old: (doc.old || []).filter(r => want(r, true)), oldFields: OLD_FIELDS };
+}
+const OLD_FIELDS = ['kickoff', 'rule', 'key', 'mins', 'res', 'units', 'clv', 'price', 'dk', 'udk', 'sport', 'clvPin', 'date|gid', 'league'];
+
 // NHL work only runs in spare slots, and a failure there can never break the soccer jobs.
 const safeNhl = async (env, now) => { try { return await nhlStep(env, now); } catch (e) { return { job: 'nhl', error: String(e && e.message || e).slice(0, 120) }; } };
 
@@ -1264,9 +1272,10 @@ const hub = {
       const names = []; let cursor;
       do { const r = await env.HUB.list({ prefix: 'nhl:day:', cursor }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
       names.sort(); const days = await Promise.all(names.map(n => env.HUB.get(n, 'json')));
-      const data = { exportedAt: new Date().toISOString(), note: 'Game Day Hub hockey backup. days = every saved NHL day (cards with model picks and results); totals = hockey results summary.', days: days.filter(Boolean), totals: await nhlTally(env) };
+      const data = { exportedAt: new Date().toISOString(), note: 'Game Day Hub hockey backup. days = every saved NHL day (cards with model picks and results); totals = hockey results summary; analyst = the Analyst\'s hockey paper bets as saved.', days: days.filter(Boolean), totals: await nhlTally(env), analyst: await backupAnalyst(env, 'nhl') };
       return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'content-disposition': `attachment; filename="gameday-hub-hockey-${new Date().toISOString().slice(0, 10)}.json"`, 'cache-control': 'no-store' } });
     }
+    if (p === '/api/backup-extra') return json({ analyst: await backupAnalyst(env, 'soccer'), bets: await getBets(env) }); // the soccer Export button: records kept outside the day cards
     if (p === '/api/nhl/tally') return json(await nhlTally(env));
     if (p === '/api/nhl/trends') { // Trends tab: how each situation has done over every saved hockey day, and a read on each game of the date
       const names = []; let cursor;

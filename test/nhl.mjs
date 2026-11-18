@@ -285,7 +285,10 @@ import { ctxFor, isBackup, gkKey, gkResolve, withGk, adj5, B2B_OWN, B2B_OPP, BAC
   const card = { id: 'g1', hAbbr: 'EDM', aAbbr: 'DET', kickoff: '2026-11-01T01:00:00Z', final: { h: 3, a: 2, last: 'OT' }, v2: { w: 60, o: 50 }, v5: { w: 62, o: 51, in: { b2b: [0, 1], bk: [0, 1] } },
     px: { op: { h: -150, a: 125 }, h: -170, a: 140, tl: 6.5, to: -110, tu: -110, opt: { tl: 6.5, to: -105, tu: -115 }, cl: '2026-11-01T00:20:00Z' }, gk: { h: { n: 'Skinner' }, a: { n: 'Talbot' } } };
   const rows = rowsOf('2026-10-31', [card, { ...card, id: 'g2', final: null }, { ...card, id: 'g3', px: null }, { ...card, id: 'g4', skipped: true }]);
-  ok('history export: graded games with a closing price only, with open / close, totals, result, rest and goalies', rows.length === 1 && rows[0].open.h === -150 && rows[0].close.h === -170 && rows[0].totalOpen.o === -105 && rows[0].final.last === 'OT' && rows[0].b2b.join() === '0,1' && rows[0].backup[1] === 1 && rows[0].goalies.a === 'Talbot', JSON.stringify(rows)); }
+  ok('history export: graded games with a closing price only, with open / close, totals, result, rest and goalies', rows.length === 1 && rows[0].open.h === -150 && rows[0].close.h === -170 && rows[0].totalOpen.o === -105 && rows[0].final.last === 'OT' && rows[0].b2b.join() === '0,1' && rows[0].backup[1] === 1 && rows[0].goalies.a === 'Talbot', JSON.stringify(rows));
+  // Nov 18, 2026: an ESPN close (cl = puck drop) was passed off as a lineup read; each row now says where its close came from
+  const src = px => rowsOf('2026-10-31', [{ ...card, px: { ...card.px, ...px } }])[0];
+  ok('history export: the close says where it came from (lineup read, button, ESPN close, last price)', src({}).closeFrom === 'lineup' && src({ cby: 'you' }).closeFrom === 'you' && src({ cl: card.kickoff, cls: 'espn' }).closeFrom === 'espn' && src({ cl: card.kickoff, cls: 'espn' }).lineupRead === null && src({ cl: undefined }).closeFrom === 'last'); }
 { // the two NHL buttons (Nov 9, 2026): mode 'analyze' reads new games, prices and Forebet and grades nothing; mode 'results' grades and reads nothing new
   const key = today.replace(/-/g, '');
   feed[key] = [ev('9201', 6, 'Edmonton Oilers', 'EDM', 'Toronto Maple Leafs', 'TOR', false), ev('9202', -1, 'Chicago Blackhawks', 'CHI', 'Colorado Avalanche', 'COL', true, 2, 3, 'Final')];

@@ -2054,7 +2054,9 @@ async function exportAll() {
     const list = (await api('/api/days')).days, days = [];
     for (let i = 0; i < list.length; i++) { say(`Exporting day ${i + 1} of ${list.length}…`); days.push(await api('/api/day?date=' + list[i])); }
     say('Exporting totals…');
-    const data = { exportedAt: new Date().toISOString(), note: 'Game Day Hub backup. days = every saved day (cards with model picks, results, SportsMole picks); totals = results summary including carried-over history.', days, totals: await api('/api/tally') };
+    // analyst / bets: the Analyst's soccer paper bets and the tracked bets, saved in their own records (not on the day cards); a failed read leaves them out, not the backup
+    let extra = {}; try { extra = await api('/api/backup-extra'); } catch (e) { extra = { error: e.message }; }
+    const data = { exportedAt: new Date().toISOString(), note: 'Game Day Hub backup. days = every saved day (cards with model picks, results, SportsMole picks); totals = results summary including carried-over history; analyst = the Analyst\'s soccer paper bets; bets = tracked bets.', days, totals: await api('/api/tally'), analyst: extra.analyst || null, bets: extra.bets || null, ...(extra.error ? { extraError: extra.error } : {}) };
     const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `gameday-hub-backup-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);

@@ -142,5 +142,18 @@ ok('a pick priced at DraftKings carries no book label', card('g2').lean && card(
   for (const d of ['2026-11-21', '2026-11-22']) kv.delete(`day:${d}`);
 }
 
+// ---- 9. the backups carry the records kept outside the day cards ----
+{
+  kv.set('analyst', JSON.stringify({ v: 1, items: [{ id: 's1', rule: 'move', key: 'H', date: DATE, gid: 'g1', league: 'eng.1' }, { id: 'h1', sport: 'nhl', rule: 'hmove', key: 'A', date: DATE, gid: '9001' }],
+    old: [['2026-11-01T15:00:00Z', 'move', 'H', 200, 'win', 0.8, 1.2, -120, -120, 0.8, null, null, '2026-11-01|g0', 'eng.1'], ['2026-11-01T23:00:00Z', 'hmove', 'A', 100, 'loss', -1, 0, 110, null, null, 'nhl', null, '2026-11-01|9000', null]] }));
+  kv.set('bets', JSON.stringify({ v: 1, items: [{ id: 'b1', legs: [{ date: DATE, id: 'g1', key: 'H' }] }] }));
+  kv.set('nhl:day:2026-11-21', JSON.stringify({ date: '2026-11-21', cards: [] }));
+  const get = p => worker.fetch(new Request('https://hub.test' + p, { headers: { 'x-admin-token': 'secret' } }), env);
+  const x = await (await get('/api/backup-extra')).json();
+  ok('soccer backup: the Analyst\'s soccer bets (open and short rows) and the tracked bets', x.analyst.items.length === 1 && x.analyst.items[0].id === 's1' && x.analyst.old.length === 1 && x.analyst.old[0][1] === 'move' && x.analyst.oldFields.length === 14 && x.bets.items[0].id === 'b1', JSON.stringify(x));
+  const n = await (await get('/api/nhl/export')).json();
+  ok('hockey backup: the Analyst\'s hockey bets only', n.analyst.items.length === 1 && n.analyst.items[0].id === 'h1' && n.analyst.old.length === 1 && n.analyst.old[0][10] === 'nhl' && n.days.length === 1, JSON.stringify(n.analyst));
+}
+
 console.log(fails ? `\n${fails} FAILED` : '\nAll data-integrity checks passed');
 process.exit(fails ? 1 : 0);
