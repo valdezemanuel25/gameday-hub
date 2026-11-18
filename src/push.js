@@ -51,8 +51,19 @@ export async function encryptPayload(sub, text) {
 // ---- devices ----
 export const getPush = async env => (await env.HUB.get('push', 'json')) || { subs: [], sent: {} };
 const savePush = (env, d) => env.HUB.put('push', JSON.stringify(d));
+// A browser's subscription, checked before it is kept (Nov 18, 2026): the Worker later POSTs to the endpoint from every alert run, so it
+// must be a plain https address (no user:password, no bare IP) of a sensible length, and the two keys must be base64url of the sizes Web
+// Push uses (a 65-byte P-256 key, a 16-byte secret). Anything else used to be stored as sent.
+const B64U = /^[A-Za-z0-9_-]+={0,2}$/;
+export function validSub(sub) {
+  if (!sub || typeof sub.endpoint !== 'string' || sub.endpoint.length > 1024 || !sub.keys) return false;
+  let u; try { u = new URL(sub.endpoint); } catch (e) { return false; }
+  if (u.protocol !== 'https:' || u.username || u.password || /^[\d.]+$|^\[/.test(u.hostname) || !u.hostname.includes('.')) return false;
+  const k = String(sub.keys.p256dh || ''), a = String(sub.keys.auth || '');
+  return B64U.test(k) && k.length >= 86 && k.length <= 90 && B64U.test(a) && a.length >= 16 && a.length <= 24;
+}
 export async function addSub(env, sub, label) {
-  if (!sub || typeof sub.endpoint !== 'string' || !sub.endpoint.startsWith('https://') || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) return { error: 'That device sent an incomplete subscription.' };
+  if (!validSub(sub)) return { error: 'That device sent an incomplete subscription.' };
   const d = await getPush(env);
   d.subs = d.subs.filter(s => s.endpoint !== sub.endpoint);
   d.subs.push({ endpoint: sub.endpoint, keys: { p256dh: String(sub.keys.p256dh), auth: String(sub.keys.auth) }, label: String(label || '').slice(0, 60), at: new Date().toISOString() });
