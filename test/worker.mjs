@@ -1,7 +1,7 @@
 // Wiring test: real Worker code, fake ESPN-shaped responses, in-memory KV.
 // Proves sync -> analyze -> delayed grade -> tally works, one league per request.
 // Does NOT prove ESPN's live JSON shape.
-import worker, { runSlot, gradeLeague } from '../src/worker.js';
+import worker, { runSlot, gradeLeague, getDay } from '../src/worker.js';
 
 const kv = new Map();
 const env = {
@@ -152,21 +152,21 @@ ok('retired v3 test keeps the 58 imported shadow matches', t.h2hOld.v2.n === 58 
 {
   const key = 'day:2026-10-15';
   const v2x = { p: [41, 29, 30], pick: 'H', over: 50, btts: 50, scores: [['1–1', 10]], lam: [1, 1], best: { pick: 'x', p: 50 } };
-  const mkDay = card => kv.set(key, JSON.stringify({ date: '2026-10-15', analyzed: {}, cards: [card] }));
+  const mkDay = card => (kv.delete('fix:' + key), kv.set(key, JSON.stringify({ date: '2026-10-15', analyzed: {}, cards: [card] })));
   const card = { id: 'fx2', league: 'eng.1', home: 'Arsenal', away: 'Brighton', v2: v2x, final: null, kickoff: '2026-10-15T19:00:00Z' };
   mkDay({ ...card, v3: { p: [40, 30, 30], pick: 'H' } }); // saved before v4 existed: no v4 key
   await call('/api/analyze?league=eng.1&date=2026-10-15&leftover=1', 'POST', 'secret');
-  const filled = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
+  const filled = (await getDay(env, '2026-10-15')).cards.find(x => x.id === 'fx2');
   ok('leftover: a card saved before v4 gets analyzed and now has a v4 key', 'v4' in filled && filled.v3 === undefined && filled.v2.lam[0] !== 1, JSON.stringify(filled.v4));
   mkDay({ ...card, v4: null, v5: null });
   await call('/api/analyze?league=eng.1&date=2026-10-15&leftover=1', 'POST', 'secret');
-  const kept = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
-  ok('leftover: a card that already has v4 and v5 keys is left exactly as it was', JSON.stringify(kept.v2) === JSON.stringify(v2x) && kept.v4 === null && kept.v5 === null);
+  const kept = (await getDay(env, '2026-10-15')).cards.find(x => x.id === 'fx2');
+  ok('leftover: a card that already has v4 and v5 keys is left exactly as it was', JSON.stringify(kept.v2) === JSON.stringify(v2x) && kept.v4 === null && kept.v5 === null, JSON.stringify(kept));
   mkDay({ ...card, v4: null });
   await call('/api/analyze?league=eng.1&date=2026-10-15&leftover=1', 'POST', 'secret');
-  const gained = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
+  const gained = (await getDay(env, '2026-10-15')).cards.find(x => x.id === 'fx2');
   ok('leftover: a card saved before v5 existed is analyzed once more and gets a v5 key', 'v5' in gained, JSON.stringify(gained.v5));
-  kv.delete(key);
+  kv.delete(key); kv.delete('fix:' + key);
 }
 
 // ---- a v4 made before kickoff survives re-analysis after the game finished (but before it is graded) ----
@@ -174,15 +174,15 @@ ok('retired v3 test keeps the 58 imported shadow matches', t.h2hOld.v2.n === 58 
   const key = 'day:2026-10-15', v4x = { p: [50, 25, 25], pick: 'H', over: 50, btts: 50, scores: [['1–0', 10]], lam: [1.4, 1] };
   const v2x = { p: [41, 29, 30], pick: 'H', over: 50, btts: 50, scores: [['1–1', 10]], lam: [1, 1], best: { pick: 'x', p: 50 } };
   const card = { id: 'fx2', league: 'eng.1', home: 'Arsenal', away: 'Brighton', v2: v2x, v4: v4x, final: null, kickoff: '2026-10-15T19:00:00Z' };
-  kv.set(key, JSON.stringify({ date: '2026-10-15', analyzed: {}, cards: [card] }));
+  kv.delete('fix:' + key); kv.set(key, JSON.stringify({ date: '2026-10-15', analyzed: {}, cards: [card] }));
   await call('/api/analyze?league=eng.1&date=2026-10-15', 'POST', 'secret'); // the clock is past that kickoff
-  const k = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
+  const k = (await getDay(env, '2026-10-15')).cards.find(x => x.id === 'fx2');
   ok('re-analysis after kickoff keeps the v4 made before it', JSON.stringify(k.v4) === JSON.stringify(v4x) && !k.v4why, JSON.stringify(k.v4));
-  kv.set(key, JSON.stringify({ date: '2026-10-15', analyzed: {}, cards: [{ ...card, v4: undefined }] }));
+  kv.delete('fix:' + key); kv.set(key, JSON.stringify({ date: '2026-10-15', analyzed: {}, cards: [{ ...card, v4: undefined }] }));
   fx2Done = true; await call('/api/analyze?league=eng.1&date=2026-10-15', 'POST', 'secret'); fx2Done = false;
-  const n = JSON.parse(kv.get(key)).cards.find(x => x.id === 'fx2');
+  const n = (await getDay(env, '2026-10-15')).cards.find(x => x.id === 'fx2');
   ok('a game first seen after kickoff has no v4 and says why', n.v4 === null && /already played|not recognized|no games/.test(n.v4why || ''), JSON.stringify([n.v4, n.v4why]));
-  kv.delete(key);
+  kv.delete(key); kv.delete('fix:' + key);
 }
 
 // ---- never overwrite a graded card ----

@@ -5,6 +5,7 @@
 //   * the daily KV write budget, Odds API credits, the last sync problem per league,
 //   * each Analyst rule's record (the weekly check-in reads it), with how close it is to being benched.
 import { getAnalyst, summary, RULES, NHL_RULES, SINCE, NHL_SINCE, BENCH, setOf, tiers, tierOf } from './analyst.js';
+import { getDay } from './fixes.js';
 
 const HOUR = 3600000;
 const lbl = c => `${c.away && c.home ? `${c.home} v ${c.away}` : c.id} (${c.league || 'nhl'}, ${c.kickoff})`;
@@ -74,7 +75,7 @@ async function restSummary(nhlRest, env) {
 export async function hubHealth(env, { today, addDays, priced, readCredits, writesToday, writeLimit, saverAt, pinnState = null, nhlRest = null }, now = Date.now()) {
   const t = today(), ds = [addDays(t, -1), t, addDays(t, 1)];
   const [sd, nd, errs, wt, doc] = await Promise.all([
-    Promise.all(ds.map(d => env.HUB.get(`day:${d}`, 'json'))), Promise.all(ds.map(d => env.HUB.get(`nhl:day:${d}`, 'json'))),
+    Promise.all(ds.map(d => getDay(env, d))), Promise.all(ds.map(d => getDay(env, d, 'nhl'))),
     env.HUB.get('meta:errors', 'json'), writesToday(env.HUB, new Date(now)), getAnalyst(env, { readOnly: true })]);
   const soc = Object.fromEntries(ds.map((d, i) => [d, sd[i]?.cards || []])), hk = Object.fromEntries(ds.map((d, i) => [d, nd[i]?.cards || []]));
   return {

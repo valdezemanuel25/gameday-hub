@@ -12,6 +12,7 @@ import { V4, dcTau } from './v4core.js';
 import { earlyPaid } from './early.js';
 import { CUP_MODEL } from './data.js';
 import { TIE, OT_GOAL } from './nhl.js';
+import { getDay } from './fixes.js';
 
 const MAXG = 11;
 export const LINES = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
@@ -188,7 +189,7 @@ export async function getBets(env) { return (await env.HUB.get('bets', 'json')) 
 export const saveBets = (env, doc) => env.HUB.put('bets', JSON.stringify(doc));
 // The cards a set of legs refers to, one read per day.
 export async function loadCards(env, legs) {
-  const keys = [...new Set(legs.map(l => `${isNhl(l) ? 'nhl:' : ''}${l.date}`))], days = await Promise.all(keys.map(k => env.HUB.get(k.startsWith('nhl:') ? `nhl:day:${k.slice(4)}` : `day:${k}`, 'json'))), m = new Map();
+  const keys = [...new Set(legs.map(l => `${isNhl(l) ? 'nhl:' : ''}${l.date}`))], days = await Promise.all(keys.map(k => getDay(env, k.startsWith('nhl:') ? k.slice(4) : k, k.startsWith('nhl:') ? 'nhl' : 'soccer'))), m = new Map();
   keys.forEach((k, i) => { const nhl = k.startsWith('nhl:'), d = nhl ? k.slice(4) : k; for (const c of days[i]?.cards || []) m.set(`${d}|${nhl ? 'nhl' : c.league}|${c.id}`, c); });
   return m;
 }

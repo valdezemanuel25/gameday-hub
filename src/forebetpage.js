@@ -4,6 +4,7 @@
 import { norm, sameTeam, words } from './sportsmole.js';
 import { localDate } from './data.js';
 import { getUnm, saveUnm, likeness } from './verify.js';
+import { getDay } from './fixes.js';
 
 const BASE = 'https://www.forebet.com/en/';
 // Hub league slug -> Forebet page. Add the Champions League once its page address is known.
@@ -113,7 +114,7 @@ async function loadDays(env, now) {
   const t = localDate(now.toISOString()), days = [];
   for (let n = 0; n < 3; n++) {
     const d = new Date(new Date(`${t}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
-    const day = await env.HUB.get(`day:${d}`, 'json');
+    const day = await getDay(env, d);
     if (day) days.push({ date: d, day });
   }
   return days;

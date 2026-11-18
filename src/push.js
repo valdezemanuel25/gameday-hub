@@ -5,6 +5,7 @@
 //   Second divisions and untracked leagues are left out, like every other record.
 // Storage: KV key 'push' holds { subs, sent } (one write when a device is added or removed, or when alerts go out) and 'push:vapid' holds the signing key.
 import { consensusPick, hockeyPick } from './pick.js';
+import { getDay } from './fixes.js';
 
 const enc = new TextEncoder();
 export const b64u = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -123,8 +124,8 @@ export async function pushStep(env, now, dates, fetcher = fetch) {
   const d = await getPush(env); if (!d.subs.length) return { push: 'no devices' };
   const cards = { soccer: [], hockey: [] };
   for (const date of dates) {
-    for (const c of (await env.HUB.get(`day:${date}`, 'json'))?.cards || []) cards.soccer.push(c);
-    for (const c of (await env.HUB.get(`nhl:day:${date}`, 'json'))?.cards || []) cards.hockey.push(c);
+    for (const c of (await getDay(env, date))?.cards || []) cards.soccer.push(c);
+    for (const c of (await getDay(env, date, 'nhl'))?.cards || []) cards.hockey.push(c);
   }
   const due = dueAlerts(cards, d.sent || {}, now); if (!due.length) return { push: 'nothing due' };
   let sent = 0;
