@@ -122,5 +122,44 @@ try {
     ok('hockey tile: a 3+ point move is lit and has an arrow', tag && /[▲▼]/.test(tag.text) && tag.color !== tag.faint, JSON.stringify(tag));
     await ctx.close();
   }
+  { // One number per tile (Nov 18, 2026): the big chances come from the headline's source, so the headline pick's % is the one shown big
+    // (a priced game showed v4's 70% over the market's "Bayern Munich to win 77%"), with a small "market" / "v4" label saying which.
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } }), errs = []; page.on('pageerror', e => errs.push(e.message));
+    await page.route('**/api/**', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify(answer(r.request().url())) }));
+    await page.route(u => !u.href.startsWith(base), r => r.abort());
+    await page.goto(`${base}/index.html`);
+    await page.waitForFunction(() => typeof render === 'function' && typeof day !== 'undefined' && day && day.cards && day.cards.length > 0, null, { timeout: 15000 }).catch(() => {});
+    const cards = [ // priced, a result pick; priced, a goals pick (Under, where v4 leans Over); not priced (v4 leads)
+      { id: 'p1', league: 'ger.1', leagueKey: 'bundesliga', leagueName: 'Bundesliga', home: 'Bayern Munich', away: 'Mainz', kickoff: T(3), ko: '1:30 PM', v2: { p: [70, 17, 13] },
+        v4: { p: [70, 17, 13], over: 58, btts: 50 }, v6: { p: [77, 15, 8], over: 63, btts: 44 }, odds: { h: -350, d: 480, a: 900 } },
+      { id: 'p2', league: 'ger.1', leagueKey: 'bundesliga', leagueName: 'Bundesliga', home: 'Borussia Dortmund', away: 'SC Freiburg', kickoff: T(4), ko: '2:30 PM', v2: { p: [45, 27, 28] },
+        v4: { p: [45, 27, 28], over: 55, btts: 52 }, v6: { p: [40, 30, 30], over: 38, btts: 41 }, odds: { h: 150, d: 230, a: 180 } },
+      { id: 'p3', league: 'por.1', leagueKey: 'primeira', leagueName: 'Primeira Liga', home: 'Benfica', away: 'Porto', kickoff: T(5), ko: '3:30 PM', v2: { p: [61, 22, 17] }, v4: { p: [61, 22, 17], over: 50, btts: 50 } },
+    ];
+    const got = await page.evaluate(cs => {
+      day.cards = cs; S.league = 'all'; const out = [];
+      for (const c of cs) {
+        S.sel = c.id; render();
+        const t = document.querySelector(`.sgt[data-ssel="${c.id}"]`), num = s => +(/(\d+)%/.exec(s) || [])[1];
+        const head = t.querySelector('.lt b').textContent, hp = num(t.querySelector('.lt em').textContent);
+        const rows = [...t.querySelectorAll('.r2')].map(r => ({ n: r.querySelector('b').firstChild.textContent, p: num(r.querySelector('span').textContent) }));
+        const foot = t.querySelector('.f2').textContent, goals = /(O2\.5|U2\.5|BTTS no|BTTS) (\d+)%/.exec(foot);
+        const team = rows.find(r => head === r.n + ' to win'), big = team ? team.p : head === 'Draw' ? num(/Draw (\d+)%/.exec(foot)[0]) : goals ? +goals[2] : null;
+        const lab = t.querySelector('.srcl'), cn = document.querySelector('#sdt .xp .n'), cl = cn && cn.querySelector('.srcl');
+        const card = cn ? [...cn.children].map(x => num(x.textContent)) : [];
+        out.push({ id: c.id, head, hp, big, goals: goals && goals[0], label: lab && lab.textContent, fs: lab ? parseFloat(getComputedStyle(lab).fontSize) : 0, cardLabel: cl && cl.textContent,
+          card, tile: [rows[0].p, num(/Draw (\d+)%/.exec(foot)[0]), rows[1].p] });
+      }
+      return out;
+    }, cards);
+    const [p1, p2, p3] = got;
+    ok('one number per tile: priced result pick, the big % is the headline\'s (market 77%, not v4 70%), labelled "market"', p1.big === 77 && p1.hp === 77 && p1.label === 'market', JSON.stringify(p1));
+    ok('one number per tile: priced goals pick, the big chances are the market\'s and the goals number beside the draw is the headline\'s side (U2.5 62%)', p2.goals === 'U2.5 62%' && p2.big === p2.hp && p2.tile.join() === '40,30,30' && p2.label === 'market', JSON.stringify(p2));
+    ok('one number per tile: not priced, v4 leads and the big % is v4\'s, labelled "v4"', p3.big === 61 && p3.hp === 61 && p3.label === 'v4', JSON.stringify(p3));
+    ok('open card: the big chances and label match the tile', got.every(x => x.cardLabel && x.card.join() === x.tile.join() && x.cardLabel === x.label), JSON.stringify(got.map(x => [x.id, x.card, x.tile, x.cardLabel])));
+    ok('source label is at least 11px', got.every(x => x.fs >= 11), JSON.stringify(got.map(x => x.fs)));
+    ok('one number per tile: no script errors', !errs.length, errs.join(' | '));
+    await page.close();
+  }
 } finally { await browser.close(); server.close(); }
 console.log(bad ? `\n${bad} page check(s) FAILED` : '\nAll page checks passed'); process.exit(bad ? 1 : 0);
