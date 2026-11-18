@@ -14,7 +14,10 @@ export function rowOf(date, c) {
   const px = c.px, op = px.op || px.f || null, ot = px.opt || (px.f && px.f.tl != null ? px.f : null), I = (c.v5 && c.v5.in) || {};
   return {
     date, id: c.id, kickoff: c.kickoff, home: c.hAbbr || c.home, away: c.aAbbr || c.away,
-    open: op ? { h: n(op.h), a: n(op.a) } : null, close: { h: px.h, a: px.a }, lineupRead: px.cl || null,
+    open: op ? { h: n(op.h), a: n(op.a) } : null, close: { h: px.h, a: px.a }, lineupRead: px.cl && !px.cls ? px.cl : null,
+    // where the close came from: 'lineup' (the Hub's read 45-20 minutes out), 'you' (the Update / Get final price button), 'espn' (ESPN's
+    // closing line on the finished game, cl = puck drop), or 'last' (no read in the window: the last price before the lock stands)
+    closeFrom: px.cls === 'espn' ? 'espn' : px.cby === 'you' ? 'you' : px.cl ? 'lineup' : 'last',
     totalOpen: ot ? { line: n(ot.tl), o: n(ot.to), u: n(ot.tu) } : null, totalClose: px.tl != null ? { line: n(px.tl), o: n(px.to), u: n(px.tu) } : null,
     final: { h: c.final.h, a: c.final.a, last: c.final.last || 'REG' },
     v2: c.v2 ? { w: n(c.v2.w), o: n(c.v2.o) } : null, v5: c.v5 ? { w: n(c.v5.w), o: n(c.v5.o) } : null, line: c.ln ? n(c.ln.v) : null,

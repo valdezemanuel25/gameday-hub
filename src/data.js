@@ -134,9 +134,13 @@ function parseEvent(ev) {
   const h = comp.competitors?.find(c => c.homeAway === 'home');
   const a = comp.competitors?.find(c => c.homeAway === 'away');
   if (!h || !a) return null;
-  const done = !!comp.status?.type?.completed;
+  const done = !!comp.status?.type?.completed, st = String(comp.status?.type?.name || ''), stx = `${st} ${comp.status?.type?.shortDetail || ''} ${comp.status?.type?.detail || ''}`;
   return {
     id: String(ev.id), date: ev.date, done,
+    // et: a final after extra time ('aet') or penalties ('pen'): ESPN's score then holds the extra-time goals, which bets do not count.
+    // off: a game that will not be played on this date as listed (postponed, canceled, abandoned): its bets are void.
+    ...(done && /_PEN\b|_PK\b|\bPens?\b|PENALT/i.test(stx) ? { et: 'pen' } : done && /\bAET\b|_AET\b|extra time/i.test(stx) ? { et: 'aet' } : {}),
+    ...(OFF.test(st) ? { off: st.replace(/^STATUS_/, '').toLowerCase() } : {}),
     home: { id: String(h.team.id), name: h.team.displayName || h.team.name, abbr: h.team.abbreviation, score: done ? Number(h.score) : null },
     away: { id: String(a.team.id), name: a.team.displayName || a.team.name, abbr: a.team.abbreviation, score: done ? Number(a.score) : null },
     odds: done ? null : parseOdds(comp.odds),
@@ -150,9 +154,19 @@ function parseEvent(ev) {
 export function goalPlays(details) {
   if (!Array.isArray(details) || !details.length) return null;
   const g = details.filter(d => d && (d.scoringPlay || /goal/i.test(d.type?.text || '')) && d.team && d.team.id != null)
-    .map((d, i) => ({ team: String(d.team.id), own: !!d.ownGoal, so: !!d.shootout, t: Number(d.clock?.value), i }));
+    .map((d, i) => ({ team: String(d.team.id), own: !!d.ownGoal, so: !!d.shootout, t: Number(d.clock?.value), reg: inRegulation(d.clock), i }));
   g.sort((x, y) => (Number.isFinite(x.t) && Number.isFinite(y.t) ? x.t - y.t : 0) || x.i - y.i);
-  return g.map(({ team, own, so }) => ({ team, own, so }));
+  return g.map(({ team, own, so, reg }) => ({ team, own, so, reg }));
+}
+// Statuses for a game that is not played as listed. Postponed, canceled (either spelling), abandoned, forfeited: bets on it are void.
+export const OFF = /POSTPONED|CANCEL|ABANDON|FORFEIT/;
+// Was a goal scored in the 90 minutes (stoppage time included)? From ESPN's clock text ("23'", "45'+2'", "90'+4'", "105'"), else its
+// value in seconds when that is clearly inside 90 minutes. null when it cannot be told (a value past 90:00 may be stoppage or extra time).
+export function inRegulation(clock) {
+  const m = /^\s*(\d+)\s*'?\s*(\+\s*\d+)?/.exec(String(clock?.displayValue ?? ''));
+  if (m) return Number(m[1]) <= 90;
+  const v = Number(clock?.value);
+  return Number.isFinite(v) && v > 0 && v <= 90 * 60 ? true : null;
 }
 
 // ESPN answers 400 to date ranges (confirmed live), so ask one day at a time and merge.

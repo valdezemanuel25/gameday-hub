@@ -259,7 +259,7 @@ export const NHL_RULES = [
 export function decideNhl(items, cards, date, now = new Date(), benched = new Set()) {
   const held = new Set(items.map(b => `${b.date}|${b.league}|${b.gid}|${MKT(b.key)}`)), out = [];
   for (const c of cards) {
-    if (!c || c.final || c.skipped || !c.px || !c.v2 || c.v2.w == null) continue;
+    if (!c || c.final || c.void || c.skipped || !c.px || !c.v2 || c.v2.w == null) continue;
     const hm = hockeyMove(c.px), ml = devig(c.px.h, c.px.a), mins = (new Date(c.kickoff).getTime() - now.getTime()) / 60000;
     const g = c.gk || {}, gs = s => (s === 'c' ? 'confirmed' : s === 'e' ? 'expected' : 'unknown'), both = g.h && g.a && g.h.st === 'c' && g.a.st === 'c';
     const ctx = { ml, b2b: c.v5 && c.v5.in && c.v5.in.b2b, gkText: g.h || g.a ? `${hk(c, 'A')} ${(g.a && g.a.n) || '?'} (${gs(g.a && g.a.st)}), ${hk(c, 'H')} ${(g.h && g.h.n) || '?'} (${gs(g.h && g.h.st)})` : 'not listed' };
@@ -310,7 +310,8 @@ export function settle(b, c, now = new Date()) {
   if (b.clvPin == null && b.pinNo == null && c && c.odds && now.getTime() >= ko) {
     const pn = c.odds.pn; b.pinNo = !c.odds.pcl || !pn ? 'read' : 'OU'.includes(b.key) && pn.tl !== 2.5 ? 'line' : 'BN'.includes(b.key) && pn.bty == null ? 'btts' : 'price'; ch = true;
   }
-  if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); if (b.dk != null) b.udk = +(hit ? dec(b.dk) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
+  if (c && c.void && !c.final) { b.res = 'void'; b.units = 0; b.score = String(c.void); ch = true; } // postponed / canceled / abandoned, or no 90-minute score
+  else if (c && c.final) { const hit = leanHit(b.key, c.final); b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); if (b.dk != null) b.udk = +(hit ? dec(b.dk) - 1 : -1).toFixed(3); b.score = `${c.final.h}-${c.final.a}`; ch = true; }
   else if (now.getTime() - ko > VOID_AFTER) { b.res = 'void'; b.units = 0; ch = true; }
   return ch;
 }
@@ -323,7 +324,8 @@ function settleNhl(b, c, now) {
     const m = closeNhl(c.px, b);
     if (m != null) { b.close = m; b.clv = r1(100 * (dec(b.price) / dec(m) - 1)); b.clvDk = b.clv; ch = true; }
   }
-  if (c && c.final) {
+  if (c && c.void && !c.final) { b.res = 'void'; b.units = 0; b.score = String(c.void); ch = true; } // postponed or canceled
+  else if (c && c.final) {
     const hit = hockeyHit(b.key, c.final, b.line);
     if (hit == null) { b.res = 'void'; b.units = 0; }
     else { b.res = hit ? 'win' : 'loss'; b.units = +(hit ? dec(b.price) - 1 : -1).toFixed(3); b.udk = b.units; }
@@ -427,7 +429,7 @@ export async function analystLook(env, date, cards, now = new Date(), shop = nul
     let dirty = false;
     for (const b of doc.items) if (!b.res && b.sport !== 'nhl') { const c = byKey.get(cardKey(b.date, b.league, b.gid)); if (c && settle(b, c, now)) dirty = true; }
     const s = summary(soc(doc.items), soc(doc.old || [], true)), benched = new Set(s.rules.filter(r => r.benched).map(r => r.id));
-    const live = cards.filter(c => c.odds && !c.final && new Date(c.kickoff).getTime() - now.getTime() > LOCK_MIN * 60000);
+    const live = cards.filter(c => c.odds && !c.final && !c.void && new Date(c.kickoff).getTime() - now.getTime() > LOCK_MIN * 60000);
     let sp = null;
     if (sharp && live.length && !benched.has('stale')) { try { sp = await sharp(live); } catch (e) { sp = null; } }
     const fresh = decide(doc.items, live, date, now, benched, sp);

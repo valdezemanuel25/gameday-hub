@@ -145,6 +145,7 @@ export function settle(bet, cards) {
   let changed = false;
   for (const l of bet.legs) {
     const c = cards.get(gameKey(l));
+    if (!l.res && c && c.void && !c.final) { l.res = 'void'; changed = true; } // postponed, canceled, abandoned (src/worker.js gradeLeague, src/nhl.js)
     if (!l.res && c && c.final) {
       const total = c.final.total ?? c.final.h + c.final.a; // hockey totals leave out the shootout goal
       l.res = isNhl(l) && l.market === 'ou' && total === Number(l.line) ? 'void' : test(l)(c.final.h, c.final.a, total) ? 'hit' : 'miss'; changed = true;

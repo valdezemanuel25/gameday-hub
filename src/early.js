@@ -35,3 +35,13 @@ export function earlyPaid(key, hit, lead, sport = 'soccer') {
   if (hit) return true;
   return lead[key === 'H' ? 0 : 1] >= EARLY[sport];
 }
+// The score after 90 minutes (stoppage time included) of a game that went to extra time, from ESPN's goal list: { h, a, seq } where seq
+// is the 90-minute goal order, or null when it cannot be trusted (no goal list, a goal whose minute is unknown, or goals that do not add
+// up to ESPN's final score fh, fa, which includes extra time and leaves out the shootout). plays: as for goalSeq, each with reg = scored
+// in the 90 minutes (true / false, or null when unknown: src/data.js inRegulation).
+export function regScore(plays, hId, aId, fh, fa) {
+  const seq = goalSeq(plays, hId, aId, fh, fa); if (!seq) return null;
+  const real = plays.filter(p => p && !p.so); if (real.some(p => p.reg !== true && p.reg !== false)) return null;
+  const reg = seq.filter((s, i) => real[i].reg);
+  return { h: reg.filter(s => s === 'h').length, a: reg.filter(s => s === 'a').length, seq: reg };
+}
