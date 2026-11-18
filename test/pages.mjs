@@ -89,5 +89,38 @@ try {
     ok('soccer page: a saved Top picks "on" is not restored, and the All chip shows as on', !st.top && st.all, JSON.stringify(st));
     await page.close();
   }
+  { // Loading and animation fixes (Nov 18, 2026)
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 900 }, reducedMotion: 'reduce' });
+    await ctx.route(u => !u.href.startsWith(base), r => r.abort());
+    await ctx.route('**/api/**', async r => { if (new URL(r.request().url()).pathname === '/api/day') await new Promise(x => setTimeout(x, 900)); r.fulfill({ contentType: 'application/json', body: JSON.stringify(answer(r.request().url())) }); });
+    const page = await ctx.newPage(), errs = []; page.on('pageerror', e => errs.push(e.message));
+    await page.goto(`${base}/index.html`); await page.waitForTimeout(400);
+    const ld = await page.evaluate(() => ({ skel: !!document.querySelector('.skel'), empty: /No games analyzed/.test(document.getElementById('view').textContent) }));
+    ok('soccer page: while the day loads the Board shows placeholder tiles, not "No games analyzed"', ld.skel && !ld.empty, JSON.stringify(ld));
+    await page.waitForFunction(() => day && day.cards && day.cards.length > 0, null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(300);
+    ok('soccer page: the placeholders go once the day is in', await page.evaluate(() => !document.querySelector('.skel') && document.querySelectorAll('.sgt').length > 0));
+    // the Movement card: the move has an arrow (not colour alone) and each chance has its open -> now bar
+    const mv = await page.evaluate(() => { const h = movesView('s1'), d = document.createElement('div'); d.innerHTML = h; const tds = [...d.querySelectorAll('.mvx tr')].slice(1, 4);
+      return { arrows: tds.filter(r => /[▲▼]/.test(r.lastElementChild.textContent) || r.lastElementChild.textContent.trim() === '0').length, bars: d.querySelectorAll('.mvx .cb i').length }; });
+    ok('soccer Movement card: every result row says the move with an arrow and draws a chance bar', mv.arrows === 3 && mv.bars >= 3, JSON.stringify(mv));
+    // reduced motion: a mouse over a flip card does not tilt or scale it
+    await page.evaluate(() => { S.sel = 's1'; render(); }); await page.waitForTimeout(300);
+    const box = await (await page.$('#sdt .fc-wrap')).boundingBox(); await page.mouse.move(box.x + 15, box.y + 15); await page.waitForTimeout(300);
+    const tf = await page.evaluate(() => document.querySelector('#sdt .fc-in').style.transform);
+    ok('reduced motion: hovering a flip card leaves it flat', /scale\(1(\.0+)?\) rotateX\(0(\.0+)?deg\)/.test(tf), tf);
+    // the spotlight pop-up sleeps once the light has settled (it ran a frame loop for as long as it was open)
+    await page.evaluate(() => { window.__raf = 0; const o = window.requestAnimationFrame; window.requestAnimationFrame = f => { window.__raf++; return o(f); }; Spotlight.open('<div class="mvg">x</div>'); });
+    await page.waitForTimeout(700); const a = await page.evaluate(() => window.__raf); await page.waitForTimeout(500); const b = await page.evaluate(() => window.__raf);
+    ok('spotlight: no frame loop while the pop-up sits idle', b - a === 0, `${b - a} frames in 0.5s`);
+    await page.evaluate(() => Spotlight.close());
+    ok('soccer page: no script errors in these checks', !errs.length, errs.join(' | '));
+    // hockey: a 3+ point price move on a tile is lit (the plain style used to outrank the lit one) and carries an arrow
+    const hp = await ctx.newPage(); await hp.goto(`${base}/nhl.html`);
+    await hp.waitForFunction(() => typeof day !== 'undefined' && day && day.cards && day.cards.length > 0, null, { timeout: 15000 }).catch(() => {});
+    const tag = await hp.evaluate(() => { day.cards[0].px = { op: { h: -150, a: 125 }, h: -200, a: 165, tl: 6.5, to: -110, tu: -110 }; render();
+      const t = document.querySelector('.bt .mvtag'); return t ? { text: t.textContent, color: getComputedStyle(t).color, faint: getComputedStyle(document.querySelector('.bt .mvpc')).color } : null; });
+    ok('hockey tile: a 3+ point move is lit and has an arrow', tag && /[▲▼]/.test(tag.text) && tag.color !== tag.faint, JSON.stringify(tag));
+    await ctx.close();
+  }
 } finally { await browser.close(); server.close(); }
 console.log(bad ? `\n${bad} page check(s) FAILED` : '\nAll page checks passed'); process.exit(bad ? 1 : 0);
