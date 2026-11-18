@@ -134,14 +134,50 @@ const slim = p => ({
 });
 const toPred = s => ({ home: s.p[0] / 100, draw: s.p[1] / 100, away: s.p[2] / 100, over25: s.over / 100, bttsYes: s.btts / 100 });
 
-// The password is ADMIN_TOKEN. It is accepted from the sign-in page (which sets a one-year cookie), from the x-admin-token header,
+// The password is ADMIN_TOKEN. It is accepted from the sign-in page (which sets a session cookie), from the x-admin-token header,
 // and from HTTP Basic (any username) so scripts keep working. With no ADMIN_TOKEN set, nothing is let in.
-// The cookie is an HMAC of a fixed phrase under the password, so nothing is stored; changing the password signs every device out.
-const COOKIE = 'hub_s';
-async function sessionValue(env) {
-  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.ADMIN_TOKEN), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode('game-day-hub session v1'));
-  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+// Sessions you can end (Nov 18, 2026, audit #17 / P5). The cookie (__Host-hub_s) is "v2.<issued at, seconds>.<HMAC>", signed with a
+// key made from the password over the issue time and SESSION_EPOCH, so nothing is stored and no KV write is ever made for it:
+//   * it is refused once it is older than SESSION_MAX_DAYS (default 180), or dated more than 5 minutes ahead;
+//   * a device in use stays in: a page opened with a session older than 30 days (or half SESSION_MAX_DAYS, if that is shorter) gets a
+//     fresh cookie on that answer;
+//   * changing SESSION_EPOCH (a var or secret, default "0") signs every device out without changing the password; changing the
+//     password does too.
+// Changeover: the old cookie (hub_s, one HMAC of a fixed phrase, the same on every device) is still taken until OLD_COOKIE_UNTIL and
+// only while SESSION_EPOCH is unset or "0". A device that shows it gets the new cookie and the old one cleared.
+const COOKIE = '__Host-hub_s', OLD_COOKIE = 'hub_s';
+export const OLD_COOKIE_UNTIL = '2026-12-20'; // the old cookie is refused from 00:00 UTC on this day (about 30 days after the change)
+const SESSION_DAYS = 180, RENEW_DAYS = 30, SKEW_S = 300, COOKIE_CAP_DAYS = 400; // browsers cap a cookie's Max-Age at 400 days
+const enc = s => new TextEncoder().encode(s);
+const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+async function hmac(key, msg) {
+  const k = await crypto.subtle.importKey('raw', typeof key === 'string' ? enc(key) : key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return crypto.subtle.sign('HMAC', k, enc(msg));
+}
+const epochOf = env => String(env.SESSION_EPOCH == null ? '' : env.SESSION_EPOCH).trim() || '0';
+export const sessionDays = env => { const d = Number(env.SESSION_MAX_DAYS); return Number.isFinite(d) && d > 0 ? d : SESSION_DAYS; };
+const renewAfterS = env => Math.min(RENEW_DAYS, sessionDays(env) / 2) * 86400;
+const oldSessionValue = async env => hex(await hmac(env.ADMIN_TOKEN, 'game-day-hub session v1'));
+// The cookie's value for a session issued at iat (seconds). Exported for test/auth.mjs.
+export async function sessionToken(env, iat) {
+  const key = await hmac(env.ADMIN_TOKEN, 'game-day-hub session key v2');
+  return `v2.${iat}.${hex(await hmac(key, `v2|${iat}|${epochOf(env)}`))}`;
+}
+const cookieLine = (name, value, maxAge) => `${name}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+const newSession = async (env, now = Date.now()) => cookieLine(COOKIE, await sessionToken(env, Math.floor(now / 1000)), Math.round(Math.min(sessionDays(env), COOKIE_CAP_DAYS) * 86400));
+const clearCookie = name => cookieLine(name, '', 0);
+const cookieOf = (header, name) => { for (const part of String(header || '').split(';')) { const s = part.trim(); if (s.startsWith(name + '=')) return s.slice(name.length + 1); } return null; };
+// The session a Cookie header carries: { v: 2, age } (seconds since issue), { v: 1 } (the old cookie), or null. Exported for test/auth.mjs.
+export async function cookieSession(env, header, now = Date.now()) {
+  if (!env.ADMIN_TOKEN) return null;
+  const t = Math.floor(now / 1000), v = cookieOf(header, COOKIE), m = v && /^v2\.(\d{1,12})\.[0-9a-f]{64}$/.exec(v);
+  if (m) {
+    const age = t - Number(m[1]);
+    if (age <= sessionDays(env) * 86400 && age >= -SKEW_S && await same(v, await sessionToken(env, Number(m[1])))) return { v: 2, age };
+  }
+  const o = cookieOf(header, OLD_COOKIE);
+  if (o && /^[0-9a-f]{64}$/.test(o) && epochOf(env) === '0' && now < Date.parse(OLD_COOKIE_UNTIL + 'T00:00:00Z') && await same(o, await oldSessionValue(env))) return { v: 1 };
+  return null;
 }
 // Secrets are compared as SHA-256 digests (always 32 bytes), so the time a check takes gives away neither where a guess first goes
 // wrong nor how long the password is (the old character loop stopped at once on a length mismatch). Exported for test/security.mjs.
@@ -149,22 +185,46 @@ export async function same(a, b) {
   const t = new TextEncoder(), [x, y] = await Promise.all([a, b].map(s => crypto.subtle.digest('SHA-256', t.encode(String(s)))));
   const u = new Uint8Array(x), v = new Uint8Array(y); let d = 0; for (let i = 0; i < u.length; i++) d |= u[i] ^ v[i]; return d === 0;
 }
+// -> null (not signed in), { via: 'header' }, or the cookie's session (cookieSession)
 async function authed(req, env) {
-  if (!env.ADMIN_TOKEN) return false;
-  if (req.headers.has('x-admin-token') && await same(req.headers.get('x-admin-token'), env.ADMIN_TOKEN)) return true;
+  if (!env.ADMIN_TOKEN) return null;
+  if (req.headers.has('x-admin-token') && await same(req.headers.get('x-admin-token'), env.ADMIN_TOKEN)) return { via: 'header' };
   const h = req.headers.get('authorization') || '';
   if (h.startsWith('Basic ')) {
     let d = null; try { d = atob(h.slice(6)); } catch (e) { /* fall through to the cookie */ }
-    if (d != null && await same(d.slice(d.indexOf(':') + 1), env.ADMIN_TOKEN)) return true;
+    if (d != null && await same(d.slice(d.indexOf(':') + 1), env.ADMIN_TOKEN)) return { via: 'header' };
   }
-  const m = /(?:^|;\s*)hub_s=([0-9a-f]+)/.exec(req.headers.get('cookie') || '');
-  return !!m && await same(m[1], await sessionValue(env));
+  return cookieSession(env, req.headers.get('cookie'), Date.now());
 }
+// The cookies a signed-in answer sets: the old cookie swapped for a new one (on a page or a data call), or a fresh cookie when a page
+// is opened with a session older than the renewal age. "A page" is a browser opening a document, so never the data calls (/api/) or a
+// page's scripts and pictures. A header sign-in (scripts) never gets a cookie.
+const isPage = (req, p) => req.method === 'GET' && !p.startsWith('/api/') && (req.headers.get('sec-fetch-dest') === 'document' || /\btext\/html\b/.test(req.headers.get('accept') || ''));
+async function sessionCookies(req, env, p, s) {
+  if (s.v === 1 && (isPage(req, p) || p.startsWith('/api/'))) return [await newSession(env), clearCookie(OLD_COOKIE)];
+  if (s.v === 2 && s.age > renewAfterS(env) && isPage(req, p)) return [await newSession(env)];
+  return null;
+}
+// Added by fetch() once the route has answered (handle() has many exits). An answer that sets a cookie is marked private, no-store, so
+// no cache keeps it; the service worker keeps nothing either (public/sw.js).
+const pendingCookies = new WeakMap();
+function withCookies(r, list) {
+  if (!r || !list || !list.length || r.status === 101) return r;
+  const out = new Response(r.body, r);
+  for (const c of list) out.headers.append('set-cookie', c);
+  out.headers.set('cache-control', 'private, no-store');
+  return out;
+}
+// The health report notes a short password (under 16 characters). It cannot be required without locking the owner out, so it is only a
+// warning, and it never shows the password or its length.
+const signInHealth = env => ({ weakPassword: String(env.ADMIN_TOKEN || '').length < 16, sessionDays: sessionDays(env) });
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
 // deep: the nightly sweep's read (token route) also gets the hockey rest-vs-price check, which lists and reads every saved hockey day. The
 // signed-in read (Sweep on every page load) leaves it out, so a page load costs no extra KV list call.
-const health = (env, deep = false) => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState, nhlRest: deep ? e => nhlTotals(e).then(valueOf).then(t => t && t.rest) : null });
+// signIn: the weak-password warning (signInHealth), shown by Sweep's report (public/sweep.js).
+const health = (env, deep = false) => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState, nhlRest: deep ? e => nhlTotals(e).then(valueOf).then(t => t && t.rest) : null })
+  .then(h => ({ ...h, signIn: signInHealth(env) }));
 // The Results summaries over every saved day, kept in the edge cache while no finished game they count has changed (src/summaries.js).
 // tally() and nhlTally() are unchanged; they are handed the days the cache check already read. values: hockey days already read.
 const soccerTotals = env => summary(env, { kind: 'tally', prefix: 'day:', build: days => tally(env, days) });
@@ -1281,7 +1341,7 @@ const hub = {
     }
     // Every request is a button's (or a page's): its saves to a day or to the Analyst's record become side patches (src/fixes.js).
     const c = counted(env0), env = withFixes(c.env, { button: true });
-    try { return withSecurity(await hub.handle(req, env)); }
+    try { const r = await hub.handle(req, env); return withSecurity(withCookies(r, pendingCookies.get(req))); }
     catch (e) {
       // A route with no catch of its own (a storage hiccup, say) answers in the Hub's own words instead of Cloudflare's error page.
       console.error('unhandled', u.pathname, e && e.stack || e);
@@ -1300,16 +1360,23 @@ const hub = {
     const q = k => url.searchParams.get(k);
     if (crossSite(req, url)) return p.startsWith('/api/') ? json({ error: 'Cross-site request refused' }, 403) : new Response('Cross-site request refused.', { status: 403, headers: { 'cache-control': 'no-store' } });
 
-    // Sign in once: a correct password sets a cookie that lasts a year, so the installed app and the browser open straight in.
+    // Sign in once: a correct password sets a session cookie (SESSION_MAX_DAYS, renewed while in use), so the installed app and the
+    // browser open straight in. Only the new cookie is set; an old one on this device is cleared.
     if (p === '/login' && req.method === 'POST') {
       let f; try { f = await req.formData(); } catch (e) { f = null; }
       const pw = f ? String(f.get('password') || '') : '', next = safeNext(f && String(f.get('next') || ''));
       // Counted before the password is looked at, so a guesser is stopped whether or not a guess is right.
       if (await limited(env.LOGIN_LIMIT, 'login:' + visitor(req))) return new Response(null, { status: 303, headers: { location: '/login?e=2' + (next !== '/' ? '&next=' + encodeURIComponent(next) : ''), 'cache-control': 'no-store', 'retry-after': '60' } });
       if (!env.ADMIN_TOKEN || !(await same(pw, env.ADMIN_TOKEN))) return new Response(null, { status: 303, headers: { location: '/login?e=1' + (next !== '/' ? '&next=' + encodeURIComponent(next) : ''), 'cache-control': 'no-store' } });
-      return new Response(null, { status: 303, headers: { location: next, 'set-cookie': `${COOKIE}=${await sessionValue(env)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
+      const h = new Headers({ location: next, 'cache-control': 'no-store' });
+      h.append('set-cookie', await newSession(env)); h.append('set-cookie', clearCookie(OLD_COOKIE));
+      return new Response(null, { status: 303, headers: h });
     }
-    if (p === '/logout') return new Response(null, { status: 303, headers: { location: '/login', 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
+    if (p === '/logout') { // clears both the new cookie and the old one
+      const h = new Headers({ location: '/login', 'cache-control': 'no-store' });
+      h.append('set-cookie', clearCookie(COOKIE)); h.append('set-cookie', clearCookie(OLD_COOKIE));
+      return new Response(null, { status: 303, headers: h });
+    }
     // iPhones also look for the home-screen icon at these fixed names; give them the same picture
     if (req.method === 'GET' && /^\/apple-touch-icon(-precomposed|-180x180|-180x180-precomposed)\.png$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/apple-touch-icon.png', url.origin)));
     if (req.method === 'GET' && (p === '/login' || PUBLIC_FILES.has(p))) return env.ASSETS.fetch(req); // /login is public/login.html (the assets handler serves it without the .html)
@@ -1326,11 +1393,13 @@ const hub = {
       return new Response(JSON.stringify({ error: 'Too many requests. Wait a minute and try again.' }), { status: 429, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '60' } });
     }
     // Whole site is private: page and data both need the password.
-    if (!(await authed(req, env))) {
+    const signed = await authed(req, env);
+    if (!signed) {
       if (p.startsWith('/api/')) return json({ error: 'Bad or missing admin token' }, 401);
       if (req.method === 'GET') return new Response(null, { status: 302, headers: { location: '/login' + (p !== '/' ? '?next=' + encodeURIComponent(p + url.search) : ''), 'cache-control': 'no-store' } });
       return new Response('Sign in to open Game Day Hub.', { status: 401, headers: { 'cache-control': 'no-store' } });
     }
+    { const sc = await sessionCookies(req, env, p, signed); if (sc) pendingCookies.set(req, sc); } // old cookie swapped, or renewed (fetch() adds them)
     if (p.startsWith('/api/') && q('date') && !DATE_RE.test(q('date'))) return json({ error: 'Pass ?date=YYYY-MM-DD' }, 400);
 
     // Opening the Hub lands on the Home carousel; Soccer lives at /soccer (old installs and bookmarks that open / land on Home too)
