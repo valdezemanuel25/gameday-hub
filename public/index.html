@@ -462,6 +462,8 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .sgt .lb{margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)}
 .sgt .lt{font-size:17px;gap:8px}.sgt .lt .mbk{display:none}.sgt .lt b{font-weight:500;letter-spacing:-.02em}.sgt .lt em{font-weight:500;color:var(--grass)}
 .sgt .lt2{margin-top:6px;font-size:12px;color:var(--faint)}.sgt .tp{color:var(--ink);font-weight:500;font-size:13px}.sgt .tp .pv{font-size:11px;padding:3px 10px;margin-left:8px}
+/* where the big chances come from (Nov 18, 2026): "market" (the price, as in the headline pick) or "v4"; quiet, like the league tag */
+.srcl{font-size:11px;font-weight:500;letter-spacing:.06em;color:var(--faint);white-space:nowrap}.xp .n .mid .srcl{display:block;text-align:center;margin-top:1px}
 .pv{background:rgba(255,255,255,.1);border:1px solid transparent;color:var(--ink);font-weight:500}.pv.val{background:var(--grass);border-color:var(--grass);color:#070908}.pv.fair{background:rgba(255,255,255,.1);border-color:transparent;color:var(--ink)}.pv.no{background:transparent;border-color:rgba(255,255,255,.2);color:var(--faint)}
 .sdt{margin:-2px 0 0}
 .m,.m.x{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:28px}.m.open{background:rgba(255,255,255,.06)}
@@ -918,6 +920,19 @@ function anLine0(c) {
 // one-line shots read and the score card percentages. The extra text (agree/disagree tags, price line, Analyst line, xG and score lines, goals chips, price-move
 // chip, fair odds, likeliest scores, price-move paragraph) is left out. Set MIN_CARD = false to bring all of it back.
 const MIN_CARD = true;
+// The big chances on a tile and on the open card come from the same source as the headline pick under them (Nov 18, 2026), so a game
+// shows one number for one result: once priced, the score card from the price (v6, label "market"); not priced yet, or the headline
+// fell back, the card's model (v4, else v2). Same leanPick call as headline(), so the source always follows the headline.
+const SRC_KEY = { O: 'O2.5', U: 'U2.5', B: 'BTTS', N: 'BTTS no' };
+function bigOf(c) {
+  const L = !S.top && ((c.v6 && c.v6.p) || (c.v4 && c.v4.p)) && typeof leanPick === 'function' ? leanPick(c) : null;
+  const mk = !!(L && L.src === 'market' && c.v6 && c.v6.p), m = mk ? c.v6 : vm(c), r = x => (typeof x === 'number' ? Math.round(x) : null);
+  // the goals number beside the draw: the side the headline picks when it is a goals pick (Under 2.5 58%, not Over 2.5 42%), else Over 2.5
+  const k = L && SRC_KEY[L.key] && (L.key === 'O' || L.key === 'U' ? r(m.over) != null : r(m.btts) != null) ? L.key : 'O';
+  const gv = k === 'O' ? r(m.over) : k === 'U' ? 100 - r(m.over) : k === 'B' ? r(m.btts) : 100 - r(m.btts);
+  return { src: mk ? 'market' : lead(c).n, p: m.p.map(r), goals: gv == null ? null : { label: SRC_KEY[k], p: gv } };
+}
+const srcLabel = b => `<small class="srcl" title="${b.src === 'market' ? 'Chances from the sportsbook price, margin removed (the score card), as in the headline pick' : `Chances from the ${b.src} model, as in the headline pick`}">${b.src}</small>`;
 function headline(c) {
   const L = ((c.v6 && c.v6.p) || (c.v4 && c.v4.p)) && typeof leanPick === 'function' ? leanPick(c) : null;
   if (L && L.src === 'market') { // the market leads (the score card from the price); the models are agree / disagree tags only
@@ -1086,7 +1101,7 @@ function chips(c) {
 }
 function game(c) {
   const open = S.open === c.id, ko = new Date(c.kickoff).getTime(), now = Date.now();
-  const v = vm(c), [h, d, a] = v.p, top = Math.max(h, d, a), [cl, ccls] = conf(c);
+  const v = vm(c), B = bigOf(c), [h, d, a] = B.p, top = Math.max(h, d, a), [cl, ccls] = conf(c); // B: the big chances from the headline's source (bigOf)
   let mid, pending = false, extra = '';
   if (c.final) {
     const g = vg(c), hit = g ? g.outcomeHit : null;
@@ -1101,7 +1116,7 @@ function game(c) {
   return `<div class="m x ${open ? 'open' : ''} ${pending ? 'pn' : ''} ${allIn(c) ? 'all' : ''}"><button type="button" class="hd" data-id="${esc(c.id)}" aria-expanded="${open}">
     <div class="xh"><span>${esc(c.leagueName)}</span><span class="cfx ${ccls}">${cl}</span></div>
     <div class="xt"><div class="xk">${xcrest(c.home, cons.strong && cons.side === 'H', c.hId)}<div><b${longWord(c.home)}>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away, cons.strong && cons.side === 'A', c.aId)}<div><b${longWord(c.away)}>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
-    <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'H' ? 'cg' : ''}">${h}%</b></span><span class="mid"><b>Draw ${d}%</b></span><span class="${fav === 'a' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'A' ? 'cg' : ''}">${a}%</b></span></div>
+    <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'H' ? 'cg' : ''}">${h}%</b></span><span class="mid"><b>Draw ${d}%</b>${srcLabel(B)}</span><span class="${fav === 'a' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'A' ? 'cg' : ''}">${a}%</b></span></div>
       <div class="b"><i class="h ${fav === 'h' ? 'f' : ''}" style="flex:${h}"></i><i class="d ${fav === 'd' ? 'f' : ''}" style="flex:${d}"></i><i class="a ${fav === 'a' ? 'f' : ''}" style="flex:${a}"></i></div></div>
     ${S.top ? topBox(c) : headline(c)}${chips(c)}${shotsBox(c)}${scoreCard(c)}</button>${open ? expanded(c) : ''}</div>`;
 }
@@ -1217,14 +1232,14 @@ function tileBet(c) {
   return `<div class="lb"><div class="lt"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span><b>${esc(leanName(c, L.key))}</b><em>${L.p != null ? L.p + '%' : ''}</em></div>${pr ? `<div class="lt2"><span>${pips}${L.src === 'market' ? 'market · ' + (L.a ? (L.y === L.a ? 'all ' + L.a + ' models agree' : L.y + ' of ' + L.a + ' models agree') : 'no model yet') : L.y === L.a ? 'all ' + L.a + ' agree' : L.k === 'solo' ? 'one model' : L.y + ' of ' + L.a + ' agree'}</span>${pr}</div>` : ''}</div>`;
 }
 function tileOf(c, on) {
-  const v = vm(c), [h, d, a] = v.p, f = c.final, ko = new Date(c.kickoff).getTime(), now = Date.now(), g = vg(c);
+  const v = vm(c), f = c.final, B = f ? null : bigOf(c), [h, d, a] = B ? B.p : v.p, ko = new Date(c.kickoff).getTime(), now = Date.now(), g = vg(c); // B: the headline's source (bigOf)
   const fav = h >= d && h >= a ? 'h' : a >= d ? 'a' : 'd', hit = f && g ? g.outcomeHit : null;
   const tag = f ? `<i>Final</i>` : now > ko && now < ko + GAME_MS ? `<i>In play</i>` : `<i>${esc(LCODE[c.leagueKey] || '')}</i>`;
   // A price move of HOT_MV+ points since the opening price (margin removed): +/- beside the team, opening → now under the name; the draw gets a +/- by its chance.
   const pmv = !f && moveOf(c.odds), mvd = i => (pmv && Math.round(Math.abs(pmv.d[i])) >= HOT_MV ? Math.round(pmv.d[i]) : 0);
   const mvt = (i, pc) => { const d = mvd(i); return d ? `<small class="mvtag ${mvLv(d)}${d > 0 ? ' up' : ''}" title="Price move since the opening price">${mvArrow(d)}</small>${pc ? `<small class="mvpc">${Math.round(pmv.p0[i])}→${Math.round(pmv.p1[i])}%</small>` : ''}` : ''; };
   const row = (nm, side, id) => `<div class="r2${!f && fav === side ? ' fv' : ''}">${xcrest(nm, false, id)}<b>${esc(strip(nm))}${mvt(side === 'h' ? 0 : 2, true)}</b><span>${f ? (side === 'h' ? f.h : f.a) : (side === 'h' ? h : a) + '%'}</span></div>`;
-  const foot = f ? `<span>${hit == null ? '' : lead(c).n + ' ' + (hit ? '✓' : '✗')}</span><span>${esc(LCODE[c.leagueKey] || '')}</span>` : `<span>Draw <b>${d}%</b>${mvt(1, false)}</span><span>O2.5 <b>${v.over}%</b></span>`;
+  const foot = f ? `<span>${hit == null ? '' : lead(c).n + ' ' + (hit ? '✓' : '✗')}</span><span>${esc(LCODE[c.leagueKey] || '')}</span>` : `<span>Draw <b>${d}%</b>${mvt(1, false)}${B.goals ? ` · ${B.goals.label} <b>${B.goals.p}%</b>` : ''}</span>${srcLabel(B)}`;
   return `<button type="button" class="sgt${on ? ' on' : ''}" data-ssel="${esc(c.id)}"><div class="m2"><span>${esc(c.ko)}</span>${tag}</div>${row(c.home, 'h', c.hId)}${row(c.away, 'a', c.aId)}${f ? '' : `<div class="pb"><i class="h" style="flex:${h}"></i><i class="d" style="flex:${d}"></i><i class="a" style="flex:${a}"></i></div>`}<div class="f2">${foot}</div>${f ? '' : tileBet(c)}</button>`;
 }
 const alertBox = () => { const a = alerts(); return a.length ? `<div class="alert">${a.join('<br>')}</div>` : ''; };
