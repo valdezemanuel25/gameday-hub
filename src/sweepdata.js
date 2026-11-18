@@ -37,7 +37,7 @@ export function dayGaps(days, now, { sport = 'soccer', priced = null, graceH = s
       if (!c.fb) row.noForebet++;
       if (sport === 'nhl') { row.pricedCards++; if (!c.px) row.noPrice++; if (!c.gk) row.noGoalie++; if (!c.ln) row.noLine++; }
       else if (!priced || priced.has(c.league)) { row.pricedCards++; if (noSoccerPrice(c)) row.noPrice++; }
-      const ko = new Date(c.kickoff).getTime(); if (!Number.isFinite(ko) || c.final) continue;
+      const ko = new Date(c.kickoff).getTime(); if (!Number.isFinite(ko) || c.final || c.void) continue; // void: closed on purpose (postponed...), not stuck
       if (now - ko > graceH * HOUR) row.ungraded++;
       if (now - ko >= STUCK_H * HOUR) stuck.push({ date, game: `${c.home} v ${c.away}`, league: c.league || 'nhl', hoursPast: Math.round((now - ko) / HOUR) });
     }

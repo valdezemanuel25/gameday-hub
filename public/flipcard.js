@@ -21,6 +21,9 @@
     '.fc-back:not(:has(>.mvg)){background:' + O.background + ';padding:4px 2px 10px}' +
     '.fc-back>.mvg{margin:0!important;border-radius:' + O.radius + 'px!important}' +
     '.fc-back .mvx{background:rgba(0,0,0,.34);border-radius:10px}' + // a light tint behind the price table only: still see-through, but the numbers read over bright dots
+    // the back face cannot blur what is behind it (a 3D-turned face loses backdrop-filter), so the whole Movement card gets a dark tint
+    // as well (Nov 18, 2026): the dots still show through, but the notes under the table read over them
+    '.fc-back>.mvg{background:rgba(6,8,6,.62)}' +
     '.fc-back .fc-tip{display:block;text-align:center;font-size:11.5px;opacity:.5;margin-top:8px;letter-spacing:.02em}' +
     '.fc-wrap.fc-tile{margin-bottom:0;width:100%;min-width:0}.fc-tile .fc-face,.fc-tile .fc-front>*{border-radius:28px!important}.fc-tile .fc-back>.mvg{border-radius:28px!important}' +
     '.fc-glare{position:absolute;inset:0;border-radius:' + O.radius + 'px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:5;transform:translateZ(1px);' +
@@ -76,7 +79,7 @@
     var sx = 0, sy = 0, base = 0, moved = false, down = false, lastX = 0, lastT = 0, vel = 0, pid = null;
     // tilt, glare and the hover scale follow a mouse
     w.addEventListener('pointermove', function (e) {
-      if (e.pointerType === 'mouse' && !w._drag) {
+      if (e.pointerType === 'mouse' && !w._drag && !reduce) { // tilt, glare and hover scale are decoration: off with reduced motion
         var r = w.getBoundingClientRect(), px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
         w._ttx = -(py - 0.5) * 2 * O.tiltMax; w._tty = (px - 0.5) * 2 * O.tiltMax; w._hover = true; w.classList.add('fc-hov');
         w.style.setProperty('--gx', (px * 100).toFixed(1) + '%'); w.style.setProperty('--gy', (py * 100).toFixed(1) + '%'); run(w);

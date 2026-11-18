@@ -4,8 +4,10 @@ import { leanPick, consensusPick, leanHit, hockeyPick, hockeyHit } from '../src/
 import { gradeCard } from '../src/nhl.js';
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
-const code = ['esc', 'strip', 'sideOfScore', 'hdaOf', 'rowsOf', 'consensusPick', 'leanPick', 'leanHit', 'headline'].map(grab).join('\n');
-const page = new Function(`const FIRST = new Set(), priceLine = () => ''; ${code}; return { leanPick, consensusPick, leanHit, headline };`)();
+const code = ['esc', 'strip', 'sideOfScore', 'hdaOf', 'rowsOf', 'consensusPick', 'leanPick', 'leanHit', 'headline', 'PRICED_LG', 'BIG_MOVE', 'devigP', 'moveOf', 'hasMv', 'pctGo', 'AN_SHORT', 'anLine', 'anLine0'].map(grab).join('\n');
+// the headline is checked as the page draws it, with the page's own MIN_CARD setting (Nov 9, 2026: the short headline)
+const MIN = /\nconst MIN_CARD = (true|false);/.exec(html)[1];
+const page = new Function(`const FIRST = new Set(), priceLine = () => '', MIN_CARD = ${MIN}; let ANB = null; ${code}; return { leanPick, consensusPick, leanHit, headline };`)();
 let fails = 0; const ok = (n, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${x}`); };
 const mk = o => ({ home: 'Club Brugge', away: 'Lens', v2: { pick: 'H', p: [52, 26, 21], over: 66, btts: 58 }, v4: { pick: 'H', p: [60, 20, 20], over: 65, btts: 61 }, fb: { p: [48, 26, 26], over: 64, btts: 56 }, sm: { h: 2, a: 1, text: '2–1' }, ...o });
 // Brugge game: v4, Forebet and SportsMole back Brugge, Over and both-score (v2 is retired: no vote while the card has v4)

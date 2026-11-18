@@ -107,6 +107,28 @@ export const unitsWon = (m, hit) => hit ? (m > 0 ? m / 100 : 100 / -m) : -1;
 // Break-even win rate (%) for an American price, and the tag for a pick: model chance 5+ points above it is Value, 5+ below is Not worth it.
 export const needP = m => m < 0 ? -m / (-m + 100) * 100 : 100 / (m + 100) * 100;
 export const verdictOf = (p, m) => p == null || m == null ? null : p - needP(m) >= 5 ? 'val' : p - needP(m) <= -5 ? 'no' : 'fair';
+// v4's chance (%) for a pick's market: H / D / A, Over / Under 2.5, both score Yes / No. null when v4 has no number for it.
+export function v4Chance(v, key) {
+  if (!v || !v.p) return null;
+  const x = { H: v.p[0], D: v.p[1], A: v.p[2], O: v.over, U: Number.isFinite(v.over) ? 100 - v.over : null, B: v.btts, N: Number.isFinite(v.btts) ? 100 - v.btts : null }[key];
+  return Number.isFinite(x) ? x : null;
+}
+// The price tag of a locked pick (Value / Fair / Not worth it), worked out from the saved card (Nov 18, 2026): v4's chance for the pick
+// against the break-even chance of the DraftKings price the pick was graded at (verdictOf: 5+ points over = 'val', 5+ under = 'no').
+// v4 uses no prices, so the tag asks whether v4 disagreeing with DraftKings pays. Until now the tag used the pick's own chance, which
+// since Oct 27 is v6's, read off that same price with the margin removed: always about the margin below break-even, so nearly every pick
+// was 'fair'. Pinnacle's fair price was not used: on 6,531 past top picks (football-data closing prices) it sat within 5 points of
+// Bet365's break-even 97% of the time, the same 'fair' for everything. null (no tag): no saved price; a price that is not DraftKings'
+// (a Bet365 / Pinnacle stand-in, odds.src, or a both-score price from another book, odds.bk; lean.pbk says so); no v4 number for that
+// market, or a promoted club's starting rating (kept out of v4's records too).
+export function priceVerdict(c, L) {
+  if (!c || !L || !Number.isFinite(L.price) || L.pbk) return null;
+  const o = c.odds || {}, bk = 'BN'.includes(L.key) ? o.bk : o.src;
+  if (bk && bk !== 'draftkings') return null;
+  if (!c.v4 || c.v4.promo) return null;
+  const p = v4Chance(c.v4, L.key);
+  return p == null ? null : verdictOf(p, L.price);
+}
 // Price bands for the profit breakdown (American odds).
 export const BANDS = [['b1', '-300 or shorter'], ['b2', '-299 to -150'], ['b3', '-149 to +149'], ['b4', '+150 or longer']];
 export const bandOf = m => m <= -300 ? 'b1' : m <= -150 ? 'b2' : m < 150 ? 'b3' : 'b4';

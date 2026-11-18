@@ -99,9 +99,12 @@ const am = v => { if (v == null) return null; const t = String(v).trim().toUpper
 const decAm = v => { if (v == null || typeof v === 'boolean') return null; const n = Number(String(v).trim()); if (!Number.isFinite(n) || n <= 1.01 || n >= 100) return null;
   return n >= 2 ? Math.round((n - 1) * 100) : -Math.round(100 / (n - 1)); };
 const bookOf = o => String(o?.provider?.name || 'other').toLowerCase().replace(/[^a-z0-9]/g, '') || 'other';
+// ESPN spells the book both ways ("DraftKings", "Draft Kings"): a plain /draftkings/ missed the second, so with a stand-in listed first the
+// stand-in was taken although DraftKings was there (Nov 18, 2026 audit).
+const isDk = x => /draft\s*kings/i.test(x?.provider?.name || '');
 export function parseOdds(list) {
   const has = x => x && (x.moneyline || x.homeTeamOdds || x.drawOdds || x.total || x.overUnder != null);
-  const all = (list || []).filter(has), o = all.find(x => /draftkings/i.test(x.provider?.name || '')) || all[0]; if (!o) return null;
+  const all = (list || []).filter(has), o = all.find(isDk) || all[0]; if (!o) return null;
   const out0 = parseAm(o); if (out0) return out0;
   // no American price anywhere: the decimal stand-in, home / draw / away only
   const h = decAm(o.homeTeamOdds?.moneyLine), d = decAm(o.drawOdds?.moneyLine), a = decAm(o.awayTeamOdds?.moneyLine);
@@ -131,9 +134,13 @@ function parseEvent(ev) {
   const h = comp.competitors?.find(c => c.homeAway === 'home');
   const a = comp.competitors?.find(c => c.homeAway === 'away');
   if (!h || !a) return null;
-  const done = !!comp.status?.type?.completed;
+  const done = !!comp.status?.type?.completed, st = String(comp.status?.type?.name || ''), stx = `${st} ${comp.status?.type?.shortDetail || ''} ${comp.status?.type?.detail || ''}`;
   return {
     id: String(ev.id), date: ev.date, done,
+    // et: a final after extra time ('aet') or penalties ('pen'): ESPN's score then holds the extra-time goals, which bets do not count.
+    // off: a game that will not be played on this date as listed (postponed, canceled, abandoned): its bets are void.
+    ...(done && /_PEN\b|_PK\b|\bPens?\b|PENALT/i.test(stx) ? { et: 'pen' } : done && /\bAET\b|_AET\b|extra time/i.test(stx) ? { et: 'aet' } : {}),
+    ...(OFF.test(st) ? { off: st.replace(/^STATUS_/, '').toLowerCase() } : {}),
     home: { id: String(h.team.id), name: h.team.displayName || h.team.name, abbr: h.team.abbreviation, score: done ? Number(h.score) : null },
     away: { id: String(a.team.id), name: a.team.displayName || a.team.name, abbr: a.team.abbreviation, score: done ? Number(a.score) : null },
     odds: done ? null : parseOdds(comp.odds),
@@ -147,9 +154,19 @@ function parseEvent(ev) {
 export function goalPlays(details) {
   if (!Array.isArray(details) || !details.length) return null;
   const g = details.filter(d => d && (d.scoringPlay || /goal/i.test(d.type?.text || '')) && d.team && d.team.id != null)
-    .map((d, i) => ({ team: String(d.team.id), own: !!d.ownGoal, so: !!d.shootout, t: Number(d.clock?.value), i }));
+    .map((d, i) => ({ team: String(d.team.id), own: !!d.ownGoal, so: !!d.shootout, t: Number(d.clock?.value), reg: inRegulation(d.clock), i }));
   g.sort((x, y) => (Number.isFinite(x.t) && Number.isFinite(y.t) ? x.t - y.t : 0) || x.i - y.i);
-  return g.map(({ team, own, so }) => ({ team, own, so }));
+  return g.map(({ team, own, so, reg }) => ({ team, own, so, reg }));
+}
+// Statuses for a game that is not played as listed. Postponed, canceled (either spelling), abandoned, forfeited: bets on it are void.
+export const OFF = /POSTPONED|CANCEL|ABANDON|FORFEIT/;
+// Was a goal scored in the 90 minutes (stoppage time included)? From ESPN's clock text ("23'", "45'+2'", "90'+4'", "105'"), else its
+// value in seconds when that is clearly inside 90 minutes. null when it cannot be told (a value past 90:00 may be stoppage or extra time).
+export function inRegulation(clock) {
+  const m = /^\s*(\d+)\s*'?\s*(\+\s*\d+)?/.exec(String(clock?.displayValue ?? ''));
+  if (m) return Number(m[1]) <= 90;
+  const v = Number(clock?.value);
+  return Number.isFinite(v) && v > 0 && v <= 90 * 60 ? true : null;
 }
 
 // ESPN answers 400 to date ranges (confirmed live), so ask one day at a time and merge.
@@ -359,7 +376,7 @@ export async function oddsWhy(slug, date, id) {
   if (js.every(j => !j)) return { error: dbg[0] || 'ESPN did not answer' };
   const ev = js.flatMap(j => (j && j.events) || []).find(e => String(e.id) === String(id));
   if (!ev) return { found: false };
-  const list = (ev.competitions?.[0]?.odds || []).filter(Boolean), o = list.find(x => /draftkings/i.test(x.provider?.name || '')) || list[0];
+  const list = (ev.competitions?.[0]?.odds || []).filter(Boolean), o = list.find(isDk) || list[0];
   const books = [...new Set(list.map(x => x.provider?.name).filter(Boolean))];
   const missing = o ? [['home', o.moneyline?.home?.close?.odds ?? o.moneyline?.home?.open?.odds ?? o.homeTeamOdds?.moneyLine], ['draw', o.moneyline?.draw?.close?.odds ?? o.moneyline?.draw?.open?.odds ?? o.drawOdds?.moneyLine], ['away', o.moneyline?.away?.close?.odds ?? o.moneyline?.away?.open?.odds ?? o.awayTeamOdds?.moneyLine]].filter(([, v]) => v == null || v === '').map(([k]) => k) : [];
   return { found: true, status: ev.status?.type?.name || null, books, parsed: parseOdds(list), missing };

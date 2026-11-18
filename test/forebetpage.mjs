@@ -66,7 +66,7 @@ save('2026-10-15', []); save('2026-10-16', [mk('7', 'Union St.-Gilloise', 'Real 
 kv.delete('meta:fb');
 const s1 = await forebetStep(env, now, ffetch);
 ok('cron step reads one page', s1 && s1.slug === 'uefa.europa' && s1.kind === '1x2' && fetches.length === 1, JSON.stringify(s1));
-ok('cron step stays within a few KV reads', reads <= 8, String(reads));
+ok('cron step stays within a few KV reads', reads <= 11, String(reads)); // each of the 3 day reads also reads its side record (fix:day:<date>, src/fixes.js)
 const s2 = await forebetStep(env, new Date(now.getTime() + 3600000), ffetch);
 ok('the next run reads a different table (the first was read within 3 hours)', s2 && s2.kind !== '1x2');
 kv.delete('meta:fb'); save('2026-10-16', []);

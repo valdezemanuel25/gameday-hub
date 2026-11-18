@@ -14,6 +14,8 @@ import { hockeyMove } from './moves.js';
 import { analystNhl } from './analyst.js';
 import { goalSeq, maxLead, earlyPaid } from './early.js';
 import { devig } from './v6core.js';
+import { getDay } from './fixes.js';
+import { loadDays } from './summaries.js';
 
 // Rest against the price (Nov 5, 2026): v5 already carries the measured back-to-back effect; the open question is whether DraftKings'
 // moneyline already has it. On every graded game where exactly one side was on the second night of a back-to-back (v5's flags), the
@@ -79,7 +81,7 @@ const sameGk = (a, b) => a === b || (a.length >= 8 && b.length >= 8 && lev(a, b)
 export async function priorStarts(env, date, known = new Set(), cache = {}) {
   const out = [];
   for (let k = 1; k <= 3; k++) {
-    const d = addDays(date, -k), sd = d in cache ? cache[d] : (cache[d] = await env.HUB.get(`nhl:day:${d}`, 'json'));
+    const d = addDays(date, -k), sd = d in cache ? cache[d] : (cache[d] = await getDay(env, d, 'nhl'));
     if (!sd) { out.push(known.has(d) ? new Map() : null); continue; }
     const m = new Map(); for (const c of sd.cards || []) for (const [side, t] of [['h', c.hAbbr], ['a', c.aAbbr]]) m.set(t, c.gk && c.gk[side] ? gkKey(c.gk[side].n) : null);
     out.push(m);
@@ -113,7 +115,7 @@ export const gamelogRest = async (fetchFn, id, date) => (await gamelogProbe(fetc
 // For checking by hand (/api/nhl/gk-check?date=YYYY-MM-DD): each listed starter of the day's games that have not finished, what the card
 // holds (his ESPN id, his rest) and what his game log gives (at most 4 reads; the first answer's start is shown to see the format).
 export async function gkCheck(env, date, fetchFn = fetch) {
-  const day = await env.HUB.get(`nhl:day:${date}`, 'json'); if (!day) return { error: `No hockey day saved for ${date}` };
+  const day = await getDay(env, date, 'nhl'); if (!day) return { error: `No hockey day saved for ${date}` };
   const out = []; let reads = 0, shown = false;
   for (const c of day.cards || []) { if (c.final) continue;
     for (const [side, ab] of [['a', c.aAbbr], ['h', c.hAbbr]]) {
@@ -352,7 +354,8 @@ async function scoreboard(date, fetchFn, debug) {
       // Probable starting goalie per side ("expected", or "confirmed" once the team names him). Display and the v5 shadow only.
       const gkOf = t => { const p = (t.probables || []).find(x => /starting goalie/i.test(x.displayName || x.name || '') || x.abbreviation === 'SG'), a = p && p.athlete; return a && a.displayName ? { n: String(a.displayName).slice(0, 40), ...(a.id ? { id: String(a.id) } : {}), st: /confirm/i.test(p.status?.type || p.status?.name || '') ? 'c' : 'e' } : null; };
       const gkh = done ? null : gkOf(h), gka = done ? null : gkOf(a);
-      out.push({ id: String(ev.id), date: ev.date, done, last, line, gk: gkh || gka ? { h: gkh, a: gka } : null, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
+      const off = /POSTPONED|CANCEL|ABANDON|FORFEIT/.test(String(t.name || '')) ? String(t.name).replace(/^STATUS_/, '').toLowerCase() : null; // not played as listed
+      out.push({ id: String(ev.id), date: ev.date, done, last, ...(off ? { off } : {}), line, gk: gkh || gka ? { h: gkh, a: gka } : null, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
     }
     return out;
   } catch (e) { debug.push(`scoreboard ${date}: ${e.message}`); return null; }
@@ -364,7 +367,7 @@ export async function nhlOddsRaw(env, date, fetchFn = fetch) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Pass ?date=YYYY-MM-DD' };
   const res = await fetchFn(`${ESPN}?dates=${date.replace(/-/g, '')}&limit=100`, { headers: { 'user-agent': 'gameday-hub/1.0' } });
   if (!res.ok) return { error: `ESPN ${res.status}` };
-  const j = await res.json(), day = await env.HUB.get(`nhl:day:${date}`, 'json');
+  const j = await res.json(), day = await getDay(env, date, 'nhl');
   return { date, games: (j.events || []).map(ev => {
     const comp = ev.competitions?.[0] || {}, card = (day?.cards || []).find(c => c.id === String(ev.id));
     return { id: String(ev.id), name: ev.shortName || ev.name, status: comp.status?.type?.shortDetail || null, read: parseHockeyOdds(comp.odds), card: card ? card.px || null : null, raw: comp.odds || null };
@@ -409,7 +412,7 @@ async function updateStarters(env, c, e, date, fetchFn, st) {
 // 45 minutes it is the closing read, marked cby = 'you'; the lock does not apply) and the starting goalies. After the final: ESPN's closing
 // line on the finished game when the card has no read of its own. In between ESPN's price may be an in-play one, so it is not taken.
 export async function nhlCardClose(env, date, id, now = new Date(), fetchFn = fetch) {
-  const day = await env.HUB.get(`nhl:day:${date}`, 'json'); const c = (day?.cards || []).find(x => x.id === id);
+  const day = await getDay(env, date, 'nhl'); const c = (day?.cards || []).find(x => x.id === id);
   if (!c) return { error: 'That game is not saved for this day' };
   if (!c.px) return { error: 'This game has no saved price to update' };
   const evs = await scoreboard(date, fetchFn, []); if (!evs) return { error: "ESPN's scoreboard would not load" };
@@ -446,8 +449,8 @@ function shotsFrom(SH, c, e, j) {
 export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
   const t = localDate(now.toISOString()), out = [];
   for (const date of [addDays(t, -1), t, addDays(t, 1)]) {
-    const day = await env.HUB.get(`nhl:day:${date}`, 'json'); if (!day) continue;
-    const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
+    const day = await getDay(env, date, 'nhl'); if (!day) continue;
+    const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && !c.void && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
     if (!due.length) continue;
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
     let dirty = false; const st = { S5: null, cache: {}, budget: { n: 8 } };
@@ -476,7 +479,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
   // makes the rest of a team that did not play on a known day before it unknown (null), never a guess.
   const played = {};
   dates.forEach((d, i) => { if (boards[i]) played[d] = new Set(boards[i].flatMap(e => [e.hc, e.ac])); });
-  for (const d of [addDays(t, -2), addDays(t, -3), addDays(t, -4)]) { const sd = await env.HUB.get(`nhl:day:${d}`, 'json'); if (sd) played[d] = new Set((sd.cards || []).flatMap(c => [c.hAbbr, c.aAbbr])); }
+  for (const d of [addDays(t, -2), addDays(t, -3), addDays(t, -4)]) { const sd = await getDay(env, d, 'nhl'); if (sd) played[d] = new Set((sd.cards || []).flatMap(c => [c.hAbbr, c.aAbbr])); }
   const restOf = (team, date) => { for (let k = 1; k <= 3; k++) { const set = played[addDays(date, -k)]; if (!set) return null; if (set.has(team)) return k; } return 4; }; // 1 = played yesterday, 4 = three or more days
   const knownDays = new Set(dates.filter((d, i) => boards[i])), gkCache = {}, prior = {}, glBudget = { n: 8 };
   const priorFor = async d => prior[d] || (prior[d] = await priorStarts(env, d, knownDays, gkCache));
@@ -484,12 +487,16 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
   for (let i = 0; i < dates.length; i++) {
     const evs = boards[i]; if (!evs) continue;
     const date = dates[i];
-    let day = await env.HUB.get(`nhl:day:${date}`, 'json'), dirty = false;
+    let day = await getDay(env, date, 'nhl'), dirty = false;
     if (!day) day = { date, cards: [] };
     for (const e of evs) {
       const ld = localDate(e.date);
+      // Postponed or canceled (Nov 18, 2026): its card is closed as void (no grade; the Analyst's and tracked bets on it are void) instead
+      // of waiting for a result for good. Not marked as seen: if ESPN also lists the game on its new day, that day gets its own card.
+      if (e.off) { const c0 = day.cards.find(x => x.id === e.id); if (c0 && !c0.final && c0.void !== e.off) { c0.void = e.off; dirty = true; out.voided = (out.voided || 0) + 1; } continue; }
       if (seen.has(e.id)) continue; seen.add(e.id); // a game is filed under the day ESPN lists it
       let c = day.cards.find(x => x.id === e.id);
+      if (c && c.void) { delete c.void; dirty = true; } // listed as on again
       if (e.done && mode === 'analyze') continue; // Analyze reads prices and lineups only; finished games are Update results' job
       if (e.done) {
         if (c && !c.final) {
@@ -566,7 +573,7 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
 async function fbWork(env, t, now) {
   const work = [];
   for (const d of [t, addDays(t, 1)]) {
-    const day = await env.HUB.get(`nhl:day:${d}`, 'json');
+    const day = await getDay(env, d, 'nhl');
     const open = (day?.cards || []).filter(c => !c.final && !c.fb && new Date(c.kickoff).getTime() > now.getTime());
     if (open.length) work.push({ date: d, day, open });
   }
@@ -608,7 +615,7 @@ async function forebetRead(env, work, now, fetchFn) {
 
 // Type the line yourself (when ESPN has none, or to match a book you use). Games that have not started only. line = null hands it back to ESPN.
 export async function nhlSetLine(env, date, id, line, now = new Date()) {
-  const day = await env.HUB.get(`nhl:day:${date}`, 'json'), c = day?.cards?.find(x => x.id === id);
+  const day = await getDay(env, date, 'nhl'), c = day?.cards?.find(x => x.id === id);
   if (!c) return { error: 'Game not found on that day' };
   if (c.final || new Date(c.kickoff).getTime() <= now.getTime()) return { error: 'That game has already started, so its line is locked.' };
   const v = line == null || line === '' ? null : Number(line);
@@ -623,9 +630,10 @@ export async function nhlSetLine(env, date, id, line, now = new Date()) {
 
 // ---- results board -----------------------------------------------------------------------------
 const mk = () => ({ n: 0, hit: 0 });
-export async function nhlTally(env) {
-  const list = await env.HUB.list({ prefix: 'nhl:day:' });
-  const days = await Promise.all(list.keys.map(k => env.HUB.get(k.name, 'json')));
+// days: the saved hockey days when the caller has read them already (the cached summary and the backup, src/summaries.js); else every
+// nhl:day: key is listed, page by page (list() stops at 1,000 keys a call), and read.
+export async function nhlTally(env, days = null) {
+  if (!days) days = await loadDays(env.HUB, 'nhl:day:');
   const M = ['v2', 'v4', 'fb'], mkB = () => ({ win: Object.fromEntries(M.map(m => [m, mk()])), ou: Object.fromEntries(M.map(m => [m, mk()])), brier: { n: 0, v2: 0, v4: 0 }, home: mk() });
   const all = mkB(), same = mkB(), recent = [];
   // v5 shadow: only games that carry a v5 (made before puck drop, from approval onward), each model on those same games. adj = games where
