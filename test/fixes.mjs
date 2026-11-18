@@ -136,5 +136,37 @@ ok('a new day from a button (Analyze this day) is written as the day itself', li
   ok('write budget: a button that changed nothing writes nothing', puts.length === 0);
 }
 
+// ---- 10. the kept Results summary (src/summaries.js, Agent 3) is rebuilt when a button's patch changes a finished game ----
+{
+  const { clearSummaries, listKeys } = await import('../src/summaries.js');
+  // Workers KV with metadata (the write ids) and an edge cache, in memory
+  const m = new Map();
+  const HUB = { async get(k, t) { const v = m.get(k); return v ? (t === 'json' ? JSON.parse(v.value) : v.value) : null; },
+    async getWithMetadata(k, t) { const v = m.get(k); return v ? { value: t === 'json' ? JSON.parse(v.value) : v.value, metadata: v.metadata } : { value: null, metadata: null }; },
+    async put(k, value, o) { m.set(k, { value: String(value), metadata: o && o.metadata !== undefined ? o.metadata : null }); }, async delete(k) { m.delete(k); },
+    async list({ prefix }) { return { keys: [...m.keys()].filter(k => k.startsWith(prefix)).sort().map(name => ({ name, ...(m.get(name).metadata ? { metadata: m.get(name).metadata } : {}) })), list_complete: true }; } };
+  const store = new Map(); globalThis.caches = { default: { async match(r) { const x = store.get(r.url); return x == null ? undefined : new Response(x); }, async put(r, res) { store.set(r.url, await res.text()); }, async delete(r) { return store.delete(r.url); } } };
+  clearSummaries();
+  const env = { ...base, GAME_HOURS: '2', GRADE_DELAY_HOURS: '3', HUB };
+  const ko = '2026-11-21T15:00:00Z', v = { p: [50, 25, 25], pick: 'H', over: 55, btts: 50, scores: [['1–0', 12]], lam: [1.5, 1], best: { pick: 'H', p: 50 } };
+  { const c = counted(env); await c.env.HUB.put(KEY, JSON.stringify({ date: DATE, analyzed: {}, cards: [{ id: 'g9', league: 'eng.1', leagueName: 'Premier League', home: 'Arsenal', away: 'Brighton', kickoff: ko, final: null, v2: v, v4: v }] })); }
+  const team = (id, n) => ({ id, displayName: n, abbreviation: n.slice(0, 3).toUpperCase() });
+  const real = globalThis.fetch;
+  globalThis.fetch = async u => new Response(JSON.stringify({ events: /eng\.1\/scoreboard\?dates=20261121/.test(String(u)) ? [{ id: 'g9', date: ko, competitions: [{ status: { type: { completed: true } }, odds: [],
+    competitors: [{ homeAway: 'home', team: team(359, 'Arsenal'), score: '2' }, { homeAway: 'away', team: team(331, 'Brighton'), score: '0' }] }] }] : [] }));
+  const call = (p, method = 'GET') => worker.fetch(new Request('https://hub.test' + p, { method, headers: { 'x-admin-token': 'secret' } }), env);
+  const t0 = await call('/api/tally'), j0 = await t0.json(), t1 = await call('/api/tally');
+  ok('summary: kept after the first build (the second load is served from it)', t0.headers.get('x-hub-cache') === 'miss' && t1.headers.get('x-hub-cache') !== 'miss' && j0.newlyGraded === 0, `${t0.headers.get('x-hub-cache')} ${t1.headers.get('x-hub-cache')}`);
+  const g = await (await call(`/api/grade?league=eng.1&date=${DATE}`, 'POST')).json(); // the Grade button: a side patch, the day record untouched
+  ok('setup: the Grade button graded the game into the side record, with a write id', g.graded === 1 && !JSON.parse(m.get(KEY).value).cards[0].final && m.get(`fix:${KEY}`) && m.get(`fix:${KEY}`).metadata && m.get(`fix:${KEY}`).metadata.w, JSON.stringify(g));
+  const lk = await listKeys(HUB, 'day:');
+  ok('listing: the day\'s id joins its side record\'s write id (a plain store is listed for it too)', lk[0].metadata && lk[0].metadata.w.endsWith('+' + m.get(`fix:${KEY}`).metadata.w), JSON.stringify(lk));
+  const t2 = await call('/api/tally'), j2 = await t2.json();
+  ok('summary: a button\'s patch on a finished game rebuilds the Results (not the kept answer)', t2.headers.get('x-hub-cache') === 'miss' && j2.newlyGraded === 1 && j2.leans.n === 1, `${t2.headers.get('x-hub-cache')} ${j2.newlyGraded}`);
+  const t3 = await call('/api/tally');
+  ok('summary: and is kept again until the next change', t3.headers.get('x-hub-cache') !== 'miss' && (await t3.json()).newlyGraded === 1);
+  globalThis.fetch = real; delete globalThis.caches; clearSummaries();
+}
+
 console.log(fails ? `\n${fails} FAILED` : '\nAll side-record (lost saves) checks passed');
 process.exit(fails ? 1 : 0);

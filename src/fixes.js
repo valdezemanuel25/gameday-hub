@@ -185,36 +185,61 @@ export function addBets(fix, bets, rawFxAt = 0, now = Date.now()) {
 // ---- the storage layer ----------------------------------------------------------------------------------------------------------------
 const applyFor = (key, raw, fix) => (key === 'analyst' ? applyAnalystFix(raw, fix) : applyFix(raw, fix, sportOf(key)));
 const SNAPS = 8; // a button's write is compared with its own last read of the record (the last few reads are kept per request)
+// Write ids (src/summaries.js): every save of a day, and of its side record, carries one as KV metadata ({ w }, through counted()). The
+// kept Results / Trends summaries see a changed day from the listing. A day with a side record is described by both ids joined
+// ("<day's id>+<side record's id>"), so a button's patch on a finished game rebuilds the summaries as a cron save does.
+const wOf = m => (m && typeof m === 'object' && m.w ? String(m.w) : '-');
+export const joinMeta = (dayMeta, fixW) => (fixW == null ? dayMeta || null : { ...(dayMeta || {}), w: `${wOf(dayMeta)}+${fixW}` });
+const getMeta = async (hub, key, type) => {
+  if (typeof hub.getWithMetadata === 'function') { const r = await hub.getWithMetadata(key, type); return { value: r ? r.value : null, metadata: r ? r.metadata : null }; }
+  return { value: await hub.get(key, type), metadata: null };
+};
+// Every side record under 'fix:' + prefix with its write id: Map(side record key -> id), every page of the listing.
+export async function listFixMeta(hub, prefix) {
+  const out = new Map(); let cursor = null;
+  do { const x = await hub.list(cursor ? { prefix: fixKey(prefix), cursor } : { prefix: fixKey(prefix) }); for (const k of (x && x.keys) || []) out.set(k.name, wOf(k.metadata)); cursor = x && x.list_complete === false && x.cursor ? x.cursor : null; } while (cursor);
+  return out;
+}
+// Listed day keys with their side record's write id joined into the metadata.
+export const withFixMeta = (keys, fm) => keys.map(k => { const f = fm.get(fixKey(k.name)); return f == null ? k : { ...k, metadata: joinMeta(k.metadata, f) }; });
 export function withFixes(env, { button = false } = {}) {
   const base = env.HUB;
   if (!base || base.fixes) return env;
-  const hub = Object.create(base), fixCache = new Map(), snaps = new Map(), known = new Map(), wrote = new Set(); // known: list prefix -> Set of side records that exist
+  const hub = Object.create(base), fixCache = new Map(), snaps = new Map(), known = new Map(), wrote = new Set(); // known: list prefix -> Map(side record -> write id)
   const watched = k => isDayKey(k) || k === 'analyst';
   const prefixOf = k => (String(k).startsWith('nhl:') ? 'nhl:day:' : 'day:');
-  async function readFix(key, fresh = false) {
+  // the side record of a key and its write id ({ doc, w }; w null when there is none)
+  async function readFixFull(key, fresh = false) {
     if ((!fresh || wrote.has(key)) && fixCache.has(key)) return fixCache.get(key); // this request's own save is the newest there is
     const kn = known.get(prefixOf(key));
-    if (!fresh && isDayKey(key) && kn && !kn.has(fixKey(key))) { fixCache.set(key, null); return null; }
-    let f = null; try { f = await base.get(fixKey(key), 'json'); } catch (e) { f = null; }
-    fixCache.set(key, f); return f;
+    if (!fresh && isDayKey(key) && kn && !kn.has(fixKey(key))) { const x = { doc: null, w: null }; fixCache.set(key, x); return x; }
+    let x = { doc: null, w: null }; try { const r = await getMeta(base, fixKey(key), 'json'); if (r.value) x = { doc: r.value, w: wOf(r.metadata) }; } catch (e) { /* read as none */ }
+    fixCache.set(key, x); return x;
   }
+  const readFix = async (key, fresh = false) => (await readFixFull(key, fresh)).doc;
+  // one record, merged: { out, meta }; a button's read is kept to compare its save with
+  async function readOne(key, withMeta) {
+    const [r, fx] = await Promise.all([withMeta ? getMeta(base, key) : base.get(key).then(value => ({ value, metadata: null })), readFixFull(key)]);
+    const text = r.value == null ? null : typeof r.value === 'string' ? r.value : JSON.stringify(r.value);
+    if (button) { snaps.delete(key); snaps.set(key, { text, fix: fx.doc }); if (snaps.size > SNAPS) snaps.delete(snaps.keys().next().value); }
+    return { out: applyFor(key, text == null ? null : JSON.parse(text), fx.doc), meta: joinMeta(r.metadata, fx.w) };
+  }
+  const typed = (out, opt) => (out == null ? null : (typeof opt === 'string' ? opt : opt && opt.type) === 'json' ? out : JSON.stringify(out));
   hub.fixes = true; hub.button = button; hub.raw = base;
-  hub.get = async (key, opt) => {
-    if (!watched(key)) return base.get(key, opt);
-    const type = typeof opt === 'string' ? opt : opt && opt.type;
-    const [text, fix] = await Promise.all([base.get(key), readFix(key)]);
-    const raw = text == null ? null : typeof text === 'string' ? JSON.parse(text) : text;
-    if (button) { snaps.delete(key); snaps.set(key, { text: text == null ? null : typeof text === 'string' ? text : JSON.stringify(text), fix }); if (snaps.size > SNAPS) snaps.delete(snaps.keys().next().value); }
-    const out = applyFor(key, raw, fix);
-    return out == null ? null : type === 'json' ? out : JSON.stringify(out);
+  hub.get = async (key, opt) => { if (!watched(key)) return base.get(key, opt); return typed((await readOne(key, false)).out, opt); };
+  hub.getWithMetadata = async (key, opt) => {
+    if (!watched(key)) return typeof base.getWithMetadata === 'function' ? base.getWithMetadata(key, opt) : { value: await base.get(key, opt), metadata: null };
+    const r = await readOne(key, true); return { value: typed(r.out, opt), metadata: r.meta };
   };
+  // A listing of the days also lists their side records (one more list call): days without one are then read without looking for it, and
+  // each listed day's metadata carries its side record's write id (src/summaries.js reads the listing to see what changed).
   hub.list = async (o = {}) => {
     const r = await base.list(o);
     const p = o && o.prefix;
-    if ((p === 'day:' || p === 'nhl:day:') && !known.has(p)) {
-      try { const s = new Set(); let cursor; do { const x = await base.list({ prefix: fixKey(p), cursor }); for (const k of x.keys || []) s.add(k.name); cursor = x.list_complete === false ? x.cursor : null; } while (cursor); known.set(p, s); } catch (e) { /* read each side record */ }
-    }
-    return r;
+    if (p !== 'day:' && p !== 'nhl:day:') return r;
+    if (!known.has(p)) { try { known.set(p, await listFixMeta(base, p)); } catch (e) { /* read each side record */ } }
+    const fm = known.get(p);
+    return fm && fm.size && r && Array.isArray(r.keys) ? { ...r, keys: withFixMeta(r.keys, fm) } : r;
   };
   hub.put = async (key, value, opts) => {
     if (!button || !watched(key)) return base.put(key, value, opts);
@@ -226,11 +251,19 @@ export function withFixes(env, { button = false } = {}) {
     let fix;
     if (key === 'analyst') { const add = diffAnalyst(before, next); if (!add) return; fix = addBets(cur, add, rawFx); }
     else { const patch = diffDay(before, next); if (!patch) return; fix = addPatch(cur, patch, rawFx, Date.now(), key.replace(/^(nhl:)?day:/, '')); }
-    await base.put(fixKey(key), JSON.stringify(fix), { expirationTtl: FIX_TTL });
-    fixCache.set(key, fix); wrote.add(key); snaps.set(key, { text: snap.text, fix });
-    const kn = known.get(prefixOf(key)); if (kn) kn.add(fixKey(key));
+    await base.put(fixKey(key), JSON.stringify(fix), { expirationTtl: FIX_TTL }); // through counted(): counted, and given its write id
+    const w = `own${Date.now().toString(36)}`; // within this request only
+    fixCache.set(key, { doc: fix, w }); wrote.add(key); snaps.set(key, { text: snap.text, fix });
+    const kn = known.get(prefixOf(key)); if (kn) kn.set(fixKey(key), w);
   };
   return { ...env, HUB: hub };
+}
+// One record with its patches laid on and its write id ({ value, metadata }), for a hub that may or may not be wrapped (src/summaries.js).
+export async function readWithMeta(hub, key) {
+  if (hub.fixes) return hub.getWithMetadata(key, 'json');
+  const fx = async () => { try { return await getMeta(hub, fixKey(key), 'json'); } catch (e) { return { value: null, metadata: null }; } };
+  const [d, f] = await Promise.all([getMeta(hub, key, 'json'), fx()]);
+  return { value: applyFor(key, d.value, f.value), metadata: joinMeta(d.metadata, f.value ? wOf(f.metadata) : null) };
 }
 
 // The merged read as plain functions, for code holding an env that is not wrapped (tests, tools) and for anyone who wants it spelled out.
@@ -249,7 +282,7 @@ export const getDay = (env, date, sport = 'soccer') => readMerged(env, dayKey(da
 export async function listDays(env, sport = 'soccer') {
   const prefix = sport === 'nhl' ? 'nhl:day:' : 'day:', names = []; let cursor;
   const hub = env.HUB.fixes ? env.HUB : withFixes(env).HUB;
-  do { const r = await hub.list({ prefix, cursor }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
+  do { const r = await hub.list(cursor ? { prefix, cursor } : { prefix }); names.push(...r.keys.map(k => k.name)); cursor = r.list_complete === false ? r.cursor : null; } while (cursor);
   return (await Promise.all(names.sort().map(n => hub.get(n, 'json')))).filter(Boolean);
 }
 

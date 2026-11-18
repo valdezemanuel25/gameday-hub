@@ -4,7 +4,7 @@
 //   * the grading slot looks back to today -3, and the early-payout lead is tried again (3 tries in all) when ESPN's goal list was missing.
 // Real Worker code, fake ESPN-shaped answers, in-memory KV (the same set-up as test/integrity.mjs).
 import worker, { analyzeLeague, gradeLeague, runSlot, LEAD_TRIES, espnCloseSoccer } from '../src/worker.js';
-import { priceFor } from '../src/pick.js';
+import { priceFor, priceVerdict } from '../src/pick.js';
 
 let fails = 0;
 const ok = (name, cond, extra = '') => { if (!cond) fails++; console.log(`${cond ? 'PASS' : 'FAIL'}  ${name} ${cond ? '' : extra}`); };
@@ -49,7 +49,8 @@ setFeed(ev('g1', KO1, ARS, BHA, { done: true, hs: 2, as: 0 }), ev('g2', KO2, CHE
 const lock1 = priceFor(card('g1').odds, 'H'); // the price on the card when the pick locks
 await gradeLeague(DATE, 'eng.1', env, { force: true }, after);
 const L1 = card('g1').lean, L2 = card('g2').lean;
-ok('a DraftKings price is the pick\'s price (counted) and carries no book', L1 && L1.key === 'H' && L1.price === lock1 && lock1 === -150 && L1.vd && !L1.pbk && L1.spx === undefined, JSON.stringify(L1));
+ok('a DraftKings price is the pick\'s price (counted) and carries no book', L1 && L1.key === 'H' && L1.price === lock1 && lock1 === -150 && !L1.pbk && L1.spx === undefined, JSON.stringify(L1));
+ok('the saved price tag (vd) is the Results tab\'s own (priceVerdict: v4 against DraftKings), so a backup matches the page', L1.vd != null && L1.vd === priceVerdict(card('g1'), L1), JSON.stringify(L1));
 ok('a stand-in price is kept on the pick (spx, with its book) but not as its counted price', L2 && L2.price === undefined && L2.vd === undefined && L2.pbk === 'bet365' && Number.isFinite(L2.spx), JSON.stringify(L2));
 // both-score: Pinnacle's price is not counted, DraftKings' is
 {
