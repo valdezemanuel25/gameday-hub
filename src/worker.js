@@ -135,16 +135,22 @@ async function sessionValue(env) {
   const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode('game-day-hub session v1'));
   return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
-const same = (a, b) => { if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; };
+// Secrets are compared as SHA-256 digests (always 32 bytes), so the time a check takes gives away neither where a guess first goes
+// wrong nor how long the password is (the old character loop stopped at once on a length mismatch). Exported for test/security.mjs.
+export async function same(a, b) {
+  const t = new TextEncoder(), [x, y] = await Promise.all([a, b].map(s => crypto.subtle.digest('SHA-256', t.encode(String(s)))));
+  const u = new Uint8Array(x), v = new Uint8Array(y); let d = 0; for (let i = 0; i < u.length; i++) d |= u[i] ^ v[i]; return d === 0;
+}
 async function authed(req, env) {
   if (!env.ADMIN_TOKEN) return false;
-  if (same(req.headers.get('x-admin-token') || '', env.ADMIN_TOKEN)) return true;
+  if (req.headers.has('x-admin-token') && await same(req.headers.get('x-admin-token'), env.ADMIN_TOKEN)) return true;
   const h = req.headers.get('authorization') || '';
   if (h.startsWith('Basic ')) {
-    try { const d = atob(h.slice(6)); if (same(d.slice(d.indexOf(':') + 1), env.ADMIN_TOKEN)) return true; } catch (e) { /* fall through to the cookie */ }
+    let d = null; try { d = atob(h.slice(6)); } catch (e) { /* fall through to the cookie */ }
+    if (d != null && await same(d.slice(d.indexOf(':') + 1), env.ADMIN_TOKEN)) return true;
   }
   const m = /(?:^|;\s*)hub_s=([0-9a-f]+)/.exec(req.headers.get('cookie') || '');
-  return !!m && same(m[1], await sessionValue(env));
+  return !!m && await same(m[1], await sessionValue(env));
 }
 // What loads without signing in: the sign-in page itself and the files a phone or desktop needs to install the app.
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
@@ -169,13 +175,29 @@ export async function dropScout(kv, now = new Date()) {
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.includes('\\') && !/[\u0000-\u001f]/.test(n) && !n.startsWith('/login') ? n : '/home');
 
 // Sent on every answer: stay on https, no guessing file types, no other site may frame the Hub or receive its forms.
+// Nov 18, 2026: also no camera / microphone / location / payment for any page, no window shared with another site's tab, and no search
+// engine listing of the sign-in page (a private site).
 const SEC_HEADERS = {
   'strict-transport-security': 'max-age=31536000',
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'SAMEORIGIN',
   'referrer-policy': 'same-origin',
   'content-security-policy': "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'",
+  'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  'cross-origin-opener-policy': 'same-origin',
+  'x-robots-tag': 'noindex, nofollow',
 };
+// Cross-site guard (Nov 18, 2026). The sign-in cookie is SameSite=Lax, which keeps it off another site's form posts but not off
+// (a) a sibling subdomain (same-site, e.g. another *.workers.dev Worker if that suffix were ever treated as one site) or (b) another
+// site's plain links, which would let any page open data routes, some of which spend a paid daily quota (/api/pinn-check: 1 of 100
+// Pinnacle requests) or sign the device out (/logout). The Hub's own pages are same-origin; scripts send neither header. -> true to refuse.
+export function crossSite(req, url) {
+  const site = req.headers.get('sec-fetch-site'), origin = req.headers.get('origin'), write = req.method !== 'GET' && req.method !== 'HEAD';
+  if ((site === 'cross-site' || site === 'same-site') && (write || url.pathname.startsWith('/api/') || url.pathname === '/logout')) return true;
+  return write && origin != null && origin !== url.origin; // 'null' (a sandboxed frame) is refused too
+}
+// A ?date= that is not a calendar date never reaches a KV key (day:<date>) or ESPN's address (?dates=).
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function withSecurity(r) {
   if (!r || r.status === 101) return r;
   try { for (const [k, v] of Object.entries(SEC_HEADERS)) r.headers.set(k, v); return r; } catch (e) { /* a file from ASSETS has locked headers: copy it */ }
@@ -1118,6 +1140,7 @@ const hub = {
     const url = new URL(req.url);
     const p = url.pathname;
     const q = k => url.searchParams.get(k);
+    if (crossSite(req, url)) return p.startsWith('/api/') ? json({ error: 'Cross-site request refused' }, 403) : new Response('Cross-site request refused.', { status: 403, headers: { 'cache-control': 'no-store' } });
 
     // Sign in once: a correct password sets a cookie that lasts a year, so the installed app and the browser open straight in.
     if (p === '/login' && req.method === 'POST') {
@@ -1125,7 +1148,7 @@ const hub = {
       const pw = f ? String(f.get('password') || '') : '', next = safeNext(f && String(f.get('next') || ''));
       // Counted before the password is looked at, so a guesser is stopped whether or not a guess is right.
       if (await limited(env.LOGIN_LIMIT, 'login:' + visitor(req))) return new Response(null, { status: 303, headers: { location: '/login?e=2' + (next !== '/' ? '&next=' + encodeURIComponent(next) : ''), 'cache-control': 'no-store', 'retry-after': '60' } });
-      if (!env.ADMIN_TOKEN || !same(pw, env.ADMIN_TOKEN)) return new Response(null, { status: 303, headers: { location: '/login?e=1' + (next !== '/' ? '&next=' + encodeURIComponent(next) : ''), 'cache-control': 'no-store' } });
+      if (!env.ADMIN_TOKEN || !(await same(pw, env.ADMIN_TOKEN))) return new Response(null, { status: 303, headers: { location: '/login?e=1' + (next !== '/' ? '&next=' + encodeURIComponent(next) : ''), 'cache-control': 'no-store' } });
       return new Response(null, { status: 303, headers: { location: next, 'set-cookie': `${COOKIE}=${await sessionValue(env)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
     }
     if (p === '/logout') return new Response(null, { status: 303, headers: { location: '/login', 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`, 'cache-control': 'no-store' } });
@@ -1134,7 +1157,12 @@ const hub = {
     if (req.method === 'GET' && (p === '/login' || PUBLIC_FILES.has(p))) return env.ASSETS.fetch(req); // /login is public/login.html (the assets handler serves it without the .html)
 
     // Hub health for the nightly sweep: read-only, with its own secret (HEALTH_TOKEN) so the scheduled task never holds the password
-    if (req.method === 'GET' && p === '/api/health' && env.HEALTH_TOKEN && same(String(q('k') || req.headers.get('x-health-token') || ''), env.HEALTH_TOKEN)) return json(await health(env, true));
+    // Nov 18, 2026: every try at this token is counted (it used to be checked before any limit, so it could be guessed without end).
+    const ht = req.method === 'GET' && p === '/api/health' && env.HEALTH_TOKEN ? String(q('k') || req.headers.get('x-health-token') || '') : '';
+    if (ht) {
+      if (await limited(env.API_LIMIT, 'health:' + visitor(req))) return new Response(JSON.stringify({ error: 'Too many requests. Wait a minute and try again.' }), { status: 429, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '60' } });
+      if (await same(ht, env.HEALTH_TOKEN)) return json(await health(env, true));
+    }
     // The password can also arrive in a header (scripts). Those tries are counted too, or the header would be a way around the sign-in limit.
     if ((req.headers.has('x-admin-token') || (req.headers.get('authorization') || '').startsWith('Basic ')) && await limited(env.API_LIMIT, 'api:' + visitor(req))) {
       return new Response(JSON.stringify({ error: 'Too many requests. Wait a minute and try again.' }), { status: 429, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '60' } });
@@ -1145,6 +1173,7 @@ const hub = {
       if (req.method === 'GET') return new Response(null, { status: 302, headers: { location: '/login' + (p !== '/' ? '?next=' + encodeURIComponent(p + url.search) : ''), 'cache-control': 'no-store' } });
       return new Response('Sign in to open Game Day Hub.', { status: 401, headers: { 'cache-control': 'no-store' } });
     }
+    if (p.startsWith('/api/') && q('date') && !DATE_RE.test(q('date'))) return json({ error: 'Pass ?date=YYYY-MM-DD' }, 400);
 
     // Opening the Hub lands on the Home carousel; Soccer lives at /soccer (old installs and bookmarks that open / land on Home too)
     if (req.method === 'GET' && p === '/') return new Response(null, { status: 302, headers: { location: '/home' + url.search, 'cache-control': 'no-store' } });
