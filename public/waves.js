@@ -106,7 +106,9 @@
       gl.uniform2f(U.R, w, h); gl.uniform1f(U.DPR, dpr);
     }
     size();
-    addEventListener('resize', size);
+    // a new canvas size wipes the picture; with reduced motion the loop has stopped, so draw the still frame again (Nov 18, 2026: the
+    // backdrop went blank after turning the phone or resizing the window)
+    addEventListener('resize', function () { size(); if (!raf && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } });
 
     // interactive cursor (canvas ignores clicks; we listen on the window so the page stays usable)
     var mx = -9999, my = -9999, ma = 0, mt = 0;

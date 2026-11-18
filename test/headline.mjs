@@ -2,8 +2,12 @@
 import fs from 'fs';
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const grab = n => html.match(new RegExp(`(?:function ${n}\\([^)]*\\) \\{|const ${n} = )[\\s\\S]*?\\n(?:\\}\\n|(?=const |function ))`))[0];
-const code = ['esc', 'strip', 'sideOfScore', 'lead', 'vm', 'hdaOf', 'rowsOf', 'consensusPick', 'leanPick', 'goalsCons', 'headline', 'priceFor', 'pTotal', 'needP', 'fmtOdds', 'priceLine'].map(grab).join('\n');
-const api = new Function(`const FIRST = new Set(['eng.1']); ${code}; return { headline, goalsCons };`)();
+const code = ['esc', 'strip', 'sideOfScore', 'lead', 'vm', 'hdaOf', 'rowsOf', 'consensusPick', 'leanPick', 'goalsCons', 'headline', 'priceFor', 'pTotal', 'needP', 'fmtOdds', 'priceLine',
+  'PRICED_LG', 'BIG_MOVE', 'devigP', 'moveOf', 'hasMv', 'pctGo', 'AN_SHORT', 'anLine', 'anLine0'].map(grab).join('\n');
+// MIN_CARD (Nov 9, 2026) trims the card's headline to the kind, the pick and its %. The checks below read the full headline (the words the
+// page keeps behind MIN_CARD = false); the page's own setting is checked too, so the short headline still leads with the same pick.
+const build = min => new Function(`const FIRST = new Set(['eng.1']), MIN_CARD = ${min}; let ANB = null; ${code}; return { headline, goalsCons };`)();
+const api = build(false), PAGE_MIN = /\nconst MIN_CARD = (true|false);/.exec(html)[1], apiPage = build(PAGE_MIN);
 let fails = 0; const ok = (n, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${x}`); };
 const mk = o => ({ home: 'Lille', away: 'Galatasaray', v2: { pick: 'H', p: [52, 26, 21], over: 41, btts: 43 }, v4: { pick: 'H', p: [60, 20, 20], over: 65, btts: 61 }, fb: { p: [48, 26, 26], over: 64, btts: 63, score: { h: 3, a: 1 } }, sm: { h: 2, a: 1, text: 'x' }, ...o });
 { const c = mk({}); const h = api.headline(c), g = api.goalsCons(c).join(' | ');
@@ -28,4 +32,9 @@ const mk = o => ({ home: 'Lille', away: 'Galatasaray', v2: { pick: 'H', p: [52, 
 { const c = mk({ league: 'eng.1', odds: { h: -150, d: 280, a: 380 }, v4: { pick: 'H', p: [60, 20, 20], over: 50, btts: 50 } }), h = api.headline(c), n = api.headline(mk({ league: 'xxx.1', odds: { h: -150, d: 280, a: 380 } }));
   ok('first-division card shows its price and break-even chance, with no Value / Fair / Not worth it tag (removed Oct 26, 2026)', /-150<\/b> needs \d+%/.test(h) && !/(Value|Fair price|Not worth it)/.test(h), h);
   ok('other leagues show no price line', !/needs \d+%|No price/.test(n), n); }
+// the headline as the page draws it today (MIN_CARD as set in index.html): the same kind, pick and % as the full one
+for (const c of [mk({}), mk({ v4: { pick: 'A', p: [20, 30, 50], over: 50, btts: 50 }, fb: { p: [60, 20, 20], over: 64, btts: 63 } }), mk({ v4: null }), mk({ v6: { p: [66, 20, 14], over: 48, btts: 55 }, league: 'eng.1', odds: { h: -150, d: 280, a: 380 } })]) {
+  const full = api.headline(c), short = apiPage.headline(c), part = h => [/<span class="k">([^<]+)<\/span>/.exec(h)[1], /<b>([^<]+)<\/b>/.exec(h)[1], />(\d+)%</.exec(h)[1]];
+  ok(`page headline (MIN_CARD ${PAGE_MIN}) leads with the same kind, pick and % as the full one: ${part(full).join(' / ')}`, JSON.stringify(part(full)) === JSON.stringify(part(short)), short);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nAll headline checks passed'); process.exit(fails ? 1 : 0);

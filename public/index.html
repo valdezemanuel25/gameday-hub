@@ -455,7 +455,8 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .sgt .r2{gap:10px;padding:4px 0}.sgt .r2 .xc{width:30px;height:30px}
 .sgt .r2 b{font-size:21px;font-weight:400;letter-spacing:-.025em;color:var(--dim)}.sgt .r2.fv b{color:var(--ink);font-weight:500}
 .sgt .r2 span{font-size:28px;font-weight:300;letter-spacing:-.04em;color:var(--faint)}.sgt .r2.fv span{color:var(--grass);font-weight:500}
-.sgt .r2 b small.mvtag,.sgt .f2 small.mvtag{font-size:10px;font-weight:650;letter-spacing:0;color:var(--faint);margin-left:4px;vertical-align:middle}.sgt .r2 b small.mvtag.up,.sgt .f2 small.mvtag.up{color:#ff2d55;text-shadow:0 0 6px rgba(255,45,85,.6)}.sgt .r2 b small.mvpc{display:block;font-size:10px;font-weight:500;letter-spacing:0;color:var(--faint);margin-top:1px;line-height:1.1}
+/* price move beside a team: arrow + points (direction), brightness = size, the same lime levels as the Movement card (3-4 points dim, 5+ bright) */
+.sgt .r2 b small.mvtag,.sgt .f2 small.mvtag{font-size:11px;font-weight:650;letter-spacing:0;color:rgba(var(--acc-rgb),.75);margin-left:5px;vertical-align:middle;white-space:nowrap}.sgt .r2 b small.mvtag.r,.sgt .f2 small.mvtag.r{color:var(--grass);text-shadow:0 0 6px rgba(var(--acc-rgb),.6)}.sgt .r2 b small.mvpc{display:block;font-size:11px;font-weight:500;letter-spacing:0;color:var(--faint);margin-top:1px;line-height:1.15}
 .pb{display:flex;gap:3px;height:4px;margin-top:12px}.pb i{display:block;height:100%;border-radius:2px}.pb .h{background:var(--grass)}.pb .d{background:rgba(255,255,255,.18)}.pb .a{background:rgba(255,255,255,.42)}
 .sgt .f2{border:0;margin-top:8px;padding-top:0;font-size:12px;color:var(--faint)}.sgt .f2 b{font-weight:500;color:var(--dim)}
 .sgt .lb{margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)}
@@ -533,6 +534,34 @@ body:before{content:"";position:fixed;top:-130px;right:-90px;width:340px;height:
 .bfan-scrim{position:fixed;inset:0;z-index:3;display:none}.bfan-scrim.open{display:block}
 .dock:has(.st:empty){display:none}
 @media (prefers-reduced-motion:reduce){.bcard{transition:none}}
+
+/* ===== Readability and charts (Nov 18, 2026). Look unchanged; these only refine it. ===== */
+/* one hit / miss colour everywhere (the neon theme's --miss), not four slightly different reds */
+.mbs.miss,.ed-r.miss,.tr2 .ag .no,.zst.miss,.zbl i.miss{color:var(--miss)}
+/* an 11px floor for labels a phone has to read */
+.xq .l,.scd .sr span i,.xh,.mvx th,.fl{font-size:11px}
+/* long club names on the open card: hyphenate a word too long for its column instead of cutting it anywhere; very long words a size smaller */
+.xk b{word-break:normal;overflow-wrap:anywhere;-webkit-hyphens:auto;hyphens:auto}.xk b.lw{font-size:12px;letter-spacing:-.01em}.xk b.lw2{font-size:11.5px}
+/* tap areas of at least 44px: an invisible ring around small buttons (the drawn button keeps its size) */
+.chip,#hub-bar a,.xhl .pgo{position:relative}
+.chip::before{content:'';position:absolute;inset:-7px -2px -6px}
+#hub-bar a::before{content:'';position:absolute;inset:-4px -2px}
+.xhl .pgo::before{content:'';position:absolute;inset:-11px -6px}
+.tab{padding-top:11px;padding-bottom:12px}
+/* the tab row scrolls sideways on a phone: fade its right edge so the cut-off tab reads as "more" */
+@media (max-width:430px){.tabs{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent)}}
+/* while a day loads: placeholder tiles, not the "No games analyzed" message (which flashed on every day change) */
+.skel{display:flex;flex-direction:column;gap:12px;padding:12px 18px 6px}.skel i{display:block;height:196px;border-radius:28px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);animation:skp 1.4s ease-in-out infinite}
+.skel i:nth-child(2){animation-delay:.15s}.skel i:nth-child(3){animation-delay:.3s}
+@keyframes skp{50%{opacity:.5}}
+/* model agreement as pips beside the words: one filled dot per model that agrees, hollow for one that does not */
+.agp{display:inline-flex;gap:3px;margin-right:6px;vertical-align:1px}.agp i{width:7px;height:7px;border-radius:50%;border:1.5px solid rgba(var(--acc-rgb),.55)}.agp i.y{background:var(--grass);border-color:var(--grass)}
+/* Movement card: the Move column says the direction with an arrow; under each chance, a small bar: the fill is the chance now, the tick the opening chance */
+.mvx .ar{font-size:.85em;margin-right:2px}
+.mvx .cb{display:block;position:relative;height:3px;margin:4px 0 1px auto;width:100%;max-width:64px;border-radius:2px;background:rgba(255,255,255,.12)}.mvx .cb i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:rgba(var(--acc-rgb),.6)}.mvx .cb u{position:absolute;top:-2px;bottom:-2px;width:2px;margin-left:-1px;background:var(--ink);border-radius:1px}
+/* Model bets: hit rate as a bar, with a tick at what chance alone would hit (green above it, red at or below) */
+.hrb{position:relative;width:110px;height:4px;margin:6px 0 2px auto;border-radius:3px;background:rgba(255,255,255,.1)}.hrb i{display:block;height:100%;border-radius:3px;background:var(--grass)}.hrb i.lo{background:var(--miss)}.hrb u{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--ink);border-radius:1px}
+@media (prefers-reduced-motion:reduce){.skel i{animation:none}}
 </style>
 </head>
 <body>
@@ -829,7 +858,13 @@ const hue = n => { let h = 7; for (const ch of String(n)) h = (h * 31 + ch.charC
 const strip = n => String(n).replace(/^(fc|afc|sc|ssc|ac|as|rc|ud|cd|sv|vfl|vfb|tsg|1\.)\s+/i, '').replace(/\s+(fc|afc|sc|cf)$/i, '');
 const ab = n => { const w = strip(n).split(/\s+/).filter(Boolean); return (w.length > 1 ? w[0][0] + w[1][0] + (w[2] ? w[2][0] : '') : (w[0] || '?').slice(0, 3)).toUpperCase().slice(0, 3); };
 // Club logo from ESPN's logo host (by ESPN team id, saved on the card). No id, or a logo that will not load: the coloured abbreviation circle stays.
-const xcrest = (n, win, id) => `<i class="xc${win ? ' win' : ''}" style="--h:${hue(n)}">${esc(ab(n))}${id ? `<img src="https://a.espncdn.com/i/teamlogos/soccer/500/${encodeURIComponent(id)}.png" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('lg')" onerror="this.remove()">` : ''}</i>`;
+// A logo that has loaded once is drawn as a logo straight away on every later redraw (window.XLG), so a redraw no longer flashes the
+// coloured letters for a frame before the cached picture is decoded again (Nov 18, 2026).
+window.XLG = window.XLG || new Set();
+const lgKey = id => String(id).replace(/[^\w-]/g, ''); // letters, digits, - and _ only: safe inside the onload code below with no escaping
+const xcrest = (n, win, id) => `<i class="xc${win ? ' win' : ''}${id && XLG.has(lgKey(id)) ? ' lg' : ''}" style="--h:${hue(n)}">${esc(ab(n))}${id ? `<img src="https://a.espncdn.com/i/teamlogos/soccer/500/${encodeURIComponent(id)}.png" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('lg');XLG.add('${lgKey(id)}')" onerror="this.parentNode.classList.remove('lg');this.remove()">` : ''}</i>`;
+// a club name with a word too long for the open card's column (Mönchengladbach, Wolverhampton) is set a size smaller
+const longWord = n => { const w = Math.max(...String(n).split(/\s+/).map(x => x.length)); return w > 13 ? ' class="lw lw2"' : w > 11 ? ' class="lw"' : ''; };
 const sideName2 = (c, s) => s === 'H' ? ab(c.home) : s === 'A' ? ab(c.away) : 'Draw';
 const sideOfScore = (h, a) => h > a ? 'H' : h < a ? 'A' : 'D';
 
@@ -991,7 +1026,10 @@ function bttsMove(odds) {
   return { b0: [f.by, f.bn], b1: [odds.by, odds.bn], p0: r1(100 * a[0]), p1: r1(100 * b[0]), d: r1(100 * (b[0] - a[0])) };
 }
 const sgn = x => (x > 0 ? '+' : '') + x;
-const sideOf = (c, i) => (i === 1 ? 'Draw' : strip(i === 0 ? c.home : c.away));
+// a price move as arrow + signed points ("▲+6", "▼-4"): the direction never rests on colour alone
+// (with cls the arrow gets its own span; without, it is plain text, so a parent's span styles cannot reach it, as on the Board tiles)
+const mvArrow = (d, cls) => { const a = d > 0 ? '▲' : d < 0 ? '▼' : ''; return (a && cls ? `<span class="${cls}" aria-hidden="true">${a}</span>` : a) + sgn(d); };
+const sideOf =(c, i) => (i === 1 ? 'Draw' : strip(i === 0 ? c.home : c.away));
 // Did v4 already lean the way the price moved? (its chance for the moved result against the opening price)
 // Did the big move go v4's way? v4's chance for the result that moved, against the opening price: 2+ points the same way as the move is
 // "in favor of v4", 2+ points the other way is "away from v4", closer than that is "v4 neutral" (a fraction of a point is not a lean).
@@ -1062,7 +1100,7 @@ function game(c) {
   const rk = r => r ? `${ord(r)}` : '';
   return `<div class="m x ${open ? 'open' : ''} ${pending ? 'pn' : ''} ${allIn(c) ? 'all' : ''}"><button type="button" class="hd" data-id="${esc(c.id)}" aria-expanded="${open}">
     <div class="xh"><span>${esc(c.leagueName)}</span><span class="cfx ${ccls}">${cl}</span></div>
-    <div class="xt"><div class="xk">${xcrest(c.home, cons.strong && cons.side === 'H', c.hId)}<div><b>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away, cons.strong && cons.side === 'A', c.aId)}<div><b>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
+    <div class="xt"><div class="xk">${xcrest(c.home, cons.strong && cons.side === 'H', c.hId)}<div><b${longWord(c.home)}>${esc(c.home)}</b><small>${rk(c.hRank)}</small></div></div>${mid}<div class="xk r">${xcrest(c.away, cons.strong && cons.side === 'A', c.aId)}<div><b${longWord(c.away)}>${esc(c.away)}</b><small>${rk(c.aRank)}</small></div></div></div>
     <div class="xp"><div class="n"><span class="${fav === 'h' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'H' ? 'cg' : ''}">${h}%</b></span><span class="mid"><b>Draw ${d}%</b></span><span class="${fav === 'a' ? '' : 'dm'}"><b class="${cons.strong && cons.side === 'A' ? 'cg' : ''}">${a}%</b></span></div>
       <div class="b"><i class="h ${fav === 'h' ? 'f' : ''}" style="flex:${h}"></i><i class="d ${fav === 'd' ? 'f' : ''}" style="flex:${d}"></i><i class="a ${fav === 'a' ? 'f' : ''}" style="flex:${a}"></i></div></div>
     ${S.top ? topBox(c) : headline(c)}${chips(c)}${shotsBox(c)}${scoreCard(c)}</button>${open ? expanded(c) : ''}</div>`;
@@ -1175,7 +1213,8 @@ function tileBet(c) {
     if (m != null) pr = `<span class="tp">${fmtOdds(m)}</span>`; // the price only: Value / Fair / Not worth it tags were removed on Oct 26, 2026 (docs/odds-history-2026-10-26.md)
     else pr = '<span class="tp none">no price</span>';
   }
-  return `<div class="lb"><div class="lt"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span><b>${esc(leanName(c, L.key))}</b><em>${L.p != null ? L.p + '%' : ''}</em></div>${pr ? `<div class="lt2"><span>${L.src === 'market' ? 'market · ' + (L.a ? (L.y === L.a ? 'all ' + L.a + ' models agree' : L.y + ' of ' + L.a + ' models agree') : 'no model yet') : L.y === L.a ? 'all ' + L.a + ' agree' : L.k === 'solo' ? 'one model' : L.y + ' of ' + L.a + ' agree'}</span>${pr}</div>` : ''}</div>`;
+  const pips = L.a > 1 && L.y <= L.a ? `<span class="agp" aria-hidden="true">${'<i class="y"></i>'.repeat(L.y)}${'<i></i>'.repeat(L.a - L.y)}</span>` : ''; // model agreement at a glance; the words beside it say the same
+  return `<div class="lb"><div class="lt"><span class="mbk ${L.k}">${LEAN_KIND[L.k]}</span><b>${esc(leanName(c, L.key))}</b><em>${L.p != null ? L.p + '%' : ''}</em></div>${pr ? `<div class="lt2"><span>${pips}${L.src === 'market' ? 'market · ' + (L.a ? (L.y === L.a ? 'all ' + L.a + ' models agree' : L.y + ' of ' + L.a + ' models agree') : 'no model yet') : L.y === L.a ? 'all ' + L.a + ' agree' : L.k === 'solo' ? 'one model' : L.y + ' of ' + L.a + ' agree'}</span>${pr}</div>` : ''}</div>`;
 }
 function tileOf(c, on) {
   const v = vm(c), [h, d, a] = v.p, f = c.final, ko = new Date(c.kickoff).getTime(), now = Date.now(), g = vg(c);
@@ -1183,7 +1222,7 @@ function tileOf(c, on) {
   const tag = f ? `<i>Final</i>` : now > ko && now < ko + GAME_MS ? `<i>In play</i>` : `<i>${esc(LCODE[c.leagueKey] || '')}</i>`;
   // A price move of HOT_MV+ points since the opening price (margin removed): +/- beside the team, opening → now under the name; the draw gets a +/- by its chance.
   const pmv = !f && moveOf(c.odds), mvd = i => (pmv && Math.round(Math.abs(pmv.d[i])) >= HOT_MV ? Math.round(pmv.d[i]) : 0);
-  const mvt = (i, pc) => { const d = mvd(i); return d ? `<small class="mvtag${d > 0 ? ' up' : ''}" title="Price move since the opening price">${sgn(d)}</small>${pc ? `<small class="mvpc">${Math.round(pmv.p0[i])}→${Math.round(pmv.p1[i])}%</small>` : ''}` : ''; };
+  const mvt = (i, pc) => { const d = mvd(i); return d ? `<small class="mvtag ${mvLv(d)}${d > 0 ? ' up' : ''}" title="Price move since the opening price">${mvArrow(d)}</small>${pc ? `<small class="mvpc">${Math.round(pmv.p0[i])}→${Math.round(pmv.p1[i])}%</small>` : ''}` : ''; };
   const row = (nm, side, id) => `<div class="r2${!f && fav === side ? ' fv' : ''}">${xcrest(nm, false, id)}<b>${esc(strip(nm))}${mvt(side === 'h' ? 0 : 2, true)}</b><span>${f ? (side === 'h' ? f.h : f.a) : (side === 'h' ? h : a) + '%'}</span></div>`;
   const foot = f ? `<span>${hit == null ? '' : lead(c).n + ' ' + (hit ? '✓' : '✗')}</span><span>${esc(LCODE[c.leagueKey] || '')}</span>` : `<span>Draw <b>${d}%</b>${mvt(1, false)}</span><span>O2.5 <b>${v.over}%</b></span>`;
   return `<button type="button" class="sgt${on ? ' on' : ''}" data-ssel="${esc(c.id)}"><div class="m2"><span>${esc(c.ko)}</span>${tag}</div>${row(c.home, 'h', c.hId)}${row(c.away, 'a', c.aId)}${f ? '' : `<div class="pb"><i class="h" style="flex:${h}"></i><i class="d" style="flex:${d}"></i><i class="a" style="flex:${a}"></i></div>`}<div class="f2">${foot}</div>${f ? '' : tileBet(c)}</button>`;
@@ -1197,6 +1236,7 @@ function board() {
   const chips = `<div class="chips"><button type="button" class="chip ${S.league === 'all' && !S.top ? 'on' : ''}" data-league="all">All<i>${day.cards.filter(c => c.v2).length}</i></button>` +
     `<button type="button" class="chip flipall ${window.FlipCard && FlipCard.allOn() ? 'on' : ''}" data-flipall="1" title="Flip every card to its other side">⟲ Flip</button>` +
     leagues.map(([k, n]) => `<button type="button" class="chip ${S.league === k && !S.top ? 'on' : ''}" data-league="${k}">${FLAG[k] || ''}${esc(LCODE[k] || n)}<i>${day.cards.filter(c => c.v2 && c.leagueKey === k).length}</i></button>`).join('') + `</div>`;
+  if (!day.cards.length && S.loading) return `<div class="skel" role="status" aria-label="Loading the day's games"><i></i><i></i><i></i></div>`;
   if (!day.cards.length) return chips + `<div class="empty">No games analyzed for this day yet.<br>Tap <b>Analyze this day</b> below to load the fixtures and predictions.</div>`;
   if (S.league !== 'all') cs = cs.filter(c => c.leagueKey === S.league);
   const uncShown = S.top ? [] : unc.filter(c => S.league === 'all' || c.leagueKey === S.league);
@@ -1323,7 +1363,8 @@ function movesView(onlyId) {
   const card = ({ c, mv, st, np }) => {
     if (np) return npCard(c);
     const o = c.odds, op = o.op || o.f, fin = c.final, out = fin ? (fin.h > fin.a ? 0 : fin.h === fin.a ? 1 : 2) : null;
-    const row = (label, a, b, p0, p1, d, hit, tg = ['', '']) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a) + tg[0]}</td><td>${b == null ? '–' : fmtOdds(b) + tg[1]}</td><td>${p0 == null ? '' : Math.round(p0) + '→'}${Math.round(p1)}%</td><td class="${d != null && mvLv(d) === 'r' ? 'm5' : d != null && mvLv(d) === 'a' ? 'm3' : ''}"><b>${d == null ? '–' : sgn(Math.round(d))}</b></td></tr>`;
+    const cb = (p0, p1) => `<span class="cb" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, Math.round(p1)))}%"></i>${p0 == null ? '' : `<u style="left:${Math.max(0, Math.min(100, Math.round(p0)))}%"></u>`}</span>`;
+    const row = (label, a, b, p0, p1, d, hit, tg = ['', '']) => `<tr${hit ? ' class="won"' : ''}><td class="n">${label}</td><td>${a == null ? '–' : fmtOdds(a) + tg[0]}</td><td>${b == null ? '–' : fmtOdds(b) + tg[1]}</td><td>${p0 == null ? '' : Math.round(p0) + '→'}${Math.round(p1)}%${cb(p0, p1)}</td><td class="${d != null && mvLv(d) === 'r' ? 'm5' : d != null && mvLv(d) === 'a' ? 'm3' : ''}"><b>${d == null ? '–' : mvArrow(Math.round(d), 'ar')}</b></td></tr>`;
     // Over / Under from whichever source has it; a price that is not DraftKings' is tagged (P = Pinnacle)
     const pinT = x => x === 'pinnacle' ? '<sup class="srcp" title="Pinnacle price: DraftKings had no total">P</sup>' : '';
     const ouRow = mv.ou ? row(`Over ${mv.ou.line}`, mv.ou.o0, mv.ou.o1, mv.ou.p0, mv.ou.p1, mv.ou.d, fin ? fin.h + fin.a > mv.ou.line : false, [pinT(mv.ou.s0), pinT(mv.ou.s1)])
@@ -1580,9 +1621,11 @@ function edgeOf(x, exp) {
   if (r <= exp) return { t: 'none', label: 'No edge', d };
   return lo > exp && n >= 30 ? { t: 'proven', label: 'Proven edge', d } : { t: 'prom', label: 'Promising', d };
 }
+// the hit rate as a bar with a tick at what chance alone hits: green when above it, red at or below (the numbers are in the line above)
+const hrBar = (r, base) => `<div class="hrb" aria-hidden="true"><i class="${r > base ? '' : 'lo'}" style="width:${Math.max(0, Math.min(100, Math.round(r)))}%"></i><u style="left:${Math.max(0, Math.min(100, Math.round(base)))}%"></u></div>`;
 function mbRow(label, sub, x, base) {
   const n = x ? x.n : 0, h = x ? x.hits : 0, m = n ? moe(h, n) : null, e = n && base != null ? edgeOf(x, base) : null;
-  return `<div class="mbr"><div class="mbl">${label}${sub ? `<small>${sub}</small>` : ''}${e ? `<span class="edg ${e.t}">${e.label}</span>` : ''}</div><div class="mbv">${n ? `<b>${Math.round(100 * h / n)}%</b><small>${h} of ${n}${m != null ? ` · ±${m}` : ''}${base != null ? ` · chance ${Math.round(base)}%` : ''}${e && e.t !== 'early' ? ` · edge ${e.d > 0 ? '+' : ''}${e.d}` : ''}</small>` : '<small>none yet</small>'}</div></div>`;
+  return `<div class="mbr"><div class="mbl">${label}${sub ? `<small>${sub}</small>` : ''}${e ? `<span class="edg ${e.t}">${e.label}</span>` : ''}</div><div class="mbv">${n ? `<b>${Math.round(100 * h / n)}%</b><small>${h} of ${n}${m != null ? ` · ±${m}` : ''}${base != null ? ` · chance ${Math.round(base)}%` : ''}${e && e.t !== 'early' ? ` · edge ${e.d > 0 ? '+' : ''}${e.d}` : ''}</small>${base != null ? hrBar(100 * h / n, base) : ''}` : '<small>none yet</small>'}</div></div>`;
 }
 // Tracked bets: simple rules (see src/strats.js). "Live" = games since the rule was set; "before" = games it was built from, so those flatter it.
 function trackedView() {
@@ -1597,7 +1640,7 @@ function trackedView() {
   const chanceOf = t => { const b = { ks: {} }; for (const x of [t.live, t.hist]) for (const [k, q] of Object.entries(x.ks || {})) b.ks[k] = (b.ks[k] || 0) + q; const e = exp(b); return e == null ? '' : `<small>chance ${Math.round(e)}%</small>`; };
   const row = t => {
     const e = edgeOf(t.live, exp(t.live));
-    return `<div class="mbr"><div class="mbl">${esc(t.name)}<small>${esc(t.rule)}</small><span class="edg ${e ? e.t : 'early'}">${e ? e.label : 'Too early'}</span></div><div class="mbv">${line('Live', t.live)}${line('Before', t.hist)}${chanceOf(t)}</div></div>`;
+    return `<div class="mbr"><div class="mbl">${esc(t.name)}<small>${esc(t.rule)}</small><span class="edg ${e ? e.t : 'early'}">${e ? e.label : 'Too early'}</span></div><div class="mbv">${line('Live', t.live)}${line('Before', t.hist)}${chanceOf(t)}${t.live.n && exp(t.live) != null ? hrBar(100 * t.live.hits / t.live.n, exp(t.live)) : ''}</div></div>`;
   };
   return `<div class="sec">Tracked bets<small>Simple rules on v4, each one fixed bet. Several can apply to one game, so they fill up faster than the headline picks. The label uses live games only (from Oct 26, 2026); "before" games came before the rules were set.</small></div><div class="mbx">${rows.map(row).join('')}</div>${old.length ? `<details class="old"><summary>Retired v2 rules (record frozen on Oct 25, 2026)</summary><div class="mbx" style="margin:0">${old.map(row).join('')}</div></details>` : ''}`;
 }
@@ -2070,7 +2113,7 @@ function renderHeader() {
   const d = new Date(S.date + 'T12:00:00');
   $('#title').innerHTML = `<span class="wd">${esc(d.toLocaleDateString('en-US', { weekday: 'long' }))}</span><span class="dt">${esc(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</span>` + (S.date !== cfg.today ? `<button type="button" class="tod" data-date="${cfg.today}">Today</button>` : '');
   const done = day.cards.filter(c => c.v2).length, need = day.cards.filter(c => !c.v2).length;
-  $('#sub').textContent = day.cards.length ? `${day.cards.length} games · ${done} with a pick${need ? ` · ${need} not covered` : ''}` : 'Nothing analyzed for this day yet';
+  $('#sub').textContent = day.cards.length ? `${day.cards.length} games · ${done} with a pick${need ? ` · ${need} not covered` : ''}` : S.loading ? 'Loading…' : 'Nothing analyzed for this day yet';
   $('#days').innerHTML = [-2, -1, 0, 1, 2].map(o => {
     const ds = addDays(S.date, o), x = new Date(ds + 'T12:00:00'), c = counts[ds];
     return `<button type="button" class="day ${o === 0 ? 'on' : ''}" data-date="${ds}">${x.toLocaleDateString('en-US', { weekday: 'short' })}<b>${x.getDate()}</b><small>${c == null ? '' : c}</small></button>`;
@@ -2095,9 +2138,9 @@ async function loadCounts() {
 }
 async function loadDay(date) {
   if (date) S.date = date;
-  S.open = null; day = { cards: [] };
+  S.open = null; day = { cards: [] }; S.loading = true; // the Board shows placeholder tiles until the day arrives (not "No games analyzed")
   render();
-  await loadCounts();
+  try { await loadCounts(); } finally { S.loading = false; }
   render();
   warmTally();
   say(day.analyzedAt ? 'Updated ' + new Date(day.analyzedAt).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
