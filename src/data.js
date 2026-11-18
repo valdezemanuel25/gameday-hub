@@ -99,9 +99,12 @@ const am = v => { if (v == null) return null; const t = String(v).trim().toUpper
 const decAm = v => { if (v == null || typeof v === 'boolean') return null; const n = Number(String(v).trim()); if (!Number.isFinite(n) || n <= 1.01 || n >= 100) return null;
   return n >= 2 ? Math.round((n - 1) * 100) : -Math.round(100 / (n - 1)); };
 const bookOf = o => String(o?.provider?.name || 'other').toLowerCase().replace(/[^a-z0-9]/g, '') || 'other';
+// ESPN spells the book both ways ("DraftKings", "Draft Kings"): a plain /draftkings/ missed the second, so with a stand-in listed first the
+// stand-in was taken although DraftKings was there (Nov 18, 2026 audit).
+const isDk = x => /draft\s*kings/i.test(x?.provider?.name || '');
 export function parseOdds(list) {
   const has = x => x && (x.moneyline || x.homeTeamOdds || x.drawOdds || x.total || x.overUnder != null);
-  const all = (list || []).filter(has), o = all.find(x => /draftkings/i.test(x.provider?.name || '')) || all[0]; if (!o) return null;
+  const all = (list || []).filter(has), o = all.find(isDk) || all[0]; if (!o) return null;
   const out0 = parseAm(o); if (out0) return out0;
   // no American price anywhere: the decimal stand-in, home / draw / away only
   const h = decAm(o.homeTeamOdds?.moneyLine), d = decAm(o.drawOdds?.moneyLine), a = decAm(o.awayTeamOdds?.moneyLine);
@@ -359,7 +362,7 @@ export async function oddsWhy(slug, date, id) {
   if (js.every(j => !j)) return { error: dbg[0] || 'ESPN did not answer' };
   const ev = js.flatMap(j => (j && j.events) || []).find(e => String(e.id) === String(id));
   if (!ev) return { found: false };
-  const list = (ev.competitions?.[0]?.odds || []).filter(Boolean), o = list.find(x => /draftkings/i.test(x.provider?.name || '')) || list[0];
+  const list = (ev.competitions?.[0]?.odds || []).filter(Boolean), o = list.find(isDk) || list[0];
   const books = [...new Set(list.map(x => x.provider?.name).filter(Boolean))];
   const missing = o ? [['home', o.moneyline?.home?.close?.odds ?? o.moneyline?.home?.open?.odds ?? o.homeTeamOdds?.moneyLine], ['draw', o.moneyline?.draw?.close?.odds ?? o.moneyline?.draw?.open?.odds ?? o.drawOdds?.moneyLine], ['away', o.moneyline?.away?.close?.odds ?? o.moneyline?.away?.open?.odds ?? o.awayTeamOdds?.moneyLine]].filter(([, v]) => v == null || v === '').map(([k]) => k) : [];
   return { found: true, status: ev.status?.type?.name || null, books, parsed: parseOdds(list), missing };
