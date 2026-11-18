@@ -37,7 +37,7 @@ Severity is for this site as deployed: one owner, one password, free plan. "Fixe
 | 14 | Low | `src/data.js:112` `parseAm` | Each outcome falls back from `close` to `open` on its own. | If ESPN drops one outcome's close, the saved price mixes the close for two outcomes with the open for the third. De-margining then gives a slightly wrong market (v6 and the headline). | Proposed (P9) |
 | 15 | Low | `src/nhl.js:283` `parseHockeyOdds` | Takes the first odds entry whatever the book. There is no DraftKings preference. | The hockey price vote and the Best gate (55%) can come from another book. The UI says DraftKings. | Proposed (P9) |
 | 16 | Low | `src/sportsmole.js:42` | `parseListing` accepts an absolute link on any host if the path looks like a preview. | A link on SportsMole's page to another host is fetched by `fetchText`. Low, since SportsMole controls the page. | Proposed: require `www.sportsmole.co.uk` |
-| 17 | Low | `src/worker.js:133`, `:1152` | The session cookie is one fixed HMAC of a constant phrase. It is the same for every device, lasts a year and has no server-side expiry. | A copied cookie works until the password changes. One device cannot be signed out on its own. There is no `__Host-` prefix. | Proposed (P5) |
+| 17 | Low | `src/worker.js:133`, `:1152` | The session cookie is one fixed HMAC of a constant phrase. It is the same for every device, lasts a year and has no server-side expiry. | A copied cookie works until the password changes. One device cannot be signed out on its own. There is no `__Host-` prefix. | **Fixed** (follow-up below): revocable `__Host-` sessions; tests `auth.mjs` |
 | 18 | Low | `src/worker.js:1161` | The health token also comes in the query string (`?k=`). | Query strings end up in logs, analytics and history. | Proposed: header only (the sweep can send `x-health-token`) |
 | 19 | Low | `public/*.html` `esc()` | `esc` does not escape `'`. | No single-quoted attribute or inline-handler use of scraped text was found (checked all `${...}` interpolations of team names, SportsMole text, Forebet titles, book names, health strings and brew text: all go through `esc` or `textContent`). It is a trap for future code only. | Proposed (Agent 2): add `'` to `&#39;` |
 | 20 | Low | `test/headline.mjs`, `test/pick.mjs`, `test/odds.mjs` | These tests are not in `npm test` and are broken: `MIN_CARD is not defined` (they eval `public/index.html`), and odds.mjs fails "the same league is not looked at again for hours". | The page's `headline()` and `src/pick.js` are meant to agree (`pick.js` line 2 says test/pick.mjs checks it). That check has not run, so the page and the locked record could drift apart without notice. | Reported (Agent 2 owns index.html). `bets`, `agree`, `btts` and `push` tests passed but were also not run; they are in `npm test` now |
@@ -88,3 +88,63 @@ Offline backtests: `tools/` is empty in this checkout (no `tools/backtest-*.mjs`
 * `test/security.mjs`: the health token limit, digest comparison, the cross-site guard (pages still open, own fetches and scripts still work, cross-site, same-site and foreign-Origin changes refused, sign-out and sign-in posts from other sites refused), `?date=` validation, the new headers, push subscription validation, and the 12-leg limit before reads. It fails against the old code (checked by running it on the pre-change tree).
 * `test/oddsprovider.mjs`: "Draft Kings" listed after a Bet365 stand-in is taken unmarked; with no DraftKings the stand-in is still used and marked.
 * Now in `npm test` as well: `push.mjs`, `bets.mjs`, `agree.mjs`, `btts.mjs` (all passed already).
+
+## Follow-up Nov 18: revocable sessions
+
+Finding #17 / proposal P5, approved by the owner. Commit `077b7e9`. Nothing pushed or deployed. No secret values were read or printed.
+
+**What changed (`src/worker.js`, auth section only).**
+
+* The cookie is now `__Host-hub_s` = `v2.<issuedAt seconds>.<hex HMAC-SHA256 over "v2|<issuedAt>|<SESSION_EPOCH>">`. The HMAC key is
+  itself an HMAC of a fixed label under `ADMIN_TOKEN`, so the key is tied to the password and kept apart from the old cookie's phrase.
+  Flags: `HttpOnly; Secure; SameSite=Lax; Path=/`, no `Domain` (required for `__Host-`). `Max-Age` follows `SESSION_MAX_DAYS`, capped
+  at 400 days (the browsers' own cap). The signature is checked with `same()` (digest compare), as before.
+* Server-side age: refused once older than `SESSION_MAX_DAYS` (default 180), or dated more than 5 minutes ahead.
+* Renewal: a page load (GET, not `/api/`, and `Sec-Fetch-Dest: document` or `Accept: text/html`) with a session older than 30 days gets a
+  fresh cookie on that answer. No KV writes. Data calls, a page's scripts and pictures, POSTs and header sign-ins never get one.
+* `SESSION_EPOCH` (var or secret, default `"0"`; empty counts as `"0"`) is in the signed text, so changing it ends every session.
+* Changeover: the old `hub_s` cookie is still taken before `OLD_COOKIE_UNTIL = '2026-12-20'` (00:00 UTC), and only while the epoch is
+  `"0"`. A page or a data call made with it gets the new cookie and `hub_s` cleared. After the cutoff, or after any epoch change, it is
+  refused.
+* `/login` sets the new cookie and clears `hub_s` (it never sets it). `/logout` clears both. `x-admin-token`, Basic and `HEALTH_TOKEN` are
+  unchanged.
+* Weak password: `/api/health` (signed in or with the health token) now has `signIn: { weakPassword, sessionDays }`, where
+  `weakPassword` is true when `ADMIN_TOKEN` is under 16 characters. Sweep's report (`public/sweep.js readHealth`, the health output shown
+  in the app) lists "the sign-in password is weak". The password and its length are never shown. Nothing is blocked.
+* `public/login.html`: "stays signed in for a year" now says "while you use it".
+
+**Changes from the brief, and why.**
+
+1. Renewal starts at 30 days *or half of `SESSION_MAX_DAYS`, whichever is shorter*. With `SESSION_MAX_DAYS` under 30 a fixed 30-day
+   threshold would never renew, and a device in daily use would be signed out anyway.
+2. The cookies are added in `fetch()` after the route answers, through a `WeakMap` keyed by the request. `handle()` has dozens of exits,
+   and this keeps the diff to the auth code and away from routes other agents edit.
+3. A page is recognized by the request (`Sec-Fetch-Dest` / `Accept`), not by the answer's `content-type`. The answer to a
+   revalidated page is often a 304 with no `content-type`, so a check on the answer would rarely renew.
+4. An answer that sets a cookie is sent with `cache-control: private, no-store`, so no cache keeps a `Set-Cookie`.
+5. Sign-in also clears a leftover `hub_s`, so an old cookie left in the jar is not usable until the cutoff.
+6. The old cookie is swapped on data calls too, not only on pages. It is a one-time swap, and the answers are already `no-store` JSON.
+
+**Caching check.** `public/sw.js` has an empty `fetch` handler (no `respondWith`) and no Cache Storage use, so it caches nothing.
+`PUBLIC_FILES` and the sign-in page are served before the auth check and never get a cookie. Every `caches.default.put` in `src/`
+stores an answer it built itself (write tally, credits, summaries, idle markers), never a request's answer. Cloudflare does not cache a
+Worker's answers on its own.
+
+**Limits that remain.** One device still cannot be signed out by itself from the server (that needs a stored list, which means KV
+writes). Use Sign out on the device, or change `SESSION_EPOCH`. A copied cookie works until it expires, the epoch changes or the password
+changes. The limiter still lets everything through if it fails, so the 16+ character password is advice, shown as a warning.
+
+**Tests** (`test/auth.mjs`, 33 new checks and 3 rewritten; `test/security.mjs` sign-in check tightened): v2 accepted; a changed signature, a re-dated
+signature and the old value under the new name refused; 179 days accepted, 181 refused, an hour ahead refused, a minute ahead accepted;
+`SESSION_MAX_DAYS` changes both the server limit and `Max-Age`; an epoch change refuses older sessions and an empty epoch counts as none;
+v1 accepted and swapped on a page and on a data call before the cutoff, refused after the cutoff and after an epoch change; renewal only
+for a session older than the threshold, only on page GETs (not `/api/`, scripts, POSTs or header sign-ins); logout clears both; the
+health warning appears for a short password, not for a long one, and never holds the password. The time-dependent checks set
+`Date.now`, so they keep passing after Dec 20. Three mutations (no future-skew check, renew on every page, v1 kept after an epoch change)
+each made the new tests fail. `npm test`: exit 0, 1,458 PASS, no FAIL.
+
+**At or after deploy.** Nothing has to be set: the defaults are 180 days and epoch `"0"`. Devices move to the new cookie the next time
+they open the Hub before Dec 20; a device not opened by then signs in once more. If `ADMIN_TOKEN` is short, change it with
+`npx wrangler secret put ADMIN_TOKEN`; that also signs every device out. To sign everything out later without changing the password:
+`npx wrangler secret put SESSION_EPOCH` with a new value (or a `[vars]` line and a deploy). After Dec 20, 2026 the v1 branch
+(`OLD_COOKIE_UNTIL`, `oldSessionValue`, the `hub_s` clear on sign-in and sign-out) is dead code that can be removed.
