@@ -261,6 +261,74 @@
       "note": "Market numbers are the Monday close."
     },
     {
+      "source": "Humbled Trader",
+      "date": "2026-11-15",
+      "weekly": true,
+      "title": "The Market Bounced. Nvidia Could Decide What Happens Next.",
+      "markets": [
+        {
+          "label": "S&P 500",
+          "value": "7,562",
+          "change": 2.5
+        },
+        {
+          "label": "Dow",
+          "value": "52,348",
+          "change": 2.1
+        },
+        {
+          "label": "Nasdaq",
+          "value": "25,136",
+          "change": 2.3
+        },
+        {
+          "label": "Russell 2000",
+          "value": "2,790",
+          "change": 1.3
+        },
+        {
+          "label": "VIX",
+          "value": "19.30",
+          "change": -24.7
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Week",
+          "t": "The S&P 500 and Nasdaq snapped four-week losing streaks; Nasdaq had its best week since August. All 11 sectors rose, led by energy (XLE +5.4%), but Friday money rotated out of tech into staples."
+        },
+        {
+          "h": "Nvidia",
+          "t": "Jensen Huang resigned Thursday and CFO Colette Kress is interim CEO. The stock fell a sixth straight week (about -12%) and closed under $4T market cap. Earnings Tue Nov 17."
+        },
+        {
+          "h": "Rates and Fed",
+          "t": "October CPI ran hot (headline +0.4%, core +0.3%). The 10-year jumped 29 bp to 5.152% and the 2-year 35 bp to 4.872%. A December hike is now fully priced; Waller says 50 bp deserves a look."
+        },
+        {
+          "h": "S&P levels",
+          "t": "7,600 flipped to resistance, with the 7,620 June high just above. Schwab calls it bearish until 7,600 is reclaimed. Nasdaq sits on its 200-day; Russell and SOX are below theirs."
+        },
+        {
+          "h": "Idea: ZETA",
+          "t": "At $36.65 after its 21st straight beat-and-raise (revenue +46%). Testing all-time highs near $38. Leaning bullish: a reclaim and hold above $38 sets up a trend-join long. Swing idea."
+        },
+        {
+          "h": "Idea: EFX",
+          "t": "At $188.12. Reclaimed the daily 200SMA and is consolidating above $180-185; a break of the consolidation and downtrend could start a reversal. She is long from about $188.60 as a swing."
+        },
+        {
+          "h": "Idea: NVDA",
+          "t": "At $162.85. The DOJ reportedly opened a probe the day Huang resigned; AMD is flagged as the other side of the trade. Bull case: demand (guided about $108B) could outlast the scandal. Needs a chart setup first."
+        },
+        {
+          "h": "Week ahead",
+          "t": "Data: Warsh speaks Mon, retail sales Tue, FOMC minutes Wed, Philly Fed Thu. Anthropic prices its IPO Wed and trades Thu. Earnings: HD, DIS, NVDA Tue; LOW, TJX, PANW Wed; GAP, ROST Thu."
+        }
+      ],
+      "note": "Weekly Sunday edition. Market numbers are the Nov 13 close with weekly % changes; VIX change is vs the Nov 6 close."
+    },
+    {
       "source": "Brew Markets",
       "date": "2026-11-13",
       "title": "Inflation gobbles the savings",
@@ -511,6 +579,79 @@
           "t": "Constellation Energy jumped 10.44% after Q3 revenue rose 45% to $9.55 billion, adjusted EPS climbed 66% to $5.06 and it raised its full-year outlook again."
         }
       ]
+    },
+    {
+      "source": "Humbled Trader",
+      "date": "2026-11-08",
+      "weekly": true,
+      "title": "AI Stocks Drop Hard, But These Setups Are Getting Interesting",
+      "markets": [
+        {
+          "label": "S&P 500",
+          "value": "7,377",
+          "change": -2.7
+        },
+        {
+          "label": "Dow",
+          "value": "51,286",
+          "change": -0.9
+        },
+        {
+          "label": "Nasdaq",
+          "value": "24,579",
+          "change": -3.4
+        },
+        {
+          "label": "Russell 2000",
+          "value": "2,754",
+          "change": -2.1
+        },
+        {
+          "label": "VIX",
+          "value": "25.64",
+          "change": 32.0
+        },
+        {
+          "label": "Oil (WTI)",
+          "value": "$90.37",
+          "change": -13.2
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Week",
+          "t": "Thursday did the damage: semis fell about 12% and the Nasdaq about 5.5% in one session on fears that data center limits after the midterms slow AI spending. The VIX touched 28, its highest since March."
+        },
+        {
+          "h": "Jobs and Fed",
+          "t": "October payrolls came in at 165,000 vs 65,000 expected and unemployment fell to 4.1%. December hike odds rose to about 78%; the 10-year closed at 4.86%."
+        },
+        {
+          "h": "S&P levels",
+          "t": "Broke the 7,600 double-top neckline, which is now resistance. Next target is the 200-day near 7,300. Nasdaq-100 is under its 200-day with RSI below 30."
+        },
+        {
+          "h": "Warning signs",
+          "t": "Breadth is stretched (70%+ of S&P stocks above the 50-day, McClellan above +100) and large speculators are near the 97th percentile net long Nasdaq futures."
+        },
+        {
+          "h": "Idea: APP",
+          "t": "At $387.38 after a 20% earnings gap that held through the tech selloff. Cautiously bullish: wants a reclaim of $380-390, a break of the daily downtrend and a reclaim of the 200SMA. Swing idea."
+        },
+        {
+          "h": "Idea: NVDA",
+          "t": "At $186.64 after the AI unwind. Waiting for a clear green market day and buying strength after 10:30-11 AM around $190-195 rather than catching the knife. Day-trade idea; same plan for AMD, SNDK."
+        },
+        {
+          "h": "Idea: ADP",
+          "t": "At $303.35. Strong hiring plus high yields help payroll firms (ADP, PAYX) through more workers and interest on client funds. Bear case: slower hiring or falling yields. Needs a chart setup first."
+        },
+        {
+          "h": "Week ahead",
+          "t": "Data: CPI Tue, jobless claims Thu, PPI Fri; bond market closed Wed. Earnings: TTWO, RKLB, HIMS, OXY Mon; ONON, CRWV Tue; CSCO, AMAT, NBIS Thu."
+        }
+      ],
+      "note": "Weekly Sunday edition. Market numbers are the Nov 6 close with weekly % changes; VIX and Oil changes are vs the Oct 31 close."
     },
     {
       "source": "Brew Markets",
