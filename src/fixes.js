@@ -46,7 +46,7 @@ const KEEP = {
 export function keepCard(s, c, sport = 'soccer') {
   const K = KEEP[sport] || KEEP.soccer;
   if (s.final && !c.final) for (const k of K.done) { if (s[k] !== undefined) c[k] = s[k]; }
-  if (s.void && !c.void && !c.final) c.void = s.void;
+  if (s.void && c.void === undefined && !c.final) c.void = s.void; // void: null is a deliberate clear (ESPN lists the game again)
   for (const k of K.has) if (s[k] && !c[k]) c[k] = s[k];
   const so = s[K.px];
   if (so) {
@@ -150,6 +150,7 @@ export function addPatch(fix, patch, rawFxAt = 0, now = Date.now(), date = null)
 // ---- the Analyst's record -----------------------------------------------------------------------------------------------------------
 const MKT = k => (k === 'O' || k === 'U' ? 'ou' : k === 'B' || k === 'N' ? 'btts' : '1x2');
 const posOf = b => `${b.sport === 'nhl' ? 'nhl' : setOf(b)}|${b.date}|${b.league}|${b.gid}|${MKT(b.key)}`; // one position per game, market and rule set
+const PIN_NOTES = ['pinNo', 'pinFair', 'clvPin'];
 export function applyAnalystFix(raw, fix) {
   const F = (raw && raw.fxAt) || 0, live = ((fix && fix.items) || []).filter(e => e && e.at > F && e.b);
   if (!live.length) return raw;
@@ -158,7 +159,11 @@ export function applyAnalystFix(raw, fix) {
   for (const e of live.sort((a, b) => a.at - b.at)) {
     const i = at.get(e.b.id);
     if (i != null) { // a bet the record has: the button's copy is taken only where it settled more (the close, then the result)
-      const s = d.items[i]; if ((!s.res && e.b.res) || (s.close == null && e.b.close != null && !s.res)) d.items[i] = clone(e.b);
+      const s = d.items[i]; if ((!s.res && e.b.res) || (s.close == null && e.b.close != null && !s.res)) { d.items[i] = clone(e.b); continue; }
+      // The Pinnacle notes settle() adds once the game starts (before any close): carried over when the record lacks them, so the next
+      // page load finds nothing new and saves nothing (Nov 19, 2026: each load during a game used to save the same patch again).
+      const add = PIN_NOTES.filter(k => s[k] == null && e.b[k] != null);
+      if (add.length) d.items[i] = { ...s, ...Object.fromEntries(add.map(k => [k, clone(e.b[k])])) };
       continue;
     }
     if (held.has(posOf(e.b))) continue; // the cron bet the same game and market meanwhile: one position only

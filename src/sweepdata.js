@@ -98,10 +98,32 @@ export async function sweepStep(env, deps, now = new Date(), f = fetch) {
   if (!env.SWEEP_GH_TOKEN || !env.SWEEP_REPO) return null;
   const part = partDue(now); if (!part) return null;
   const at = new Date(now).getTime(), file = { repo: env.SWEEP_REPO, path: `${part}.json`, token: env.SWEEP_GH_TOKEN, now: at };
+  let out;
   try {
     const state = await fileState(file, f);
     if (state.fresh) return null;
-    if (state.status) return { job: 'sweepdata', part, saved: false, status: state.status };
-    return { job: 'sweepdata', part, built: true, ...(await putFile({ ...file, obj: await buildPart(part, deps, at), state }, f)) };
-  } catch (e) { return { job: 'sweepdata', part, saved: false, error: String(e && e.message || e) }; }
+    if (state.status) out = { job: 'sweepdata', part, saved: false, status: state.status };
+    else out = { job: 'sweepdata', part, built: true, ...(await putFile({ ...file, obj: await buildPart(part, deps, at), state }, f)) };
+  } catch (e) { out = { job: 'sweepdata', part, saved: false, error: String(e && e.message || e).slice(0, 160) }; }
+  await noteLast(env, part, out, at);
+  return out;
+}
+
+// The last answer per file (Nov 19, 2026): three nights of missing files could not be explained because the answer was thrown away.
+// Kept in one small KV record (SWEEP_LAST) and shown by the health report (sweepStatus). Written only when the answer for that file
+// changed or the kept one is over LAST_REFRESH_H hours old, so at most about 3 writes a night. Never throws.
+export const SWEEP_LAST = 'sweep:last';
+const LAST_REFRESH_H = 6;
+const outcome = r => ({ saved: !!r.saved, ...(r.status ? { status: r.status } : {}), ...(r.error ? { error: r.error } : {}) });
+async function noteLast(env, part, r, at) {
+  try {
+    const cur = (await env.HUB.get(SWEEP_LAST, 'json')) || {}, prev = cur[part], o = outcome(r);
+    if (prev && JSON.stringify(outcome(prev)) === JSON.stringify(o) && at - Date.parse(prev.at) < LAST_REFRESH_H * HOUR) return;
+    await env.HUB.put(SWEEP_LAST, JSON.stringify({ ...cur, [part]: { at: new Date(at).toISOString(), ...o } }));
+  } catch (e) { /* a note only: never allowed to break the step */ }
+}
+// For the health report: is the step set up, and what happened last time per file. Reads only.
+export async function sweepStatus(env) {
+  let last = null; try { last = await env.HUB.get(SWEEP_LAST, 'json'); } catch (e) { /* unknown */ }
+  return { token: !!env.SWEEP_GH_TOKEN, repo: env.SWEEP_REPO || null, last };
 }

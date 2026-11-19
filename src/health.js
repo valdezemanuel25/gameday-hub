@@ -6,6 +6,7 @@
 //   * each Analyst rule's record (the weekly check-in reads it), with how close it is to being benched.
 import { getAnalyst, summary, RULES, NHL_RULES, SINCE, NHL_SINCE, BENCH, setOf, tiers, tierOf } from './analyst.js';
 import { getDay } from './fixes.js';
+import { sweepStatus } from './sweepdata.js';
 
 const HOUR = 3600000;
 const lbl = c => `${c.away && c.home ? `${c.home} v ${c.away}` : c.id} (${c.league || 'nhl'}, ${c.kickoff})`;
@@ -92,6 +93,9 @@ export async function hubHealth(env, { today, addDays, priced, readCredits, writ
     // only problems from the last 3 days: older entries are leagues ESPN stopped answering for long ago, not news
     // hockey rest vs the price: { n, won, expected, llPrice, llRest, diff, se, verdict: early | missing | priced | overdone }; null when not wired
     hockeyRest: nhlRest ? await restSummary(nhlRest, env) : null,
+    // the nightly stats files (src/sweepdata.js): whether the token and repo are set, and the last answer per file (saved, a GitHub
+    // status such as 401 / 403 / 404, or an error). Never shows the token itself.
+    sweepData: await sweepStatus(env),
     syncProblems: Object.fromEntries(Object.entries(errs || {}).filter(([, e]) => e && e.at && now - Date.parse(e.at) <= 3 * 86400000)),
   };
 }

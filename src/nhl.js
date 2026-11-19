@@ -339,6 +339,8 @@ export async function fetchSummary(fetchFn, id) {
 export async function fetchLead(fetchFn, id, final) {
   try { const r = await fetchFn(SUMMARY(id), { headers: { 'user-agent': 'gameday-hub/1.0' } }); return r.ok ? leadFromSummary(await r.json(), final) : null; } catch (e) { return null; }
 }
+// A side's score, or null when ESPN sent none (missing or empty: Number('') would read as 0).
+const scoreOf = t => { const v = t && t.score; if (v == null || String(v).trim() === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
 async function scoreboard(date, fetchFn, debug) {
   try {
     const res = await fetchFn(`${ESPN}?dates=${date.replace(/-/g, '')}&limit=100`, { headers: { 'user-agent': 'gameday-hub/1.0' } });
@@ -355,7 +357,7 @@ async function scoreboard(date, fetchFn, debug) {
       const gkOf = t => { const p = (t.probables || []).find(x => /starting goalie/i.test(x.displayName || x.name || '') || x.abbreviation === 'SG'), a = p && p.athlete; return a && a.displayName ? { n: String(a.displayName).slice(0, 40), ...(a.id ? { id: String(a.id) } : {}), st: /confirm/i.test(p.status?.type || p.status?.name || '') ? 'c' : 'e' } : null; };
       const gkh = done ? null : gkOf(h), gka = done ? null : gkOf(a);
       const off = /POSTPONED|CANCEL|ABANDON|FORFEIT/.test(String(t.name || '')) ? String(t.name).replace(/^STATUS_/, '').toLowerCase() : null; // not played as listed
-      out.push({ id: String(ev.id), date: ev.date, done, last, ...(off ? { off } : {}), line, gk: gkh || gka ? { h: gkh, a: gka } : null, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? Number(h.score) : null, as: done ? Number(a.score) : null });
+      out.push({ id: String(ev.id), date: ev.date, done, last, ...(off ? { off } : {}), line, gk: gkh || gka ? { h: gkh, a: gka } : null, px: done ? null : parseHockeyOdds(comp.odds), pxDone: done ? parseHockeyOdds(comp.odds) : null, lineSrc: od ? String(od.provider?.name || 'ESPN odds').slice(0, 30) : null, hName: h.team.displayName, aName: a.team.displayName, hc: code(h.team.abbreviation), ac: code(a.team.abbreviation), hs: done ? scoreOf(h) : null, as: done ? scoreOf(a) : null });
     }
     return out;
   } catch (e) { debug.push(`scoreboard ${date}: ${e.message}`); return null; }
@@ -496,8 +498,11 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
       if (e.off) { const c0 = day.cards.find(x => x.id === e.id); if (c0 && !c0.final && c0.void !== e.off) { c0.void = e.off; dirty = true; out.voided = (out.voided || 0) + 1; } continue; }
       if (seen.has(e.id)) continue; seen.add(e.id); // a game is filed under the day ESPN lists it
       let c = day.cards.find(x => x.id === e.id);
-      if (c && c.void) { delete c.void; dirty = true; } // listed as on again
-      if (e.done && mode === 'analyze') continue; // Analyze reads prices and lineups only; finished games are Update results' job
+      if (c && c.void) { c.void = null; dirty = true; } // listed as on again (null, not deleted: a save must not copy the old void back)
+      if (e.done && mode === 'analyze') continue;
+      // Final but no score (Nov 19, 2026): left pending for the next run. Grading it scored the pick a loss and wrote blank goals and
+      // Elo into both teams' ratings for good.
+      if (e.done && !(Number.isFinite(e.hs) && Number.isFinite(e.as))) { out.noScore = (out.noScore || 0) + 1; continue; } // Analyze reads prices and lineups only; finished games are Update results' job
       if (e.done) {
         if (c && !c.final) {
           c.final = { h: e.hs, a: e.as, last: e.last, total: 0 };

@@ -48,7 +48,7 @@ const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
 const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games' };
 const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
 export const writeKind = k => { const s = String(k); return s.startsWith('fix:') ? 'button saves' : s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
-  : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
+  : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('sweep:') ? 'stats files' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
 const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
 export function counted(env) { // exported for test/writes.mjs
   const base = env.HUB; let n = 0, by = {};
@@ -230,7 +230,8 @@ const health = (env, deep = false) => hubHealth(env, { today, addDays, priced: P
 const soccerTotals = env => summary(env, { kind: 'tally', prefix: 'day:', build: days => tally(env, days) });
 const nhlTotals = (env, values = null) => summary(env, { kind: 'nhltally', prefix: 'nhl:day:', build: days => nhlTally(env, days), values });
 // Nightly stats files for the sweep (src/sweepdata.js): the Results summaries, the last two weeks of gaps and the health report, saved
-// to the separate data repo just after midnight Central. Reads only. Does nothing without SWEEP_GH_TOKEN and SWEEP_REPO.
+// to the separate data repo just after midnight Central. Reads only, apart from one small note of the last answer per file (sweep:last,
+// at most about 3 writes a night). Does nothing without SWEEP_GH_TOKEN and SWEEP_REPO.
 export const SWEEP_DAYS = 14;
 const lastDays = async (env, prefix, now) => { const t = localDate(new Date(now).toISOString()), ds = Array.from({ length: SWEEP_DAYS }, (_, i) => addDays(t, -i));
   const got = await Promise.all(ds.map(d => getDay(env, d, prefix === 'nhl:day:' ? 'nhl' : 'soccer'))); return Object.fromEntries(ds.map((d, i) => [d, got[i]?.cards]).filter(([, c]) => c && c.length)); };
@@ -423,6 +424,8 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   for (const c of cards) { if (!c.fb && prior.get(c.id)?.fb) c.fb = prior.get(c.id).fb; mergeSeed(c, date); }
   // A game ESPN lists as postponed, canceled or abandoned is void (no new prices or bets; never graded); it clears if ESPN lists it again
   for (const f of fx) if (f.off) { const c = cards.find(x => x.id === f.id); if (c && !c.final) c.void = f.off; }
+  // Listed as on again: the old void is cleared on purpose (void: null), so the save's keep-rules (src/fixes.js keepCard) do not copy it back.
+  for (const f of fx) if (!f.off && !f.done && prior.get(f.id)?.void) { const c = cards.find(x => x.id === f.id); if (c && !c.final) c.void = null; }
   // Cards ESPN did not list on this run are kept when the feed answered only in part, or when the game has already kicked off (a game
   // moved after kickoff is graded from its new day by gradeLeague; dropping it lost its prices, pick and the Analyst's bets on it).
   // A game not yet started that ESPN no longer lists for this day was moved: its card goes, and the new day gets it.

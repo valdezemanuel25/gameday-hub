@@ -146,7 +146,7 @@ const gh = (existing) => { const calls = []; const f = async (url, init = {}) =>
   ok('worker: the stuck soccer game is named', sent.soccer && sent.soccer.gaps.stuck.length === 1 && /A v B/.test(sent.soccer.gaps.stuck[0].game));
   ok('worker: the hockey file carries the hockey summary and gaps', sent.nhl && 'graded' in sent.nhl.totals && sent.nhl.gaps.days[0].date === '2026-11-15' && sent.nhl.gaps.days[0].noGoalie === 1, JSON.stringify(sent.nhl || null).slice(0, 300));
   ok('worker: the health file carries the health report (writes, analyst)', sent.health && sent.health.health && 'writes' in sent.health.health && 'analyst' in sent.health.health, JSON.stringify(sent.health || null).slice(0, 300));
-  ok('worker: building and saving the files writes nothing to KV', kv.size === before);
+  ok('worker: building and saving the files writes nothing to KV but the last-answer note', kv.size === before + 1 && kv.has('sweep:last') && ['soccer', 'nhl', 'health'].every(p => JSON.parse(kv.get('sweep:last'))[p]?.saved === true), JSON.stringify([...kv.keys()]));
   ok('worker: no file holds the token', !JSON.stringify(sent).includes('"T"') && !/SWEEP_GH_TOKEN/.test(JSON.stringify(sent)));
 }
 
