@@ -1,6 +1,71 @@
 {
-  "updated": "2026-11-18T21:08:37Z",
+  "updated": "2026-11-19T11:09:29Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-19",
+      "title": "Welcome to Vice City",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "24,430",
+          "change": 0.42
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,324",
+          "change": -0.23
+        },
+        {
+          "label": "Dow",
+          "value": "50,198",
+          "change": -1.11
+        },
+        {
+          "label": "10-yr",
+          "value": "5.066%",
+          "change": -4.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$62,237",
+          "change": -3.74
+        },
+        {
+          "label": "Nvidia",
+          "value": "$150.96",
+          "change": -2.9
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Mixed close",
+          "t": "The Nasdaq gained 0.42% while the S&P slipped 0.23% and the Dow lost 1.11% ahead of Anthropic's market debut."
+        },
+        {
+          "h": "Anthropic IPO",
+          "t": "Anthropic priced at $83 a share, above range, raising $81B, the largest IPO ever, and starts trading today as ANT on the Nasdaq."
+        },
+        {
+          "h": "Nvidia dips",
+          "t": "Nvidia fell 2.9% to $150.96 the day after its first report without Jensen Huang, despite beating estimates and raising its outlook."
+        },
+        {
+          "h": "Fed hikes ahead",
+          "t": "October minutes show almost all Fed officials expect rate hikes in coming months, and the 10-year yield eased 4 bps to 5.066%."
+        },
+        {
+          "h": "GTA VI launch",
+          "t": "GTA VI launched with a 99 Metacritic score and over $1.5B in preorders, with analysts eyeing about $3B in four months."
+        },
+        {
+          "h": "Bitcoin and art",
+          "t": "Bitcoin fell 3.74% to about $62,237, while a Van Gogh sold for a record $190.4M at Sotheby's."
+        }
+      ],
+      "note": "Market numbers are the Wednesday close."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-18",
@@ -64,71 +129,6 @@
           "t": "UnitedHealth fell 10.21% on tougher fraud rules, Newmont dropped 6.05% as gold sank, and Take-Two rose 6.22% ahead of GTA VI."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-18",
-      "title": "Buttloads of cash",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "24,328",
-          "change": -0.74
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,341",
-          "change": -1.03
-        },
-        {
-          "label": "Dow",
-          "value": "50,759",
-          "change": -1.65
-        },
-        {
-          "label": "10-yr",
-          "value": "5.103%",
-          "change": -2.0,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$64,230",
-          "change": -1.55
-        },
-        {
-          "label": "Nike",
-          "value": "$35.85",
-          "change": -6.3
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Tuesday slide",
-          "t": "The Dow fell 1.65%, the S&P 1.03% and the Nasdaq 0.74% as traders waited on Nvidia earnings."
-        },
-        {
-          "h": "Anthropic IPO",
-          "t": "Anthropic prices today at $70-$78 a share, a raise of up to $90.4B at a $1.4T valuation, with orders about 7x the shares offered."
-        },
-        {
-          "h": "Nvidia results",
-          "t": "Nvidia's Q3 revenue rose 20% from the prior quarter, Q4 guidance is 12% growth, and shares rose after hours in the first quarter without Jensen Huang."
-        },
-        {
-          "h": "Nike drops",
-          "t": "Nike fell 6.30% to $35.85 after saying it doesn't expect sales growth until 2029."
-        },
-        {
-          "h": "Food stocks",
-          "t": "Investors rotating out of tech lifted Tyson 8% in a week and Campbell's 22% in a month, while the Nasdaq is down 8% over the past month."
-        },
-        {
-          "h": "Rates and crypto",
-          "t": "The 10-year yield eased 2 bps to 5.103% and Bitcoin slid 1.55% to about $64,230."
-        }
-      ],
-      "note": "Market numbers are the Tuesday close."
     },
     {
       "source": "Brew Markets",
@@ -842,134 +842,6 @@
         {
           "h": "Gridlock risk",
           "t": "The US is projected to hit its $41.1T debt ceiling by summer 2027, and BNY expects at least one shutdown next year."
-        }
-      ]
-    },
-    {
-      "source": "Brew Markets",
-      "date": "2026-11-03",
-      "title": "Apple gets Siri-ous",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,377",
-          "change": 0.84
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,568",
-          "change": 0.35
-        },
-        {
-          "label": "Dow",
-          "value": "51,747",
-          "change": -0.46
-        },
-        {
-          "label": "10-yr",
-          "value": "4.952%",
-          "change": 6,
-          "unit": "bps"
-        },
-        {
-          "label": "Oil",
-          "value": "$96.66",
-          "change": 0.21
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$77,676",
-          "change": 1.35
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Markets",
-          "t": "Chip stocks rebounded, lifting the Nasdaq 0.84% and S&P 500 0.35% while the Dow slipped 0.46%."
-        },
-        {
-          "h": "Yields",
-          "t": "The 10-year yield rose 6 bps to 4.952% as investors waited on midterm election results."
-        },
-        {
-          "h": "Apple",
-          "t": "Apple posted record revenue of $114.5B (+12%) and $2.10 EPS, but fell 1.90% after warning memory-chip costs will cut gross margin to 45%-46%."
-        },
-        {
-          "h": "Palantir",
-          "t": "Palantir revenue jumped 96% to $2.31B and US commercial sales topped government for the first time, yet shares lost 1.65% on slower bookings."
-        },
-        {
-          "h": "Shopify",
-          "t": "Shopify fell 8.74% after $3.74B revenue missed estimates, even as AI-referred orders grew 3.3x."
-        },
-        {
-          "h": "Movers",
-          "t": "Fiserv surged 12.46% and Eaton gained 7.03%, while Gartner tumbled 13.28% and Dynatrace sank 14.74%."
-        }
-      ]
-    },
-    {
-      "source": "Brew Markets",
-      "date": "2026-11-02",
-      "title": "What the midterms mean for your portfolio",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,164",
-          "change": -1.07
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,542",
-          "change": -0.51
-        },
-        {
-          "label": "Dow",
-          "value": "51,984",
-          "change": 0.41
-        },
-        {
-          "label": "10-yr",
-          "value": "4.894%",
-          "change": -4,
-          "unit": "bps"
-        },
-        {
-          "label": "Oil",
-          "value": "$95.80",
-          "change": -7.99
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$76,744",
-          "change": -1.32
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Markets",
-          "t": "An early AI rebound faded and chips reversed, leaving the Nasdaq down 1.07% and S&P 500 down 0.51% while the Dow gained 0.41%."
-        },
-        {
-          "h": "Oil & yields",
-          "t": "Oil sank 7.99% to $95.80 on US-Iran talk hopes, pulling the 10-year yield down 4 bps to 4.894%."
-        },
-        {
-          "h": "Midterms",
-          "t": "With divided government likely, Morgan Stanley says the S&P 500 averaged a 23% gain in the year after midterms when Congress was split."
-        },
-        {
-          "h": "Marvell deal",
-          "t": "Marvell is buying Lumentum in an all-stock deal valued at $115B; Marvell fell 12.82% and Lumentum 18.66%."
-        },
-        {
-          "h": "Movers",
-          "t": "Oracle slid 8.85% on a $20B debt-and-stock raise, Intel fell 8.8%, while IDEXX jumped 21.85% and Rivian rose 8.47%."
-        },
-        {
-          "h": "Marriott",
-          "t": "Marriott beat estimates with $7B revenue, $3.02 adjusted EPS and raised 2026 RevPAR growth guidance to 4.5%-5%; shares rose 4.26%."
         }
       ]
     },
