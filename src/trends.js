@@ -55,6 +55,15 @@ export const SITUATIONS = [
   { id: 'hfavl3c', kind: 'ml', subject: 'A', who: 'road team', label: 'Home favorite on a 3+ game losing streak vs a conference rival', base: 0.4 },
   { id: 'afavl3c', kind: 'ml', subject: 'H', who: 'home team', label: 'Road favorite on a 3+ game losing streak vs a conference rival', base: 0.42 },
   { id: 'tired4in6over', kind: 'ou', subject: 'O', who: 'Over', label: 'A team in its 4th game in 6 nights, over', base: 0.5 },
+  // Price angles (Nov 20, 2026), from a scan of ~150 price-only angles on the same 162 priced games. Line move = the home team's chance
+  // (margin removed) from the opening price to now / the close (hockeyMove). Before the close the move is the one so far.
+  //   steam: the favorite whose chance rose 3+ points (road favorites 21-3, all favorites 28-6 in the scan)
+  //   v2 fade: v2 rates a team 5+ points above the market's chance: back the other team (43-17 in the scan). The read backs the side the
+  //   model does not, so with v4 or v2 on that side the strength shows Conflict (model disagrees) as for any read against the model.
+  { id: 'roadfavsteam', kind: 'ml', subject: 'A', who: 'road team', label: 'Road favorite the line moved 3+ points toward', base: 0.6 },
+  { id: 'homefavsteam', kind: 'ml', subject: 'H', who: 'home team', label: 'Home favorite the line moved 3+ points toward', base: 0.62 },
+  { id: 'v2hihome', kind: 'ml', subject: 'A', who: 'road team', label: 'v2 rates the home team 5+ points above the market', base: 0.45 },
+  { id: 'v2lohome', kind: 'ml', subject: 'H', who: 'home team', label: 'v2 rates the home team 5+ points below the market', base: 0.55 },
   // Tracked only from the same scan (pointed the same way in both halves, but ride the home slump of that window or overlap the above).
   { id: 'roadtrip3', kind: 'ml', subject: 'A', who: 'road team', label: 'Road team on its 3rd+ straight road game', base: 0.45, watch: true, since: '2026-11-20' },
   { id: 'hfavblow', kind: 'ml', subject: 'A', who: 'road team', label: 'Home favorite coming off a 3+ goal loss', base: 0.4, watch: true, since: '2026-11-20' },
@@ -119,6 +128,12 @@ function inSpot(s, c) {
   if (s.id === 'roadtrip4') return c.aroad >= 3 ? hit : false;
   if (s.id === 'tired3in4') return c.hin4 >= 2 || c.ain4 >= 2 ? hit : false;
   const hfav = ch != null && ch > 0.5, afav = ch != null && ch < 0.5;
+  if (s.id === 'roadfavsteam' || s.id === 'homefavsteam' || s.id === 'v2hihome' || s.id === 'v2lohome') {
+    const pr = px ? two(px.h, px.a) : null; if (!pr) return false;
+    if (s.id === 'v2hihome' || s.id === 'v2lohome') { const w = c.v2 && Number.isFinite(c.v2.w) ? c.v2.w : null; if (w == null) return false; const gap = w - 100 * pr[0]; return (s.id === 'v2hihome' ? gap >= 5 : gap <= -5) ? hit : false; }
+    const mv = hockeyMove(px), d = mv && mv.ml ? mv.ml.d : null; if (d == null) return false;
+    return s.id === 'homefavsteam' ? (pr[0] > 0.5 && d >= 3 ? hit : false) : (pr[0] < 0.5 && d <= -3 ? hit : false);
+  }
   if (s.id === 'away4in6') return c.ain6 >= 3 ? hit : false;
   if (s.id === 'home4in6') return c.hin6 >= 3 ? hit : false;
   if (s.id === 'hfavl3c') return hfav && c.hloss >= 3 && sameConf(c.hAbbr, c.aAbbr) ? hit : false;

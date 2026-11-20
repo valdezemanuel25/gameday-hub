@@ -172,4 +172,17 @@ ok('65%+ is Strong, 58%+ Medium, 53%+ Weak, under that a Pass', rate(65, true) =
   ok('home favorite after a 3+ goal loss is tracked, backing the road team', r4.watch.some(w => w.id === 'hfavblow' && w.backs === 'BUF'));
   ok('a game across conferences is not a conference-rival spot', !r5.ml);
 }
+// 10. Nov 20, 2026 price angles: steam toward the favorite, and v2 5+ points off the market (backs the other team)
+{
+  const ctx = withContext([day('2026-11-05', [
+    card('s', '2026-11-05T19:00', 'MIN', 'CGY', { px: { h: 195, a: -238, op: { h: 164, a: -198 } }, v2: { w: 35 } }),
+    card('v', '2026-11-05T19:00', 'ANA', 'COL', { px: { h: -142, a: 120, op: { h: -142, a: 120 } }, v2: { w: 66 } }),
+    card('n', '2026-11-05T19:00', 'DAL', 'VGK', { px: { h: -125, a: 105, op: { h: -125, a: 105 } }, v2: { w: 53 } }),
+  ])]);
+  const r = gameReads(ctx, [{ id: 'roadfavsteam', lift: 10 }, { id: 'homefavsteam', lift: 10 }, { id: 'v2hihome', lift: 8 }, { id: 'v2lohome', lift: 8 }], '2026-11-05');
+  const by = id => r.find(x => x.id === id);
+  ok('a road favorite the line moved 3+ points toward is backed', by('s').ml && by('s').ml.side === 'A' && by('s').ml.ev.some(e => e.id === 'roadfavsteam'), JSON.stringify(by('s').ml));
+  ok('v2 5+ points above the market on the home team backs the road team, a Conflict with the model', by('v').ml && by('v').ml.side === 'A' && by('v').ml.ev.some(e => e.id === 'v2hihome') && by('v').ml.lab === 'Conflict', JSON.stringify(by('v').ml));
+  ok('no move and v2 at the market: no price angle', !by('n').ml);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nall trends checks pass'); process.exit(fails ? 1 : 0);
