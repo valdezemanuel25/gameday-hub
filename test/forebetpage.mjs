@@ -54,23 +54,29 @@ ok('leftover Forebet rows dated a day later are offered for assigning', unmI.len
 
 // failures are recorded, not hidden
 save('2026-10-16', [mk('7', 'Union St.-Gilloise', 'Real Sociedad', '2026-10-16T16:45:00Z')]);
-const bad = await forebetFetch(env, 'uefa.europa', '1x2', now, async () => new Response('no', { status: 403 }));
+// Forebet only for leagues playing today (Nov 20, 2026): on Oct 15 the only open game is tomorrow's, so nothing is read
+let n0 = 0; const count = async () => { n0++; return new Response(page('1x2')); };
+const notToday = await forebetFetch(env, 'uefa.europa', '1x2', now, count);
+ok('a league whose open games are all tomorrow or later is not read', notToday.skipped === 'no games today' && n0 === 0, JSON.stringify(notToday));
+const next = new Date('2026-10-16T12:00:00Z'); // 7:00 AM Central on the 16th: Union kicks off today
+const bad = await forebetFetch(env, 'uefa.europa', '1x2', next, async () => new Response('no', { status: 403 }));
 const meta = JSON.parse(kv.get('meta:fb'));
 ok('a 403 is recorded for the Status tab and fills nothing', bad.error === 'HTTP 403' && meta['uefa.europa|1x2'].ok === false && meta['uefa.europa|1x2'].msg === 'HTTP 403');
-const empty = await forebetFetch(env, 'uefa.europa', '1x2', now, async () => new Response('<html>captcha</html>'));
+const empty = await forebetFetch(env, 'uefa.europa', '1x2', next, async () => new Response('<html>captcha</html>'));
 ok('a page with no readable games is flagged, not trusted', empty.rows === 0 && JSON.parse(kv.get('meta:fb'))['uefa.europa|1x2'].ok === false);
 
 // cron step: soonest games first, backs off after a read, few reads
 fetches = []; reads = 0;
 save('2026-10-15', []); save('2026-10-16', [mk('7', 'Union St.-Gilloise', 'Real Sociedad', '2026-10-16T16:45:00Z')]);
 kv.delete('meta:fb');
-const s1 = await forebetStep(env, now, ffetch);
+ok('cron step: a league playing only tomorrow is not read', (await forebetStep(env, now, ffetch)) === null && fetches.length === 0, JSON.stringify(fetches));
+reads = 0; const s1 = await forebetStep(env, next, ffetch);
 ok('cron step reads one page', s1 && s1.slug === 'uefa.europa' && s1.kind === '1x2' && fetches.length === 1, JSON.stringify(s1));
 ok('cron step stays within a few KV reads', reads <= 11, String(reads)); // each of the 3 day reads also reads its side record (fix:day:<date>, src/fixes.js)
-const s2 = await forebetStep(env, new Date(now.getTime() + 3600000), ffetch);
+const s2 = await forebetStep(env, new Date(next.getTime() + 3600000), ffetch);
 ok('the next run reads a different table (the first was read within 3 hours)', s2 && s2.kind !== '1x2');
 kv.delete('meta:fb'); save('2026-10-16', []);
-ok('nothing to fill: the step does nothing', (await forebetStep(env, now, ffetch)) === null);
+ok('nothing to fill: the step does nothing', (await forebetStep(env, next, ffetch)) === null);
 ok('all league pages are set up (incl. Brazil)', Object.keys(FB_PAGES).length === 14 && !!FB_PAGES['bra.1']);
 
 // Short Forebet names against full ESPN names (2. Bundesliga and similar)

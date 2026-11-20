@@ -56,6 +56,16 @@ try {
     await page.goto(`${base}/${file}`);
     await page.waitForFunction(() => window.FlipCard && typeof render === 'function' && typeof day !== 'undefined' && day && day.cards && day.cards.length > 0, null, { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(300);
+    if (label === 'soccer') { // Update Forebet asks only for leagues playing today (Nov 20, 2026), and judges coverage on today's games
+      const need = await page.evaluate(() => { const fb = (ok, cov, covT) => ({ '1x2': { at: new Date().toISOString(), ok, cov, covT }, ou: { at: new Date().toISOString(), ok, cov, covT }, btts: { at: new Date().toISOString(), ok, cov, covT } });
+        const was = stat; stat = { writes: { used: 10, limit: 1000, by: {} }, leagues: [
+          { slug: 'ger.1', name: 'Bundesliga', games: { today: 1, tomorrow: 6 }, fb: fb(false, [0, 7], [0, 1]) },        // playing today, blocked: asked for
+          { slug: 'eng.1', name: 'Premier League', games: { today: 0, tomorrow: 7 }, fb: fb(false, [0, 7], [0, 0]) },    // tomorrow only: left alone
+          { slug: 'mex.1', name: 'Liga MX', games: { today: 3, tomorrow: 4 }, fb: fb(true, [3, 7], [3, 3]) },            // today's games all covered: done
+        ] };
+        const r = fbNeeds().map(j => j.slug); stat = was; return r; });
+      ok('soccer: Update Forebet asks only for a league playing today that still needs it', JSON.stringify(need) === '["ger.1"]', JSON.stringify(need));
+    }
     const seen = [];
     for (const id of all) {
       const r = await page.evaluate(([id, src]) => { (0, eval)(`(${src})`)(id);

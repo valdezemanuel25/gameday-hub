@@ -1521,15 +1521,16 @@ const hub = {
         for (const c of dd?.cards || []) {
           (games[c.league] || (games[c.league] = [0, 0]))[di]++; // games on the board today / tomorrow, whatever their state
           if (c.final || !c.v2 || new Date(c.kickoff).getTime() <= nowMs) continue;
-          const o = per[c.league] || (per[c.league] = { n: 0, sm: 0, tried: 0, fb: { '1x2': 0, ou: 0, btts: 0 } });
+          const o = per[c.league] || (per[c.league] = { n: 0, sm: 0, tried: 0, fb: { '1x2': 0, ou: 0, btts: 0 }, nT: 0, fbT: { '1x2': 0, ou: 0, btts: 0 } });
           o.n++; if (c.sm) o.sm++;
+          if (di === 0) { o.nT++; if (c.fb && c.fb.p) o.fbT['1x2']++; if (c.fb && c.fb.over != null) o.fbT.ou++; if (c.fb && c.fb.btts != null) o.fbT.btts++; } // today's games only: what the Update Forebet button asks for
           const tr = dd.smTried && dd.smTried[c.id]; if (tr > o.tried) o.tried = tr;
           if (c.fb && c.fb.p) o.fb['1x2']++; if (c.fb && c.fb.over != null) o.fb.ou++; if (c.fb && c.fb.btts != null) o.fb.btts++;
         }
       }
       const srcOf = l => {
         const o = per[l.slug] || { n: 0, sm: 0, tried: 0, fb: {} }, fb = {};
-        if (FB_PAGES[l.slug]) for (const k of ['1x2', 'ou', 'btts']) { const m = (fbMeta || {})[`${l.slug}|${k}`]; if (m) fb[k] = { at: m.at, ok: !!m.ok, msg: m.msg || null, cov: [o.fb[k] || 0, o.n] }; }
+        if (FB_PAGES[l.slug]) for (const k of ['1x2', 'ou', 'btts']) { const m = (fbMeta || {})[`${l.slug}|${k}`]; if (m) fb[k] = { at: m.at, ok: !!m.ok, msg: m.msg || null, cov: [o.fb[k] || 0, o.n], covT: [(o.fbT || {})[k] || 0, o.nT || 0] }; }
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({

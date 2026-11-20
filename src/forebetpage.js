@@ -121,6 +121,10 @@ async function loadDays(env, now) {
 }
 // Games of one league that have not started and still lack this table's numbers.
 const openCards = (days, now, slug, kind) => days.map(x => ({ ...x, open: x.day.cards.filter(c => c.league === slug && !c.final && !has(c, kind) && new Date(c.kickoff).getTime() > now.getTime()) })).filter(x => x.open.length);
+// Forebet is read only for a league with a game still to come TODAY (Central) (Nov 20, 2026: reading leagues whose games were
+// tomorrow or later brought Forebet's "too many requests" blocks on the leagues playing today). A read for a playing league still
+// fills its later games from the same page, at no extra request.
+const playsToday = (work, now) => work.some(w => w.date === localDate(now.toISOString()));
 
 // Read one Forebet page and fill the matching cards. Returns what happened.
 export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = fetch, days = null) {
@@ -128,6 +132,7 @@ export async function forebetFetch(env, slug, kind, now = new Date(), fetchFn = 
   const meta = (await env.HUB.get('meta:fb', 'json')) || {};
   const key = `${slug}|${kind}`;
   if (!work.length) return { slug, kind, skipped: 'nothing to fill' };
+  if (!playsToday(work, now)) return { slug, kind, skipped: 'no games today' };
   let res, html;
   try {
     res = await fetchFn(url, { headers: fbHeaders() });
@@ -173,7 +178,7 @@ export async function forebetStep(env, now = new Date(), fetchFn = fetch) {
     const m = meta[`${slug}|${kind}`];
     if (m && (m.ok || m.hv === FB_HV) && now.getTime() - new Date(m.at).getTime() < (m.ok ? 3 : 6) * HOUR) continue;
     const work = openCards(days, now, slug, kind);
-    if (work.length) cand.push({ slug, kind, ko: Math.min(...work.flatMap(w => w.open.map(c => new Date(c.kickoff).getTime()))) });
+    if (work.length && playsToday(work, now)) cand.push({ slug, kind, ko: Math.min(...work.flatMap(w => w.open.map(c => new Date(c.kickoff).getTime()))) });
   }
   if (!cand.length) return null;
   cand.sort((a, b) => a.ko - b.ko);

@@ -1,5 +1,6 @@
 // Verify and assign: games a fetch could not match by name are kept as suggestions and can be assigned to a card.
 import worker, { getDay } from '../src/worker.js';
+import { localDate } from '../src/data.js';
 import { forebetFetch } from '../src/forebetpage.js';
 
 const kv = new Map();
@@ -10,8 +11,9 @@ let fail = 0;
 const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) fail++; };
 const call = async (path, body) => (await worker.fetch(new Request('https://x' + path, { method: body ? 'POST' : 'GET', body: body ? JSON.stringify(body) : undefined, headers: { 'x-admin-token': 's' } }), env)).json();
 
-const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-const ko = new Date(Date.now() + 30 * 3600000).toISOString();
+// today's Central date (Nov 20, 2026: Forebet is read only for leagues playing today); the card is filed under it, kickoff 2 hours on
+const date = localDate(new Date().toISOString());
+const ko = new Date(Date.now() + 2 * 3600000).toISOString();
 const dayKey = 'day:' + date;
 // A button's save is a side patch (src/fixes.js): the day is read merged, and a test that stores a new day drops the old patches.
 const setDay = v => { kv.delete('fix:' + dayKey); kv.set(dayKey, v); };
