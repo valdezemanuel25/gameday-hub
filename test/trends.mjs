@@ -153,4 +153,23 @@ ok('65%+ is Strong, 58%+ Medium, 53%+ Weak, under that a Pass', rate(65, true) =
   const big = { id: 'roadtrip4', lift: 9, dir: 'with', w: 15, l: 7, n: 22 }, r = gameReads([{ ...g4, final: undefined }], [big], '2026-11-04')[0];
   ok('a tracked situation is listed on the game with the side it backs, and makes no read', r.watch.length === 1 && r.watch[0].backs === 'RRR' && !r.ml && !r.ou, JSON.stringify(r));
 }
+// 9. Nov 20, 2026 situations: 4th game in 6 nights, a favorite on a 3+ game losing streak vs a conference rival, after a 3+ goal loss
+{
+  const fin = (h, a) => ({ final: { h, a, total: h + a }, grade: true });
+  const ctx = withContext([
+    day('2026-11-01', [card('1', '2026-11-01T19:00', 'BOS', 'TOR', fin(1, 4))]),
+    day('2026-11-02', [card('2', '2026-11-02T19:00', 'TOR', 'MTL', fin(3, 2))]),
+    day('2026-11-04', [card('3', '2026-11-04T19:00', 'TOR', 'OTT', fin(6, 1))]),
+    day('2026-11-05', [card('4', '2026-11-05T19:00', 'BUF', 'TOR', { px: { h: -150, a: 130, tl: 6.5 } }), card('5', '2026-11-05T19:00', 'SEA', 'DAL', { px: { h: -150, a: 130 } })]),
+  ]);
+  const g = Object.fromEntries(ctx.map(c => [c.id, c]));
+  ok('games in the 5 days before are counted: a 4th game in 6 nights is 3', g['4'].hin6 === 3 && g['4'].ain6 === 0, JSON.stringify([g['4'].hin6, g['4'].ain6]));
+  ok('a losing streak and the last game\'s margin are carried', g['4'].hloss === 3 && g['4'].hlast === -5, JSON.stringify([g['4'].hloss, g['4'].hlast]));
+  const r = gameReads(ctx, [{ id: 'home4in6', lift: 4 }, { id: 'hfavl3c', lift: 3 }, { id: 'tired4in6over', lift: 2 }, { id: 'hfavblow', lift: 5, dir: 'with', w: 12, l: 8, n: 20 }], '2026-11-05');
+  const r4 = r.find(x => x.id === '4'), r5 = r.find(x => x.id === '5');
+  ok('home favorite on 4-in-6 and on a 3-game skid vs a conference rival both pull toward the road team', r4.ml && r4.ml.shift === -7 && ['home4in6', 'hfavl3c'].every(id => r4.ml.ev.some(e => e.id === id)), JSON.stringify(r4.ml));
+  ok('the 4-in-6 Over is in the total read', r4.ou && r4.ou.ev.some(e => e.id === 'tired4in6over'));
+  ok('home favorite after a 3+ goal loss is tracked, backing the road team', r4.watch.some(w => w.id === 'hfavblow' && w.backs === 'BUF'));
+  ok('a game across conferences is not a conference-rival spot', !r5.ml);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nall trends checks pass'); process.exit(fails ? 1 : 0);

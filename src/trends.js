@@ -46,7 +46,24 @@ export const SITUATIONS = [
   { id: 'homeback', kind: 'ml', subject: 'H', who: 'home team', label: 'Home team in its first game back from the road', base: 0.55, watch: true, since: WATCH_SINCE },
   { id: 'roadtrip4', kind: 'ml', subject: 'A', who: 'road team', label: 'Road team on its 4th+ straight road game', base: 0.45, watch: true, since: WATCH_SINCE },
   { id: 'tired3in4', kind: 'ou', subject: 'O', who: 'Over', label: 'A team in its 3rd game in 4 nights, over', base: 0.5, watch: true, since: WATCH_SINCE },
+  // Added Nov 20, 2026 from a scan of ~240 situational slices on the Hub backup (162 priced games, Oct 26 to Nov 19, 2026). In the read:
+  // the fatigue spots (betting against a team in its 4th game in 6 nights went 27-13, and the repo's 14,347-game rest backtest also found
+  // tired teams worth about 6 points) and the favorite on a 3+ game losing streak against a conference rival (1-6 so far: it moves nothing
+  // until it has 10 games, like every situation). Like every situation, each one's pull on a read is its own record, shrunk and capped.
+  { id: 'away4in6', kind: 'ml', subject: 'H', who: 'home team', label: 'Road team in its 4th game in 6 nights', base: 0.58 },
+  { id: 'home4in6', kind: 'ml', subject: 'A', who: 'road team', label: 'Home team in its 4th game in 6 nights', base: 0.47 },
+  { id: 'hfavl3c', kind: 'ml', subject: 'A', who: 'road team', label: 'Home favorite on a 3+ game losing streak vs a conference rival', base: 0.4 },
+  { id: 'afavl3c', kind: 'ml', subject: 'H', who: 'home team', label: 'Road favorite on a 3+ game losing streak vs a conference rival', base: 0.42 },
+  { id: 'tired4in6over', kind: 'ou', subject: 'O', who: 'Over', label: 'A team in its 4th game in 6 nights, over', base: 0.5 },
+  // Tracked only from the same scan (pointed the same way in both halves, but ride the home slump of that window or overlap the above).
+  { id: 'roadtrip3', kind: 'ml', subject: 'A', who: 'road team', label: 'Road team on its 3rd+ straight road game', base: 0.45, watch: true, since: '2026-11-20' },
+  { id: 'hfavblow', kind: 'ml', subject: 'A', who: 'road team', label: 'Home favorite coming off a 3+ goal loss', base: 0.4, watch: true, since: '2026-11-20' },
+  { id: 'afavblow', kind: 'ml', subject: 'H', who: 'home team', label: 'Road favorite coming off a 3+ goal loss', base: 0.42, watch: true, since: '2026-11-20' },
 ];
+// NHL conferences (2026-27), for the conference-rival spots.
+const EAST = new Set(['BOS', 'BUF', 'DET', 'FLA', 'MTL', 'OTT', 'TBL', 'TOR', 'CAR', 'CBJ', 'NJD', 'NYI', 'NYR', 'PHI', 'PIT', 'WSH']);
+const WEST = new Set(['CHI', 'COL', 'DAL', 'MIN', 'NSH', 'STL', 'UTA', 'WPG', 'ANA', 'CGY', 'EDM', 'LAK', 'SJS', 'SEA', 'VAN', 'VGK']);
+export const sameConf = (a, b) => (EAST.has(a) && EAST.has(b)) || (WEST.has(a) && WEST.has(b));
 const imp = o => (o > 0 ? 100 / (o + 100) : -o / (-o + 100));
 const two = (h, a) => { if (!Number.isFinite(h) || !Number.isFinite(a)) return null; const x = imp(h), y = imp(a), t = x + y; return [x / t, y / t]; };
 export const lineOf = c => (c.ln && Number.isFinite(c.ln.v) ? c.ln.v : c.px && Number.isFinite(c.px.tl) ? c.px.tl : null);
@@ -54,7 +71,7 @@ export const lineOf = c => (c.ln && Number.isFinite(c.ln.v) ? c.ln.v : c.px && N
 // Every card of every saved day, in order, with each team's days of rest (days since it last played in the saved days; null for a team's
 // first saved game) and whether it is the first game of its day. Rest is an honest null, not 0, when the days before were not saved.
 export function withContext(days) {
-  const out = [], last = new Map(), losses = new Map(); // losses: a team's current run of straight losses in the saved graded games
+  const out = [], last = new Map(), losses = new Map(), margin = new Map(); // margin: a team's goal difference in its last graded game // losses: a team's current run of straight losses in the saved graded games
   const sched = new Map(); // a team's saved games so far, oldest first: { D, home }
   const run = (ab, home) => { const h = sched.get(ab) || []; let n = 0; for (let i = h.length - 1; i >= 0 && h[i].home === home; i--) n++; return n; };
   const sorted = (days || []).filter(d => d && d.date && Array.isArray(d.cards)).slice().sort((a, b) => a.date.localeCompare(b.date));
@@ -64,10 +81,11 @@ export function withContext(days) {
     for (const c of cards) {
       const rest = ab => (last.has(ab) ? Math.round((D - last.get(ab)) / 86400000) - 1 : null);
       const in4 = ab => (sched.get(ab) || []).filter(x => D - x.D <= 3 * 86400000).length; // games in the 3 days before this one
+      const in6 = ab => (sched.get(ab) || []).filter(x => D - x.D <= 5 * 86400000).length; // games in the 5 days before: 3 = a 4th game in 6 nights
       // aroad: straight road games the road team has just played. hback: the home team's last game was on the road. hin4 / ain4: 2 = this is a 3rd game in 4 nights.
-      out.push({ ...c, date: d.date, hrest: rest(c.hAbbr), arest: rest(c.aAbbr), firstGame: c.kickoff === first, hloss: losses.get(c.hAbbr) || 0, aloss: losses.get(c.aAbbr) || 0, aroad: run(c.aAbbr, false), hback: sched.has(c.hAbbr) && run(c.hAbbr, true) === 0, hin4: in4(c.hAbbr), ain4: in4(c.aAbbr) });
+      out.push({ ...c, date: d.date, hrest: rest(c.hAbbr), arest: rest(c.aAbbr), firstGame: c.kickoff === first, hloss: losses.get(c.hAbbr) || 0, aloss: losses.get(c.aAbbr) || 0, aroad: run(c.aAbbr, false), hback: sched.has(c.hAbbr) && run(c.hAbbr, true) === 0, hin4: in4(c.hAbbr), ain4: in4(c.aAbbr), hin6: in6(c.hAbbr), ain6: in6(c.aAbbr), hlast: margin.has(c.hAbbr) ? margin.get(c.hAbbr) : null, alast: margin.has(c.aAbbr) ? margin.get(c.aAbbr) : null });
     }
-    for (const c of cards) { if (!c.final || !c.grade) continue; const hw = c.final.h > c.final.a; losses.set(c.hAbbr, hw ? 0 : (losses.get(c.hAbbr) || 0) + 1); losses.set(c.aAbbr, hw ? (losses.get(c.aAbbr) || 0) + 1 : 0); }
+    for (const c of cards) { if (!c.final || !c.grade) continue; const hw = c.final.h > c.final.a; losses.set(c.hAbbr, hw ? 0 : (losses.get(c.hAbbr) || 0) + 1); losses.set(c.aAbbr, hw ? (losses.get(c.aAbbr) || 0) + 1 : 0); margin.set(c.hAbbr, c.final.h - c.final.a); margin.set(c.aAbbr, c.final.a - c.final.h); }
     for (const c of cards) { last.set(c.hAbbr, D); last.set(c.aAbbr, D); for (const [ab, home] of [[c.hAbbr, true], [c.aAbbr, false]]) { if (!sched.has(ab)) sched.set(ab, []); sched.get(ab).push({ D, home }); } }
   }
   return out;
@@ -100,6 +118,15 @@ function inSpot(s, c) {
   if (s.id === 'homeback') return c.hback ? hit : false;
   if (s.id === 'roadtrip4') return c.aroad >= 3 ? hit : false;
   if (s.id === 'tired3in4') return c.hin4 >= 2 || c.ain4 >= 2 ? hit : false;
+  const hfav = ch != null && ch > 0.5, afav = ch != null && ch < 0.5;
+  if (s.id === 'away4in6') return c.ain6 >= 3 ? hit : false;
+  if (s.id === 'home4in6') return c.hin6 >= 3 ? hit : false;
+  if (s.id === 'hfavl3c') return hfav && c.hloss >= 3 && sameConf(c.hAbbr, c.aAbbr) ? hit : false;
+  if (s.id === 'afavl3c') return afav && c.aloss >= 3 && sameConf(c.hAbbr, c.aAbbr) ? hit : false;
+  if (s.id === 'tired4in6over') return c.hin6 >= 3 || c.ain6 >= 3 ? hit : false;
+  if (s.id === 'roadtrip3') return c.aroad >= 2 ? hit : false;
+  if (s.id === 'hfavblow') return hfav && c.hlast != null && c.hlast <= -3 ? hit : false;
+  if (s.id === 'afavblow') return afav && c.alast != null && c.alast <= -3 ? hit : false;
   return false;
 }
 // Did the subject win? true / false, or null when the game is not graded or has no line to grade an Over against (a push is null too).
@@ -159,6 +186,10 @@ export function gameReads(ctx, stats, date) {
     // only the stronger one is kept (a tie keeps resthome, the narrower spot).
     const rb = ml.findIndex(x => x.id === 'roadb2b'), rh = ml.findIndex(x => x.id === 'resthome');
     if (rb >= 0 && rh >= 0) ml.splice(Math.abs(ml[rb].toward) > Math.abs(ml[rh].toward) ? rh : rb, 1);
+    // Same for the road team's fatigue (Nov 20, 2026): a road team in its 4th game in 6 nights is mostly also on a back-to-back, so of
+    // roadb2b / resthome / away4in6 only the strongest stays. The 4-in-6 Over and the back-to-back Over likewise count once.
+    const keep1 = (arr, ids) => { const ix = arr.map((x, i) => (ids.includes(x.id) ? i : -1)).filter(i => i >= 0); if (ix.length < 2) return; const best = ix.reduce((b, i) => (Math.abs(arr[i].toward) > Math.abs(arr[b].toward) ? i : b)); for (const i of ix.reverse()) if (i !== best) arr.splice(i, 1); };
+    keep1(ml, ['roadb2b', 'resthome', 'away4in6']); keep1(ou, ['b2bover', 'tired4in6over']);
     const m = c.v4 || c.v2, hm = c.px ? hockeyMove(c.px) : null, line = lineOf(c), out = { id: c.id, date: c.date, kickoff: c.kickoff, ko: c.ko, aAbbr: c.aAbbr, hAbbr: c.hAbbr, away: c.away, home: c.home, line, hrest: c.hrest, arest: c.arest, watch };
     const a = readOf(chanceHome(c), ml);
     if (a) {
