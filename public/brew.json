@@ -1,70 +1,70 @@
 {
-  "updated": "2026-11-19T22:08:38Z",
+  "updated": "2026-11-20T11:10:52Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-19",
-      "title": "Welcome to Vice City",
+      "date": "2026-11-20",
+      "title": "More yachts",
       "markets": [
         {
           "label": "Nasdaq",
-          "value": "24,430",
-          "change": 0.42
+          "value": "23,879",
+          "change": -2.25
         },
         {
           "label": "S&P 500",
-          "value": "7,324",
-          "change": -0.23
+          "value": "7,176",
+          "change": -2.02
         },
         {
           "label": "Dow",
-          "value": "50,198",
-          "change": -1.11
+          "value": "49,097",
+          "change": -2.19
         },
         {
           "label": "10-yr",
-          "value": "5.066%",
-          "change": -4.0,
+          "value": "5.052%",
+          "change": -1.0,
           "unit": "bps"
         },
         {
           "label": "Bitcoin",
-          "value": "$62,237",
-          "change": -3.74
+          "value": "$61,926",
+          "change": -0.53
         },
         {
-          "label": "Nvidia",
-          "value": "$150.96",
-          "change": -2.9
+          "label": "Anthropic",
+          "value": "$97.17",
+          "change": 17.07
         }
       ],
       "takeaways": [
         {
-          "h": "Mixed close",
-          "t": "The Nasdaq gained 0.42% while the S&P slipped 0.23% and the Dow lost 1.11% ahead of Anthropic's market debut."
+          "h": "Stocks slide",
+          "t": "The Nasdaq fell 2.25%, the S&P 2.02% and the Dow 2.19% as investors cashed out gains and worried again about chipmakers."
         },
         {
-          "h": "Anthropic IPO",
-          "t": "Anthropic priced at $83 a share, above range, raising $81B, the largest IPO ever, and starts trading today as ANT on the Nasdaq."
+          "h": "Anthropic debut",
+          "t": "Anthropic opened near $111, 34% over its $83 IPO price, then closed at $97.17, up 17% on its first day as ANT."
         },
         {
-          "h": "Nvidia dips",
-          "t": "Nvidia fell 2.9% to $150.96 the day after its first report without Jensen Huang, despite beating estimates and raising its outlook."
+          "h": "Record raise",
+          "t": "The IPO raised a record $81B, topping SpaceX's $75B in June, and Anthropic also sold $26B in private shares."
         },
         {
-          "h": "Fed hikes ahead",
-          "t": "October minutes show almost all Fed officials expect rate hikes in coming months, and the 10-year yield eased 4 bps to 5.066%."
+          "h": "Walmart beats",
+          "t": "Walmart raised its yearly outlook after global e-commerce sales jumped 17%, helped by price cuts on more than 8,000 items."
         },
         {
-          "h": "GTA VI launch",
-          "t": "GTA VI launched with a 99 Metacritic score and over $1.5B in preorders, with analysts eyeing about $3B in four months."
+          "h": "Yields and Bitcoin",
+          "t": "The 10-year yield slipped 1 bp to 5.052% while Bitcoin eased 0.53% to about $61,926."
         },
         {
-          "h": "Bitcoin and art",
-          "t": "Bitcoin fell 3.74% to about $62,237, while a Van Gogh sold for a record $190.4M at Sotheby's."
+          "h": "Deals and bids",
+          "t": "Nvidia reportedly approached Arm's Rene Haas for its CEO job, and the LA Sparks are near a WNBA-record $750M sale."
         }
       ],
-      "note": "Market numbers are the Wednesday close."
+      "note": "Market numbers are the Thursday close."
     },
     {
       "source": "Brew Markets",
