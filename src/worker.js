@@ -578,7 +578,9 @@ export function analystShop(env, slug, f = fetch) {
 // The Analyst's stale-price rule: DraftKings against a sharp book for the open games of ONE league (2 credits a look). Looks at a
 // league at most every SHARP_GAP_H hours and at most SHARP_PER_DAY times a day in all (Worker variables, defaults below; both kept
 // in the free edge cache), and never once the month's credits are at BTTS_RESERVE or below. The last look is noted for the Analyst tab.
-export const SHARP_GAP_H = 3, SHARP_PER_DAY = 15;
+// SHARP_PER_DAY was 15 until Nov 20, 2026: up to 30 credits a day (about 900 a month, near both keys' 1,000) for a rule with 0 bets
+// so far; 3 looks (6 credits a day) leaves the month's credits for the both-score reads.
+export const SHARP_GAP_H = 3, SHARP_PER_DAY = 3;
 const SHARP_NOTE = 'https://hub.local/sharp-last';
 async function cacheGet(k) { try { const r = typeof caches !== 'undefined' ? await caches.default.match(k) : null; return r ? await r.json() : null; } catch (e) { return null; } }
 async function cachePut(k, v, secs) { try { if (typeof caches !== 'undefined') await caches.default.put(k, new Response(JSON.stringify(v), { headers: { 'cache-control': `max-age=${secs}` } })); } catch (e) { /* ignore */ } }
