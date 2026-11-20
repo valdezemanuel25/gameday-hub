@@ -1,6 +1,70 @@
 {
-  "updated": "2026-11-20T11:10:52Z",
+  "updated": "2026-11-20T22:08:43Z",
   "issues": [
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-20",
+      "title": "The golden age is over",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "22,618",
+          "change": -5.28
+        },
+        {
+          "label": "S&P 500",
+          "value": "6,910",
+          "change": -3.7
+        },
+        {
+          "label": "Dow",
+          "value": "48,147",
+          "change": -1.93
+        },
+        {
+          "label": "10-yr",
+          "value": "4.912%",
+          "change": -14.0,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$58,165",
+          "change": -5.38
+        },
+        {
+          "label": "Oil",
+          "value": "$84",
+          "change": 1.89
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Worst week in a year",
+          "t": "The S&P 500 fell 3.70% into a correction, down over 10% from its peak, while the Nasdaq erased its 2026 gains and the Dow lost more than 1,000 points."
+        },
+        {
+          "h": "Anthropic hangover",
+          "t": "Shares fell 8.50% a day after the record $81.3B IPO, and Nvidia dropped 14.01% while Micron fell 13.89% and SK Hynix 13.11%."
+        },
+        {
+          "h": "Gold slump",
+          "t": "Gold hit its lowest since September 2025 on bets for a December Fed hike, down over 30% from its January peak, with silver off about 64%."
+        },
+        {
+          "h": "Yields & Bitcoin",
+          "t": "The 10-year fell 14 bps to 4.912% as Treasurys rallied, and Bitcoin slid below $59,000, heading for its worst month in over four years."
+        },
+        {
+          "h": "AMD export scrutiny",
+          "t": "AMD sank 13.25% after short-seller reports on China exports and up to $8.5B in guarantees backing its partners; the company says it follows export law."
+        },
+        {
+          "h": "Movers & deals",
+          "t": "Intuit fell 12.77% on a cut outlook and Sandisk 16.05%, while Gap rose 11.44% and Bill Holdings dropped 4.12% on a roughly $6B TPG and Corpay buyout."
+        }
+      ]
+    },
     {
       "source": "Morning Brew",
       "date": "2026-11-20",
@@ -773,70 +837,6 @@
         {
           "h": "DraftKings",
           "t": "Shares fell 21.30% after full-year profit guidance was cut from $700-900M to $175-275M to fund up to $700M in prediction markets."
-        }
-      ]
-    },
-    {
-      "source": "Brew Markets",
-      "date": "2026-11-05",
-      "title": "Making sense of the market plunge",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "24,368",
-          "change": -5.32
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,367",
-          "change": -4.18
-        },
-        {
-          "label": "Dow",
-          "value": "51,578",
-          "change": -3.33
-        },
-        {
-          "label": "10-yr",
-          "value": "4.837%",
-          "change": -6,
-          "unit": "bps"
-        },
-        {
-          "label": "Oil",
-          "value": "$90.71",
-          "change": 2.94
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$76,038",
-          "change": -5.0
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Markets",
-          "t": "An AI-driven selloff pushed the Nasdaq down 5.32% into correction territory, the S&P 500 down 4.18% and the Dow down 3.33% (over 1,700 points)."
-        },
-        {
-          "h": "AI trade",
-          "t": "Fears of tighter data-center rules after the midterms hit chipmakers: Sandisk fell 22.26%, AMD 17.26%, Nvidia 9.26%, and the VIX jumped over 60%."
-        },
-        {
-          "h": "Yields",
-          "t": "Treasurys rallied as the 10-year yield fell 6 bps to 4.837%, its lowest since early September; Bitcoin dropped 5% to $76,038."
-        },
-        {
-          "h": "Oil",
-          "t": "Oil rose 2.94% to $90.71 on renewed uncertainty over the Iran war."
-        },
-        {
-          "h": "Gaming",
-          "t": "Memory-chip costs hurt Nintendo, whose profit fell 16% as Switch 2 sales dropped 41%, while Sony's profit rose 45% and its stock gained 6.19%."
-        },
-        {
-          "h": "Movers",
-          "t": "AppLovin jumped 31.04% and Warby Parker 22.59% on earnings, while Dutch Bros sank 21.41% and Snap 14.02%."
         }
       ]
     },
