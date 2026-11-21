@@ -1,5 +1,5 @@
 // Hockey Trends: rest and first-game context, the situation records judged against the chance going in, tags, lifts, the game read as a chance, and the strength rule.
-import { withContext, situations, tagOf, gameReads, rate, buildTrends, track, chanceHome, chanceOver } from '../src/trends.js';
+import { withContext, situations, tagOf, gameReads, rate, buildTrends, track, chanceHome, chanceOver, priceOnly } from '../src/trends.js';
 let fails = 0; const ok = (n, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${c ? '' : x}`); };
 
 const card = (id, kickoff, a, h, o = {}) => ({ id, kickoff, ko: kickoff.slice(11, 16), aAbbr: a, hAbbr: h, away: a, home: h, ...o });
@@ -185,4 +185,9 @@ ok('65%+ is Strong, 58%+ Medium, 53%+ Weak, under that a Pass', rate(65, true) =
   ok('v2 5+ points above the market on the home team backs the road team, a Conflict with the model', by('v').ml && by('v').ml.side === 'A' && by('v').ml.ev.some(e => e.id === 'v2hihome') && by('v').ml.lab === 'Conflict', JSON.stringify(by('v').ml));
   ok('no move and v2 at the market: no price angle', !by('n').ml);
 }
+// Price only (Nov 21, 2026): a read with no counted situation behind its pick is the price's favorite, not a play
+ok('price only: OTT Medium whose one situation backs LAK', priceOnly('Medium', [{ toward: -1 }], true) === 'Price');
+ok('price only: one situation for the pick keeps the strength', priceOnly('Medium', [{ toward: -1 }, { toward: 2 }], true) === 'Medium');
+ok('price only: an away pick backed by a situation keeps Strong', priceOnly('Strong', [{ toward: -3 }], false) === 'Strong');
+ok('price only: Conflict and Pass are left as they are', priceOnly('Conflict', [{ toward: -1 }], true) === 'Conflict' && priceOnly('Pass', [{ toward: -1 }], true) === 'Pass');
 console.log(fails ? `\n${fails} FAILED` : '\nall trends checks pass'); process.exit(fails ? 1 : 0);

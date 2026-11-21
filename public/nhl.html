@@ -259,7 +259,7 @@ button:focus-visible{outline:2px solid var(--blue)}
 .pk .k{font-size:10.5px;font-weight:700;color:var(--faint);letter-spacing:.04em}
 .pk .v{font-size:16px;font-weight:750;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk .v.dim{color:var(--mut);font-weight:600;font-size:14px}
 .pk .pass{font-size:12.5px;color:var(--bad);font-weight:650}
-.lc{color:var(--amber);font-size:14px}.pk .v .pc{font-size:12px;font-weight:650;color:var(--mut);margin-left:2px}
+.lc{color:var(--amber);font-size:14px}.vp{display:flex;flex-direction:column;min-width:0}.vp .po{font-size:11.5px;font-weight:650;color:var(--amber);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk .v .pc{font-size:12px;font-weight:650;color:var(--mut);margin-left:2px}
 .str{display:inline-flex;gap:3px}.str i{width:7px;height:16px;border-radius:2px;background:rgba(255,255,255,.12)}.str.s i.f{background:var(--blue)}.str.m i.f{background:var(--gold)}.str.w i.f{background:rgba(255,255,255,.5)}
 .pk .mv{font-size:13px;font-weight:750;min-width:48px;text-align:right;white-space:nowrap}.pk .mv.y{color:var(--good)}.pk .mv.n{color:var(--bad)}.pk .mv.z{color:var(--faint);font-weight:600;font-size:12px}
 .rs{font-size:10px;font-weight:800;letter-spacing:.05em;padding:3px 7px;border-radius:6px}.rs.w{background:rgba(94,224,143,.16);color:var(--good)}.rs.l{background:rgba(255,123,107,.14);color:var(--bad)}.rs.p{background:rgba(255,255,255,.08);color:var(--mut)}
@@ -491,7 +491,9 @@ function trendEv(x, pickUp, upName, downName) { const up = x.toward > 0, yes = u
 // details" opens the situations behind the read and the game's Movement card (prices, goalies) in place. The Movement tab stays as it is.
 // Nov 11, 2026: the pick is the side the read gives the better chance, shown beside it ("EDM -218 · 72%"); the bars are that chance
 // (Strong 65%+, Medium 58%+, Weak 53%+). Under 53% is "Pass · coin flip", a model on the other side "Pass · mixed signals".
-const LN_ORDER = { Strong: 0, Medium: 1, Weak: 2, Conflict: 3, Pass: 3 };
+const LN_ORDER = { Strong: 0, Medium: 1, Weak: 2, Price: 3, Conflict: 3, Pass: 3 };
+// Price only (Nov 21, 2026): the price's favorite with no situation behind it; shown with its price and chance but no bars, never a play.
+const lnPrice = x => `<span class="vp"><span class="v">${esc(x.side === 'Over' || x.side === 'Under' ? `${x.side} ${x.line}` : x.team)}${x.price != null ? ' ' + fmtOdds(x.price) : ''}${lnPct(x)}</span><small class="po" title="No situation backs this pick: it is the price's favorite">Price only${x.ev && x.ev.length && x.lean ? ` · situations lean ${esc(x.lean)}` : ''}</small></span>`;
 const lnNoPlay = x => x.lab === 'Conflict' || x.lab === 'Pass', lnPass = x => `<span class="pass" title="${x.lab === 'Pass' ? 'The read gives neither side 53%' : 'The model is on the other side'}">Pass · ${x.lab === 'Pass' ? 'coin flip' : 'mixed signals'}</span>`, lnPct = x => (Number.isFinite(x.chance) ? ` <small class="pc" title="The read's chance for this pick: ${x.base}% going in, ${x.shift >= 0 ? '+' : '−'}${Math.abs(x.shift)} from the situations">${x.chance}%</small>` : '');
 const lnBars = lab => { const n = { Strong: 3, Medium: 2, Weak: 1 }[lab] || 0, k = { Strong: 's', Medium: 'm', Weak: 'w' }[lab] || ''; return `<span class="str ${k}" role="img" aria-label="${lab} trend" title="${lab} trend">${[0, 1, 2].map(i => `<i${i < n ? ' class="f"' : ''}></i>`).join('')}</span>`; };
 const lnPlay = g => [g.ml, g.ou].some(x => x && (x.lab === 'Strong' || x.lab === 'Medium'));
@@ -508,11 +510,11 @@ const lnRes = r => r == null ? '' : `<span class="rs ${r === 'push' ? 'p' : r ? 
 function lnCard(g, dc) {
   const px = dc && dc.px, hm = dc ? hockeyMove(px) : null, f = dc && dc.final, a = g.aAbbr, h = g.hAbbr;
   const ml = g.ml && g.ml.lab !== 'None' ? g.ml : null, ou = g.ou && g.ou.lab !== 'None' ? g.ou : null;
-  const row = (k, pick, lab, mv, res) => `<div class="pk${res ? ' fin' : ''}"><span class="k">${k}</span>${pick}${lab && lab !== 'Conflict' && lab !== 'Pass' ? lnBars(lab) : '<span></span>'}${mv}${res}</div>`;
+  const row = (k, pick, lab, mv, res) => `<div class="pk${res ? ' fin' : ''}"><span class="k">${k}</span>${pick}${lab && lab !== 'Conflict' && lab !== 'Pass' && lab !== 'Price' ? lnBars(lab) : '<span></span>'}${mv}${res}</div>`;
   // Winner
   let r1;
   if (ml) {
-    const c = lnNoPlay(ml), pick = c ? lnPass(ml) : `<span class="v">${esc(ml.team)}${ml.price != null ? ' ' + fmtOdds(ml.price) : ''}${lnPct(ml)}</span>`;
+    const c = lnNoPlay(ml), pick = c ? lnPass(ml) : ml.lab === 'Price' ? lnPrice(ml) : `<span class="v">${esc(ml.team)}${ml.price != null ? ' ' + fmtOdds(ml.price) : ''}${lnPct(ml)}</span>`;
     const res = f && !c ? ((ml.side === 'H') === (f.h > f.a)) : null;
     r1 = row('ML', pick, ml.lab, lnMove(hm && hm.ml ? hm.ml.d : null, ml.side === 'H', h, a), lnRes(res));
   } else r1 = row('ML', '<span class="v dim">No trend</span>', '', lnMove(hm && hm.ml ? hm.ml.d : null, null, h, a), '');
@@ -521,7 +523,7 @@ function lnCard(g, dc) {
   let r2;
   if (ou) {
     const c = lnNoPlay(ou), lineTxt = lnMoved && px.tl === ou.line ? `${ot.tl} <span class="lc">→ ${ou.line}</span>` : String(ou.line);
-    const pick = c ? lnPass(ou) : `<span class="v">${esc(ou.side)} ${lineTxt}${lnPct(ou)}</span>`;
+    const pick = c ? lnPass(ou) : ou.lab === 'Price' ? lnPrice(ou) : `<span class="v">${esc(ou.side)} ${lineTxt}${lnPct(ou)}</span>`;
     const res = f && !c ? (f.total === ou.line ? 'push' : (f.total > ou.line) === (ou.side === 'Over')) : null;
     r2 = row('O/U', pick, ou.lab, lnMove(hm && hm.ou ? hm.ou.d : null, ou.side === 'Over', 'Over', 'Under'), lnRes(res));
   } else r2 = row('O/U', `<span class="v dim">No trend${lnMoved ? ` <span class="lc">${ot.tl} → ${px.tl}</span>` : ''}</span>`, '', lnMove(hm && hm.ou ? hm.ou.d : null, null, 'Over', 'Under'), '');

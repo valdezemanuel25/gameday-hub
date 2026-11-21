@@ -172,6 +172,10 @@ export function situations(ctx) {
   });
 }
 // Strength of a read from the pick's chance (0-100). A model on the other side makes it a Conflict (no play).
+// Price only (Nov 21, 2026): a Strong / Medium / Weak read where no counted situation backs the pick is the price's favorite, not a trend
+// (LAK @ OTT: OTT -185 read Medium at 61% while its one situation backed LAK by 1 point). It is shown as "Price only", is not a play, and
+// gets its own row in the replay. lean = the side the situations back. A Conflict or a Pass is left as it is.
+export function priceOnly(lab, ev, up) { return ['Strong', 'Medium', 'Weak'].includes(lab) && !ev.some(x => (x.toward > 0) === up) ? 'Price' : lab; }
 export function rate(chance, modelOk) {
   if (modelOk === false) return 'Conflict';
   return chance >= BANDS.Strong ? 'Strong' : chance >= BANDS.Medium ? 'Medium' : chance >= BANDS.Weak ? 'Weak' : 'Pass';
@@ -211,13 +215,13 @@ export function gameReads(ctx, stats, date) {
       const home = a.up, team = home ? c.hAbbr : c.aAbbr, price = c.px ? (home ? c.px.h : c.px.a) : null;
       const modelHome = m ? m.w >= 50 : null, modelOk = modelHome == null ? null : modelHome === home;
       const d = hm && hm.ml ? hm.ml.d : null, mvOn = d != null && Math.abs(d) >= 3 ? (d > 0) === home : null;
-      out.ml = { side: home ? 'H' : 'A', team, price, chance: a.chance, base: a.base, shift: a.shift, ev: ml, modelOk, model: m ? `${modelHome ? c.hAbbr : c.aAbbr} ${modelHome ? m.w : 100 - m.w}%` : null, move: d, moveWith: mvOn, lab: rate(a.chance, modelOk) };
+      out.ml = { side: home ? 'H' : 'A', team, price, chance: a.chance, base: a.base, shift: a.shift, ev: ml, modelOk, model: m ? `${modelHome ? c.hAbbr : c.aAbbr} ${modelHome ? m.w : 100 - m.w}%` : null, move: d, moveWith: mvOn, lab: priceOnly(rate(a.chance, modelOk), ml, home), lean: home ? c.aAbbr : c.hAbbr };
     }
     const b = line != null ? readOf(chanceOver(c), ou) : null;
     if (b) {
       const over = b.up, modelOver = m && Number.isFinite(m.o) ? m.o >= 50 : null, modelOk = modelOver == null ? null : modelOver === over;
       const d = hm && hm.ou && hm.ou.line === line ? hm.ou.d : null, mvOn = d != null && Math.abs(d) >= 3 ? (d > 0) === over : null;
-      out.ou = { side: over ? 'Over' : 'Under', line, chance: b.chance, base: b.base, shift: b.shift, ev: ou, modelOk, model: modelOver == null ? null : `${modelOver ? 'Over' : 'Under'} ${modelOver ? m.o : 100 - m.o}%`, move: d, moveWith: mvOn, lab: rate(b.chance, modelOk) };
+      out.ou = { side: over ? 'Over' : 'Under', line, chance: b.chance, base: b.base, shift: b.shift, ev: ou, modelOk, model: modelOver == null ? null : `${modelOver ? 'Over' : 'Under'} ${modelOver ? m.o : 100 - m.o}%`, move: d, moveWith: mvOn, lab: priceOnly(rate(b.chance, modelOk), ou, over), lean: over ? 'Under' : 'Over' };
     }
     return out;
   });
@@ -227,7 +231,7 @@ export const statsBefore = (ctx, date) => situations(ctx.filter(c => c.date < da
 // How the reads have done: every graded game read with the records of the days before it (so it is a fair replay: no read knew its own
 // result), grouped by strength. Each row is how often the trend pick won; on a Conflict it also says how often the model's pick won.
 // A pushed total is left out.
-const TRACK = [['Strong', 'Strong'], ['Medium', 'Medium'], ['Weak', 'Weak'], ['Pass', 'Pass (coin flip)'], ['Conflict', 'model disagrees (Conflict)']];
+const TRACK = [['Strong', 'Strong'], ['Medium', 'Medium'], ['Weak', 'Weak'], ['Pass', 'Pass (coin flip)'], ['Conflict', 'model disagrees (Conflict)'], ['Price', 'price only (no situation for the pick)']];
 export function track(ctx) {
   const byKey = Object.fromEntries(ctx.map(c => [c.id + '|' + c.date, c])), G = {};
   const add = (id, label, won, mwon) => { const g = G[id] || (G[id] = { id, label, w: 0, n: 0, mw: 0, hasModel: mwon != null }); g.n++; if (won) g.w++; if (mwon) g.mw++; };
@@ -242,7 +246,7 @@ export function track(ctx) {
       if (r.ou && c.final.total !== r.line) put('ou', 'Total', r.ou, (r.ou.side === 'Over') === (c.final.total > r.line));
     }
   }
-  return ['ml', 'ou'].flatMap(k => ['play', 'strong', 'medium', 'weak', 'pass', 'conflict'].map(x => G[k + '-' + x])).filter(Boolean);
+  return ['ml', 'ou'].flatMap(k => ['play', 'strong', 'medium', 'weak', 'pass', 'conflict', 'price'].map(x => G[k + '-' + x])).filter(Boolean);
 }
 // What /api/nhl/trends sends: the situations (every saved day), the replay, and a read for each game of the date (from the days before it).
 export function buildTrends(days, date) {
