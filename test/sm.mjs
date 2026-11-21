@@ -20,6 +20,12 @@ ok('RB Leipzig vs PSV Eindhoven', find('RB Leipzig', 'PSV Eindhoven') === '60670
 ok('Viking FK vs Bayern Munich', find('Viking FK', 'Bayern Munich') === '606703');
 ok('no wrong match', find('Arsenal', 'Chelsea') === undefined);
 
+// A preview address with a double or trailing hyphen made the whole league's read throw (Nov 21, 2026: "reading 'toUpperCase'")
+const { slugTitle } = await import('../src/verify.js');
+const st = u => { try { return JSON.stringify(slugTitle(u)); } catch (e) { return 'threw ' + e.message; } };
+ok('preview address with a double hyphen gives a title, no error', st('https://www.sportsmole.co.uk/football/preview/sheff-utd--vs-watford-prediction-team-news_1.html') === '{"home":"Sheff Utd","away":"Watford"}', st('https://www.sportsmole.co.uk/football/preview/sheff-utd--vs-watford-prediction-team-news_1.html'));
+ok('preview address with an empty side gives nothing, no error', st('https://x/preview/--vs-watford-prediction_1.html') === 'null', st('https://x/preview/--vs-watford-prediction_1.html'));
+
 const w = parseWeSay('<div><h2>We say: Arsenal 2-0 Lille</h2><p>Arsenal should win…</p></div>');
 ok('parse "We say: Arsenal 2-0 Lille"', w && w.h === 2 && w.a === 0 && w.text === 'Arsenal 2–0 Lille', JSON.stringify(w));
 ok('no We say -> null', parseWeSay('<p>nothing</p>') === null);
