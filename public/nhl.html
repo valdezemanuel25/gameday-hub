@@ -239,7 +239,7 @@ button:focus-visible{outline:2px solid var(--blue)}
 .evl{margin-top:8px;display:flex;flex-direction:column}
 .evr{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:6px;padding:5px 0;border-top:1px solid var(--line);font-size:12px;color:var(--mut);align-items:baseline}
 .evr:first-child{border-top:0}
-.evr.sx{grid-template-columns:42px minmax(0,1fr) auto}.evr .tg{font-size:9.5px;font-weight:800;letter-spacing:.02em;padding:1px 0;border-radius:4px;text-align:center}.evr .tg.y{background:rgba(94,224,143,.14);color:var(--good)}.evr .tg.n{background:rgba(255,123,107,.12);color:var(--bad)}.evr .tg.w{background:rgba(255,255,255,.08);color:var(--mut)}
+.evr.sx{grid-template-columns:64px minmax(0,1fr) auto}.evr .tg{font-size:9.5px;font-weight:800;letter-spacing:.02em;padding:1px 0;white-space:nowrap;border-radius:4px;text-align:center}.evr .tg.y{background:rgba(94,224,143,.14);color:var(--good)}.evr .tg.n{background:rgba(255,123,107,.12);color:var(--bad)}.evr .tg.w{background:rgba(255,255,255,.08);color:var(--mut)}
 .evr em{font-style:normal;color:var(--faint);font-size:11px;white-space:nowrap}
 .chs{display:flex;flex-wrap:wrap;margin-top:6px}
 .cal td small{display:block}.cal td:nth-child(2){white-space:nowrap}
@@ -482,7 +482,9 @@ const trendPts = x => (Number.isFinite(x.toward) ? ` · +${Math.round(Math.abs(x
 // One situation row: tagged with the side it backs (the home team or Over when it points up, else the away team or Under), written
 // "Van", "Over". Green when that is the card's pick, red when it backs the other side.
 const tcase = t => String(t).charAt(0).toUpperCase() + String(t).slice(1).toLowerCase();
-function trendEv(x, pickUp, upName, downName) { const up = x.toward > 0, yes = up === pickUp, side = tcase(up ? upName : downName); return `<div class="evr sx"><span class="tg ${yes ? 'y' : 'n'}" aria-label="backs ${esc(side)}${yes ? ', the pick' : ', against the pick'}">${esc(side)}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}${trendPts(x)}</em></div>`; }
+// The tag says outright which side the situation backs (Nov 21, 2026: a bare "Lak" on an OTT home-favorite situation read as the home team).
+const backsTag = t => `Backs ${/^(over|under)$/i.test(String(t)) ? tcase(t) : String(t).toUpperCase()}`;
+function trendEv(x, pickUp, upName, downName) { const up = x.toward > 0, yes = up === pickUp, side = tcase(up ? upName : downName); return `<div class="evr sx"><span class="tg ${yes ? 'y' : 'n'}" aria-label="backs ${esc(side)}${yes ? ', the pick' : ', against the pick'}">${esc(backsTag(side))}</span><span class="et">${esc(x.label)}</span><em>${trendHit(x)}${trendPts(x)}</em></div>`; }
 // ---------- Lines tab (Nov 9, 2026): replaces the Trends cards. One short card per game: the trend's pick on the winner and the total, its
 // strength as bars, how far the price moved since the opening and whether that was toward the pick (✓) or against it (✕), a changed total
 // line in amber, the result once the game is final. Plays (Strong or Medium) come first; finished games drop to the bottom. "Tap for
@@ -541,7 +543,7 @@ function lnCard(g, dc) {
   const title = f ? `${esc(a)} <span class="sco">${f.a}–${f.h}</span> ${esc(h)}` : `${esc(a)} @ ${esc(h)}`;
   // Details: the situations behind the read, then the Movement card (prices, goalies, rest), else just the goalies
   const ev = [...(ml ? ml.ev.map(x => trendEv(x, ml.side === 'H', h, a)) : []), ...(ou ? ou.ev.map(x => trendEv(x, ou.side === 'Over', 'Over', 'Under')) : [])];
-  const wt = (g.watch || []).map(x => `<div class="evr sx"><span class="tg w" aria-label="so far backs ${esc(x.backs)}">${esc(tcase(x.backs))}</span><span class="et">${esc(x.label)}</span><em>${x.w}-${x.l}</em></div>`);
+  const wt = (g.watch || []).map(x => `<div class="evr sx"><span class="tg w" aria-label="so far backs ${esc(x.backs)}">${esc(backsTag(x.backs))}</span><span class="et">${esc(x.label)}</span><em>${x.w}-${x.l}</em></div>`);
   const wth = wt.length ? `<div class="lnh">Tracking · not in the read</div><div class="evl">${wt.join('')}</div>` : '';
   const mvc = wth + (dc && hm ? movesView(g.id) : dc ? gkRestTags(dc) : '');
   const det = `${ev.length ? `<div class="lnh">Why · ${ev.length} situation${ev.length === 1 ? '' : 's'}</div><div class="evl">${ev.join('')}</div>` : `<div class="pxl" style="margin-top:4px">No situation matches this game, or the ones that do have not been counted long enough (10 games) to move the read.</div>`}${mvc}`;

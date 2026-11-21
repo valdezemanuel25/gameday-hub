@@ -80,6 +80,10 @@ try {
         ] }; const r = smNeeds().map(j => `${j.slug}:${j.left}`); stat = was; return r; });
       ok('soccer: Update SportsMole offers only leagues with games still missing a preview', JSON.stringify(smn) === '["eng.1:5"]', JSON.stringify(smn));
     }
+    if (label === 'hockey') { // a situation row says which side it backs (Nov 21, 2026)
+      const tg = await page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = trendEv({ toward: -1, label: 'Home favorite the line moved 3+ points toward', dir: 'against', w: 5, l: 7, n: 12 }, true, 'OTT', 'LAK') + trendEv({ toward: 2, label: 'x', dir: 'with', w: 6, l: 4, n: 10 }, false, 'Over', 'Under'); return [...d.querySelectorAll('.tg')].map(e => e.textContent + '|' + e.className); });
+      ok('hockey: situation tags read "Backs LAK" / "Backs Over" and mark against the pick', JSON.stringify(tg) === '["Backs LAK|tg n","Backs Over|tg n"]', JSON.stringify(tg));
+    }
     const seen = [];
     for (const id of all) {
       const r = await page.evaluate(([id, src]) => { (0, eval)(`(${src})`)(id);
