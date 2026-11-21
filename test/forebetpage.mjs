@@ -54,10 +54,15 @@ ok('leftover Forebet rows dated a day later are offered for assigning', unmI.len
 
 // failures are recorded, not hidden
 save('2026-10-16', [mk('7', 'Union St.-Gilloise', 'Real Sociedad', '2026-10-16T16:45:00Z')]);
-// Forebet only for leagues playing today (Nov 20, 2026): on Oct 15 the only open game is tomorrow's, so nothing is read
+// A button tap reads a league playing today or tomorrow (Nov 21, 2026); games two days out are left alone
 let n0 = 0; const count = async () => { n0++; return new Response(page('1x2')); };
-const notToday = await forebetFetch(env, 'uefa.europa', '1x2', now, count);
-ok('a league whose open games are all tomorrow or later is not read', notToday.skipped === 'no games today' && n0 === 0, JSON.stringify(notToday));
+save('2026-10-16', []); save('2026-10-17', [mk('7b', 'Union St.-Gilloise', 'Real Sociedad', '2026-10-17T16:45:00Z')]);
+const dayAfter = await forebetFetch(env, 'uefa.europa', '1x2', now, count);
+ok('a button tap does not read a league whose open games are two days out', dayAfter.skipped === 'no games today or tomorrow' && n0 === 0, JSON.stringify(dayAfter));
+kv.delete('day:2026-10-17'); save('2026-10-16', [mk('7', 'Union St.-Gilloise', 'Real Sociedad', '2026-10-16T16:45:00Z')]);
+const tmr = await forebetFetch(env, 'uefa.europa', '1x2', now, count);
+ok('a button tap reads a league playing only tomorrow', !tmr.skipped && !tmr.error && n0 === 1, JSON.stringify(tmr));
+save('2026-10-16', [mk('7', 'Union St.-Gilloise', 'Real Sociedad', '2026-10-16T16:45:00Z')]);
 const next = new Date('2026-10-16T12:00:00Z'); // 7:00 AM Central on the 16th: Union kicks off today
 const bad = await forebetFetch(env, 'uefa.europa', '1x2', next, async () => new Response('no', { status: 403 }));
 const meta = JSON.parse(kv.get('meta:fb'));

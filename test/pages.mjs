@@ -65,6 +65,14 @@ try {
         ] };
         const r = fbNeeds().map(j => j.slug); stat = was; return r; });
       ok('soccer: Update Forebet asks only for a league playing today that still needs it', JSON.stringify(need) === '["ger.1"]', JSON.stringify(need));
+      const tmr = await page.evaluate(() => { const fb = (ok, cov) => ({ '1x2': { at: new Date().toISOString(), ok, cov }, ou: { at: new Date().toISOString(), ok, cov }, btts: { at: new Date().toISOString(), ok, cov } });
+        const was = stat; stat = { writes: { used: 10, limit: 1000, by: {} }, leagues: [
+          { slug: 'eng.1', name: 'Premier League', games: { today: 0, tomorrow: 7 }, fb: fb(false, [0, 7]) },   // tomorrow, blocked: offered
+          { slug: 'mex.1', name: 'Liga MX', games: { today: 3, tomorrow: 4 }, fb: fb(true, [7, 7]) },          // tomorrow all covered: done
+          { slug: 'esp.1', name: 'LaLiga', games: { today: 2, tomorrow: 0 }, fb: fb(false, [0, 2]) },          // today only: not this button
+        ] };
+        const r = fbTomorrow().map(j => j.slug); stat = was; return r; });
+      ok('soccer: Fetch tomorrow offers only a league playing tomorrow that still needs it', JSON.stringify(tmr) === '["eng.1"]', JSON.stringify(tmr));
     }
     const seen = [];
     for (const id of all) {
