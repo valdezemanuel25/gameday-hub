@@ -48,6 +48,12 @@ const r = await smLeague('2026-10-20', 'uefa.champions', env, new Date('2026-10-
 const day = JSON.parse(kv.get('day:2026-10-20'));
 ok('fetch: found 1, missed 1', r.found === 1 && r.missed === 1, JSON.stringify(r));
 ok('card carries the SportsMole line', day.cards[0].sm?.text === 'Arsenal 2–0 Lille');
+ok('fetch: nothing left waiting past the 6-a-call cap', r.more === 0, JSON.stringify(r));
+// SportsMole button (Nov 21, 2026): a call reads at most 6 previews and says how many still wait, so the button calls again
+kv.set('day:2026-10-21', JSON.stringify({ date: '2026-10-21', cards: Array.from({ length: 7 }, (_, i) => ({ ...card(`c${i}`, 'Arsenal', 'Lille'), kickoff: '2026-10-21T19:00:00Z' })) }));
+const rc = await smLeague('2026-10-21', 'uefa.champions', env, new Date('2026-10-21T12:00:00Z'), { force: true });
+const rc2 = await smLeague('2026-10-21', 'uefa.champions', env, new Date('2026-10-21T12:00:05Z'), { force: true });
+ok('cap: 6 read, 1 left waiting; the next call reads it', rc.found === 6 && rc.more === 1 && rc2.found === 1 && rc2.more === 0, JSON.stringify([rc, rc2]));
 const before = hits;
 const r2 = await smLeague('2026-10-20', 'uefa.champions', env, new Date('2026-10-20T12:30:00Z'));
 ok('tried-recently cards are not refetched (no extra requests)', r2.idle === true && hits === before, JSON.stringify(r2));

@@ -936,13 +936,13 @@ export async function smLeague(date, slug, env, now = new Date(), { force = fals
   if (!todo.length) return { idle: true, found: 0 };
   let links;
   try { links = await getListing(env, now.getTime()); } catch (e) { return { error: `SportsMole list: ${e.message}`, found: 0 }; }
-  let found = 0, missed = 0, fetched = 0;
+  let found = 0, missed = 0, fetched = 0, more = 0;
   const errors = [], missedCards = [];
   for (const c of todo) {
     const link = matchLink(c.home, c.away, links);
     day.smTried[c.id] = now.getTime();
     if (!link) { missed++; missedCards.push(c); continue; }
-    if (fetched >= 6) { delete day.smTried[c.id]; continue; } // keep each request small; the next run continues
+    if (fetched >= 6) { delete day.smTried[c.id]; more++; continue; } // keep each request small; the next run (or the button's next call) continues
     fetched++;
     try {
       const w = parseWeSay(await fetchText(link.url));
@@ -961,7 +961,7 @@ export async function smLeague(date, slug, env, now = new Date(), { force = fals
   }
   await saveUnm(env, unm, before, today());
   await putDay(env, date, day);
-  return { found, missed, listed: links.length, ...(errors.length ? { errors } : {}) };
+  return { found, missed, more, listed: links.length, ...(errors.length ? { errors } : {}) };
 }
 
 // ---------------------------------------------------------------------------------------------

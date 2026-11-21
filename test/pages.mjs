@@ -73,6 +73,12 @@ try {
         ] };
         const r = fbTomorrow().map(j => j.slug); stat = was; return r; });
       ok('soccer: Fetch tomorrow offers only a league playing tomorrow that still needs it', JSON.stringify(tmr) === '["eng.1"]', JSON.stringify(tmr));
+      const smn = await page.evaluate(() => { const was = stat; stat = { writes: { used: 10, limit: 1000, by: {} }, leagues: [
+          { slug: 'eng.1', name: 'Premier League', games: { today: 0, tomorrow: 7 }, sm: { tried: null, found: 2, total: 7 } },   // 5 still missing: offered
+          { slug: 'mex.1', name: 'Liga MX', games: { today: 3, tomorrow: 4 }, sm: { tried: null, found: 7, total: 7 } },          // all found: done
+          { slug: 'esp.1', name: 'LaLiga', games: { today: 0, tomorrow: 0 }, sm: { tried: null, found: 0, total: 0 } },           // no games: not offered
+        ] }; const r = smNeeds().map(j => `${j.slug}:${j.left}`); stat = was; return r; });
+      ok('soccer: Update SportsMole offers only leagues with games still missing a preview', JSON.stringify(smn) === '["eng.1:5"]', JSON.stringify(smn));
     }
     const seen = [];
     for (const id of all) {

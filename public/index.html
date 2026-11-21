@@ -284,7 +284,7 @@ body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}.wrap
 .mp{width:100%;max-width:420px;background:linear-gradient(var(--panel2),var(--panel2)),var(--bg);border:1px solid var(--acc-line);border-radius:18px;padding:18px 18px 16px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .mp b{font-size:16px}.mp p{font-size:13px;color:var(--dim);line-height:1.5;margin:6px 0 12px}
 .mr div{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}.mr em{font-style:normal;color:var(--faint);font-size:12.5px;text-align:right}
-#fbm .mr{max-height:52vh;overflow:auto}
+#fbm .mr,#smm .mr{max-height:52vh;overflow:auto}
 .mr .run em{color:var(--amber)}.mr .ok em{color:var(--grass)}.mr .bad em{color:#ff9d84}
 .mb{display:flex;gap:10px;margin-top:14px}.mb button{flex:1;padding:12px;border-radius:12px;font-weight:650;font-size:14px;border:1px solid var(--acc-line)}
 .mb .mgo{background:var(--grass);border-color:var(--grass);color:#06130c}.mb button:disabled{opacity:.6}
@@ -1954,7 +1954,7 @@ function sourceBoard() {
   const rows = playing.map(row).join('') + (idle.length ? `<tr class="sep"><td colspan="7">No games today: nothing to worry about here</td></tr>` + idle.map(row).join('') : '');
   const bads = playing.map(l => ({ l, ks: l.fb ? ['1x2', 'ou', 'btts'].filter(k => l.fb[k] && !l.fb[k].ok) : [] })).filter(x => x.ks.length);
   return `<div class="sec">Data by league<small>Leagues with games today are at the top and highlighted: those should have every model and source up to date. Each box is the last time that source was fetched for that league. Where it applies, a second line shows games covered (found / games today and tomorrow). Forebet is read automatically only for leagues playing today. Tap a red box in a row with games today or tomorrow to fetch it, or use Fetch tomorrow for tomorrow's games.</small></div>
-  <div class="pair" style="padding-top:0">${(n => `<button type="button" class="xbtn" data-fball="1" style="margin:0 0 10px">Update Forebet${n ? ` · ${n} league${n === 1 ? '' : 's'} need it` : ' · all up to date'}</button>`)(fbNeeds().length)} ${(n => `<button type="button" class="xbtn" data-fbtm="1" style="margin:0 0 10px">Fetch tomorrow${n ? ` · ${n} league${n === 1 ? '' : 's'}` : ' · all up to date'}</button>`)(fbTomorrow().length)}<table class="sb"><tr><th></th><th>ESPN<br>results</th><th>v4<br>ratings</th><th>Sports<br>Mole</th><th class="g" colspan="3">Forebet</th></tr>
+  <div class="pair" style="padding-top:0">${(n => `<button type="button" class="xbtn" data-fball="1" style="margin:0 0 10px">Update Forebet${n ? ` · ${n} league${n === 1 ? '' : 's'} need it` : ' · all up to date'}</button>`)(fbNeeds().length)} ${(n => `<button type="button" class="xbtn" data-fbtm="1" style="margin:0 0 10px">Fetch tomorrow${n ? ` · ${n} league${n === 1 ? '' : 's'}` : ' · all up to date'}</button>`)(fbTomorrow().length)} ${(n => `<button type="button" class="xbtn" data-small="1" style="margin:0 0 10px">Update SportsMole${n ? ` · ${n} league${n === 1 ? '' : 's'}` : ' · all up to date'}</button>`)(smNeeds().length)}<table class="sb"><tr><th></th><th>ESPN<br>results</th><th>v4<br>ratings</th><th>Sports<br>Mole</th><th class="g" colspan="3">Forebet</th></tr>
     <tr><th></th><th></th><th></th><th></th><th>1X2</th><th>O/U</th><th>Both</th></tr>${rows}</table>
     <div class="sbl"><span><i style="background:rgba(var(--acc-rgb),.5)"></i>fresh</span><span><i style="background:rgba(240,181,74,.6)"></i>getting old</span><span><i style="background:rgba(224,122,95,.7)"></i>blocked or failed</span><span><i style="border:1px dashed var(--faint)"></i>not fetched yet</span><span><i style="background:var(--grass)"></i>games today</span></div></div>
   ${bads.length ? `<div class="sec" style="padding-top:16px">Needs a re-fetch<small>${bads.length} league${bads.length === 1 ? '' : 's'} playing today with Forebet pages that came back blocked. v2, v4 and SportsMole are not affected.</small></div>
@@ -1993,6 +1993,41 @@ function fbOpen(jobs, intro) {
     <p>${intro}</p><div class="mr">${rows}</div>
     <div class="mb"><button type="button" class="mn" data-fbm="cancel">${jobs.length ? 'Cancel' : 'Close'}</button>${jobs.length ? `<button type="button" class="mgo" data-fbm="go">Fetch from Forebet</button>` : ''}</div></div>`;
   document.body.appendChild(el);
+}
+// SportsMole button (Nov 21, 2026): every league with games still to come today or tomorrow that have no "We say" preview yet. The
+// Hub reads SportsMole's list of previews and fills each game it can match; previews SportsMole has not posted yet are simply not there.
+function smNeeds() {
+  return (stat && stat.leagues || []).filter(l => l.sm && l.sm.total > l.sm.found).map(l => ({ slug: l.slug, name: l.name, left: l.sm.total - l.sm.found }));
+}
+const smDates = () => { const t = new Date().toLocaleDateString('en-CA', { timeZone: TZ }); return [t, new Date(Date.parse(`${t}T12:00:00Z`) + 86400000).toISOString().slice(0, 10)]; };
+let SMJOBS = [];
+function smOpen() {
+  SMJOBS = smNeeds(); const old = $('#smm'); if (old) old.remove();
+  const el = document.createElement('div'); el.id = 'smm'; el.className = 'mo'; const n = SMJOBS.length;
+  const rows = n ? SMJOBS.map(j => `<div data-k="${esc(j.slug)}"><span>${esc(j.name)} · ${j.left} game${j.left === 1 ? '' : 's'}</span><em>waiting</em></div>`).join('') : '<div class="ok"><span>Every game today and tomorrow already has its SportsMole preview</span><em>✓</em></div>';
+  el.innerHTML = `<div class="mp" role="dialog" aria-modal="true" aria-labelledby="smm-t"><b id="smm-t">Fetch from SportsMole?</b>
+    <p>${n ? `${n} league${n === 1 ? '' : 's'} with games today or tomorrow still lack a SportsMole preview: the Hub reads every one SportsMole has posted. Games it has not previewed yet stay empty.` : 'Nothing to fetch.'}</p><div class="mr">${rows}</div>
+    <div class="mb"><button type="button" class="mn" data-smm="cancel">${n ? 'Cancel' : 'Close'}</button>${n ? `<button type="button" class="mgo" data-smm="go">Fetch from SportsMole</button>` : ''}</div></div>`;
+  document.body.appendChild(el);
+}
+async function smRun() {
+  const m = $('#smm'); if (!m || !SMJOBS.length) return; m.dataset.busy = '1';
+  const go = m.querySelector('[data-smm="go"]'), cn = m.querySelector('[data-smm="cancel"]'); go.disabled = true; cn.disabled = true; go.textContent = 'Fetching…';
+  const row = (id, cls, t) => { const r = m.querySelector(`[data-k="${CSS.escape(id)}"]`); if (!r) return; r.className = cls; r.querySelector('em').textContent = t; r.scrollIntoView({ block: 'nearest' }); };
+  let total = 0;
+  for (const j of SMJOBS) {
+    row(j.slug, 'run', 'reading…'); let found = 0, missed = 0, err = null;
+    for (const date of smDates()) {
+      for (let i = 0; i < 6; i++) { // each call reads at most 6 previews; "more" says some are still waiting
+        try { const r = await post(`/api/sm?league=${encodeURIComponent(j.slug)}&date=${date}`); if (r.error) { err = r.error; break; } found += r.found || 0; missed = r.missed || 0; if (!r.more) break; }
+        catch (er) { err = er.message; break; }
+      }
+    }
+    total += found;
+    row(j.slug, err && !found ? 'bad' : 'ok', err && !found ? err : `found ${found}${missed ? `, ${missed} not on SportsMole yet` : ''}`);
+  }
+  delete m.dataset.busy; go.textContent = `Done · ${total} found`; go.dataset.smm = 'close'; go.disabled = false; cn.remove();
+  try { stat = await api('/api/status'); if (S.tab === 'status') render(); if (total) { delete counts[S.date]; tally = null; await loadDay(); } } catch (er) { /* the grid refreshes on the next visit */ }
 }
 async function fbRun() {
   const m = $('#fbm'); if (!m || !FBJOBS.length) return; m.dataset.busy = '1';
@@ -2248,6 +2283,8 @@ document.addEventListener('click', async e => {
   const fm = e.target.closest('[data-fbm]');
   if (e.target.closest('[data-fball]')) { const J = fbNeeds(); return fbOpen(J, J.length ? `${J.length} league${J.length === 1 ? '' : 's'} playing today still need Forebet: the Hub reads each missing table one after another.` : 'Nothing to fetch.'); }
   if (e.target.closest('[data-fbtm]')) { const J = fbTomorrow(); return fbOpen(J, J.length ? `${J.length} league${J.length === 1 ? '' : 's'} playing tomorrow still need Forebet: the Hub reads each missing table one after another. Fetch a few at a time if Forebet starts saying "too many requests".` : 'Nothing to fetch.'); }
+  if (e.target.closest('[data-small]')) return smOpen();
+  const smm = e.target.closest('[data-smm]'); if (smm) { if (smm.dataset.smm === 'go') return smRun(); const m = $('#smm'); if (m && !m.dataset.busy) m.remove(); return; }
   if (fm) { const a = fm.dataset.fbm; if (a === 'go') return fbRun(); const m = $('#fbm'); if (m && !m.dataset.busy) m.remove(); return; }
   if (e.target.closest('#btn-export')) return exportAll();
   if (e.target.closest('#btn-fb')) {
