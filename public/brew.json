@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-22T13:08:00Z",
+  "updated": "2026-11-22T18:08:46Z",
   "issues": [
     {
       "source": "Morning Brew",
@@ -33,6 +33,74 @@
         }
       ],
       "note": "Sunday gift-guide issue with no market data; see Saturday's issue for the latest market numbers."
+    },
+    {
+      "source": "Humbled Trader",
+      "date": "2026-11-22",
+      "weekly": true,
+      "title": "Nvidia Drops 23%, AI Stocks Unwind, and Retail Defies the Selloff",
+      "markets": [
+        {
+          "label": "S&P 500",
+          "value": "6,910",
+          "change": -8.6
+        },
+        {
+          "label": "Dow",
+          "value": "48,147",
+          "change": -8
+        },
+        {
+          "label": "Nasdaq",
+          "value": "22,618",
+          "change": -10
+        },
+        {
+          "label": "Russell 2000",
+          "value": "2,582",
+          "change": -7.5
+        },
+        {
+          "label": "VIX",
+          "value": "35.89",
+          "change": 86
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Week",
+          "t": "The S&P 500 lost 8.6%, its worst week since April 2025, and closed in correction with the Dow; the Nasdaq is now negative for 2026. Every sector ETF finished red, tech (XLK) -12.5% and staples best at -2.1%, and Friday's 3.7% drop was the seventh straight red day."
+        },
+        {
+          "h": "Nvidia and Anthropic",
+          "t": "Nvidia beat and raised but sank 22.9% on the week after Reuters said the SEC is examining its accounting. Anthropic priced its IPO at $83, opened at $111.50 Thursday and faded to $88.91 by Friday."
+        },
+        {
+          "h": "Rates and Fed",
+          "t": "Bonds rallied on growth fears: the 10-year fell 23 bp to 4.92% and the 2-year to 4.63%. A 25 bp hike on Dec 9 is still 90-97% priced, and Waller floated 50 bp to jolt inflation expectations."
+        },
+        {
+          "h": "S&P levels",
+          "t": "Closed at 6,910, below the 200-day with RSI at 26, the lowest since April 2025. Resistance is 7,000, then Thursday's 7,175 close. Only 52.6% of S&P names sit above their 200-day, but VIX above 30 with RSI under 30 has Schwab looking for an oversold bounce."
+        },
+        {
+          "h": "Idea: AMD",
+          "t": "At $424.39 after a 7.7% drop Thursday on a Hunterbrook short report about firmware reaching a blacklisted Chinese server maker. Bearish: a break below the daily 200SMA is her cue to join short 30-40 minutes after the open, targeting the $400s. Day trade; no position."
+        },
+        {
+          "h": "Idea: TGT",
+          "t": "At $165.83 after Q3, with full-year sales growth guidance raised to about 6% and EPS to $10.65-11.40. Bullish since retail breakouts are holding: she wants pullbacks toward the 8EMA that hold the $163s. Swing idea; no position."
+        },
+        {
+          "h": "Idea: EQIX",
+          "t": "At $968.22. Tenji thesis: Trump's threat to penalize US firms building data centers abroad could hurt Equinix and Digital Realty's foreign builds and tenants, though the counter case is that AI demand kept at home could fill their US sites."
+        },
+        {
+          "h": "Week ahead",
+          "t": "Flash PMIs Mon, consumer confidence Tue, then PCE, Q3 GDP, durable goods and the Beige Book Wed; markets closed Thu for Thanksgiving. Earnings: HPE, ZM Mon; DELL, BBY, WDAY, HPQ, ADSK Tue; DE Wed."
+        }
+      ],
+      "note": "Weekly Sunday edition. Market numbers are the Nov 20 close with weekly % changes; VIX change is vs the Nov 13 close."
     },
     {
       "source": "Brew Markets",
@@ -352,6 +420,74 @@
       "note": "Market numbers are the Monday close."
     },
     {
+      "source": "Humbled Trader",
+      "date": "2026-11-15",
+      "weekly": true,
+      "title": "The Market Bounced. Nvidia Could Decide What Happens Next.",
+      "markets": [
+        {
+          "label": "S&P 500",
+          "value": "7,562",
+          "change": 2.5
+        },
+        {
+          "label": "Dow",
+          "value": "52,348",
+          "change": 2.1
+        },
+        {
+          "label": "Nasdaq",
+          "value": "25,136",
+          "change": 2.3
+        },
+        {
+          "label": "Russell 2000",
+          "value": "2,790",
+          "change": 1.3
+        },
+        {
+          "label": "VIX",
+          "value": "19.30",
+          "change": -24.7
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Week",
+          "t": "The S&P 500 and Nasdaq snapped four-week losing streaks; Nasdaq had its best week since August. All 11 sectors rose, led by energy (XLE +5.4%), but Friday money rotated out of tech into staples."
+        },
+        {
+          "h": "Nvidia",
+          "t": "Jensen Huang resigned Thursday and CFO Colette Kress is interim CEO. The stock fell a sixth straight week (about -12%) and closed under $4T market cap. Earnings Tue Nov 17."
+        },
+        {
+          "h": "Rates and Fed",
+          "t": "October CPI ran hot (headline +0.4%, core +0.3%). The 10-year jumped 29 bp to 5.152% and the 2-year 35 bp to 4.872%. A December hike is now fully priced; Waller says 50 bp deserves a look."
+        },
+        {
+          "h": "S&P levels",
+          "t": "7,600 flipped to resistance, with the 7,620 June high just above. Schwab calls it bearish until 7,600 is reclaimed. Nasdaq sits on its 200-day; Russell and SOX are below theirs."
+        },
+        {
+          "h": "Idea: ZETA",
+          "t": "At $36.65 after its 21st straight beat-and-raise (revenue +46%). Testing all-time highs near $38. Leaning bullish: a reclaim and hold above $38 sets up a trend-join long. Swing idea."
+        },
+        {
+          "h": "Idea: EFX",
+          "t": "At $188.12. Reclaimed the daily 200SMA and is consolidating above $180-185; a break of the consolidation and downtrend could start a reversal. She is long from about $188.60 as a swing."
+        },
+        {
+          "h": "Idea: NVDA",
+          "t": "At $162.85. The DOJ reportedly opened a probe the day Huang resigned; AMD is flagged as the other side of the trade. Bull case: demand (guided about $108B) could outlast the scandal. Needs a chart setup first."
+        },
+        {
+          "h": "Week ahead",
+          "t": "Data: Warsh speaks Mon, retail sales Tue, FOMC minutes Wed, Philly Fed Thu. Anthropic prices its IPO Wed and trades Thu. Earnings: HD, DIS, NVDA Tue; LOW, TJX, PANW Wed; GAP, ROST Thu."
+        }
+      ],
+      "note": "Weekly Sunday edition. Market numbers are the Nov 13 close with weekly % changes; VIX change is vs the Nov 6 close."
+    },
+    {
       "source": "Brew Markets",
       "date": "2026-11-13",
       "title": "Inflation gobbles the savings",
@@ -604,138 +740,6 @@
       ]
     },
     {
-      "source": "Brew Markets",
-      "date": "2026-11-06",
-      "title": "Jobs pop, rate hopes drop",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "24,579",
-          "change": 1.09
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,377",
-          "change": 0.32
-        },
-        {
-          "label": "Dow",
-          "value": "51,286",
-          "change": -0.46
-        },
-        {
-          "label": "10-yr",
-          "value": "4.859%",
-          "change": 2,
-          "unit": "bps"
-        },
-        {
-          "label": "Oil",
-          "value": "$90.62",
-          "change": 0.11
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$75,769",
-          "change": 0.08
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Markets",
-          "t": "Stocks partly rebounded from Thursday's rout as chipmakers rallied: Nasdaq +1.09%, S&P 500 +0.32%, Dow -0.46%."
-        },
-        {
-          "h": "Jobs",
-          "t": "October payrolls rose 165,000 and unemployment slipped to 4.1%, while September's gain was revised up from 29,000 to 60,000."
-        },
-        {
-          "h": "Rates",
-          "t": "Wages grew 3.1% against 3.7% inflation, and traders put the odds of a December Fed hike near 80%, nudging the 10-year up 2 bps to 4.859%."
-        },
-        {
-          "h": "Chips",
-          "t": "Dip buyers lifted AMD 11.04%, Intel 7.71% and Micron 5.12%; Lam Research gained 8.23% on a $25B buyback."
-        },
-        {
-          "h": "Earnings",
-          "t": "Airbnb jumped 11.67% on 19% revenue growth to $4.87B, while Atlassian fell 16.15% and Axon 18.18% on weak outlooks."
-        },
-        {
-          "h": "DraftKings",
-          "t": "Shares fell 21.30% after full-year profit guidance was cut from $700-900M to $175-275M to fund up to $700M in prediction markets."
-        }
-      ]
-    },
-    {
-      "source": "Humbled Trader",
-      "date": "2026-11-15",
-      "weekly": true,
-      "title": "The Market Bounced. Nvidia Could Decide What Happens Next.",
-      "markets": [
-        {
-          "label": "S&P 500",
-          "value": "7,562",
-          "change": 2.5
-        },
-        {
-          "label": "Dow",
-          "value": "52,348",
-          "change": 2.1
-        },
-        {
-          "label": "Nasdaq",
-          "value": "25,136",
-          "change": 2.3
-        },
-        {
-          "label": "Russell 2000",
-          "value": "2,790",
-          "change": 1.3
-        },
-        {
-          "label": "VIX",
-          "value": "19.30",
-          "change": -24.7
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Week",
-          "t": "The S&P 500 and Nasdaq snapped four-week losing streaks; Nasdaq had its best week since August. All 11 sectors rose, led by energy (XLE +5.4%), but Friday money rotated out of tech into staples."
-        },
-        {
-          "h": "Nvidia",
-          "t": "Jensen Huang resigned Thursday and CFO Colette Kress is interim CEO. The stock fell a sixth straight week (about -12%) and closed under $4T market cap. Earnings Tue Nov 17."
-        },
-        {
-          "h": "Rates and Fed",
-          "t": "October CPI ran hot (headline +0.4%, core +0.3%). The 10-year jumped 29 bp to 5.152% and the 2-year 35 bp to 4.872%. A December hike is now fully priced; Waller says 50 bp deserves a look."
-        },
-        {
-          "h": "S&P levels",
-          "t": "7,600 flipped to resistance, with the 7,620 June high just above. Schwab calls it bearish until 7,600 is reclaimed. Nasdaq sits on its 200-day; Russell and SOX are below theirs."
-        },
-        {
-          "h": "Idea: ZETA",
-          "t": "At $36.65 after its 21st straight beat-and-raise (revenue +46%). Testing all-time highs near $38. Leaning bullish: a reclaim and hold above $38 sets up a trend-join long. Swing idea."
-        },
-        {
-          "h": "Idea: EFX",
-          "t": "At $188.12. Reclaimed the daily 200SMA and is consolidating above $180-185; a break of the consolidation and downtrend could start a reversal. She is long from about $188.60 as a swing."
-        },
-        {
-          "h": "Idea: NVDA",
-          "t": "At $162.85. The DOJ reportedly opened a probe the day Huang resigned; AMD is flagged as the other side of the trade. Bull case: demand (guided about $108B) could outlast the scandal. Needs a chart setup first."
-        },
-        {
-          "h": "Week ahead",
-          "t": "Data: Warsh speaks Mon, retail sales Tue, FOMC minutes Wed, Philly Fed Thu. Anthropic prices its IPO Wed and trades Thu. Earnings: HD, DIS, NVDA Tue; LOW, TJX, PANW Wed; GAP, ROST Thu."
-        }
-      ],
-      "note": "Weekly Sunday edition. Market numbers are the Nov 13 close with weekly % changes; VIX change is vs the Nov 6 close."
-    },
-    {
       "source": "Humbled Trader",
       "date": "2026-11-08",
       "weekly": true,
@@ -807,6 +811,70 @@
         }
       ],
       "note": "Weekly Sunday edition. Market numbers are the Nov 6 close with weekly % changes; VIX and Oil changes are vs the Oct 31 close."
+    },
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-06",
+      "title": "Jobs pop, rate hopes drop",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "24,579",
+          "change": 1.09
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,377",
+          "change": 0.32
+        },
+        {
+          "label": "Dow",
+          "value": "51,286",
+          "change": -0.46
+        },
+        {
+          "label": "10-yr",
+          "value": "4.859%",
+          "change": 2,
+          "unit": "bps"
+        },
+        {
+          "label": "Oil",
+          "value": "$90.62",
+          "change": 0.11
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$75,769",
+          "change": 0.08
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Markets",
+          "t": "Stocks partly rebounded from Thursday's rout as chipmakers rallied: Nasdaq +1.09%, S&P 500 +0.32%, Dow -0.46%."
+        },
+        {
+          "h": "Jobs",
+          "t": "October payrolls rose 165,000 and unemployment slipped to 4.1%, while September's gain was revised up from 29,000 to 60,000."
+        },
+        {
+          "h": "Rates",
+          "t": "Wages grew 3.1% against 3.7% inflation, and traders put the odds of a December Fed hike near 80%, nudging the 10-year up 2 bps to 4.859%."
+        },
+        {
+          "h": "Chips",
+          "t": "Dip buyers lifted AMD 11.04%, Intel 7.71% and Micron 5.12%; Lam Research gained 8.23% on a $25B buyback."
+        },
+        {
+          "h": "Earnings",
+          "t": "Airbnb jumped 11.67% on 19% revenue growth to $4.87B, while Atlassian fell 16.15% and Axon 18.18% on weak outlooks."
+        },
+        {
+          "h": "DraftKings",
+          "t": "Shares fell 21.30% after full-year profit guidance was cut from $700-900M to $175-275M to fund up to $700M in prediction markets."
+        }
+      ]
     },
     {
       "source": "Humbled Trader",
