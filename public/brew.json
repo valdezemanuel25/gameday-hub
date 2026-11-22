@@ -1,70 +1,38 @@
 {
-  "updated": "2026-11-21T11:08:14Z",
+  "updated": "2026-11-22T13:08:00Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-21",
-      "title": "Tech’s tumble",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "22,618",
-          "change": -5.28
-        },
-        {
-          "label": "S&P 500",
-          "value": "6,910",
-          "change": -3.7
-        },
-        {
-          "label": "Dow",
-          "value": "48,147",
-          "change": -1.93
-        },
-        {
-          "label": "10-yr",
-          "value": "4.912%",
-          "change": -14,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$58,923",
-          "change": -5.11
-        },
-        {
-          "label": "Nvidia",
-          "value": "$125.53",
-          "change": -14.01
-        }
-      ],
+      "date": "2026-11-22",
+      "title": "The Brew’s Gift Guide",
+      "markets": [],
       "takeaways": [
         {
-          "h": "Tech rout",
-          "t": "The Nasdaq wiped out its 2026 gains and the S&P 500 fell 3.70% into correction territory as chip stocks led the selloff."
+          "h": "Dining out",
+          "t": "Morning Brew's top gift idea for partners and parents is a restaurant meal, with Cheesecake Factory singled out as a chain bucking a struggling industry."
         },
         {
-          "h": "Anthropic slips",
-          "t": "Anthropic shares dropped 8.5% a day after its record IPO, briefly nearly touching the $83 offer price."
+          "h": "Secondhand boom",
+          "t": "ThredUp's 2026 holiday report found 62% of US adults planned to shop secondhand this year."
         },
         {
-          "h": "Chip carnage",
-          "t": "Nvidia fell 14% after regulators opened a probe into its accounting, while AMD lost 13%, Broadcom 12% and Intel 8%."
+          "h": "Etsy crackdown",
+          "t": "Etsy recently restricted AI-generated content to fight low-quality seller listings."
         },
         {
-          "h": "Rotation out",
-          "t": "Investors moved into safer areas, lifting consumer staples 0.68% and government bonds, with the 10-year yield down 14 bps to 4.912%."
+          "h": "Budget tiers",
+          "t": "Picks run from under $25 (13 items) and under $50 (11) to under $100 (9), plus seven splurges up to a $899 Bose soundbar."
         },
         {
-          "h": "Data center tax",
-          "t": "Trump threatened a tremendous tax on US companies that build data centers abroad, which surprised even his own staff."
+          "h": "Reader asks",
+          "t": "Personalized picks covered a $50 gym-teacher gift, a $200 toddler budget, a $30 white elephant and a $100 gift for a 10-year-old."
         },
         {
-          "h": "Blue Lagoon IPO",
-          "t": "Iceland’s Blue Lagoon began trading in Reykjavik, raising about $115M at a valuation near $1B."
+          "h": "Sponsor",
+          "t": "Amazon sponsored the issue, promoting new daily deals through Black Friday week."
         }
       ],
-      "note": "Market numbers are the Friday close."
+      "note": "Sunday gift-guide issue with no market data; see Saturday's issue for the latest market numbers."
     },
     {
       "source": "Brew Markets",
