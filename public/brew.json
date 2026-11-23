@@ -1,38 +1,70 @@
 {
-  "updated": "2026-11-22T18:08:46Z",
+  "updated": "2026-11-23T11:08:01Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-22",
-      "title": "The Brew’s Gift Guide",
-      "markets": [],
-      "takeaways": [
+      "date": "2026-11-23",
+      "title": "Flaky behavior",
+      "markets": [
         {
-          "h": "Dining out",
-          "t": "Morning Brew's top gift idea for partners and parents is a restaurant meal, with Cheesecake Factory singled out as a chain bucking a struggling industry."
+          "label": "Nasdaq",
+          "value": "22,618",
+          "change": -2.69
         },
         {
-          "h": "Secondhand boom",
-          "t": "ThredUp's 2026 holiday report found 62% of US adults planned to shop secondhand this year."
+          "label": "S&P 500",
+          "value": "6,910",
+          "change": 0.95
         },
         {
-          "h": "Etsy crackdown",
-          "t": "Etsy recently restricted AI-generated content to fight low-quality seller listings."
+          "label": "Dow",
+          "value": "48,147",
+          "change": 0.17
         },
         {
-          "h": "Budget tiers",
-          "t": "Picks run from under $25 (13 items) and under $50 (11) to under $100 (9), plus seven splurges up to a $899 Bose soundbar."
+          "label": "10-yr",
+          "value": "4.912%",
+          "change": 74.9,
+          "unit": "bps"
         },
         {
-          "h": "Reader asks",
-          "t": "Personalized picks covered a $50 gym-teacher gift, a $200 toddler budget, a $30 white elephant and a $100 gift for a 10-year-old."
+          "label": "Bitcoin",
+          "value": "$60,998",
+          "change": -30.3
         },
         {
-          "h": "Sponsor",
-          "t": "Amazon sponsored the issue, promoting new daily deals through Black Friday week."
+          "label": "Zoom",
+          "value": "$81.26",
+          "change": -5.83
         }
       ],
-      "note": "Sunday gift-guide issue with no market data; see Saturday's issue for the latest market numbers."
+      "takeaways": [
+        {
+          "h": "Copper slump",
+          "t": "Copper fell to about $5.48/lb from $6.89 in September, and an industrial metals index is flashing a death cross, a possible warning for growth."
+        },
+        {
+          "h": "Tariff fade",
+          "t": "Fading odds of a raw-copper tariff and the AI stock sell-off, which is forcing gold liquidations, are also pressuring metals."
+        },
+        {
+          "h": "Zoom earnings",
+          "t": "Zoom reports Q3 today after its stock dropped 18% last week."
+        },
+        {
+          "h": "Holiday week",
+          "t": "Markets close Thursday and at 1pm Friday; PCE inflation and a second Q3 GDP estimate land Wednesday."
+        },
+        {
+          "h": "Earnings slate",
+          "t": "HPE reports today, then Dell, Medtronic, Workday, Dollar Tree and Best Buy Tuesday, and Deere Wednesday."
+        },
+        {
+          "h": "Delta delays",
+          "t": "Half of Delta flights were delayed Sunday over a weight-and-balance system issue, with a multi-hour ground stop in Atlanta."
+        }
+      ],
+      "note": "Market numbers are the Friday close; changes are year-to-date, as the issue reports them."
     },
     {
       "source": "Humbled Trader",
@@ -811,70 +843,6 @@
         }
       ],
       "note": "Weekly Sunday edition. Market numbers are the Nov 6 close with weekly % changes; VIX and Oil changes are vs the Oct 31 close."
-    },
-    {
-      "source": "Brew Markets",
-      "date": "2026-11-06",
-      "title": "Jobs pop, rate hopes drop",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "24,579",
-          "change": 1.09
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,377",
-          "change": 0.32
-        },
-        {
-          "label": "Dow",
-          "value": "51,286",
-          "change": -0.46
-        },
-        {
-          "label": "10-yr",
-          "value": "4.859%",
-          "change": 2,
-          "unit": "bps"
-        },
-        {
-          "label": "Oil",
-          "value": "$90.62",
-          "change": 0.11
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$75,769",
-          "change": 0.08
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Markets",
-          "t": "Stocks partly rebounded from Thursday's rout as chipmakers rallied: Nasdaq +1.09%, S&P 500 +0.32%, Dow -0.46%."
-        },
-        {
-          "h": "Jobs",
-          "t": "October payrolls rose 165,000 and unemployment slipped to 4.1%, while September's gain was revised up from 29,000 to 60,000."
-        },
-        {
-          "h": "Rates",
-          "t": "Wages grew 3.1% against 3.7% inflation, and traders put the odds of a December Fed hike near 80%, nudging the 10-year up 2 bps to 4.859%."
-        },
-        {
-          "h": "Chips",
-          "t": "Dip buyers lifted AMD 11.04%, Intel 7.71% and Micron 5.12%; Lam Research gained 8.23% on a $25B buyback."
-        },
-        {
-          "h": "Earnings",
-          "t": "Airbnb jumped 11.67% on 19% revenue growth to $4.87B, while Atlassian fell 16.15% and Axon 18.18% on weak outlooks."
-        },
-        {
-          "h": "DraftKings",
-          "t": "Shares fell 21.30% after full-year profit guidance was cut from $700-900M to $175-275M to fund up to $700M in prediction markets."
-        }
-      ]
     },
     {
       "source": "Humbled Trader",
