@@ -12,7 +12,7 @@ const HOUR = 3600000;
 const lbl = c => `${c.away && c.home ? `${c.home} v ${c.away}` : c.id} (${c.league || 'nhl'}, ${c.kickoff})`;
 
 // A soccer card is priced only with a home / draw / away price from ESPN: a price record holding just Pinnacle's or the both-score
-// price does not count (Nov 1, 2026: Frankfurt v Hamburg had no ESPN price, which a bare !c.odds check missed).
+// price does not count (a bare !c.odds check would miss such a game).
 export const noSoccerPrice = c => !c.odds || ![c.odds.h, c.odds.d, c.odds.a].every(Number.isFinite);
 // cards: { date: [cards] }; graceH: hours after kickoff a game should have a result by. standIn: games priced from another book than
 // DraftKings (c.odds.src, src/data.js parseOdds), for a note: the board shows them, the Analyst sits them out.
@@ -34,7 +34,7 @@ export function analystChecks(doc, now) {
   const noClose = [], stale = [], noPinClose = [];
   for (const b of items) {
     const ko = new Date(b.kickoff).getTime();
-    // Nov 6, 2026: the bench check reads Pinnacle's fair close first and falls back to DraftKings' close quietly. A top-division soccer bet
+    // The bench check reads Pinnacle's fair close first and falls back to DraftKings' close quietly. A top-division soccer bet
     // from the last 3 days with a DraftKings close but no Pinnacle one is listed, so a run of fallbacks (Pinnacle out, rate limited,
     // no lineup read) shows up here instead of hiding in the bench numbers. Bets that can never have one are left out (src/analyst.js settle
     // pinNo): an Over/Under 2.5 bet in a game Pinnacle lines at another total, a both-score bet in a game Pinnacle never priced for it.

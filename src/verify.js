@@ -18,8 +18,7 @@ export const likeness = (card, home, away) => {
 };
 export const slugTitle = url => {
   const m = /\/preview\/([a-z0-9-]+?)-vs-([a-z0-9-]+?)-prediction/i.exec(url);
-  // Empty pieces are skipped (Nov 21, 2026): a slug with a double or trailing hyphen ("sheff-utd--vs-...") threw here, which stopped the
-  // whole league's SportsMole read before it saved, so even the previews it had found were lost.
+  // Empty pieces are skipped: a slug with a double or trailing hyphen ("sheff-utd--vs-...") must not throw here and stop the league's read.
   const t = s => s.split('-').filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
   const home = m && t(m[1]), away = m && t(m[2]);
   return home && away ? { home, away } : null;

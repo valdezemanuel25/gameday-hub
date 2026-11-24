@@ -17,7 +17,7 @@ import { devig } from './v6core.js';
 import { getDay } from './fixes.js';
 import { loadDays } from './summaries.js';
 
-// Rest against the price (Nov 5, 2026): v5 already carries the measured back-to-back effect; the open question is whether DraftKings'
+// Rest against the price: v5 already carries the measured back-to-back effect; the open question is whether DraftKings'
 // moneyline already has it. On every graded game where exactly one side was on the second night of a back-to-back (v5's flags), the
 // closing moneyline (margin removed) is scored by log loss as it is, and again with the back-to-back shift (B2B_LOGIT) added. If the
 // shifted price scores better over enough games, the price is missing rest and a rule could use it; if not, the price already has it.
@@ -472,7 +472,7 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
 }
 
 // ---- cron / on-demand step ---------------------------------------------------------------------
-// mode (Nov 9, 2026): 'all' (the cron, as before), 'analyze' (new games, prices and price moves, goalies / lineups, Forebet; no grading) or 'results'
+// mode: 'all' (the cron), 'analyze' (new games, prices and price moves, goalies / lineups, Forebet; no grading) or 'results'
 // (grade finished games, closing prices, leads, shots, and with them the model bets; no price, lineup or Forebet reads). The two buttons on the NHL page.
 export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = false, mode = 'all' } = {}) {
   const debug = [], t = localDate(now.toISOString());
@@ -496,15 +496,13 @@ export async function nhlStep(env, now = new Date(), fetchFn = fetch, { force = 
     if (!day) day = { date, cards: [] };
     for (const e of evs) {
       const ld = localDate(e.date);
-      // Postponed or canceled (Nov 18, 2026): its card is closed as void (no grade; the Analyst's and tracked bets on it are void) instead
-      // of waiting for a result for good. Not marked as seen: if ESPN also lists the game on its new day, that day gets its own card.
+      // Postponed or canceled: its card is closed as void (no grade; the Analyst's and tracked bets on it are void). Not marked as seen: if ESPN also lists the game on its new day, that day gets its own card.
       if (e.off) { const c0 = day.cards.find(x => x.id === e.id); if (c0 && !c0.final && c0.void !== e.off) { c0.void = e.off; dirty = true; out.voided = (out.voided || 0) + 1; } continue; }
       if (seen.has(e.id)) continue; seen.add(e.id); // a game is filed under the day ESPN lists it
       let c = day.cards.find(x => x.id === e.id);
       if (c && c.void) { c.void = null; dirty = true; } // listed as on again (null, not deleted: a save must not copy the old void back)
       if (e.done && mode === 'analyze') continue;
-      // Final but no score (Nov 19, 2026): left pending for the next run. Grading it scored the pick a loss and wrote blank goals and
-      // Elo into both teams' ratings for good.
+      // Final but no score: left pending for the next run (grading it would score the pick a loss and write blank goals into the ratings).
       if (e.done && !(Number.isFinite(e.hs) && Number.isFinite(e.as))) { out.noScore = (out.noScore || 0) + 1; continue; } // Analyze reads prices and lineups only; finished games are Update results' job
       if (e.done) {
         if (c && !c.final) {
@@ -588,7 +586,7 @@ async function fbWork(env, t, now) {
   return work;
 }
 const fbNames = work => work.flatMap(w => w.open.map(c => `${c.aAbbr} @ ${c.hAbbr}`));
-// Forebet only (Nov 12, 2026): the Status tab's "Update Forebet" button. One read of Forebet's NHL page for the games of today and tomorrow
+// Forebet only: the Status tab's "Update Forebet" button. One read of Forebet's NHL page for the games of today and tomorrow
 // that have not started and have no Forebet numbers yet, whenever the last read was (the 3 / 6 hour wait is for the cron, not for a tap).
 // Nothing else runs: no new games, prices, goalies or grading. With nothing missing it does not fetch.
 // { missing (before), saved, rows, left: [games still without numbers], error | note }.

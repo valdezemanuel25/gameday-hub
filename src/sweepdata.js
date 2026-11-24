@@ -109,8 +109,7 @@ export async function sweepStep(env, deps, now = new Date(), f = fetch) {
   return out;
 }
 
-// The last answer per file (Nov 19, 2026): three nights of missing files could not be explained because the answer was thrown away.
-// Kept in one small KV record (SWEEP_LAST) and shown by the health report (sweepStatus). Written only when the answer for that file
+// The last answer per file, so a missing file can be explained: kept in one small KV record (SWEEP_LAST) and shown by the health report (sweepStatus). Written only when the answer for that file
 // changed or the kept one is over LAST_REFRESH_H hours old, so at most about 3 writes a night. Never throws.
 export const SWEEP_LAST = 'sweep:last';
 const LAST_REFRESH_H = 6;

@@ -1,11 +1,11 @@
-// Full-history summaries, kept instead of rebuilt (Nov 18, 2026, audit P6). The Results tab (tally, nhlTally), both Trends tabs
+// Full-history summaries, kept instead of rebuilt. The Results tab (tally, nhlTally), both Trends tabs
 // (buildSoccerTrends, buildTrends), the hockey backup and the nightly sweep each read and parse EVERY saved day: about 30 ms of CPU at 35
 // days and 70 to 110 ms at 120, against the free plan's 10 ms. Those functions are unchanged; their answer is now kept in this isolate's
 // memory and in the free edge cache (caches.default, no KV writes) under a stamp of what it was built from, and given back while that
 // stamp holds.
 //
-// The stamp. Every save of a day (`day:<date>`, `nhl:day:<date>`) goes through the write counter in src/worker.js (counted()), which
-// now gives the key a write id as KV metadata ({ w }, no extra write: it rides on the save). KV's list() returns each key's metadata
+// The stamp. Every save of a day (`day:<date>`, `nhl:day:<date>`) goes through the write counter in src/store.js (counted()), which
+// gives the key a write id as KV metadata ({ w }, no extra write: it rides on the save). KV's list() returns each key's metadata
 // for free, so one list call says which days were saved since the last look. A changed day is read; if it still has an open game it
 // is reduced to its "settled view": every finished, graded or void card in full, which is all tally() and nhlTally() read, and for the
 // Trends reads also the identity of the open games (id, league, clubs, kickoff: streaks and rest days count them). That is all the
@@ -25,7 +25,7 @@ import { isDayKey, readWithMeta, listFixMeta, withFixMeta } from './fixes.js';
 
 export const SUM_VERSION = 1;                 // bump to drop every kept summary without a deploy
 export const STAMPED = ['day:', 'nhl:day:', 'fix:day:', 'fix:nhl:day:'];  // saves under these prefixes carry a write id
-// fix:day: / fix:nhl:day: (Nov 18, 2026, Agent 1 round 2): a button's save is a side patch next to the day (src/fixes.js), laid on at every
+// fix:day: and fix:nhl:day: hold a button's save as a side patch next to the day (src/fixes.js), laid on at every
 // read. Its write id is joined to the day's in the listing and on each read (joinMeta), so a patch rebuilds a summary as a day save does.
 const DAY_PREFIXES = new Set(['day:', 'nhl:day:']);
 export const MAX_AGE = 12 * 3600;             // seconds a kept summary may be served at most (backstop)

@@ -1,4 +1,4 @@
-// Saves from the buttons kept apart from the background job's saves (Nov 18, 2026, round 2 of the data audit).
+// Saves from the buttons kept apart from the background job's saves (history: docs/changelog.md).
 //
 // The problem: a day's cards live in ONE KV record (day:<date>, nhl:day:<date>), and so do the Analyst's paper bets (analyst). The
 // background job (cron) and the buttons each read the whole record, change it and write it all back. KV can serve a read up to about
@@ -161,7 +161,7 @@ export function applyAnalystFix(raw, fix) {
     if (i != null) { // a bet the record has: the button's copy is taken only where it settled more (the close, then the result)
       const s = d.items[i]; if ((!s.res && e.b.res) || (s.close == null && e.b.close != null && !s.res)) { d.items[i] = clone(e.b); continue; }
       // The Pinnacle notes settle() adds once the game starts (before any close): carried over when the record lacks them, so the next
-      // page load finds nothing new and saves nothing (Nov 19, 2026: each load during a game used to save the same patch again).
+      // page load finds nothing new and saves nothing.
       const add = PIN_NOTES.filter(k => s[k] == null && e.b[k] != null);
       if (add.length) d.items[i] = { ...s, ...Object.fromEntries(add.map(k => [k, clone(e.b[k])])) };
       continue;

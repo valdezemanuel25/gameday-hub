@@ -86,8 +86,8 @@ function teamShots(c) {
 // First divisions: the only leagues where a sportsbook price is shown next to a pick (display only, no model reads it).
 export const FIRST_DIV = new Set(['eng.2', 'eng.1', 'ger.1', 'esp.1', 'ita.1', 'fra.1', 'ned.1', 'usa.1', 'mex.1', 'bra.1']);
 // Leagues whose prices are recorded: the first divisions plus the two cups with a v4 model, i.e. every game that counts in the records,
-// so the model can be scored against the market (src/market.js). Second divisions stay out of the model records (UNTRACKED), but from
-// Nov 2, 2026 La Liga 2 and 2. Bundesliga are priced too (SECOND_PRICED): ESPN's DraftKings price only (no Odds API league in
+// so the model can be scored against the market (src/market.js). Second divisions stay out of the model records (UNTRACKED), but
+// La Liga 2 and 2. Bundesliga are priced too (SECOND_PRICED): ESPN's DraftKings price only (no Odds API league in
 // src/btts.js SPORT, so no credits), for the board, Movement and the Analyst, whose record splits them out as second divisions.
 export const SECOND_PRICED = new Set(['esp.2', 'ger.2']);
 export const PRICED = new Set([...FIRST_DIV, ...SECOND_PRICED, ...CUP_MODEL.map(l => l.slug)]);
@@ -99,8 +99,7 @@ const am = v => { if (v == null) return null; const t = String(v).trim().toUpper
 const decAm = v => { if (v == null || typeof v === 'boolean') return null; const n = Number(String(v).trim()); if (!Number.isFinite(n) || n <= 1.01 || n >= 100) return null;
   return n >= 2 ? Math.round((n - 1) * 100) : -Math.round(100 / (n - 1)); };
 const bookOf = o => String(o?.provider?.name || 'other').toLowerCase().replace(/[^a-z0-9]/g, '') || 'other';
-// ESPN spells the book both ways ("DraftKings", "Draft Kings"): a plain /draftkings/ missed the second, so with a stand-in listed first the
-// stand-in was taken although DraftKings was there (Nov 18, 2026 audit).
+// ESPN spells the book both ways ("DraftKings", "Draft Kings"): both are DraftKings, so a stand-in listed first is never taken over it.
 const isDk = x => /draft\s*kings/i.test(x?.provider?.name || '');
 export function parseOdds(list) {
   const has = x => x && (x.moneyline || x.homeTeamOdds || x.drawOdds || x.total || x.overUnder != null);
@@ -219,7 +218,7 @@ export async function syncLeague(league, env, now = new Date(), debug) {
   return { caughtUp, games: st.games.length, context: !!ctx };
 }
 
-// One-time fill of shots for stored games saved before shots were recorded (Nov 3, 2026): a stored game with only 8 elements has never
+// One-time fill of shots for stored games saved before shots were recorded: a stored game with only 8 elements has never
 // been checked. Each call looks at the 12 days starting from the oldest unchecked game, writes the shots found (or null, meaning ESPN
 // had none, so the game is not asked again), and rebuilds the league's context so the shots reach the cards. Call it until remaining is
 // 0 (POST /api/sync?league=<slug>&backfill=1). 13 requests to ESPN a call, one store write and one context write.

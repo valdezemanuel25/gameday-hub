@@ -121,11 +121,11 @@ async function loadDays(env, now) {
 }
 // Games of one league that have not started and still lack this table's numbers.
 const openCards = (days, now, slug, kind) => days.map(x => ({ ...x, open: x.day.cards.filter(c => c.league === slug && !c.final && !has(c, kind) && new Date(c.kickoff).getTime() > now.getTime()) })).filter(x => x.open.length);
-// The cron reads Forebet only for a league with a game still to come TODAY (Central) (Nov 20, 2026: reading leagues whose games were
-// tomorrow or later brought Forebet's "too many requests" blocks on the leagues playing today). A read for a playing league still
+// The cron reads Forebet only for a league with a game still to come TODAY (Central): reading leagues whose games are tomorrow or later
+// brings Forebet's "too many requests" blocks on the leagues playing today. A read for a playing league still
 // fills its later games from the same page, at no extra request.
 const playsToday = (work, now) => work.some(w => w.date === localDate(now.toISOString()));
-// A button tap (you asked for it) may also read a league playing TOMORROW (Nov 21, 2026); games two days out are still left alone.
+// A button tap (you asked for it) may also read a league playing TOMORROW; games two days out are left alone.
 const playsSoon = (work, now) => { const t = localDate(now.toISOString()), tm = new Date(new Date(`${t}T12:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10); return work.some(w => w.date === t || w.date === tm); };
 
 // Read one Forebet page and fill the matching cards. Returns what happened.

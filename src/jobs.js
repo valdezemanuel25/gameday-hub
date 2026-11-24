@@ -93,13 +93,9 @@ const lastDays = async (env, prefix, now) => { const t = localDate(new Date(now)
 export const sweepData = (env, now = new Date(), f = fetch) => sweepStep(env, { soccerTotals: () => soccerTotals(env).then(valueOf), nhlTotals: () => nhlTotals(env).then(valueOf), soccerDays: () => lastDays(env, 'day:', now),
   nhlDays: () => lastDays(env, 'nhl:day:', now), health: () => health(env, true), priced: PRICED }, now, f);
 
-// Saving a soccer day without losing what another save put there (Nov 18, 2026 audit). The cron and the buttons each read the whole day,
-// change it and write it back, so a save made from an older read could erase what a save in between added: a lineup-window close, a
-// graded result and its locked pick, Forebet or SportsMole. Just before writing, the stored day is read again and anything of that kind
-// it has and this copy lacks is carried over (keepSaved, src/fixes.js). It costs one read per save, no write.
-// Round 2 (Nov 18, 2026): a button no longer writes the day at all. Its changes go to a side record (fix:day:<date>) that every read lays
-// on top and the cron's next save carries in (src/fixes.js), so a button can neither erase a cron save nor be erased by one. A button's
-// save is compared with the day as that request read it, so it is written as it is here (no second read).
+// Saving a soccer day. The cron reads the stored day again just before writing and carries over what it has and this copy lacks (a close,
+// a result and its locked pick, Forebet, SportsMole: keepSaved, src/fixes.js); one read, no extra write. A button's save becomes a side
+// patch (src/fixes.js), written as it is here. History: docs/changelog.md.
 export async function putDay(env, date, day) {
   if (env.HUB.button) return env.HUB.put(`day:${date}`, JSON.stringify(day));
   let saved = null; try { saved = await getDay(env, date); } catch (e) { /* write what we have */ }
@@ -387,8 +383,7 @@ export function analystShop(env, slug, f = fetch) {
 // The Analyst's stale-price rule: DraftKings against a sharp book for the open games of ONE league (2 credits a look). Looks at a
 // league at most every SHARP_GAP_H hours and at most SHARP_PER_DAY times a day in all (Worker variables, defaults below; both kept
 // in the free edge cache), and never once the month's credits are at BTTS_RESERVE or below. The last look is noted for the Analyst tab.
-// SHARP_PER_DAY was 15 until Nov 20, 2026: up to 30 credits a day (about 900 a month, near both keys' 1,000) for a rule with 0 bets
-// so far; 3 looks (6 credits a day) leaves the month's credits for the both-score reads.
+// 3 looks a day (6 credits) leaves the month's credits for the both-score reads (why it is not 15: docs/changelog.md).
 export const SHARP_GAP_H = 3, SHARP_PER_DAY = 3;
 const SHARP_NOTE = 'https://hub.local/sharp-last';
 async function cacheGet(k) { try { const r = typeof caches !== 'undefined' ? await caches.default.match(k) : null; return r ? await r.json() : null; } catch (e) { return null; } }
@@ -413,9 +408,8 @@ export function analystSharp(env, slug, f = fetch, now = new Date()) {
 // Pinnacle (src/pinn.js), only with the Worker secret PINNODDS_KEY: the first price seen (odds.pf) and the close at the lineup read
 // (odds.pcl), on the same schedule as the ESPN price. One request prices every league (the trimmed list is shared for 10 minutes), a game
 // it cannot match is tried again after PN_RETRY_OPEN_H hours (PN_RETRY_CLOSE_MIN minutes in the closing window). Returns cards changed.
-// Both score (Nov 5, 2026): Pinnacle often posts its both-score price hours after the match price, so a game with no both-score price
-// yet from any book (no odds.bf) is read again every PN_RETRY_OPEN_H hours (odds.pbt = the last such try) until Pinnacle has one. Free:
-// the reads share the one fixture list, and no Odds API credit is used.
+// Both score: a game with no both-score price yet from any book (no odds.bf) is read again every PN_RETRY_OPEN_H hours (odds.pbt = the
+// last such try) until Pinnacle has one (it often posts it hours after the match price). Free: the reads share the one fixture list.
 export const PN_RETRY_OPEN_H = 3, PN_RETRY_CLOSE_MIN = 10;
 export async function addPinn(env, cards, now = new Date(), f = fetch) {
   if (!env.PINNODDS_KEY) return 0;
@@ -423,7 +417,7 @@ export async function addPinn(env, cards, now = new Date(), f = fetch) {
   const close = c => inWin(c) && !c.odds.pcl, open = c => !c.odds.pf;
   const ago = t => (t ? now.getTime() - new Date(t).getTime() : Infinity);
   const bttsDue = c => c.odds.pf && !c.odds.bf && !(c.odds.pn && c.odds.pn.bty != null) && ago(c.odds.pbt) >= PN_RETRY_OPEN_H * 3600000;
-  // A game with no price at all (ESPN has none) is looked up too (Nov 6, 2026): Pinnacle may have it, and then it is the card's stand-in
+  // A game with no price at all (ESPN has none) is looked up too: Pinnacle may have it, and then it is the card's stand-in
   // price (pinnStandIn). A miss on such a card is stamped on the card (c.pnat), not in a price object, so it still counts as unpriced.
   const due = cards.filter(c => { if (!c.odds) return ago(c.pnat) >= PN_RETRY_OPEN_H * 3600000; if (!(close(c) || open(c))) return bttsDue(c); return ago(c.odds.pat) >= (close(c) ? PN_RETRY_CLOSE_MIN * 60000 : PN_RETRY_OPEN_H * 3600000); });
   if (!due.length) return 0;
@@ -434,16 +428,16 @@ export async function addPinn(env, cards, now = new Date(), f = fetch) {
     if (!c.odds) { if (!e) { c.pnat = now.toISOString(); changed++; continue; } c.odds = {}; delete c.pnat; }
     const o = c.odds, was = JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]);
     if (e) { o.pn = pinnPrice(e); if (!o.pf) o.pf = pinnPrice(e); if (inWin(c)) o.pcl = now.toISOString(); delete o.pat; } else o.pat = now.toISOString();
-    // no both-score price yet: try again in PN_RETRY_OPEN_H hours. Stamped on a miss too (Nov 6, 2026: a game Pinnacle priced and then stopped
-    // listing was due again on every run, re-saving the day and asking PinnOdds every 10 minutes); a game never matched (no pf) waits on pat.
+    // no both-score price yet: try again in PN_RETRY_OPEN_H hours, stamped on a miss too (so a game Pinnacle stopped listing is not due
+    // every run); a game never matched (no pf) waits on pat.
     if (o.bf || (o.pn && o.pn.bty != null)) delete o.pbt; else if (e || o.pf) o.pbt = now.toISOString();
     if (JSON.stringify([o.pn, o.pf, o.pcl, o.pat, o.pbt]) !== was) changed++;
   }
   return changed;
 }
-// Pinnacle as the stand-in price (Nov 6, 2026): a game ESPN has no home / draw / away price for (no book, or a book without the three)
+// Pinnacle as the stand-in price: a game ESPN has no home / draw / away price for (no book, or a book without the three)
 // takes Pinnacle's home / draw / away and 2.5 total, marked src 'pinnacle' like the Bet365 stand-in. The board, the score card (v6) and
-// Movement show it; the Analyst, Scout's home / draw / away / total bets and the Shots read sit it out (they close against DraftKings).
+// Movement show it; the Analyst and the Shots read sit it out (they close against DraftKings).
 // DraftKings arriving from ESPN replaces it (withOdds); a Bet365 stand-in already on the card is left alone. -> true when the card changed
 export function pinnStandIn(c, now = new Date()) {
   const o = c.odds, q = o && o.pn;
@@ -551,7 +545,7 @@ export async function refreshBtts(env, date, slug, now = new Date(), f = fetch) 
   if (!open.length) return { games: 0, priced: 0 };
   const need = open.filter(c => !(c.odds && c.odds.by != null)), have = open.length - need.length; // already-priced games cost no credit
   if (!need.length) return { games: open.length, priced: have, skipped: [], left: null };
-  // A league with no Odds API league (La Liga 2, 2. Bundesliga): Pinnacle's both-score price instead, no credit (Nov 2, 2026). It needs
+  // A league with no Odds API league (La Liga 2, 2. Bundesliga): Pinnacle's both-score price instead, no credit. It needs
   // the game's ESPN price first (the Pinnacle read rides on it); games without one are listed as skipped.
   if (!SPORT[slug]) {
     if (!env.PINNODDS_KEY) return { games: open.length, priced: have, skipped: [], left: null, note: 'No both-score source for this league without Pinnacle' };
@@ -646,10 +640,9 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
   // Postponed, canceled or abandoned (ESPN's status, src/data.js OFF): the card is closed as void (c.void = the status), never graded, and
   // bets on it are void. It used to wait as "pending" for good, keeping its league due in the grading slot for two days.
   const off = new Map(fx.filter(f => f.off).map(f => [f.id, f]));
-  // Moved games (Nov 12, 2026): ESPN files a game moved to a later day (Las Palmas v Eldense, Nov 8 -> Nov 9) under its new date, so this
-  // day's scoreboard no longer lists it and its card (and any Analyst bet on it) was never graded. A card past kickoff that this day does not
-  // list as finished is looked up by its ESPN id on the next 3 days' scoreboards. Only read while such a card is waiting, so no extra
-  // requests on a normal day, and nothing is saved unless a game is graded.
+  // Moved games: ESPN files a game moved to a later day under its new date. A card past kickoff that this day does not list as finished
+  // is looked up by its ESPN id on the next 3 days' scoreboards. Only read while such a card is waiting, so no extra requests on a normal
+  // day, and nothing is saved unless a game is graded.
   const moved = open.filter(c => !finals.has(c.id) && !off.has(c.id) && now.getTime() > new Date(c.kickoff).getTime() + 2 * 3600000);
   if (moved.length) {
     const d1 = new Date(`${addDays(date, 1)}T12:00:00Z`);
@@ -672,7 +665,7 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
       c.final = { h: r.h, a: r.a, et: f.et, ft: [f.home.score, f.away.score] }; seq = r.seq;
     } else { c.final = { h: f.home.score, a: f.away.score }; seq = goalSeq(f.plays, f.home.id, f.away.id, c.final.h, c.final.a); }
     // The biggest lead each side had at any moment (bet365 early payout); left off when ESPN's goal list does not add up.
-    // Not known now (ESPN's goal list missing or not adding up): this was try 1 of LEAD_TRIES; leadStep tries again later (Nov 18, 2026).
+    // Not known now (ESPN's goal list missing or not adding up): this was try 1 of LEAD_TRIES; leadStep tries again later.
     const ld = maxLead(seq); if (ld) c.final.lead = ld; else c.final.ldt = 1;
     mergeSeed(c, date);
     c.grade = {};
@@ -684,13 +677,13 @@ export async function gradeLeague(date, slug, env, { force = false } = {}, now =
     if (c.sm && c.v2) c.smGrade = smGrade(c.sm, c.final);
     // The card's headline pick is locked here, from what the card held when it finished, and scored on the final score.
     // pbk: the book of the saved price when it is not DraftKings (a Bet365 / Pinnacle stand-in, Pinnacle's both-score price), so a backup can tell them apart.
-    // DraftKings only in Model bets (Nov 18, 2026, round 2): such a price is kept as spx (shown, never counted) and price / vd, which the
-    // profit record counts, are set only for a DraftKings price. Picks locked before then keep the price they were saved with.
+    // DraftKings only in Model bets: such a price is kept as spx (shown, never counted) and price / vd, which the profit record counts,
+    // are set only for a DraftKings price. Older picks keep the price they were saved with (docs/changelog.md).
     // vd: the same price tag the Results tab works out from the card (priceVerdict, src/pick.js: v4 against DraftKings' break-even), so a backup matches the page.
     if (c.v2 && !c.lean) { const l = leanPick(c); if (l) { l.hit = leanHit(l.key, c.final); const m = FIRST_DIV.has(c.league) ? priceFor(c.odds, l.key) : null;
       if (m != null) { const bk = 'BN'.includes(l.key) ? c.odds.bk || 'unknown' : c.odds.src; if (bk && bk !== 'draftkings') { l.pbk = bk; l.spx = m; } else { l.price = m; const vd = priceVerdict(c, l); if (vd) l.vd = vd; } }
       const ep = earlyPaid(l.key, l.hit, c.final.lead); if (ep != null) l.ep = ep; c.lean = l; } }
-    // ESPN's close for a card that missed its lineup read (Nov 18, 2026, round 2): after the pick locked above, so its price stays the one
+    // ESPN's close for a card that missed its lineup read: after the pick locked above, so its price stays the one
     // shown when it locked. For the Movement tab and closing-line value only.
     if (espnCloseSoccer(c, f.oddsDone, now)) closed++;
     graded++;
@@ -715,7 +708,7 @@ export function espnCloseSoccer(c, done, now = new Date()) {
   n.cl = c.kickoff; n.cls = 'espn'; delete n.cby;
   c.odds = n; return true;
 }
-// The early-payout lead again (Nov 18, 2026, round 2): a graded card whose lead could not be read at grading (ESPN's goal list missing or
+// The early-payout lead again: a graded card whose lead could not be read at grading (ESPN's goal list missing or
 // not adding up) is tried again, like hockey: up to LEAD_TRIES tries in all (final.ldt counts them; grading was the first), one league
 // and day per idle grading turn, each at least an hour after the last (edge cache, no write), from today back to today -3. Two ESPN
 // requests and at most one write a try. days: the days the grading turn just read ({ date: day }).
@@ -755,8 +748,8 @@ export async function leadStep(env, now = new Date(), days = {}, cache = typeof 
 export async function smLeague(date, slug, env, now = new Date(), { force = false } = {}) {
   const day = await getDay(env, date);
   day && (day.smTried = day.smTried || {});
-  // Only games that have not started (Nov 18, 2026): a "We say" read after kickoff changed the agree / disagree count, and so the Best /
-  // Lean / Split kind, of a pick that locks at grading. Forebet already waits for nothing after kickoff.
+  // Only games that have not started: a "We say" read after kickoff would change the agree / disagree count, and so the Best / Lean /
+  // Split kind, of a pick that locks at grading. Forebet is not read after kickoff either.
   const todo = (day?.cards || []).filter(c => c.league === slug && c.v2 && !c.sm && !c.final && new Date(c.kickoff).getTime() > now.getTime() && (force || now.getTime() - (day.smTried[c.id] || 0) > 3 * HOUR));
   if (!todo.length) return { idle: true, found: 0 };
   let links;
@@ -805,7 +798,7 @@ async function tally(env, days = null) {
   if (!days) days = await loadDays(env.HUB, 'day:');
   const promoV2 = blank(), promoV4 = blank(), v2All = blank(), v4All = blank(), h2hV2 = blank(), h2hV4 = blank(), oldV2 = blank(), oldV3 = blank();
   const live = [];
-  // Shots read against the results (Nov 3, 2026): every finished card with shots numbers and a DraftKings Over/Under 2.5 price, scored at
+  // Shots read against the results: every finished card with shots numbers and a DraftKings Over/Under 2.5 price, scored at
   // the card's last (closing) price. Groups: top leagues and second divisions with their own weights, MLS / Liga MX tracking only (read
   // with the top-league weights). Second divisions count here although they are left out of the model records.
   const SHB = [['Under 40%', 0, 40], ['40 to 45%', 40, 45], ['45 to 50%', 45, 50], ['50 to 55%', 50, 55], ['55 to 60%', 55, 60], ['60 to 65%', 60, 65], ['65% and up', 65, 101]];
@@ -1068,8 +1061,8 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   }
 
   if (slot === 1) {
-    // Grading reach (Nov 18, 2026, round 2): back to today -3, so a league ESPN kept from grading for two days is still graded before the
-    // Analyst voids its open bets at 4 days.
+    // Grading reach: back to today -3, so a league ESPN kept from grading for two days is still graded before the Analyst voids its open
+    // bets at 4 days.
     const due = [], days = {};
     for (const date of [t, addDays(t, -1), addDays(t, -2), addDays(t, -3)]) {
       const day = days[date] = await getDay(env, date);
@@ -1095,9 +1088,8 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
 
   if (slot === 3) { // SportsMole "We say" for today / tomorrow, one league per run
     if (env.SAVER) return await safeNhl(env, now); // saver mode: no SportsMole / Forebet / ratings saves
-    // Forebet's turn (Nov 18, 2026): SportsMole retries every league whose games have no preview yet every 3 hours, which on a busy
-    // weekend fills every run of this slot, and Forebet's pages (a vote on the headline pick) were only read when it had nothing to do.
-    // Every other run now offers Forebet the turn first; with no page due, SportsMole runs as before.
+    // Forebet's turn: every other run offers Forebet the turn first (SportsMole's 3-hourly retries can fill every run of this slot on a
+    // busy weekend); with no page due, SportsMole runs.
     const fbFirst = Math.floor(now.getTime() / 1200000) % 2 === 0;
     if (fbFirst) { const fbr = await forebetStep(env, now); if (fbr) return { job: 'forebet', ...fbr }; }
     try { await getListing(env, now.getTime()); } catch (e) { /* keep going; retried next run */ }
@@ -1114,10 +1106,8 @@ export async function runSlot(env, now = new Date(), slot = Math.floor(now.getTi
   }
 
   // slot 2: analyze. Domestic leagues first, cups last (cups need domestic data).
-  // Turns (Nov 18, 2026): re-analyzing 15 leagues x 2 days every 6 hours needs about 120 runs a day and this slot has 72, so it never had
-  // a spare run and the hockey job (nhlStep: new games, grading, the 6-hourly / hourly prices) only got slot 0's few, about 6 a day.
-  // Now: a league not yet analyzed for the day always goes first; a re-analysis gives every other turn to hockey; and a league with no
-  // games that day is looked at again after NO_GAMES_RECHECK_H hours instead of 6 (it used to cost a run and a write every 6 hours).
+  // Turns: a league not yet analyzed for the day always goes first; a re-analysis gives every other turn to hockey (nhlStep); and a league
+  // with no games that day is looked at again after NO_GAMES_RECHECK_H hours instead of 6. Why: docs/changelog.md.
   const ordered = [...DOMESTIC.filter(l => !l.support), ...LEAGUES.filter(l => l.cup)];
   const todo = [];
   for (const date of [t, addDays(t, 1)]) {

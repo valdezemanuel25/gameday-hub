@@ -24,7 +24,7 @@ const jsonText = s => new Response(s.text, { headers: { 'content-type': 'applica
 
 // The password is ADMIN_TOKEN. It is accepted from the sign-in page (which sets a session cookie), from the x-admin-token header,
 // and from HTTP Basic (any username) so scripts keep working. With no ADMIN_TOKEN set, nothing is let in.
-// Sessions you can end (Nov 18, 2026, audit #17 / P5). The cookie (__Host-hub_s) is "v2.<issued at, seconds>.<HMAC>", signed with a
+// Sessions you can end. The cookie (__Host-hub_s) is "v2.<issued at, seconds>.<HMAC>", signed with a
 // key made from the password over the issue time and SESSION_EPOCH, so nothing is stored and no KV write is ever made for it:
 //   * it is refused once it is older than SESSION_MAX_DAYS (default 180), or dated more than 5 minutes ahead;
 //   * a device in use stays in: a page opened with a session older than 30 days (or half SESSION_MAX_DAYS, if that is shorter) gets a
@@ -111,9 +111,8 @@ const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', 
 // Where to go after signing in: only a path on this site. A backslash is refused because browsers read "/\evil.example" as "//evil.example".
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.includes('\\') && !/[\u0000-\u001f]/.test(n) && !n.startsWith('/login') ? n : '/home');
 
-// Sent on every answer: stay on https, no guessing file types, no other site may frame the Hub or receive its forms.
-// Nov 18, 2026: also no camera / microphone / location / payment for any page, no window shared with another site's tab, and no search
-// engine listing of the sign-in page (a private site).
+// Sent on every answer: stay on https, no guessing file types, no other site may frame the Hub or receive its forms, no camera /
+// microphone / location / payment for any page, no window shared with another site's tab, and no search engine listing (a private site).
 const SEC_HEADERS = {
   'strict-transport-security': 'max-age=31536000',
   'x-content-type-options': 'nosniff',
@@ -124,7 +123,7 @@ const SEC_HEADERS = {
   'cross-origin-opener-policy': 'same-origin',
   'x-robots-tag': 'noindex, nofollow',
 };
-// Cross-site guard (Nov 18, 2026). The sign-in cookie is SameSite=Lax, which keeps it off another site's form posts but not off
+// Cross-site guard. The sign-in cookie is SameSite=Lax, which keeps it off another site's form posts but not off
 // (a) a sibling subdomain (same-site, e.g. another *.workers.dev Worker if that suffix were ever treated as one site) or (b) another
 // site's plain links, which would let any page open data routes, some of which spend a paid daily quota (/api/pinn-check: 1 of 100
 // Pinnacle requests) or sign the device out (/logout). The Hub's own pages are same-origin; scripts send neither header. -> true to refuse.

@@ -54,9 +54,9 @@ export async function encryptPayload(sub, text) {
 // ---- devices ----
 export const getPush = async env => (await env.HUB.get('push', 'json')) || { subs: [], sent: {} };
 const savePush = (env, d) => env.HUB.put('push', JSON.stringify(d));
-// A browser's subscription, checked before it is kept (Nov 18, 2026): the Worker later POSTs to the endpoint from every alert run, so it
+// A browser's subscription, checked before it is kept: the Worker later POSTs to the endpoint from every alert run, so it
 // must be a plain https address (no user:password, no bare IP) of a sensible length, and the two keys must be base64url of the sizes Web
-// Push uses (a 65-byte P-256 key, a 16-byte secret). Anything else used to be stored as sent.
+// Push uses (a 65-byte P-256 key, a 16-byte secret).
 const B64U = /^[A-Za-z0-9_-]+={0,2}$/;
 export function validSub(sub) {
   if (!sub || typeof sub.endpoint !== 'string' || sub.endpoint.length > 1024 || !sub.keys) return false;
