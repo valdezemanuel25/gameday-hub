@@ -246,13 +246,6 @@ const lastDays = async (env, prefix, now) => { const t = localDate(new Date(now)
   const got = await Promise.all(ds.map(d => getDay(env, d, prefix === 'nhl:day:' ? 'nhl' : 'soccer'))); return Object.fromEntries(ds.map((d, i) => [d, got[i]?.cards]).filter(([, c]) => c && c.length)); };
 export const sweepData = (env, now = new Date(), f = fetch) => sweepStep(env, { soccerTotals: () => soccerTotals(env).then(valueOf), nhlTotals: () => nhlTotals(env).then(valueOf), soccerDays: () => lastDays(env, 'day:', now),
   nhlDays: () => lastDays(env, 'nhl:day:', now), health: () => health(env, true), priced: PRICED }, now, f);
-// Scout was removed (Nov 5, 2026): its old log (KV 'scout') is deleted by the first cron run that finds it. A delete is not a write, so
-// it costs nothing from the write budget; after DROP_SCOUT_UNTIL the check stops (not even a read), and this can be taken out.
-export const DROP_SCOUT_UNTIL = '2026-11-12';
-export async function dropScout(kv, now = new Date()) {
-  if (now.toISOString().slice(0, 10) >= DROP_SCOUT_UNTIL) return false;
-  try { if ((await kv.get('scout')) === null) return false; await kv.delete('scout'); return true; } catch (e) { return false; }
-}
 // Where to go after signing in: only a path on this site. A backslash is refused because browsers read "/\evil.example" as "//evil.example".
 const safeNext = n => (typeof n === 'string' && n.startsWith('/') && !n.startsWith('//') && !n.includes('\\') && !/[\u0000-\u001f]/.test(n) && !n.startsWith('/login') ? n : '/home');
 
@@ -1583,7 +1576,6 @@ const hub = {
   async scheduled(event, env0, ctx) {
     const c = counted(env0), env = withFixes(c.env); // the cron reads days with the buttons' patches laid on, and its saves carry them in
     ctx.waitUntil((async () => {
-      await dropScout(env0.HUB); // one-time clean-up of the removed Scout's log (stops itself after DROP_SCOUT_UNTIL)
       try { env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit
       // (a heavy soccer job) used to drop them. The rotating job runs after.

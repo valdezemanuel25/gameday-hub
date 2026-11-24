@@ -55,12 +55,6 @@ ok('route: sync problems older than 3 days are left out', (j2 => Object.keys(j2.
 r = await go('/api/config?k=hk', env({ HEALTH_TOKEN: 'hk' }));
 ok('route: the health key opens nothing else', r.status === 401);
 ok('route: reading health writes nothing', puts.length === 0, puts.join());
-// Scout's old log is deleted once by the cron, then left alone; after the cut-off date nothing is read
-{ const { dropScout } = await import('../src/worker.js'); const m = new Map([['scout', '{}'], ['analyst', '{}']]); let reads = 0;
-  const kvd = { get: async k => { reads++; return m.has(k) ? m.get(k) : null; }, delete: async k => { m.delete(k); } };
-  const d1 = await dropScout(kvd, new Date('2026-11-05T12:00:00Z')), d2 = await dropScout(kvd, new Date('2026-11-05T12:05:00Z'));
-  const r0 = reads, d3 = await dropScout({ ...kvd, get: async () => { reads++; return '{}'; } }, new Date('2026-11-12T00:00:00Z'));
-  ok('Scout clean-up: deletes only the scout log, once; stops after the cut-off', d1 === true && d2 === false && !m.has('scout') && m.has('analyst') && d3 === false && reads === r0); }
 // Nov 6, 2026: bets that fell back to DraftKings' close, rules benched on close value, and Pinnacle's state
 { const T = Date.parse('2026-11-06T06:00:00Z'), k = h => new Date(T + h * H).toISOString();
   const b = (o) => ({ rule: 'follow', key: 'H', home: 'A', away: 'B', price: 110, mins: 200, league: 'eng.1', date: '2026-11-05', ...o });
