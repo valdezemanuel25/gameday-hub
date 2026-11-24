@@ -123,5 +123,26 @@ ok('a stand-in price is kept on the pick (spx, with its book) but not as its cou
   ok('after the third try the card is left alone', card('g1').final.ldt === LEAD_TRIES && r5.job !== 'lead', JSON.stringify([card('g1').final, r5.job]));
 }
 
+// ---- a finished game whose score ESPN sent empty or not at all is not graded (Number('') would read as 0) ----
+{
+  await fresh();
+  const blank = (e, v) => { for (const c of e.competitions[0].competitors) if (v === undefined) delete c.score; else c.score = v; return e; };
+  setFeed(blank(ev('g1', KO1, ARS, BHA, { done: true }), ''), blank(ev('g2', KO2, CHE, LIV, { done: true }), undefined));
+  const r = await gradeLeague(DATE, 'eng.1', env, { force: true }, after);
+  ok('empty or missing scores: no card is graded 0-0, both wait', r.graded === 0 && r.pending === 2 && !card('g1').final && !card('g2').final, JSON.stringify([r, card('g1').final]));
+}
+// ---- ESPN lists no game of the league that day: a game that already kicked off keeps its card, one not yet started goes ----
+{
+  await fresh();
+  patch('g2', c => { c.void = 'postponed'; });
+  setFeed();
+  const mid = new Date(Date.parse(KO1) + H); // g1 kicked off, g2 (void) still to come
+  await analyzeLeague(DATE, 'eng.1', env, mid);
+  ok('empty listing: the kicked-off card and the void card are kept', !!card('g1') && card('g1').odds && card('g2') && card('g2').void === 'postponed', JSON.stringify(day().cards.map(c => c.id)));
+  patch('g2', c => { delete c.void; });
+  await analyzeLeague(DATE, 'eng.1', env, mid);
+  ok('empty listing: a card not yet started and not void goes (the game moved)', !!card('g1') && !card('g2'), JSON.stringify(day().cards.map(c => c.id)));
+}
+
 console.log(fails ? `\n${fails} FAILED` : '\nAll round-2 grading checks passed');
 process.exit(fails ? 1 : 0);

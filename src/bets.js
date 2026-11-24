@@ -155,6 +155,10 @@ export function settle(bet, cards) {
     if (l.res && l.ep == null && mlLeg(l) && c && c.final && c.final.lead) { const ep = earlyPaid(l.sel, l.res === 'hit', c.final.lead, isNhl(l) ? 'nhl' : 'soccer'); if (ep != null) { l.ep = ep; changed = true; } }
   }
   const was = bet.status, wasEp = bet.ep;
+  if (bet.manual) { // voided by hand: void, whatever its legs did
+    bet.status = 'void'; delete bet.ep; if (!bet.settledAt) { bet.settledAt = new Date().toISOString(); changed = true; }
+    return changed || was !== bet.status || wasEp !== bet.ep;
+  }
   bet.status = bet.legs.some(l => l.res === 'miss') ? 'miss' : bet.legs.every(l => l.res) ? (bet.legs.every(l => l.res === 'void') ? 'void' : 'hit') : 'pending';
   if (bet.status !== 'pending' && !bet.settledAt) { bet.settledAt = new Date().toISOString(); changed = true; }
   // The same bet under early payout: only worked out once every missed leg is known either way.
@@ -186,7 +190,15 @@ function summarize(items) {
 
 // ---- storage: one small document, written only when a bet is added, changed or settled ----
 export async function getBets(env) { return (await env.HUB.get('bets', 'json')) || { v: 1, items: [] }; }
-export const saveBets = (env, doc) => env.HUB.put('bets', JSON.stringify(doc));
+// The list is read again just before it is written: a bet another request added after this one read the list (an id not in `seen`, the
+// ids this request read) is kept, first in the list. A bet this request removed stays removed.
+export async function saveBets(env, doc, seen = new Set()) {
+  let now = null; try { now = await getBets(env); } catch (e) { /* write what we have */ }
+  const have = new Set(doc.items.map(b => b.id)), added = ((now && now.items) || []).filter(b => !have.has(b.id) && !seen.has(b.id));
+  if (added.length) doc.items = added.concat(doc.items).slice(0, 300);
+  return env.HUB.put('bets', JSON.stringify(doc));
+}
+const idsOf = doc => new Set(doc.items.map(b => b.id));
 // The cards a set of legs refers to, one read per day.
 export async function loadCards(env, legs) {
   const keys = [...new Set(legs.map(l => `${isNhl(l) ? 'nhl:' : ''}${l.date}`))], days = await Promise.all(keys.map(k => getDay(env, k.startsWith('nhl:') ? k.slice(4) : k, k.startsWith('nhl:') ? 'nhl' : 'soccer'))), m = new Map();
@@ -196,10 +208,12 @@ export async function loadCards(env, legs) {
 export async function addBet(env, legs, now = new Date(), source = null) {
   const cards = await loadCards(env, legs || []), a = analyze(cards, legs);
   if (a.error) return a;
+  const begun = a.legs.find(l => new Date(l.kickoff).getTime() <= now.getTime());
+  if (begun) return { error: `${begun.home} vs ${begun.away} has already started, so it can't be tracked.` };
   const bet = { id: now.getTime().toString(36) + Math.random().toString(36).slice(2, 6), at: now.toISOString(), status: 'pending', ...(source === 'model' ? { src: 'model' } : {}), p: a.p, parlay: a.parlay, sameGame: a.sameGame,
     legs: a.legs.map(l => ({ date: l.date, league: l.league, id: l.id, ...(l.sport ? { sport: l.sport } : {}), market: l.market, sel: l.sel, ...(l.market === 'ou' ? { line: l.line, ...(l.src ? { src: l.src } : {}) } : {}), label: l.label, home: l.home, away: l.away, leagueName: l.leagueName, ko: l.ko, kickoff: l.kickoff, p: l.p, res: null })) };
-  const doc = await getBets(env); doc.items.unshift(bet); doc.items = doc.items.slice(0, 300);
-  await saveBets(env, doc);
+  const doc = await getBets(env), seen = idsOf(doc); doc.items.unshift(bet); doc.items = doc.items.slice(0, 300);
+  await saveBets(env, doc, seen);
   return { saved: true, bet };
 }
 // Open the list: settle anything whose games have finished (and save only if something changed).
@@ -208,16 +222,16 @@ export async function listBets(env) {
   if (open.length) {
     const cards = await loadCards(env, open.flatMap(b => b.legs));
     let dirty = false; for (const b of open) dirty = settle(b, cards) || dirty;
-    if (dirty) await saveBets(env, doc);
+    if (dirty) await saveBets(env, doc, idsOf(doc));
   }
   return { items: doc.items, summary: summary(doc.items) };
 }
 export async function changeBet(env, id, action) {
-  const doc = await getBets(env), i = doc.items.findIndex(b => b.id === id);
+  const doc = await getBets(env), seen = idsOf(doc), i = doc.items.findIndex(b => b.id === id);
   if (i < 0) return { error: 'That bet was not found.' };
   if (action === 'delete') doc.items.splice(i, 1);
-  else if (action === 'void') { const b = doc.items[i]; for (const l of b.legs) if (!l.res) l.res = 'void'; settle(b, new Map()); }
+  else if (action === 'void') { const b = doc.items[i]; for (const l of b.legs) if (!l.res) l.res = 'void'; b.manual = true; settle(b, new Map()); } // the whole bet is void, never a hit
   else return { error: 'Unknown action.' };
-  await saveBets(env, doc);
+  await saveBets(env, doc, seen);
   return { ok: true };
 }

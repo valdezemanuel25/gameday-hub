@@ -128,6 +128,8 @@ function parseAm(o) {
   }
   return Object.keys(out).length ? out : null;
 }
+// A side's score, or null when ESPN sent none or one that is not a number (Number('') would read as 0).
+const scoreOf = t => { const v = t && t.score; if (v == null || String(v).trim() === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
 function parseEvent(ev) {
   const comp = ev.competitions?.[0];
   if (!comp) return null;
@@ -141,8 +143,8 @@ function parseEvent(ev) {
     // off: a game that will not be played on this date as listed (postponed, canceled, abandoned): its bets are void.
     ...(done && /_PEN\b|_PK\b|\bPens?\b|PENALT/i.test(stx) ? { et: 'pen' } : done && /\bAET\b|_AET\b|extra time/i.test(stx) ? { et: 'aet' } : {}),
     ...(OFF.test(st) ? { off: st.replace(/^STATUS_/, '').toLowerCase() } : {}),
-    home: { id: String(h.team.id), name: h.team.displayName || h.team.name, abbr: h.team.abbreviation, score: done ? Number(h.score) : null },
-    away: { id: String(a.team.id), name: a.team.displayName || a.team.name, abbr: a.team.abbreviation, score: done ? Number(a.score) : null },
+    home: { id: String(h.team.id), name: h.team.displayName || h.team.name, abbr: h.team.abbreviation, score: done ? scoreOf(h) : null },
+    away: { id: String(a.team.id), name: a.team.displayName || a.team.name, abbr: a.team.abbreviation, score: done ? scoreOf(a) : null },
     odds: done ? null : parseOdds(comp.odds),
     oddsDone: done ? parseOdds(comp.odds) : null, // ESPN's closing line on a finished game, if it still lists one
     shots: done ? (sh => (sh.h && sh.a ? [sh.h[0], sh.h[1], sh.a[0], sh.a[1]] : null))({ h: teamShots(h), a: teamShots(a) }) : null,
@@ -196,7 +198,7 @@ export async function syncLeague(league, env, now = new Date(), debug) {
   if (dbg.length) { await touchSynced(league.slug, env, now); return { caughtUp: false, games: st.games.length, context: false, error: dbg.join('; ') }; }
   const at = new Map(st.games.map((g, i) => [g[0], i]));
   for (const e of evs) {
-    if (!e.done || e.home.score == null) continue;
+    if (!e.done || !Number.isFinite(e.home.score) || !Number.isFinite(e.away.score)) continue;
     // 9th element = shots [homeShots, homeOnTarget, awayShots, awayOnTarget], or null when ESPN gave none.
     // It is only recorded here (coverage tracking); no model reads it yet.
     if (!at.has(e.id)) {

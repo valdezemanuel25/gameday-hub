@@ -49,6 +49,7 @@ const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'met
 const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
 export const writeKind = k => { const s = String(k); return s.startsWith('fix:') ? 'button saves' : s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
   : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('sweep:') ? 'stats files' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
+const SAME_KEY_MS = 1100;
 const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
 export function counted(env) { // exported for test/writes.mjs
   const base = env.HUB; let n = 0, by = {};
@@ -58,7 +59,15 @@ export function counted(env) { // exported for test/writes.mjs
   if (typeof base.getWithMetadata === 'function') hub.getWithMetadata = (...a) => base.getWithMetadata(...a);
   // A saved day also gets a write id as KV metadata (src/summaries.js stampPut): the cached Results and Trends summaries see from the
   // key listing which days changed. No extra write.
-  hub.put = (...a) => { n++; const k = writeKind(a[0]); by[k] = (by[k] || 0) + 1; const o = stampPut(a[0], a[2]); return o === undefined ? base.put(a[0], a[1]) : base.put(a[0], a[1], o); };
+  // KV takes one write a second to the same key (a faster one fails with 429): a run's second save of a key waits out the rest of that second.
+  // Only on Cloudflare (caches is there); Node tests do not wait.
+  const lastPut = new Map();
+  hub.put = async (...a) => {
+    const t = lastPut.get(a[0]), wait = t == null || typeof caches === 'undefined' ? 0 : SAME_KEY_MS - (Date.now() - t);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    n++; const k = writeKind(a[0]); by[k] = (by[k] || 0) + 1; const o = stampPut(a[0], a[2]);
+    try { return await (o === undefined ? base.put(a[0], a[1]) : base.put(a[0], a[1], o)); } finally { lastPut.set(a[0], Date.now()); }
+  };
   return { env: { ...env, HUB: hub }, flush: async () => {
     if (!n) return;
     const d = new Date().toISOString().slice(0, 10);
@@ -315,7 +324,8 @@ export async function analyzeLeague(date, slug, env, now = new Date(), { partial
   if (!fx.length) {
     // A failed feed is not "no games": report it and don't mark the league analyzed.
     if (debug.length) return { fixtures: 0, cards: 0, skipped: 0, feedError: true, debug };
-    day.cards = day.cards.filter(c => c.league !== slug || c.final);
+    // ESPN lists no game: as with the kept cards below, a game that already kicked off (moved after kickoff) or was closed as void keeps its card
+    day.cards = day.cards.filter(c => c.league !== slug || c.final || c.void || new Date(c.kickoff).getTime() <= now.getTime());
     day.analyzed[slug] = now.getTime();
     await putDay(env, date, day);
     return { fixtures: 0, cards: 0, skipped: 0, debug };
@@ -799,7 +809,9 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
   const outs = [];
   for (const p of pick) {
     try { if (cache) await cache.put(p.ck, new Response('1', { headers: { 'cache-control': `max-age=${p.ttl}` } })); } catch (e) { /* ignore */ }
-    outs.push({ league: p.lg.slug, date: p.date, ...(await refreshOdds(env, p.date, p.lg.slug, now)) });
+    // one league's failure (a feed, a save) does not cost the others their read
+    try { outs.push({ league: p.lg.slug, date: p.date, ...(await refreshOdds(env, p.date, p.lg.slug, now)) }); }
+    catch (e) { outs.push({ league: p.lg.slug, date: p.date, error: String(e && e.message || e).slice(0, 120) }); }
   }
   return { job: 'odds', ...outs[0], ...(outs.length > 1 ? { also: outs.slice(1) } : {}) };
 }
@@ -1580,8 +1592,11 @@ const hub = {
       // The sweep's stats file, when one is due (three runs a night, src/sweepdata.js), takes this run's turn in place of the rotating
       // job, so the run stays inside the free plan's CPU limit. Nothing due, not set up, or the file is already saved (nothing was built): the
       // rotating job runs as always.
-      let sw = null; try { sw = await sweepData(env); } catch (e) { /* never allowed to break the background job */ }
-      try { if (!(sw && sw.built)) await runSlot(env); }
+      // Which job and which stats file are this run's turn comes from the time the run was scheduled, so steps that ran long before
+      // (slow feeds) cannot move the run into the next 5-minute turn. The jobs themselves compare kickoffs with the time now.
+      const at = Number.isFinite(event && event.scheduledTime) ? event.scheduledTime : Date.now();
+      let sw = null; try { sw = await sweepData(env, new Date(at)); } catch (e) { /* never allowed to break the background job */ }
+      try { if (!(sw && sw.built)) await runSlot(env, new Date(), Math.floor(at / 300000) % 4); }
       finally {
         // Alerts for games about to start. Never allowed to break the background job.
         try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }

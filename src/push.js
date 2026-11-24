@@ -19,6 +19,8 @@ export async function getVapid(env, origin) {
     const k = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
     v = { pub: b64u(await crypto.subtle.exportKey('raw', k.publicKey)), jwk: await crypto.subtle.exportKey('jwk', k.privateKey), sub: origin || 'https://example.com' };
     await env.HUB.put('push:vapid', JSON.stringify(v));
+    // Two first requests at once each make a key and the last save wins: give back the key that is stored, so no device subscribes with the other
+    v = (await env.HUB.get('push:vapid', 'json')) || v;
   }
   return v;
 }
@@ -81,15 +83,26 @@ export async function removeSub(env, endpoint) {
 // Send one message to every device. A device the phone company says is gone (404 or 410) is dropped.
 export async function sendAll(env, msg, now = Date.now(), fetcher = fetch) {
   const d = await getPush(env); if (!d.subs.length) return { sent: 0, gone: 0 };
-  const v = await getVapid(env), text = JSON.stringify(msg), dead = []; let sent = 0;
-  for (const s of d.subs) {
+  const r = await sendTo(d.subs, await getVapid(env), msg, now, fetcher);
+  if (r.gone.length) await dropSubs(env, r.gone);
+  return { sent: r.sent, gone: r.gone.length };
+}
+// One message to the given devices (one request each): how many took it, and the endpoints the phone company says are gone (404 / 410).
+async function sendTo(subs, v, msg, now, fetcher) {
+  const text = JSON.stringify(msg), gone = []; let sent = 0;
+  for (const s of subs) {
     try {
       const r = await fetcher(s.endpoint, { method: 'POST', headers: { 'content-encoding': 'aes128gcm', 'content-type': 'application/octet-stream', ttl: '3600', urgency: 'high', authorization: await vapidHeader(v, s.endpoint, now) }, body: await encryptPayload(s, text) });
-      if (r.status === 404 || r.status === 410) dead.push(s.endpoint); else if (r.ok) sent++;
+      if (r.status === 404 || r.status === 410) gone.push(s.endpoint); else if (r.ok) sent++;
     } catch (e) { /* try again at the next alert */ }
   }
-  if (dead.length) { d.subs = d.subs.filter(s => !dead.includes(s.endpoint)); await savePush(env, d); }
-  return { sent, gone: dead.length };
+  return { sent, gone };
+}
+// Gone devices are taken off the list as it is stored now (read again just before the save), so a device added meanwhile is kept.
+async function dropSubs(env, gone) {
+  const d = await getPush(env), n = d.subs.length;
+  d.subs = d.subs.filter(s => !gone.includes(s.endpoint));
+  if (d.subs.length !== n) await savePush(env, d);
 }
 
 // ---- which games earn an alert ----
@@ -128,11 +141,25 @@ export async function pushStep(env, now, dates, fetcher = fetch) {
     for (const c of (await getDay(env, date, 'nhl'))?.cards || []) cards.hockey.push(c);
   }
   const due = dueAlerts(cards, d.sent || {}, now); if (!due.length) return { push: 'nothing due' };
-  let sent = 0;
-  for (const a of due) { const r = await sendAll(env, { title: a.title, body: a.body, tag: a.tag, url: a.url }, now, fetcher); sent += r.sent; }
+  // The device list and the signing key are read once. At most PUSH_CAP requests a run (the free plan allows 50 outside calls per run):
+  // alerts past the cap wait for the next run, still inside their window. An alert is marked sent once a device took it, or once no device is left.
+  const v = await getVapid(env), gone = new Set(), done = [];
+  let sent = 0, calls = 0;
+  for (const a of due) {
+    const live = d.subs.filter(s => !gone.has(s.endpoint));
+    if (!live.length) { done.push(a); continue; }
+    if (calls > 0 && calls + live.length > PUSH_CAP) break; // the first alert always goes, so more devices than the cap cannot stall every alert
+    calls += live.length;
+    const r = await sendTo(live, v, { title: a.title, body: a.body, tag: a.tag, url: a.url }, now, fetcher);
+    for (const e of r.gone) gone.add(e);
+    sent += r.sent;
+    if (r.sent > 0 || live.every(s => gone.has(s.endpoint))) done.push(a);
+  }
   const d2 = await getPush(env); d2.sent = d2.sent || {};
-  for (const a of due) d2.sent[a.key] = now;
+  if (gone.size) d2.subs = d2.subs.filter(s => !gone.has(s.endpoint));
+  for (const a of done) d2.sent[a.key] = now;
   for (const k of Object.keys(d2.sent)) if (now - d2.sent[k] > 3 * 86400000) delete d2.sent[k];
   await savePush(env, d2);
-  return { push: 'sent', alerts: due.length, delivered: sent };
+  return { push: 'sent', alerts: done.length, delivered: sent, ...(done.length < due.length ? { waiting: due.length - done.length } : {}) };
 }
+export const PUSH_CAP = 20;

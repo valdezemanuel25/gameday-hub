@@ -1,6 +1,6 @@
 // Alerts to the installed app: encryption the phone can read, the signed header, which games earn an alert, and that each is sent once.
 import worker from '../src/worker.js';
-import { b64u, unb64u, encryptPayload, getVapid, soccerAlert, hockeyAlert, dueAlerts, pushStep, addSub, getPush } from '../src/push.js';
+import { b64u, unb64u, encryptPayload, getVapid, soccerAlert, hockeyAlert, dueAlerts, pushStep, addSub, removeSub, getPush, PUSH_CAP } from '../src/push.js';
 let fail = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) fail++; };
 const kv = new Map(), env = { ADMIN_TOKEN: 's', ASSETS: { fetch: () => new Response('a') }, HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { kv.set(k, v); }, list: async () => ({ keys: [] }) } };
 // a pretend phone
@@ -66,6 +66,23 @@ const gone = async () => new Response(null, { status: 410 });
 await pushStep(env, T0 + 10 * 60000, ['2026-10-22'], gone);
 ok('a gone device (410) is removed', (await getPush(env)).subs.length === 0);
 r = await pushStep(env, T0 + 15 * 60000, ['2026-10-22'], fetcher); ok('no devices: nothing is even read', r.push === 'no devices');
+// a run sends at most PUSH_CAP requests, and an alert no device took is tried again
+{
+  await addSub(env, sub, 'phone'); sent.length = 0;
+  const ids = Array.from({ length: PUSH_CAP + 5 }, (_, i) => `c${i}`), T1 = T0 + 20 * 60000;
+  kv.set('day:2026-10-22', JSON.stringify({ cards: ids.map(id => soc({ id, kickoff: new Date(T1 + 30 * 60000).toISOString() })) })); kv.set('nhl:day:2026-10-22', JSON.stringify({ cards: [] }));
+  let x = await pushStep(env, T1, ['2026-10-22'], fetcher);
+  ok('one run stops at the cap; the rest wait', sent.length === PUSH_CAP && x.alerts === PUSH_CAP && x.waiting === 5, JSON.stringify(x));
+  x = await pushStep(env, T1 + 5 * 60000, ['2026-10-22'], fetcher);
+  ok('the next run sends the ones that waited', sent.length === PUSH_CAP + 5 && x.alerts === 5, JSON.stringify(x));
+  kv.set('day:2026-10-22', JSON.stringify({ cards: [soc({ id: 'z1', kickoff: new Date(T1 + 30 * 60000).toISOString() })] }));
+  const down = async () => new Response(null, { status: 500 });
+  x = await pushStep(env, T1 + 6 * 60000, ['2026-10-22'], down);
+  ok('an alert no device took is not marked sent', x.alerts === 0 && !(await getPush(env)).sent['s|uefa.champions|z1'], JSON.stringify(x));
+  x = await pushStep(env, T1 + 11 * 60000, ['2026-10-22'], fetcher);
+  ok('...and goes out on the next run', x.alerts === 1 && (await getPush(env)).sent['s|uefa.champions|z1'] > 0, JSON.stringify(x));
+  await removeSub(env, sub.endpoint);
+}
 // routes
 const go = (path, init = {}) => worker.fetch(new Request('https://hub.test' + path, { headers: { 'x-admin-token': 's', 'content-type': 'application/json' }, ...init }), env, { waitUntil() {} });
 let j = await (await go('/api/push/key')).json(); ok('the page gets the public key', j.key === v.pub && j.devices === 0, JSON.stringify(j));

@@ -598,7 +598,14 @@ const saveView = () => { try { localStorage.setItem('hubView', JSON.stringify({ 
 /* ---------- admin token (protects Analyze / Update so strangers can't use your free quota) ---------- */
 /* The browser's own login box (shown once per device) is the password; every request carries it automatically. */
 async function parse(r) { const t = await r.text(); try { return JSON.parse(t); } catch (e) { throw new Error(`Server replied ${r.status}: ${t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) || 'empty response'}`); } }
-async function api(path) { return parse(await fetch(path)); }
+// A read: signed out (401) opens the sign-in page and comes back here; any other failed answer throws its error, so no caller keeps it as data.
+async function api(path) {
+  const r = await fetch(path);
+  if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search); throw new Error('Signed out. Opening the sign-in page.'); }
+  const j = await parse(r);
+  if (!r.ok) throw new Error((j && j.error) || `Server replied ${r.status}`);
+  return j;
+}
 async function post(path, body) {
   const r = await fetch(path, body ? { method: 'POST', body: JSON.stringify(body) } : { method: 'POST' });
   if (r.status === 401) throw new Error('Signed out. Reload the page and sign in again.');
@@ -2207,7 +2214,7 @@ async function loadDay(date) {
   say(day.analyzedAt ? 'Updated ' + new Date(day.analyzedAt).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 }
 let tallyTry = false;
-async function warmTally() { if (tally || tallyTry) return; tallyTry = true; try { tally = await api('/api/tally'); if (S.tab === 'board') render(); } catch (e) {} }
+async function warmTally() { if (tally || tallyTry) return; tallyTry = true; try { const t = await api('/api/tally'); if (t && !t.error) { tally = t; if (S.tab === 'board') render(); } else tallyTry = false; } catch (e) { tallyTry = false; /* tried again on the next day load */ } }
 document.addEventListener('input', e => { if (e.target && e.target.id === 'bq') { BS.q = e.target.value; const el = document.getElementById('bglist'); if (el) el.innerHTML = gameArea(); } });
 async function ensureTally() { if (!tally) { tally = await api('/api/tally'); } }
 

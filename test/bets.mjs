@@ -71,6 +71,36 @@ dd.cards[0].final = null; kv.set(`day:${D}`, JSON.stringify(dd));
 const v = await addBet(e2, [L('1', 'win', 'H')]);
 ok('voiding a bet closes it with no result', (await changeBet(e2, v.bet.id, 'void')).ok && (await listBets(e2)).items.find(b => b.id === v.bet.id).status === 'void');
 ok('a bet can be removed', (await changeBet(e2, v.bet.id, 'delete')).ok && !(await listBets(e2)).items.some(b => b.id === v.bet.id));
+{ // a parlay voided by hand with one leg already won is void, never a hit
+  const x = JSON.parse(kv.get(`day:${D}`)); x.cards[0].final = null; x.cards[1].final = null; kv.set(`day:${D}`, JSON.stringify(x));
+  const pv = await addBet(e2, [L('1', 'win', 'H'), L('2', 'btts', 'Y')]);
+  x.cards[0].final = { h: 2, a: 0 }; kv.set(`day:${D}`, JSON.stringify(x));
+  const mid = (await listBets(e2)).items.find(b => b.id === pv.bet.id);
+  ok('setup: one leg won, the other still to play', mid.status === 'pending' && mid.legs[0].res === 'hit' && mid.legs[1].res === null, JSON.stringify(mid.legs.map(q => q.res)));
+  await changeBet(e2, pv.bet.id, 'void');
+  const after = await listBets(e2), vb = after.items.find(b => b.id === pv.bet.id);
+  ok('voiding a part-won parlay leaves it void, not a hit', vb.status === 'void' && vb.manual === true && after.summary.bets.hit === after.items.filter(b => b.status === 'hit').length && after.summary.bets.void === after.items.filter(b => b.status === 'void').length, JSON.stringify(vb));
+  x.cards[1].final = { h: 1, a: 1 }; kv.set(`day:${D}`, JSON.stringify(x));
+  ok('...and it stays void when its other game finishes', (await listBets(e2)).items.find(b => b.id === pv.bet.id).status === 'void');
+  x.cards[0].final = null; x.cards[1].final = null; kv.set(`day:${D}`, JSON.stringify(x));
+}
+{ // a game that has kicked off cannot be tracked
+  const x = JSON.parse(kv.get(`day:${D}`)); x.cards[0].kickoff = new Date(Date.now() - 60000).toISOString(); kv.set(`day:${D}`, JSON.stringify(x));
+  const n = JSON.parse(kv.get('bets')).items.length, rr = await addBet(e2, [L('1', 'win', 'H')]);
+  ok('a game already started is refused with a clear message', !rr.saved && /already started/.test(rr.error || '') && JSON.parse(kv.get('bets')).items.length === n, JSON.stringify(rr));
+  x.cards[0].kickoff = C1.kickoff; kv.set(`day:${D}`, JSON.stringify(x));
+}
+{ // a bet added by another request between this one's read and its save is kept
+  const realGet = e2.HUB.get; let once = true;
+  const other = { id: 'other1', at: new Date().toISOString(), status: 'pending', legs: [] };
+  e2.HUB.get = async (k, t) => { const v = await realGet(k, t); if (k === 'bets' && once) { once = false; const d = JSON.parse(kv.get('bets')); d.items.unshift(other); kv.set('bets', JSON.stringify(d)); } return v; };
+  const nb = await addBet(e2, [L('2', 'btts', 'Y')]);
+  e2.HUB.get = realGet;
+  const items = JSON.parse(kv.get('bets')).items;
+  ok('a save keeps a bet another request added meanwhile', items.some(b => b.id === 'other1') && items.some(b => b.id === nb.bet.id), JSON.stringify(items.map(b => b.id)));
+  await changeBet(e2, 'other1', 'delete');
+  ok('...and a removed bet stays removed', !JSON.parse(kv.get('bets')).items.some(b => b.id === 'other1'));
+}
 
 // ---- hockey: winner and Over/Under at the card's own line ----
 {
