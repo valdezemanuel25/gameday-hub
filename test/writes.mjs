@@ -37,4 +37,14 @@ ok('saver mode: the SportsMole / Forebet slot does no SportsMole or Forebet work
 hit = []; const r2 = await runSlot(env({ SAVER: true }), now, 2);
 ok('saver mode: a league already analyzed today is not analyzed again', !(r2 && r2.job === 'analyze' && r2.league === 'eng.1'), JSON.stringify(r2));
 globalThis.fetch = real;
+// src/store.js: the same counter from its own module, and coalesce(): one read and one write per record however many jobs change it
+{ const S = await import('../src/store.js');
+  ok('store: the Worker\'s counted() is the store\'s', S.counted === counted && S.writeKind === writeKind && S.writesToday === writesToday);
+  const reads = [], writes = [], b = S.coalesce(async k => { reads.push(k); return { k, n: 0 }; }, async (k, v) => { writes.push([k, v.n]); if (k === 'bad') throw new Error('429'); });
+  (await b.get('a')).n++; (await b.get('a')).n++; b.mark('a'); b.mark('a'); (await b.get('c')).n++; await b.get('bad'); b.mark('bad');
+  const out = await b.flush();
+  ok('coalesce: each record read once and written once, with every change', reads.join() === 'a,c,bad' && writes.map(w => w.join(':')).join() === 'a:2,bad:0', JSON.stringify([reads, writes]));
+  ok('coalesce: an unmarked record is not written; a failed save is reported, not thrown', !writes.some(w => w[0] === 'c') && out.find(x => x.key === 'bad').error === '429' && !out.find(x => x.key === 'a').error);
+  ok('coalesce: a flush empties the list', (await b.flush()).length === 0);
+}
 console.log(fail ? `\n${fail} write-budget check(s) FAILED` : '\nAll write-budget checks passed'); process.exit(fail ? 1 : 0);

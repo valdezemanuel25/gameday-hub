@@ -375,7 +375,7 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
 // are all done within them (3 a run, soonest kickoff first) instead of one league a run.
 {
   const date = '2026-10-31', ko = Date.parse('2026-10-31T15:00:00Z'), now = new Date(ko - 28 * 60000), kv = new Map(), leagues = ['eng.1', 'ger.1', 'eng.2', 'fra.1', 'ita.1'];
-  const env = { HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => kv.set(k, v) } };
+  const dayPuts = []; const env = { HUB: { get: async (k, t) => { const v = kv.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { if (k === 'day:' + date) dayPuts.push(k); kv.set(k, v); } } };
   const real = globalThis.fetch;
   globalThis.fetch = async u => { const slug = (u.match(/soccer\/([a-z.0-9]+)\/scoreboard/) || [])[1]; return { ok: true, json: async () => ({ events: [{ id: slug, date: new Date(ko).toISOString(), competitions: [{ status: { type: { completed: false } }, competitors: [{ homeAway: 'home', team: { id: 'h' + slug, displayName: 'H ' + slug, abbreviation: 'H' } }, { homeAway: 'away', team: { id: 'a' + slug, displayName: 'A ' + slug, abbreviation: 'A' } }], odds: [{ provider: { name: 'Draft Kings' }, homeTeamOdds: { moneyLine: -150 }, awayTeamOdds: { moneyLine: 400 }, drawOdds: { moneyLine: 280 } }] }] }] }) }; };
   kv.set('day:' + date, JSON.stringify({ date, cards: leagues.map((l, i) => ({ id: l, league: l, kickoff: new Date(ko + (i === 2 ? 0 : 0)).toISOString(), home: 'H ' + l, away: 'A ' + l, v4: { p: [50, 25, 25] } })) }));
@@ -383,6 +383,7 @@ ok('a fresh price keeps the lineup-read and last-change times', withOdds({ h: -1
   const r1 = await oddsStep(env, now, cache);
   const got = () => JSON.parse(kv.get('day:' + date)).cards.filter(c => c.odds && c.odds.cl).map(c => c.league);
   ok('first run in the window: three leagues get their lineup read, not one', r1 && r1.also && r1.also.length === 2 && got().length === 3, JSON.stringify([got(), r1 && r1.also && r1.also.length]));
+  ok('the three leagues share one day: it is saved once in the run, not three times', dayPuts.length === 1, dayPuts.length);
   const r2 = await oddsStep(env, new Date(now.getTime() + 5 * 60000), cache);
   const cs = JSON.parse(kv.get('day:' + date)).cards;
   ok('the next run takes the other two, and the first three keep the time of their read (not read again for the close)', got().length === 5 && r2.also.length === 1 && ['eng.1', 'ger.1', 'ita.1'].every(l => cs.find(c => c.league === l).odds.cl === now.toISOString()) && ['fra.1', 'eng.2'].every(l => cs.find(c => c.league === l).odds.cl === new Date(now.getTime() + 5 * 60000).toISOString()), JSON.stringify(cs.map(c => [c.league, c.odds.cl])));

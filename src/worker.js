@@ -32,6 +32,7 @@ import { nhlStep, nhlForebet, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nh
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 import { withFixes, keepSaved, foldStep, getDay, listDays } from './fixes.js';
 import { errEntry, answerErrors, saveErrors, readErrors } from './errlog.js';
+import { WRITE_LIMIT, counted, writeKind, writesToday, pendingWrites, coalesce } from './store.js';
 export { keepSaved, getDay, listDays, withFixes };
 
 const json = (data, status = 200) =>
@@ -40,66 +41,8 @@ const json = (data, status = 200) =>
 const jsonText = s => new Response(s.text, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-hub-cache': s.cache } });
 
 const HOUR = 3600000;
-const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
-
-// Counts this request's KV writes so the Status tab can show how close the day is to the limit.
-// The count is saved with ONE extra write at the end, and only when something was written.
-// What a key's write is for, for the per-job breakdown (meta:writes.by): soccer day cards, hockey day cards, the Analyst, and so on.
-// bookkeeping split by record (Nov 2, 2026), so the sweep can see which one costs saves
-const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games', 'meta:joberrors': 'job errors' };
-const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
-export const writeKind = k => { const s = String(k); return s.startsWith('fix:') ? 'button saves' : s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
-  : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('sweep:') ? 'stats files' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
-const SAME_KEY_MS = 1100;
-const addBy = (a, b) => { const o = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v; return o; };
-export function counted(env) { // exported for test/writes.mjs
-  const base = env.HUB; let n = 0, by = {};
-  const hub = Object.create(base);
-  hub.get = (...a) => base.get(...a);
-  hub.list = (...a) => base.list(...a);
-  if (typeof base.getWithMetadata === 'function') hub.getWithMetadata = (...a) => base.getWithMetadata(...a);
-  // A saved day also gets a write id as KV metadata (src/summaries.js stampPut): the cached Results and Trends summaries see from the
-  // key listing which days changed. No extra write.
-  // KV takes one write a second to the same key (a faster one fails with 429): a run's second save of a key waits out the rest of that second.
-  // Only on Cloudflare (caches is there); Node tests do not wait.
-  const lastPut = new Map();
-  hub.put = async (...a) => {
-    const t = lastPut.get(a[0]), wait = t == null || typeof caches === 'undefined' ? 0 : SAME_KEY_MS - (Date.now() - t);
-    if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    n++; const k = writeKind(a[0]); by[k] = (by[k] || 0) + 1; const o = stampPut(a[0], a[2]);
-    try { return await (o === undefined ? base.put(a[0], a[1]) : base.put(a[0], a[1], o)); } finally { lastPut.set(a[0], Date.now()); }
-  };
-  return { env: { ...env, HUB: hub }, flush: async () => {
-    if (!n) return;
-    const d = new Date().toISOString().slice(0, 10);
-    // Counting must not eat the budget it counts: keep a running tally in the (free) edge cache and
-    // save it to KV only once about 15 writes have piled up.
-    let pending = n, pby = by;
-    const cache = typeof caches !== 'undefined' ? caches.default : null, ck = new Request(`https://hub.local/writes/${d}`);
-    if (cache) { try { const r = await cache.match(ck); if (r) { const x = readPending(await r.text()); pending += x.n; pby = addBy(by, x.by); } } catch (e) { /* count from this run only */ } }
-    if (cache && pending < 15) { try { await cache.put(ck, new Response(JSON.stringify({ n: pending, by: pby }), { headers: { 'cache-control': 'max-age=86400' } })); return; } catch (e) { /* fall through and save */ } }
-    const c = (await base.get('meta:writes', 'json').catch(() => null)) || {}, same = c.d === d;
-    // y: the day before's saved total and breakdown, kept at the rollover inside the same save (no extra write) for the health report
-    const y = same ? c.y : c.d ? { d: c.d, n: c.n || 0, by: c.by || {} } : undefined;
-    await base.put('meta:writes', JSON.stringify({ d, n: (same ? c.n : 0) + pending + 1, by: addBy(addBy(same ? c.by : {}, pby), { 'bookkeeping: write counter': 1 }), ...(y ? { y } : {}) })).catch(() => {});
-    if (cache) { try { await cache.delete(ck); } catch (e) { /* ignore */ } }
-  } };
-}
-// the cached tally: {n, by} (older runs saved a bare number)
-const readPending = t => { try { const j = JSON.parse(t); return typeof j === 'number' ? { n: j, by: {} } : { n: Number(j.n) || 0, by: j.by || {} }; } catch (e) { return { n: Number(t) || 0, by: {} }; } };
-
-async function pendingWrites(d) {
-  try { if (typeof caches === 'undefined') return 0; const r = await caches.default.match(new Request(`https://hub.local/writes/${d}`)); return r ? readPending(await r.text()).n : 0; } catch (e) { return 0; }
-}
-// Writes used today (UTC day, the free plan's day): the saved count plus this server's not-yet-saved tally. A close estimate: other
-// servers can each hold up to 14 not-yet-saved writes, which is why saver mode starts early (SAVER_AT).
-export async function writesToday(hub, now = new Date()) {
-  const d = now.toISOString().slice(0, 10), w = await hub.get('meta:writes', 'json').catch(() => null);
-  // yesterday: the saved total for the UTC day before (the saved count only: each location's last unsaved tally is not in it), or null
-  const yd = new Date(Date.parse(d + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
-  const y = !w ? null : w.d === d ? (w.y && w.y.d === yd ? w.y : null) : w.d === yd ? { d: w.d, n: w.n || 0, by: w.by || {} } : null;
-  return { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), by: w && w.d === d ? w.by || {} : {}, yesterday: y };
-}
+// KV writes are counted and spaced per run in src/store.js; these stay exported here for the tests.
+export { counted, writeKind, writesToday };
 // Saver mode: from 80% of the daily writes, the background job skips the saves that matter least (the regular 6-hourly and hourly
 // price reads, SportsMole and Forebet fetches, v4 ratings rebuilds, re-analyzing a league already analyzed today) and keeps the ones
 // that matter (closing / lineup reads, grading, results syncs, first analysis of a day, hockey, the Analyst, alerts).
@@ -707,9 +650,11 @@ export async function priceWhy(env, date, slug, id, now = new Date(), why = odds
   if (!bk) return { kind: 'none', title: 'No book on ESPN yet', detail: "ESPN lists the game but no sportsbook has a price on it in ESPN's feed yet. Smaller leagues often get theirs a day or two before kickoff. The Hub keeps checking: every 6 hours, then hourly in the last 3." };
   return { kind: 'partial', title: 'Incomplete price on ESPN', detail: `ESPN lists ${bk} for this game${r.missing.length ? ` but without the ${r.missing.join(' and ')} price` : ' but not as a home / draw / away price the Hub can read'}. The Hub needs all three to price the game.` };
 }
-export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) {
+// batch: a coalesce() of the days (src/store.js) shared by the lineup burst: the day is read from it and only marked changed, and the
+// burst saves it once at the end. Without one the day is read and saved here.
+export async function refreshOdds(env, date, slug, now = new Date(), f = fetch, batch = null) {
   const lg = leagueBySlug(slug); if (!lg || !PRICED.has(slug)) return { error: 'Prices are only read for the first divisions, La Liga 2, 2. Bundesliga and the two European cups' };
-  const day = await getDay(env, date); if (!day) return { games: 0, priced: 0, changed: 0 };
+  const day = batch ? await batch.get(date) : await getDay(env, date); if (!day) return { games: 0, priced: 0, changed: 0 };
   const open = (day.cards || []).filter(c => c.league === slug && (c.v2 || c.v4) && !c.final && !c.void && priceOpen(c, now));
   if (!open.length) return { games: 0, priced: 0, changed: 0 };
   const byId = new Map((await fixturesForLeague(lg, date, [])).map(f => [f.id, f]));
@@ -732,7 +677,7 @@ export async function refreshOdds(env, date, slug, now = new Date(), f = fetch) 
   changed += await addPinn(env, open, now, f); // first: its both-score price is the first choice of addBtts
   for (const c of open) if (pinnStandIn(c, now)) { if (setV6(c, c, now)) {} changed++; } // no ESPN price: Pinnacle's stands in
   changed += await addBtts(env, open, slug, now, f);
-  if (changed) await putDay(env, date, day);
+  if (changed) { if (batch) batch.mark(date); else await putDay(env, date, day); }
   const an = await analystLook(env, date, day.cards.filter(c => c.league === slug), now, analystShop(env, slug, f), analystSharp(env, slug, f, now)); // the Analyst reads the same prices (src/analyst.js)
   return { games: open.length, priced, changed, analyst: an };
 }
@@ -801,13 +746,14 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
   }
   const pick = urgent.length ? urgent.sort((a, b) => a.first - b.first).slice(0, LINEUP_BURST) : env.SAVER ? [] : normal.slice(0, 1); // saver mode: closing reads only
   if (!pick.length) return null;
-  const outs = [];
+  const outs = [], batch = coalesce(d => getDay(env, d), (d, day) => putDay(env, d, day)); // each day saved once, after every league on it was read
   for (const p of pick) {
     try { if (cache) await cache.put(p.ck, new Response('1', { headers: { 'cache-control': `max-age=${p.ttl}` } })); } catch (e) { /* ignore */ }
-    // one league's failure (a feed, a save) does not cost the others their read
-    try { outs.push({ league: p.lg.slug, date: p.date, ...(await refreshOdds(env, p.date, p.lg.slug, now)) }); }
+    // one league's failure (a feed) does not cost the others their read
+    try { outs.push({ league: p.lg.slug, date: p.date, ...(await refreshOdds(env, p.date, p.lg.slug, now, fetch, batch)) }); }
     catch (e) { outs.push({ league: p.lg.slug, date: p.date, error: String(e && e.message || e).slice(0, 120) }); }
   }
+  for (const s of await batch.flush()) if (s.error) for (const o of outs) if (o.date === s.key && !o.error) o.error = `save failed: ${s.error}`;
   return { job: 'odds', ...outs[0], ...(outs.length > 1 ? { also: outs.slice(1) } : {}) };
 }
 
