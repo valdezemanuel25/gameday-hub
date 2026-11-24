@@ -77,4 +77,21 @@ ok('push: a huge address is refused', !validSub(sub('https://fcm.googleapis.com/
   ok('a 500-pick bet is refused before any of its days is read (it used to cost a KV read per date first)', r.status === 400 && reads === 0, `${r.status} reads ${reads}`);
 }
 
+// ---- the route table: exactly these answer without signing in; everything else asks for it ----
+{ const { PUBLIC_ROUTES } = await import('../src/routes.js');
+  ok('public routes: sign in, sign out, the home-screen icon names, the sign-in page and install files, health with its own key',
+    PUBLIC_ROUTES.map(r => r.name).join('|') === 'sign in|sign out|home-screen icon names|sign-in page and install files|health report with HEALTH_TOKEN', PUBLIC_ROUTES.map(r => r.name).join('|'));
+  const open = ['/login', '/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico', '/apple-touch-icon-precomposed.png', '/apple-touch-icon-180x180.png', '/apple-touch-icon-180x180-precomposed.png'];
+  let bad = [];
+  for (const p of open) { const r = await go(p); if (r.status !== 200 || !(await r.text()).startsWith('asset:')) bad.push(p); }
+  ok('signed out, the sign-in page and install files load', !bad.length, bad.join());
+  const r1 = await go('/logout'), r2 = await go('/login', { method: 'POST', body: new URLSearchParams({ password: 'nope' }) }), r3 = await go('/api/health?k=healthtok');
+  ok('signed out: sign out, a sign-in try and health with its key answer', r1.status === 303 && r2.status === 303 && /e=1/.test(r2.headers.get('location')) && r3.status === 200);
+  bad = [];
+  for (const [p, m] of [['/', 'GET'], ['/home', 'GET'], ['/soccer', 'GET'], ['/nhl', 'GET'], ['/index.html', 'GET'], ['/sweep.js', 'GET'], ['/brew.json', 'GET'], ['/api/day', 'GET'], ['/api/config', 'GET'], ['/api/health', 'GET'],
+    ['/api/health?k=wrong', 'GET'], ['/api/status', 'GET'], ['/api/push/key', 'GET'], ['/api/bets', 'POST'], ['/api/nhl/run', 'POST'], ['/api/analyze?league=eng.1', 'POST'], ['/login', 'PUT'], ['/favicon.ico', 'POST']]) {
+    const r = await go(p, { method: m }); if (!(r.status === 401 || (r.status === 302 && /^\/login/.test(r.headers.get('location') || '')))) bad.push(`${m} ${p} ${r.status}`); }
+  ok('signed out, every other route asks to sign in (401, or a page sent to /login)', !bad.length, bad.join(', '));
+}
+
 console.log(fail ? `\n${fail} security checks FAILED` : '\nAll security checks passed'); process.exit(fail ? 1 : 0);
