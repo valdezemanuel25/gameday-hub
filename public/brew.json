@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-24T11:07:50Z",
+  "updated": "2026-11-24T21:08:18Z",
   "issues": [
     {
       "source": "Morning Brew",
@@ -65,6 +65,70 @@
         }
       ],
       "note": "Market numbers are the Monday close."
+    },
+    {
+      "source": "Brew Markets",
+      "date": "2026-11-24",
+      "title": "Consumer confidence, retail therapy",
+      "markets": [
+        {
+          "label": "Nasdaq",
+          "value": "23,734",
+          "change": -1.48
+        },
+        {
+          "label": "S&P 500",
+          "value": "7,201",
+          "change": -0.5
+        },
+        {
+          "label": "Dow",
+          "value": "50,020",
+          "change": 0.86
+        },
+        {
+          "label": "10-yr",
+          "value": "4.904%",
+          "change": -1,
+          "unit": "bps"
+        },
+        {
+          "label": "Bitcoin",
+          "value": "$59,642",
+          "change": -2.65
+        },
+        {
+          "label": "Oil",
+          "value": "$81.44",
+          "change": 1.58
+        }
+      ],
+      "takeaways": [
+        {
+          "h": "Tech drags",
+          "t": "Chipmakers pulled the Nasdaq down 1.48% and the S&P 500 down 0.50%, while the Dow rose 0.86% on rotation into cyclicals."
+        },
+        {
+          "h": "Retail rebound",
+          "t": "Consumer confidence hit a near two-year high; Best Buy comps rose 6.1% vs 2.3% expected, Kohl's jumped 19.78% and Abercrombie 19.87%."
+        },
+        {
+          "h": "Sanofi-Insmed",
+          "t": "Sanofi agreed to buy Insmed for $41B in cash, a 17% premium; Insmed rose 14.13% and Sanofi 10.97%."
+        },
+        {
+          "h": "AI selloff",
+          "t": "Nvidia fell 5.86% despite Huang's return, Micron dropped 10.97% on a downgrade, and Analog Devices sank 17.37% on weak guidance."
+        },
+        {
+          "h": "AI spending, debt",
+          "t": "Hyperscaler capex forecasts have stopped climbing, and they have issued over $250B of bonds this year, now 5.1% of investment-grade debt."
+        },
+        {
+          "h": "Yields, oil, crypto",
+          "t": "The 10-year slipped 1.0 bp to 4.904%, oil rose 1.58% to $81.44 and Bitcoin fell 2.65% to $59,642."
+        }
+      ]
     },
     {
       "source": "Brew Markets",
@@ -712,70 +776,6 @@
         }
       ],
       "note": "Market numbers are the Thursday close."
-    },
-    {
-      "source": "Brew Markets",
-      "date": "2026-11-10",
-      "title": "Hims & Hurts",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "25,066",
-          "change": -0.74
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,521",
-          "change": -0.38
-        },
-        {
-          "label": "Dow",
-          "value": "52,233",
-          "change": -0.3
-        },
-        {
-          "label": "10-yr",
-          "value": "4.983%",
-          "change": 12,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$73,864",
-          "change": -1.42
-        },
-        {
-          "label": "Oil",
-          "value": "$86.40",
-          "change": -0.52
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "Yields jump",
-          "t": "Hot October CPI and hawkish Fed talk pushed the 10-year up 12 bps to 4.983%, and the two-year headed for its biggest one-day jump since April 2025."
-        },
-        {
-          "h": "Inflation",
-          "t": "CPI rose 0.4% in October versus 0.3% expected, core gained 0.3% for a third month, and traders now see a December hike as near-certain with 10%+ odds of 50 bps."
-        },
-        {
-          "h": "Stocks fade",
-          "t": "The rebound lost steam: Nasdaq fell 0.74%, S&P 500 0.38% and Dow 0.30%, while Nvidia dropped 5.47% on the Huang probe and Microsoft slid 2.20%."
-        },
-        {
-          "h": "SoftBank",
-          "t": "SoftBank posted a $7 billion quarterly loss, including a $3.7 billion writedown on prepaid US data center equipment, its first net loss in nearly two years."
-        },
-        {
-          "h": "Hims & Hers",
-          "t": "Shares sank 16.61% as revenue rose 49% to $890 million but gross margin fell from 74% to 57%, a $33 million net loss followed, and guidance was cut."
-        },
-        {
-          "h": "Movers",
-          "t": "Take-Two rose 8.31% on strong GTA VI preorders, AAON jumped 19.31% on record revenue, and Digital Turbine plunged 35.84% on AI spending plans."
-        }
-      ]
     },
     {
       "source": "Humbled Trader",
