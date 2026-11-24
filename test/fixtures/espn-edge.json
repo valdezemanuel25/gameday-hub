@@ -1,0 +1,71 @@
+{
+  "_note": "Odd ESPN soccer scoreboard answers (site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=YYYYMMDD), one per test. ESPN could not be reached from the build environment, so these copy the fields the Hub reads (src/data.js parseEvent, parseOdds, goalPlays) in the shapes the existing tests use.",
+  "emptyScore": {
+    "events": [
+      { "id": "e1", "date": "2026-11-21T15:00Z", "competitions": [{
+        "status": { "type": { "name": "STATUS_FULL_TIME", "completed": true, "shortDetail": "FT", "detail": "FT" } },
+        "competitors": [
+          { "homeAway": "home", "score": "", "team": { "id": "359", "displayName": "Arsenal", "abbreviation": "ARS" } },
+          { "homeAway": "away", "team": { "id": "331", "displayName": "Brighton & Hove Albion", "abbreviation": "BHA" } }
+        ] }] }
+    ]
+  },
+  "extraTime": {
+    "events": [
+      { "id": "e2", "date": "2026-11-21T15:00Z", "competitions": [{
+        "status": { "type": { "name": "STATUS_FINAL_AET", "completed": true, "shortDetail": "AET", "detail": "After Extra Time" } },
+        "competitors": [
+          { "homeAway": "home", "score": "2", "team": { "id": "359", "displayName": "Arsenal", "abbreviation": "ARS" } },
+          { "homeAway": "away", "score": "1", "team": { "id": "331", "displayName": "Brighton & Hove Albion", "abbreviation": "BHA" } }
+        ],
+        "details": [
+          { "type": { "text": "Goal" }, "scoringPlay": true, "team": { "id": "331" }, "clock": { "value": 1380, "displayValue": "23'" } },
+          { "type": { "text": "Goal" }, "scoringPlay": true, "team": { "id": "359" }, "clock": { "value": 5640, "displayValue": "90'+4'" } },
+          { "type": { "text": "Goal" }, "scoringPlay": true, "team": { "id": "359" }, "clock": { "value": 6300, "displayValue": "105'" } }
+        ] }] }
+    ]
+  },
+  "movedFrom": {
+    "events": []
+  },
+  "movedTo": {
+    "events": [
+      { "id": "e3", "date": "2026-11-22T15:00Z", "competitions": [{
+        "status": { "type": { "name": "STATUS_FULL_TIME", "completed": true, "shortDetail": "FT", "detail": "FT" } },
+        "competitors": [
+          { "homeAway": "home", "score": "3", "team": { "id": "363", "displayName": "Chelsea", "abbreviation": "CHE" } },
+          { "homeAway": "away", "score": "0", "team": { "id": "364", "displayName": "Liverpool", "abbreviation": "LIV" } }
+        ],
+        "details": [
+          { "type": { "text": "Goal" }, "scoringPlay": true, "team": { "id": "363" }, "clock": { "value": 600, "displayValue": "10'" } },
+          { "type": { "text": "Goal" }, "scoringPlay": true, "team": { "id": "363" }, "clock": { "value": 1800, "displayValue": "30'" } },
+          { "type": { "text": "Goal" }, "scoringPlay": true, "team": { "id": "363" }, "clock": { "value": 3000, "displayValue": "50'" } }
+        ] }] }
+    ]
+  },
+  "zeroGames": {
+    "leagues": [{ "id": "700", "abbreviation": "ENG.1", "name": "English Premier League" }],
+    "events": []
+  },
+  "noOdds": {
+    "events": [
+      { "id": "e4", "date": "2026-11-21T15:00Z", "competitions": [{
+        "status": { "type": { "name": "STATUS_SCHEDULED", "completed": false, "shortDetail": "Sat, November 21st at 9:00 AM CST", "detail": "Sat, November 21st at 9:00 AM CST" } },
+        "competitors": [
+          { "homeAway": "home", "score": "0", "team": { "id": "359", "displayName": "Arsenal", "abbreviation": "ARS" } },
+          { "homeAway": "away", "score": "0", "team": { "id": "331", "displayName": "Brighton & Hove Albion", "abbreviation": "BHA" } }
+        ] }] }
+    ]
+  },
+  "scheduled": {
+    "events": [
+      { "id": "e3", "date": "2026-11-21T15:00Z", "competitions": [{
+        "status": { "type": { "name": "STATUS_SCHEDULED", "completed": false, "shortDetail": "Sat, November 21st at 9:00 AM CST", "detail": "Sat, November 21st at 9:00 AM CST" } },
+        "odds": [{ "provider": { "name": "DraftKings" }, "moneyline": { "home": { "close": { "odds": "+120" } }, "draw": { "close": { "odds": "+250" } }, "away": { "close": { "odds": "+210" } } } }],
+        "competitors": [
+          { "homeAway": "home", "score": "0", "team": { "id": "363", "displayName": "Chelsea", "abbreviation": "CHE" } },
+          { "homeAway": "away", "score": "0", "team": { "id": "364", "displayName": "Liverpool", "abbreviation": "LIV" } }
+        ] }] }
+    ]
+  }
+}
