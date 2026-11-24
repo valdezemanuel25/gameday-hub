@@ -121,10 +121,11 @@
     var an = H && H.analyst ? '<h4>Analyst</h4><table><tr><th></th><th>settled</th><th>units</th><th>vs close</th></tr>' + rows(H.analyst.soccer) + '<tr><td colspan="4" class="sp">Hockey</td></tr>' + rows(H.analyst.nhl) + '</table>' : '';
     var by = H && H.writes ? Object.keys(H.writes.by || {}).sort(function (a, b) { return H.writes.by[b] - H.writes.by[a]; }).slice(0, 2) : [];
     var sv = H && H.writes ? '<h4>Saves today</h4><p>' + H.writes.used + ' of ' + H.writes.limit + (by.length ? ' · most from ' + by.map(function (k) { return esc(k) + ' (' + H.writes.by[k] + ')'; }).join(', ') : '') + (H.writes.saver ? ' · <b>saver mode on</b>' : '') + '</p>' : '';
+    var je = H && H.jobErrors && H.jobErrors.length ? '<h4>Background job errors</h4><ul>' + H.jobErrors.slice(-3).reverse().map(function (x) { return '<li>' + esc(x.job) + ': ' + esc(x.msg) + '</li>'; }).join('') + '</ul>' : '';
     return '<div class="sr-h">' + svg(mood || 'work').replace('<svg ', '<svg width="44" height="46" ') + '<div><b>Sweep\'s report</b><small>' + when + ' · checked ' + (H && H.at ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(H.at)) : 'just now') + '</small></div></div>'
       + (f.length ? '<p class="sr-s issue"><b>Found ' + f.length + ' thing' + (f.length > 1 ? 's' : '') + '</b></p><ul>' + f.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>'
         : '<p class="sr-s"><b>All clear.</b> No stuck games, prices are in, and every Analyst bet has its closing price.</p>')
-      + an + sv
+      + an + sv + je
       + '<p class="sr-n">Tests, the build and code suggestions are in the full report in Notion (Game Day Hub sweep log).</p>'
       + '<button type="button" class="sr-ok">Got it · see you at 10 PM</button>';
   }

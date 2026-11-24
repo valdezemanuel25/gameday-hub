@@ -31,6 +31,7 @@ import { summary, valueOf, stampPut, listKeys, readKeys, loadDays } from './summ
 import { nhlStep, nhlForebet, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nhlOddsRaw, gkCheck, nhlCardClose } from './nhl.js';
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 import { withFixes, keepSaved, foldStep, getDay, listDays } from './fixes.js';
+import { errEntry, answerErrors, saveErrors, readErrors } from './errlog.js';
 export { keepSaved, getDay, listDays, withFixes };
 
 const json = (data, status = 200) =>
@@ -45,7 +46,7 @@ const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
 // The count is saved with ONE extra write at the end, and only when something was written.
 // What a key's write is for, for the per-job breakdown (meta:writes.by): soccer day cards, hockey day cards, the Analyst, and so on.
 // bookkeeping split by record (Nov 2, 2026), so the sweep can see which one costs saves
-const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games' };
+const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games', 'meta:joberrors': 'job errors' };
 const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
 export const writeKind = k => { const s = String(k); return s.startsWith('fix:') ? 'button saves' : s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
   : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('sweep:') ? 'stats files' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
@@ -231,9 +232,10 @@ const signInHealth = env => ({ weakPassword: String(env.ADMIN_TOKEN || '').lengt
 const PUBLIC_FILES = new Set(['/login.html', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.ico']);
 // deep: the nightly sweep's read (token route) also gets the hockey rest-vs-price check, which lists and reads every saved hockey day. The
 // signed-in read (Sweep on every page load) leaves it out, so a page load costs no extra KV list call.
-// signIn: the weak-password warning (signInHealth), shown by Sweep's report (public/sweep.js).
-const health = (env, deep = false) => hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState, nhlRest: deep ? e => nhlTotals(e).then(valueOf).then(t => t && t.rest) : null })
-  .then(h => ({ ...h, signIn: signInHealth(env) }));
+// signIn: the weak-password warning (signInHealth), shown by Sweep's report (public/sweep.js). jobErrors: the background job's last
+// caught errors (src/errlog.js).
+const health = (env, deep = false) => Promise.all([hubHealth(env, { today, addDays, priced: PRICED, readCredits, writesToday, writeLimit: WRITE_LIMIT, saverAt: SAVER_AT, pinnState, nhlRest: deep ? e => nhlTotals(e).then(valueOf).then(t => t && t.rest) : null }), readErrors(env.HUB)])
+  .then(([h, jobErrors]) => ({ ...h, signIn: signInHealth(env), jobErrors }));
 // The Results summaries over every saved day, kept in the edge cache while no finished game they count has changed (src/summaries.js).
 // tally() and nhlTally() are unchanged; they are handed the days the cache check already read. values: hockey days already read.
 const soccerTotals = env => summary(env, { kind: 'tally', prefix: 'day:', build: days => tally(env, days) });
@@ -1539,6 +1541,7 @@ const hub = {
         return { games: { today: (games[l.slug] || [0, 0])[0], tomorrow: (games[l.slug] || [0, 0])[1] }, sm: { tried: o.tried ? new Date(o.tried).toISOString() : null, found: o.sm, total: o.n }, fb: FB_PAGES[l.slug] ? fb : null };
       };
       return json({
+        jobErrors: await readErrors(env.HUB), // the background job's last caught errors (src/errlog.js)
         now: Date.now(), btts: { key: oddsKeys(env).length > 0, credits: await readCredits(0), keys: oddsKeys(env).length, credits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, reserve: num(env.BTTS_RESERVE, BTTS_RESERVE) }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z', by: w && w.d === d ? w.by || {} : {}, saverAt: Math.round(SAVER_AT * WRITE_LIMIT) },
         leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
       });
@@ -1575,23 +1578,27 @@ const hub = {
 
   async scheduled(event, env0, ctx) {
     const c = counted(env0), env = withFixes(c.env); // the cron reads days with the buttons' patches laid on, and its saves carry them in
+    // errs: the errors this run caught and carried on past, saved in one write at the end (src/errlog.js)
+    const errs = [], note = (job, e) => errs.push(errEntry(job, e)), noteAnswer = (job, r) => errs.push(...answerErrors(job, r));
     ctx.waitUntil((async () => {
       try { env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit
       // (a heavy soccer job) used to drop them. The rotating job runs after.
-      try { await nhlLineupStep(env); } catch (e) { /* hockey lineup read: retried in 5 minutes */ }
-      try { await oddsStep(env); } catch (e) { /* prices are a bonus; never allowed to break the background job */ }
+      try { noteAnswer('nhl lineup', await nhlLineupStep(env)); } catch (e) { note('nhl lineup', e); /* retried in 5 minutes */ }
+      try { noteAnswer('odds', await oddsStep(env)); } catch (e) { note('odds', e); /* prices are a bonus; never allowed to break the background job */ }
       // The sweep's stats file, when one is due (three runs a night, src/sweepdata.js), takes this run's turn in place of the rotating
       // job, so the run stays inside the free plan's CPU limit. Nothing due, not set up, or the file is already saved (nothing was built): the
       // rotating job runs as always.
       // Which job and which stats file are this run's turn comes from the time the run was scheduled, so steps that ran long before
       // (slow feeds) cannot move the run into the next 5-minute turn. The jobs themselves compare kickoffs with the time now.
       const at = Number.isFinite(event && event.scheduledTime) ? event.scheduledTime : Date.now();
-      let sw = null; try { sw = await sweepData(env, new Date(at)); } catch (e) { /* never allowed to break the background job */ }
-      try { if (!(sw && sw.built)) await runSlot(env, new Date(), Math.floor(at / 300000) % 4); }
+      let sw = null; try { sw = await sweepData(env, new Date(at)); } catch (e) { note('stats files', e); /* never allowed to break the background job */ }
+      try { if (!(sw && sw.built)) noteAnswer('slot', await runSlot(env, new Date(), Math.floor(at / 300000) % 4)); }
+      catch (e) { note('slot', e); throw e; }
       finally {
         // Alerts for games about to start. Never allowed to break the background job.
-        try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { /* retried in 5 minutes */ }
+        try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { note('alerts', e); /* retried in 5 minutes */ }
+        try { await saveErrors(env.HUB, errs); } catch (e) { /* the log is bookkeeping */ }
         await c.flush();
       }
     })());

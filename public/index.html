@@ -2118,6 +2118,7 @@ function statusView() {
     ${byW.length ? `<div class="small" style="margin:0 18px 6px">${byW.map(([k, v]) => `${esc(k)} <b>${v}</b>`).join(' · ')}</div>` : ''}
     <div class="pair" style="padding-top:0"><div class="meter ${cls}"><i style="width:${pct}%"></i></div>${pct >= 90 ? '<div class="small" style="color:var(--miss)">Almost out. Avoid Analyze this day until the reset.</div>' : pct >= 70 ? '<div class="small" style="color:var(--amber)">Getting high. Use Analyze leftover games instead of a full run.</div>' : ''}</div>
     ${bad.length ? `<div class="sec" style="padding-top:16px">Needs attention<small>${bad.length} league${bad.length === 1 ? '' : 's'} with a problem the last time they ran.</small></div><div class="pair" style="padding-top:0">${bad.map(row).join('')}</div>` : `<div class="banner" style="margin-top:14px">No league problems on record.</div>`}
+    ${jobErrorsBox()}
     ${pushBox()}
     ${sourceBoard()}
     ${shotsBlock()}
@@ -2126,6 +2127,13 @@ function statusView() {
     <div class="sec" style="padding-top:16px">Back up your history<small>Downloads every saved day with predictions, results and SportsMole picks, plus the carried-over totals.</small></div>
     <div class="pair" style="padding-top:0"><div class="small" style="margin:0 0 4px;${backupAge() == null || backupAge() >= 7 ? 'color:var(--amber)' : ''}">${backupAge() == null ? 'No backup made from this device yet.' : backupAge() === 0 ? 'Last backup from this device: today.' : `Last backup from this device: ${backupAge()} day${backupAge() === 1 ? '' : 's'} ago.`}</div><button type="button" class="xbtn" id="btn-export">Export data</button></div>
     ${asgSection()}`;
+}
+// The background job's last caught errors (src/errlog.js), newest first.
+function jobErrorsBox() {
+  const list = ((stat && stat.jobErrors) || []).slice().reverse();
+  if (!list.length) return '';
+  return `<div class="sec" style="padding-top:16px">Background job errors<small>The last ${list.length} error${list.length === 1 ? '' : 's'} the background job caught and carried on past. The same error is noted at most once an hour.</small></div>
+    <div class="pair" style="padding-top:0">${list.map(x => `<div class="small" style="margin:0 0 6px"><b>${esc(x.job)}</b> · ${x.at ? ago(x.at) : ''}<br>${esc(x.msg)}</div>`).join('')}</div>`;
 }
 // Paste Forebet's league table (select the table on the page, copy, paste here). Only games that have not kicked off are saved.
 function forebetReads() {
