@@ -24,7 +24,7 @@ import { same as sameName } from './names.js';
 import { getVapid, getPush, addSub, removeSub, sendAll, pushStep } from './push.js';
 import { homeSummary } from './home.js';
 import { hubHealth } from './health.js';
-import { sweepStep } from './sweepdata.js';
+import { sweepStep, partDue } from './sweepdata.js';
 import { buildTrends } from './trends.js';
 import { buildSoccerTrends } from './trendssoccer.js';
 import { summary, valueOf, stampPut, listKeys, readKeys, loadDays } from './summaries.js';
@@ -32,7 +32,7 @@ import { nhlStep, nhlForebet, nhlTally, nhlStatus, nhlSetLine, nhlLineupStep, nh
 import { getListing, matchLink, fetchText, parseWeSay, smGrade } from './sportsmole.js';
 import { withFixes, keepSaved, foldStep, getDay, listDays } from './fixes.js';
 import { errEntry, answerErrors, saveErrors, readErrors } from './errlog.js';
-import { WRITE_LIMIT, counted, writeKind, writesToday, pendingWrites, coalesce } from './store.js';
+import { WRITE_LIMIT, counted, writeKind, writesToday, pendingWrites, coalesce, budget, ask } from './store.js';
 export { keepSaved, getDay, listDays, withFixes };
 
 const json = (data, status = 200) =>
@@ -727,6 +727,12 @@ export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
 // several leagues kicking off together and the window is only 10 minutes (two runs), so one league a run left the later leagues in the
 // list (Championship, League One...) without their closing read.
 export const LINEUP_BURST = 3;
+// The most outside calls one league's price read can make (refreshOdds): ESPN's two scoreboard days, Pinnacle's list, and per Odds API
+// key the event list, a both-score read per open game, the Analyst's price shopping and its sharp-book look.
+export const oddsCost = (env, games) => 2 + (env.PINNODDS_KEY ? 1 : 0) + oddsKeys(env).length * (games + 3);
+// Calls the price reads leave for the steps after them in a cron run: the rotating job (SLOT_COST: its heaviest turns are a results sync,
+// 13 scoreboard days and the standings, and the hockey job, 3 scoreboards, up to 6 game summaries and 8 goalie game logs) and a few alerts.
+export const SLOT_COST = 18, ODDS_KEEP = SLOT_COST + 4, SWEEP_COST = 2;
 export async function oddsStep(env, now = new Date(), cache = typeof caches !== 'undefined' ? caches.default : null) {
   const t = localDate(now.toISOString()), urgent = [], normal = [];
   for (const date of [t, addDays(t, 1)]) {
@@ -741,13 +747,16 @@ export async function oddsStep(env, now = new Date(), cache = typeof caches !== 
       const ttl = Math.max(300, Math.min(mins <= 180 ? 3600 : 21600, Math.round((mins - LINEUP_READ) * 60)));
       const ck = new Request(`https://hub.local/odds/${date}/${lg.slug}`);
       try { if (cache && await cache.match(ck) && !need) continue; } catch (e) { /* no cache: just look */ }
-      (need ? urgent : normal).push({ lg, date, ttl, ck, first });
+      (need ? urgent : normal).push({ lg, date, ttl, ck, first, n: live.length });
     }
   }
   const pick = urgent.length ? urgent.sort((a, b) => a.first - b.first).slice(0, LINEUP_BURST) : env.SAVER ? [] : normal.slice(0, 1); // saver mode: closing reads only
   if (!pick.length) return null;
   const outs = [], batch = coalesce(d => getDay(env, d), (d, day) => putDay(env, d, day)); // each day saved once, after every league on it was read
   for (const p of pick) {
+    // the run's outside calls (src/store.js budget): a league that would leave too few for the rotating job and the alerts waits for the
+    // next run (not marked as read, so it is first in line then)
+    if (!ask(env, oddsCost(env, p.n), ODDS_KEEP)) { outs.push({ league: p.lg.slug, date: p.date, waiting: 'budget' }); continue; }
     try { if (cache) await cache.put(p.ck, new Response('1', { headers: { 'cache-control': `max-age=${p.ttl}` } })); } catch (e) { /* ignore */ }
     // one league's failure (a feed) does not cost the others their read
     try { outs.push({ league: p.lg.slug, date: p.date, ...(await refreshOdds(env, p.date, p.lg.slug, now, fetch, batch)) }); }
@@ -858,7 +867,9 @@ export async function leadStep(env, now = new Date(), days = {}, cache = typeof 
       const lg = leagueBySlug(slug), cards = want.filter(c => c.league === slug); if (!lg) continue;
       if (now.getTime() < Math.max(...cards.map(c => new Date(c.kickoff).getTime())) + gradeDelayMs(env) + HOUR) continue; // graded just now
       const ck = new Request(`https://hub.local/lead/${date}/${slug}`);
-      try { if (cache && await cache.match(ck)) continue; if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': 'max-age=3600' } })); } catch (e) { /* no cache: try */ }
+      try { if (cache && await cache.match(ck)) continue; } catch (e) { /* no cache: try */ }
+      if (!ask(env, 2)) return { job: 'lead', league: slug, date, waiting: 'budget' }; // ESPN's two scoreboard days; out of calls: not a try
+      try { if (cache) await cache.put(ck, new Response('1', { headers: { 'cache-control': 'max-age=3600' } })); } catch (e) { /* no cache: try */ }
       const dbg = [], fx = await fixturesForLeague(lg, date, dbg);
       if (!fx.length && dbg.length) return { job: 'lead', league: slug, date, error: dbg[0] }; // ESPN did not answer: not a try
       const byId = new Map(fx.filter(f => f.done).map(f => [f.id, f]));
@@ -1524,6 +1535,7 @@ const hub = {
 
   async scheduled(event, env0, ctx) {
     const c = counted(env0), env = withFixes(c.env); // the cron reads days with the buttons' patches laid on, and its saves carry them in
+    env.BUDGET = budget(); // the run's outside calls (src/store.js): each step asks before it fetches
     // errs: the errors this run caught and carried on past, saved in one write at the end (src/errlog.js)
     const errs = [], note = (job, e) => errs.push(errEntry(job, e)), noteAnswer = (job, r) => errs.push(...answerErrors(job, r));
     ctx.waitUntil((async () => {
@@ -1538,10 +1550,15 @@ const hub = {
       // Which job and which stats file are this run's turn comes from the time the run was scheduled, so steps that ran long before
       // (slow feeds) cannot move the run into the next 5-minute turn. The jobs themselves compare kickoffs with the time now.
       const at = Number.isFinite(event && event.scheduledTime) ? event.scheduledTime : Date.now();
-      let sw = null; try { sw = await sweepData(env, new Date(at)); } catch (e) { note('stats files', e); /* never allowed to break the background job */ }
-      try { if (!(sw && sw.built)) noteAnswer('slot', await runSlot(env, new Date(), Math.floor(at / 300000) % 4)); }
+      // A stats file due costs two calls to GitHub (src/sweepdata.js): with too few left it waits for the next run of its window.
+      const sweepDue = env.SWEEP_GH_TOKEN && env.SWEEP_REPO && partDue(new Date(at));
+      let sw = null; try { if (!sweepDue || ask(env, SWEEP_COST)) sw = await sweepData(env, new Date(at)); } catch (e) { note('stats files', e); /* never allowed to break the background job */ }
+      // The rotating job runs on SLOT_COST calls set aside for it; the steps in it that fetch per item (the early-payout lead) ask that share.
+      const run = env.BUDGET;
+      try { if (!(sw && sw.built)) { env.BUDGET = run.child(SLOT_COST); noteAnswer('slot', await runSlot(env, new Date(), Math.floor(at / 300000) % 4)); } }
       catch (e) { note('slot', e); throw e; }
       finally {
+        env.BUDGET = run; // the alerts use what is left
         // Alerts for games about to start. Never allowed to break the background job.
         try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { note('alerts', e); /* retried in 5 minutes */ }
         try { await saveErrors(env.HUB, errs); } catch (e) { /* the log is bookkeeping */ }

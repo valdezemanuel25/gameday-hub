@@ -63,6 +63,24 @@ export async function writesToday(hub, now = new Date()) {
   return { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), by: w && w.d === d ? w.by || {} : {}, yesterday: y };
 }
 
+// Outside calls (fetch) one cron run may make: the free plan allows 50 subrequests a run, and RUN_BUDGET leaves a margin. The steps
+// ask before they fetch, with an upper estimate of what they are about to use:
+//   take(n, keep): n calls, granted only when `keep` calls would still be left for the steps after (false: the step stops cleanly);
+//   spend(n): calls already made, taken off what is left;
+//   child(n): up to n calls set aside for one step that asks its own budget (the rotating job), taken off now.
+// A run with no budget (a button, a test that sets none) is not limited: ask() then always says yes.
+export const RUN_BUDGET = 45;
+export function budget(n = RUN_BUDGET) {
+  let left = n;
+  return {
+    take(k = 1, keep = 0) { if (left - k < keep) return false; left -= k; return true; },
+    spend(k) { left = Math.max(0, left - k); },
+    child(k) { const g = Math.max(0, Math.min(k, left)); left -= g; return budget(g); },
+    get left() { return left; },
+  };
+}
+export const ask = (env, k, keep = 0) => !env.BUDGET || env.BUDGET.take(k, keep);
+
 // Saves of one record held back and made once (the lineup burst saves each day once, however many leagues it read on it).
 // read(key) is asked once per key, and every get() of that key hands back the same object, so each job changes the copy the next one
 // sees. mark(key) notes it changed; flush() writes each marked record once, in the order first marked, and answers

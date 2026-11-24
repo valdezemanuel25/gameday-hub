@@ -149,6 +149,7 @@ export async function pushStep(env, now, dates, fetcher = fetch) {
     const live = d.subs.filter(s => !gone.has(s.endpoint));
     if (!live.length) { done.push(a); continue; }
     if (calls > 0 && calls + live.length > PUSH_CAP) break; // the first alert always goes, so more devices than the cap cannot stall every alert
+    if (env.BUDGET && !env.BUDGET.take(live.length)) break; // the run's outside calls (src/store.js budget): the rest wait for the next run
     calls += live.length;
     const r = await sendTo(live, v, { title: a.title, body: a.body, tag: a.tag, url: a.url }, now, fetcher);
     for (const e of r.gone) gone.add(e);

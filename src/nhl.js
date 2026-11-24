@@ -454,15 +454,18 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
     const day = await getDay(env, date, 'nhl'); if (!day) continue;
     const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && !c.void && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
     if (!due.length) continue;
+    if (env.BUDGET && !env.BUDGET.take(1)) break; // the run's outside calls (src/store.js budget): retried in 5 minutes
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
-    let dirty = false; const st = { S5: null, cache: {}, budget: { n: 8 } };
-    for (const c of due) {
-      const e = evs.find(x => x.id === c.id); if (!e || e.done) continue;
-      if (setPrice(c, e.px, now)) { dirty = true; out.push(c.id); }
-      // The starting goalie, as the team names him: v5 is re-made from it (v2 and v4 do not read it).
-      if (await updateStarters(env, c, e, date, fetchFn, st)) { dirty = true; if (!out.includes(c.id)) out.push(c.id); }
-      st.SH = st.SH || await getShots(env); if (setSg(st.SH, c, now, true)) dirty = true; // the read with the goalies as named at the lineup read
-    }
+    let dirty = false; const n0 = env.BUDGET ? Math.min(8, env.BUDGET.left) : 8, st = { S5: null, cache: {}, budget: { n: n0 } }; // goalie game logs read
+    try {
+      for (const c of due) {
+        const e = evs.find(x => x.id === c.id); if (!e || e.done) continue;
+        if (setPrice(c, e.px, now)) { dirty = true; out.push(c.id); }
+        // The starting goalie, as the team names him: v5 is re-made from it (v2 and v4 do not read it).
+        if (await updateStarters(env, c, e, date, fetchFn, st)) { dirty = true; if (!out.includes(c.id)) out.push(c.id); }
+        st.SH = st.SH || await getShots(env); if (setSg(st.SH, c, now, true)) dirty = true; // the read with the goalies as named at the lineup read
+      }
+    } finally { if (env.BUDGET) env.BUDGET.spend(n0 - st.budget.n); } // the game logs read
     if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); }
   }
   return out.length ? { job: 'nhl-lineup', read: out } : null;
