@@ -582,9 +582,12 @@ export async function pinnCheck(env, slug, f = fetch, now = new Date()) {
 // several leagues kicking off together and the window is only 10 minutes (two runs), so one league a run left the later leagues in the
 // list (Championship, League One...) without their closing read.
 export const LINEUP_BURST = 3;
-// The most outside calls one league's price read can make (refreshOdds): ESPN's two scoreboard days, Pinnacle's list, and per Odds API
-// key the event list, a both-score read per open game, the Analyst's price shopping and its sharp-book look.
-export const oddsCost = (env, games) => 2 + (env.PINNODDS_KEY ? 1 : 0) + oddsKeys(env).length * (games + 3);
+// The most outside calls one league's price read can make (refreshOdds): ESPN's two scoreboard days, Pinnacle's list, and on ONE Odds API
+// key the event list, a both-score read per open game, the Analyst's price shopping and its sharp-book look. The keys are not all used:
+// viaOddsKey runs each of those three Odds API calls on the best key and moves to the next only when the first call answers 401 / 429
+// (src/btts.js stops there), so each extra key adds at most one call to each of the three. Counting every key in full made a league of
+// 8+ open games with both keys set cost more than the price reads may use, so the cron never read it (sweep, Nov 25, 2026).
+export const oddsCost = (env, games) => { const k = oddsKeys(env).length; return 2 + (env.PINNODDS_KEY ? 1 : 0) + (k ? games + 3 + 3 * (k - 1) : 0); };
 // Calls the price reads leave for the steps after them in a cron run: the rotating job (SLOT_COST: its heaviest turns are a results sync,
 // 13 scoreboard days and the standings, and the hockey job, 3 scoreboards, up to 6 game summaries and 8 goalie game logs) and a few alerts.
 export const SLOT_COST = 18, ODDS_KEEP = SLOT_COST + 4, SWEEP_COST = 2;

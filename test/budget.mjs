@@ -19,13 +19,14 @@ const kv = new Map(), HUB = {
   put: async (k, v) => { kv.set(k, v); }, delete: async k => { kv.delete(k); },
   list: async ({ prefix } = {}) => ({ keys: [...kv.keys()].filter(k => !prefix || k.startsWith(prefix)).map(name => ({ name })), list_complete: true }),
 };
-const games = l => Array.from({ length: 6 }, (_, i) => `${l}-${i}`);
+const SIZE = {}; // games per league; 6 unless a check below sets more
+const games = l => Array.from({ length: SIZE[l] || 6 }, (_, i) => `${l}-${i}`);
 kv.set(`day:${DATE}`, JSON.stringify({ date: DATE, analyzed: {}, cards: LEAGUES.flatMap(l => games(l).map(id => ({ id, league: l, leagueKey: l, kickoff: new Date(KO).toISOString(), home: 'H ' + id, away: 'A ' + id, ko: '9:00 AM',
   v2: { pick: 'H', p: [70, 18, 12], over: 70, btts: 60 }, v4: { pick: 'H', p: [68, 20, 12], over: 68, btts: 62 }, fb: { p: [66, 20, 14], over: 66, btts: 61 }, sm: { h: 2, a: 1, text: '2–1' } }))) }));
 const phone = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']), pub = b64u(await crypto.subtle.exportKey('raw', phone.publicKey));
 kv.set('push', JSON.stringify({ subs: Array.from({ length: 5 }, (_, i) => ({ endpoint: `https://push.example.com/d${i}`, keys: { p256dh: pub, auth: b64u(crypto.getRandomValues(new Uint8Array(16))) } })), sent: {} }));
 let calls = 0;
-const espn = u => { const slug = (u.match(/soccer\/([a-z.0-9]+)\/scoreboard/) || [])[1]; return { events: (LEAGUES.includes(slug) ? games(slug) : []).map(id => ({ id, date: new Date(KO).toISOString(), competitions: [{ status: { type: { completed: false } },
+const espn = u => { const slug = (u.match(/soccer\/([a-z.0-9]+)\/scoreboard/) || [])[1]; return { events: (LEAGUES.includes(slug) || SIZE[slug] ? games(slug) : []).map(id => ({ id, date: new Date(KO).toISOString(), competitions: [{ status: { type: { completed: false } },
   odds: [{ provider: { name: 'DraftKings' }, moneyline: { home: { close: { odds: '-150' } }, draw: { close: { odds: '+260' } }, away: { close: { odds: '+400' } } } }],
   competitors: [{ homeAway: 'home', team: { id: 'h' + id, displayName: 'H ' + id } }, { homeAway: 'away', team: { id: 'a' + id, displayName: 'A ' + id } }] }] })) }; };
 globalThis.fetch = async (u, init) => {
@@ -45,6 +46,20 @@ const day = JSON.parse(kv.get(`day:${DATE}`)), read = LEAGUES.filter(l => day.ca
 ok(`a busy run stays within the budget (${calls} outside calls of ${RUN_BUDGET}, the free plan allows 50)`, calls <= RUN_BUDGET, calls);
 ok('...and still takes lineup reads (soonest first), leaving the rest for the next run', read.length >= 1 && read.length < LEAGUES.length, JSON.stringify(read));
 ok('the price reads never eat into what the rotating job and the alerts need', oddsCost(env, 6) === 2 + 1 + 9 && ODDS_KEEP > SLOT_COST);
+
+// ---- both price keys and a big league (sweep, Nov 25, 2026) ----
+// Only one Odds API key is used at a time (the next only after a 401 / 429 on the first call), so a second key adds at most 3 calls, not a
+// whole second read. Before, a league with 8+ open games and both keys set cost more than the price reads may use and was never read.
+{ const env2 = { ...env, ODDS_API_KEY_2: 'k2' };
+  ok('a second key adds at most one call to each Odds API call, not a second full read', oddsCost(env2, 9) === 2 + 1 + 12 + 3 && oddsCost(env2, 9) <= RUN_BUDGET - ODDS_KEEP);
+  ok('no Odds API key: ESPN and Pinnacle only', oddsCost({ PINNODDS_KEY: 'p' }, 9) === 3);
+  const D2 = '2026-11-29', K2 = Date.parse('2026-11-29T20:00:00Z'), N2 = K2 - 25 * 60000; SIZE['ita.1'] = 9;
+  kv.set(`day:${D2}`, JSON.stringify({ date: D2, analyzed: {}, cards: games('ita.1').map(id => ({ id, league: 'ita.1', leagueKey: 'ita.1', kickoff: new Date(K2).toISOString(), home: 'H ' + id, away: 'A ' + id, ko: '2:00 PM',
+    v2: { pick: 'H', p: [70, 18, 12], over: 70, btts: 60 }, v4: { pick: 'H', p: [68, 20, 12], over: 68, btts: 62 } })) }));
+  const before = calls, b = budget();
+  const r = await oddsStep({ ...env2, BUDGET: b }, new Date(N2), { match: async () => undefined, put: async () => {} });
+  ok('both keys, 9 open games in the lineup window: the league is read, not left waiting', r && r.league === 'ita.1' && !r.waiting && r.games === 9, JSON.stringify(r));
+  ok('...within its estimate', calls - before <= oddsCost(env2, 9), `${calls - before} calls`); }
 
 // ---- each step stops cleanly when it is out ----
 { const e = { HUB, BUDGET: budget(0) }; const before = calls;
