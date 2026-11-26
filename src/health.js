@@ -7,23 +7,23 @@
 import { getAnalyst, summary, RULES, NHL_RULES, SINCE, NHL_SINCE, BENCH, setOf, tiers, tierOf } from './analyst.js';
 import { getDay } from './fixes.js';
 import { sweepStatus } from './sweepdata.js';
+import { HOUR, koOf, tracked, noResult, noSoccerPrice } from './gaps.js';
 
-const HOUR = 3600000;
 const lbl = c => `${c.away && c.home ? `${c.home} v ${c.away}` : c.id} (${c.league || 'nhl'}, ${c.kickoff})`;
 
-// A soccer card is priced only with a home / draw / away price from ESPN: a price record holding just Pinnacle's or the both-score
-// price does not count (a bare !c.odds check would miss such a game).
-export const noSoccerPrice = c => !c.odds || ![c.odds.h, c.odds.d, c.odds.a].every(Number.isFinite);
+// The tests for what a card is missing live in src/gaps.js, shared with the stats files (src/sweepdata.js) and the Data Keeper
+// (src/keeper.js), so all three agree.
+export { noSoccerPrice } from './gaps.js';
 // cards: { date: [cards] }; graceH: hours after kickoff a game should have a result by. standIn: games priced from another book than
 // DraftKings (c.odds.src, src/data.js parseOdds), for a note: the board shows them, the Analyst sits them out.
 export function gameChecks(days, now, { graceH, priced = null, needPrice = noSoccerPrice }) {
   const ungraded = [], unpriced = [], standIn = [];
   for (const [date, cards] of Object.entries(days)) for (const c of cards || []) {
     if (!c || c.skipped || c.void) continue; // void: postponed / canceled / abandoned, or no 90-minute score (closed on purpose, not stuck)
-    const ko = new Date(c.kickoff).getTime(); if (!Number.isFinite(ko)) continue;
-    if (!c.final && now - ko > graceH * HOUR) ungraded.push({ date, game: lbl(c), hoursPast: Math.round((now - ko) / HOUR) });
+    const ko = koOf(c); if (!Number.isFinite(ko)) continue;
+    if (noResult(c, now, graceH)) ungraded.push({ date, game: lbl(c), hoursPast: Math.round((now - ko) / HOUR) });
     // a game with a model pick, starting in the next 1 to 24 hours, in a league that is priced, with no price yet
-    if (!c.final && ko - now > HOUR && ko - now < 24 * HOUR && (c.v2 || c.v4) && (!priced || priced.has(c.league)) && needPrice(c)) unpriced.push({ date, game: lbl(c), hoursToGo: Math.round((ko - now) / HOUR) });
+    if (!c.final && ko - now > HOUR && ko - now < 24 * HOUR && tracked(c) && (!priced || priced.has(c.league)) && needPrice(c)) unpriced.push({ date, game: lbl(c), hoursToGo: Math.round((ko - now) / HOUR) });
     if (!c.final && ko > now && c.odds && c.odds.src) standIn.push({ date, game: lbl(c), book: c.odds.src });
   }
   return { ungraded, unpriced, standIn };

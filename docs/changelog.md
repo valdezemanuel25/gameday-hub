@@ -438,3 +438,11 @@ notes in the pages under public/.
   // Empty pieces are skipped (Nov 21, 2026): a slug with a double or trailing hyphen ("sheff-utd--vs-...") threw here, which stopped the
   // whole league's SportsMole read before it saved, so even the previews it had found were lost.
   ```
+
+## src/keeper.js
+
+- Nov 26, 2026: Data Keeper step 1 of 4 (docs/data-keeper-plan.md), the checker. `missing(days, now, { bets })` lists what each game in
+  the priced leagues (first divisions, the two cups with a model) and the NHL lacks, most urgent first: lineup-window reads, then results
+  with none at kickoff + 6 h (back to today - 3), then prices, both-score prices, Forebet and Analyst bets; La Liga 2 and 2. Bundesliga
+  last. Reads only what it is handed; nothing calls it yet. The per-card "missing" tests moved to src/gaps.js and are now shared by
+  src/health.js gameChecks, src/sweepdata.js dayGaps and the Keeper (same answers as before). Tests: test/keeper.mjs.

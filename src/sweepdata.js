@@ -8,9 +8,9 @@
 // One file per cron run (00:10, 00:15, 00:20 Central), then one more try at each (00:25, 00:30, 00:35) that does nothing when the
 // first try worked. The Hub only reads here: no KV writes, no Odds API credits. Without the secret or the var this does nothing.
 // The token can only reach the data repo, never the Hub's own code.
-import { noSoccerPrice } from './health.js';
+import { HOUR, koOf, tracked, closed, noResult, noSoccerPrice, noForebet, noHockeyPrice, noGoalie, noLine } from './gaps.js';
 
-const HOUR = 3600000, TZ = 'America/Chicago';
+const TZ = 'America/Chicago';
 export const PARTS = ['soccer', 'nhl', 'health'];
 export const START_MIN = 10, END_MIN = 40; // the window, minutes after midnight Central
 export const FRESH_MIN = 30;               // a file saved this recently is left alone
@@ -30,15 +30,15 @@ export function partDue(now = new Date()) {
 export function dayGaps(days, now, { sport = 'soccer', priced = null, graceH = sport === 'nhl' ? 5 : 6 } = {}) {
   const out = [], stuck = [];
   for (const date of Object.keys(days || {}).sort()) {
-    const cards = (days[date] || []).filter(c => c && !c.skipped && (c.v2 || c.v4));
+    const cards = (days[date] || []).filter(tracked);
     const row = { date, cards: cards.length, noForebet: 0, pricedCards: 0, noPrice: 0, ungraded: 0 };
     if (sport === 'nhl') { row.noGoalie = 0; row.noLine = 0; }
     for (const c of cards) {
-      if (!c.fb) row.noForebet++;
-      if (sport === 'nhl') { row.pricedCards++; if (!c.px) row.noPrice++; if (!c.gk) row.noGoalie++; if (!c.ln) row.noLine++; }
+      if (noForebet(c)) row.noForebet++;
+      if (sport === 'nhl') { row.pricedCards++; if (noHockeyPrice(c)) row.noPrice++; if (noGoalie(c)) row.noGoalie++; if (noLine(c)) row.noLine++; }
       else if (!priced || priced.has(c.league)) { row.pricedCards++; if (noSoccerPrice(c)) row.noPrice++; }
-      const ko = new Date(c.kickoff).getTime(); if (!Number.isFinite(ko) || c.final || c.void) continue; // void: closed on purpose (postponed...), not stuck
-      if (now - ko > graceH * HOUR) row.ungraded++;
+      const ko = koOf(c); if (!Number.isFinite(ko) || closed(c)) continue; // void: closed on purpose (postponed...), not stuck
+      if (noResult(c, now, graceH)) row.ungraded++;
       if (now - ko >= STUCK_H * HOUR) stuck.push({ date, game: `${c.home} v ${c.away}`, league: c.league || 'nhl', hoursPast: Math.round((now - ko) / HOUR) });
     }
     out.push(row);
