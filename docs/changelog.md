@@ -474,3 +474,7 @@ notes in the pages under public/.
   (results 6, hockey results 9). Saver-mode waits are not saved. The health report's 24-hour counts come from hourly counts and include
   repairs run and the KV writes the Keeper caused. The alerts step reuses the days the Keeper read. The hockey lineup read answers
   whenever it read ESPN, so the Keeper does not read it again in the same run.
+- Nov 26, 2026: Data Keeper trial tasks (no code). Night 1 moved to Sun Nov 29 01:13 Central and night 2 to Thu Dec 3 01:13 Central, after
+  the Hub saves its stats files (00:10-00:40 Central), so each reads the day it checks. All three Keeper tasks take their baseline from the
+  stats repo's history (no Notion needed) and read the audit fix's fields (`last24h.repairs` and `writes`, give-ups per repair). The
+  nightly sweep's Data check now lists the Keeper's 24-hour counts and give-ups and flags Keeper writes above 60.

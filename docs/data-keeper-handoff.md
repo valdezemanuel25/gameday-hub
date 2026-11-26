@@ -60,10 +60,9 @@ Forebet: a 403 / 429 recorded by Forebet's own job (`meta:fb` per league and tab
    pre-Keeper baseline from `git show <sha>:health.json` (no Notion needed; they write the Notion note only if a Notion tool happens to
    be there, and always put it in their summary), name `4b88273`, compare `keeper.last24h.writes` with the 20-60 target, drop the
    100-entry caveat, and read give-ups as per repair (`game` "X and N more", `games` = count).
-3. **Nightly sweep (audit #12), only with Manny's OK:** the "Game Day Hub nightly sweep" task (`trig_0186JDUet3WDCYod2aH2Eyar`, Wed
-   and Sat 22:30 Central) does not read `health.keeper`. The plan says the sweep picks up the give-ups. Add one line to its step 7
-   (Data check): list `health.keeper.gaveUp` (game, check, why) and `last24h`, and flag `last24h.writes` above 60. Its prompt is long
-   and tuned: change only that, and show Manny the exact diff first.
+3. ~~Nightly sweep (audit #12)~~: done Nov 26 with Manny's OK. Step 7 (Data check) of `trig_0186JDUet3WDCYod2aH2Eyar` has one new
+   bullet: "Keeper 24 h: filled F, still missing M, gave up G, repairs R, Keeper writes W" from `health.keeper.last24h`, the give-ups
+   (game, check, why) grouped by reason, and `last24h.writes` above 60 flagged as a Data problem. Nothing else in its prompt changed.
 4. **After the trial (step 4 of the plan):** night 2 sends up to 3 tuning suggestions naming constants in `src/keeper.js`
    (`BACKOFF_MIN`, `GIVE_UP`, `BLOCK_H`, `FB_OK_H`, `ALERTS_KEEP`, `TIER`, `costOf`, `RESULT_H`, `ALERT_PRICE_MIN`, `LOG_MAX`). Build
    only the ones Manny picks, the same way: branch, tests, his "push".
@@ -85,7 +84,7 @@ Forebet: a 403 / 429 recorded by Forebet's own job (`meta:fb` per league and tab
 | Data Keeper check: Thursday Nov 26 slate | `trig_01J2h69D2tFfBWifUFvwwq23` | Fri Nov 27 01:13 | one-time; push notification; ~21 games expected |
 | Data Keeper trial, night 1 of 2 | `trig_01QdmXfA5omwoGuhTdgAegmT` | Sun Nov 29 01:13 (checks Sat Nov 28) | one-time |
 | Data Keeper trial, night 2 of 2 | `trig_01DLDy7sKn2Dx8zGrp3Z4PHp` | Thu Dec 3 01:13 (checks Wed Dec 2) | one-time; tuning suggestions |
-| Game Day Hub nightly sweep | `trig_0186JDUet3WDCYod2aH2Eyar` | Wed, Sat 22:30 | read-only; not edited |
+| Game Day Hub nightly sweep | `trig_0186JDUet3WDCYod2aH2Eyar` | Wed, Sat 22:30 | read-only; reads `health.keeper` (step 7) since Nov 26 |
 
 All three Keeper tasks are read-only (no code, KV, or task changes) and report by push notification and their session summary.
 
