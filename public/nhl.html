@@ -857,6 +857,19 @@ function mbetsView() {
     <div class="mbsec">Recent model bets</div><div class="mbx">${recent}</div>
     <div class="note" style="margin-top:10px"><b>Proven edge</b>: beats chance with the whole ± range above it and 30+ picks. <b>Promising</b>: beats chance but is not certain yet. <b>No edge</b>: at or below chance. <b>Too early</b>: under 5 picks. For strength and agreement rows, chance is what the same mix of bets would score on average. ± is the 95% margin.</div>` : ''}</div>`;
 }
+// The Data Keeper (src/keeper.js): the background job's repairs of missing hockey prices, goalies, lines, Forebet, results and Analyst bets.
+// The last 10 hockey actions, newest first, and every game it gave up on (the nightly check looks at those).
+const KEEP_CHECK = { 'nhl-lineup': 'lineup read (price, goalies, line)', 'nhl-forebet': 'Forebet', result: 'result', 'bet-settle': 'Analyst bet to settle', 'bet-close': 'Analyst bet close' };
+const kAgo = iso => { const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+function keeperBox() {
+  const k = status && status.keeper; if (!k) return '';
+  const col = r => /^gave up/.test(r) ? '#ff6b7a' : r === 'filled' ? '#c8ff2e' : '#e0a040';
+  const line = x => `<div class="note"><b>${esc(x.game || '')}</b> · ${esc(KEEP_CHECK[x.check] || x.check)}${x.at ? ` · ${kAgo(x.at)}` : ''}<br><span style="color:${col(x.result || 'gave up')}">${esc(x.result || `gave up: ${x.why || ''}`)}</span></div>`;
+  const last = k.last || [], gave = k.gaveUp || [];
+  return `<div class="kv" id="keeper" style="margin-top:12px"><span>Data Keeper</span><span>${last.length ? `${last.length} recent` : 'nothing yet'}</span></div>
+  <div class="note">The background job re-runs the read for a game missing its price, goalies, line, Forebet, result or Analyst settle, one a run, and notes what it did. After three failed tries it gives up and leaves it to the nightly check.${k.forebetBlockedUntil ? ' Forebet repairs are paused for now (Forebet refused the last read).' : ''}</div>
+  ${last.map(line).join('')}${gave.length ? `<div class="note"><b>Gave up on ${gave.length} game${gave.length === 1 ? '' : 's'}</b></div>${gave.map(line).join('')}` : ''}`;
+}
 function statusView() {
   if (!status) return `<div class="empty">Loading…</div>`;
   const fb = status.forebet, miss = status.fbMissing || [];
@@ -871,6 +884,7 @@ function statusView() {
   <div class="note" id="fbst">${S.fbMsg ? esc(S.fbMsg) : 'Reads Forebet\'s NHL page now for the games of today and tomorrow that have not started and have no Forebet numbers yet. Nothing else runs: no prices, goalies or grading.'}</div>
   <div class="note">Backtest on 2,428 games from 3 seasons: winner picks hit about 55% (v2) and 56% (v4) against 54% for always picking the home team. Over/Under at 5.5 only beat the 55% Over rate when the model was confident. Goalie ratings did not help, so they are not used yet.</div>
   <div class="note" style="${nbAge() == null || nbAge() >= 7 ? 'color:#e0a040' : ''}">${nbLine()}</div>
+  ${keeperBox()}
   ${pushBox()}
   <button type="button" class="btn" id="xp" style="margin-top:12px">Export hockey data</button><div class="note">Downloads every saved hockey day (cards with v2, v4 and Forebet picks and results) plus the totals, as one file.</div></div></div>`;
 }

@@ -189,5 +189,34 @@ try {
     ok('one number per tile: no script errors', !errs.length, errs.join(' | '));
     await page.close();
   }
+  { // The Data Keeper on the Status tabs (src/keeper.js, Nov 26, 2026): the last actions and every give-up, soccer and hockey apart
+    const ago = m => new Date(Date.now() - m * 60000).toISOString();
+    const K = { last: [
+        { at: ago(5), sport: 'soccer', date: D, league: 'eng.1', game: 'Arsenal v Chelsea', check: 'close', action: 'refreshCardClose', result: 'filled' },
+        { at: ago(40), sport: 'soccer', date: D, league: 'ger.1', game: 'Bayern Munich v Mainz', check: 'forebet', action: 'forebetFetch', result: 'still missing' },
+        { at: ago(90), sport: 'soccer', date: D, league: 'esp.1', game: 'Sevilla v <b>Betis</b>', check: 'result', action: 'gradeLeague', result: 'gave up: HTTP 503' } ],
+      gaveUp: [{ sport: 'soccer', date: D, league: 'esp.1', game: 'Sevilla v <b>Betis</b>', check: 'result', why: 'HTTP 503', at: ago(90) }], forebetBlockedUntil: new Date(Date.now() + 3600000).toISOString() };
+    for (const [file, set] of [['index.html', k => { stat = { leagues: [], writes: { used: 10, limit: 1000, by: {} }, keeper: k }; S.tab = 'status'; render(); }],
+                               ['nhl.html', k => { status = { through: '2026-11-07', gamesThisSeason: 200, teams: 32, forebet: null, fbMissing: [], keeper: k }; S.tab = 'status'; render(); }]]) {
+      const page = await browser.newPage({ viewport: { width: 390, height: 900 } }), errs = []; page.on('pageerror', e => errs.push(e.message));
+      await page.route('**/api/**', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify(answer(r.request().url())) }));
+      await page.route(u => !u.href.startsWith(base), r => r.abort());
+      await page.goto(`${base}/${file}`);
+      await page.waitForFunction(() => typeof render === 'function' && typeof S !== 'undefined', null, { timeout: 15000 }).catch(() => {});
+      await page.waitForTimeout(300);
+      const k = file === 'nhl.html' ? { ...K, last: K.last.map(x => ({ ...x, sport: 'nhl', check: x.check === 'close' ? 'nhl-lineup' : x.check })), forebetBlockedUntil: null } : K;
+      const got = await page.evaluate(([src, k]) => { (new Function('k', `(${src})(k)`))(k); const v = document.querySelector('#view') || document.body, h = v.innerHTML, t = v.textContent;
+        return { has: !!document.querySelector('#keeper'), t, rawTag: /Betis<\/b>/.test(h.replace(/&lt;b&gt;Betis&lt;\/b&gt;/g, '')) }; }, [set.toString(), k]);
+      const lbl = file === 'nhl.html' ? 'hockey' : 'soccer';
+      ok(`${lbl} Status: a Data Keeper section with the last actions`, got.has && /Data Keeper/.test(got.t) && /Arsenal v Chelsea/.test(got.t) && /filled/.test(got.t) && /still missing/.test(got.t), got.t.slice(0, 300));
+      ok(`${lbl} Status: the give-ups are listed with the reason`, /Gave up on 1 game/.test(got.t) && /gave up: HTTP 503/.test(got.t));
+      ok(`${lbl} Status: game names are shown as text, never as markup`, !got.rawTag && /Sevilla v <b>Betis<\/b>/.test(got.t));
+      if (lbl === 'soccer') ok('soccer Status: a running Forebet pause is shown', /Forebet repairs are paused until/.test(got.t));
+      const empty = await page.evaluate(src => { (new Function('k', `(${src})(k)`))({ last: [], gaveUp: [] }); return (document.querySelector('#view') || document.body).textContent; }, set.toString());
+      ok(`${lbl} Status: with nothing done yet it says so`, file === 'nhl.html' ? /nothing yet/.test(empty) : /Nothing to repair yet/.test(empty));
+      ok(`${lbl} Status: no script errors`, !errs.length, errs.join(' | '));
+      await page.close();
+    }
+  }
 } finally { await browser.close(); server.close(); }
 console.log(bad ? `\n${bad} page check(s) FAILED` : '\nAll page checks passed'); process.exit(bad ? 1 : 0);

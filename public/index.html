@@ -2119,6 +2119,7 @@ function statusView() {
     <div class="pair" style="padding-top:0"><div class="meter ${cls}"><i style="width:${pct}%"></i></div>${pct >= 90 ? '<div class="small" style="color:var(--miss)">Almost out. Avoid Analyze this day until the reset.</div>' : pct >= 70 ? '<div class="small" style="color:var(--amber)">Getting high. Use Analyze leftover games instead of a full run.</div>' : ''}</div>
     ${bad.length ? `<div class="sec" style="padding-top:16px">Needs attention<small>${bad.length} league${bad.length === 1 ? '' : 's'} with a problem the last time they ran.</small></div><div class="pair" style="padding-top:0">${bad.map(row).join('')}</div>` : `<div class="banner" style="margin-top:14px">No league problems on record.</div>`}
     ${jobErrorsBox()}
+    ${keeperBox()}
     ${pushBox()}
     ${sourceBoard()}
     ${shotsBlock()}
@@ -2127,6 +2128,18 @@ function statusView() {
     <div class="sec" style="padding-top:16px">Back up your history<small>Downloads every saved day with predictions, results and SportsMole picks, plus the carried-over totals.</small></div>
     <div class="pair" style="padding-top:0"><div class="small" style="margin:0 0 4px;${backupAge() == null || backupAge() >= 7 ? 'color:var(--amber)' : ''}">${backupAge() == null ? 'No backup made from this device yet.' : backupAge() === 0 ? 'Last backup from this device: today.' : `Last backup from this device: ${backupAge()} day${backupAge() === 1 ? '' : 's'} ago.`}</div><button type="button" class="xbtn" id="btn-export">Export data</button></div>
     ${asgSection()}`;
+}
+// The Data Keeper (src/keeper.js): the background job's repairs of missing prices, closes, Forebet, results and Analyst bets. The last 10
+// soccer actions, newest first, and every game it gave up on (the nightly sweep looks at those).
+const KEEP_CHECK = { price: 'price', close: 'closing price', btts: 'both-score price', forebet: 'Forebet', result: 'result', 'bet-settle': 'Analyst bet to settle', 'bet-close': 'Analyst bet close' };
+function keeperBox() {
+  const k = stat && stat.keeper; if (!k) return '';
+  const col = r => /^gave up/.test(r) ? 'var(--miss)' : r === 'filled' ? 'var(--grass)' : 'var(--amber)';
+  const line = x => `<div class="small" style="margin:0 0 6px"><b>${esc(x.game || '')}</b> · ${esc(KEEP_CHECK[x.check] || x.check)}${x.league ? ` · ${esc(x.league)}` : ''} · ${x.at ? ago(x.at) : ''}<br><span style="color:${col(x.result || 'gave up')}">${esc(x.result || `gave up: ${x.why || ''}`)}</span></div>`;
+  const last = k.last || [], gave = k.gaveUp || [];
+  return `<div class="sec" style="padding-top:16px" id="keeper">Data Keeper<small>The background job re-runs the read for a game missing its price, closing price, Forebet, result or Analyst settle, one a run, and notes what it did. After three failed tries it gives up and leaves it to the nightly check.${k.forebetBlockedUntil ? ` Forebet repairs are paused until ${new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(new Date(k.forebetBlockedUntil))} (Forebet refused the last read).` : ''}</small></div>
+    <div class="pair" style="padding-top:0">${last.length ? last.map(line).join('') : '<div class="small">Nothing to repair yet.</div>'}
+    ${gave.length ? `<div class="small" style="margin:8px 0 4px"><b>Gave up on ${gave.length} game${gave.length === 1 ? '' : 's'}</b></div>${gave.map(line).join('')}` : ''}</div>`;
 }
 // The background job's last caught errors (src/errlog.js), newest first.
 function jobErrorsBox() {

@@ -84,6 +84,9 @@
     if (nc) out.push(nc + ' Analyst bet' + (nc > 1 ? 's' : '') + ' missing a closing price');
     if (st) out.push(st + ' Analyst bet' + (st > 1 ? 's' : '') + ' open 2+ days');
     if (sp) out.push('a sync problem in ' + Object.keys(h.syncProblems).join(', '));
+    // the Data Keeper's give-ups (src/keeper.js): games it re-read three times and could not fill
+    var kg = n(h.keeper && h.keeper.gaveUp);
+    if (kg) out.push('the Data Keeper gave up on ' + kg + ' gap' + (kg > 1 ? 's' : '') + ' (' + h.keeper.gaveUp.slice(0, 2).map(function (g) { return (g.game || '?') + ', ' + g.check; }).join('; ') + (kg > 2 ? '; ...' : '') + ')');
     if (h.writes && h.writes.limit && h.writes.used > 0.7 * h.writes.limit) out.push('storage writes at ' + h.writes.used + ' of ' + h.writes.limit);
     // low only when the backup key (ODDS_API_KEY_2) cannot take over either; an unread backup counts as unknown, not low
     var c1 = h.oddsApiCredits && h.oddsApiCredits.left, c2 = h.oddsApiCredits2 && h.oddsApiCredits2.left, low = function (x) { return x != null && x < 50; };

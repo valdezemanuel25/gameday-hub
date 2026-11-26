@@ -8,6 +8,7 @@ import { getAnalyst, summary, RULES, NHL_RULES, SINCE, NHL_SINCE, BENCH, setOf, 
 import { getDay } from './fixes.js';
 import { sweepStatus } from './sweepdata.js';
 import { HOUR, koOf, tracked, noResult, noSoccerPrice } from './gaps.js';
+import { readKeeper, keeperHealth } from './keeperlog.js';
 
 const lbl = c => `${c.away && c.home ? `${c.home} v ${c.away}` : c.id} (${c.league || 'nhl'}, ${c.kickoff})`;
 
@@ -75,15 +76,17 @@ async function restSummary(nhlRest, env) {
 }
 export async function hubHealth(env, { today, addDays, priced, readCredits, writesToday, writeLimit, saverAt, pinnState = null, nhlRest = null }, now = Date.now()) {
   const t = today(), ds = [addDays(t, -1), t, addDays(t, 1)];
-  const [sd, nd, errs, wt, doc] = await Promise.all([
+  const [sd, nd, errs, wt, doc, kp] = await Promise.all([
     Promise.all(ds.map(d => getDay(env, d))), Promise.all(ds.map(d => getDay(env, d, 'nhl'))),
-    env.HUB.get('meta:errors', 'json'), writesToday(env.HUB, new Date(now)), getAnalyst(env, { readOnly: true })]);
+    env.HUB.get('meta:errors', 'json'), writesToday(env.HUB, new Date(now)), getAnalyst(env, { readOnly: true }), readKeeper(env)]);
   const soc = Object.fromEntries(ds.map((d, i) => [d, sd[i]?.cards || []])), hk = Object.fromEntries(ds.map((d, i) => [d, nd[i]?.cards || []]));
   return {
     at: new Date(now).toISOString(), today: t,
     soccer: gameChecks(soc, now, { graceH: 6, priced }),
     nhl: gameChecks(hk, now, { graceH: 5, needPrice: c => !c.px }),
     analyst: analystChecks(doc, now),
+    // the Data Keeper (src/keeper.js): what it filled, tried and gave up on in the last 24 hours, and every give-up still on record
+    keeper: keeperHealth(kp, now),
     writes: { used: wt.used, limit: writeLimit, by: wt.by, saver: wt.used >= saverAt * writeLimit, yesterday: wt.yesterday || null }, // by = which job wrote what today; saver = background job skipping low-priority saves; yesterday = {d, n, by} saved for the UTC day before (null if unknown)
     oddsApiCredits: await readCredits(0),
     oddsApiCredits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, // the backup key (ODDS_API_KEY_2); null when it is not set

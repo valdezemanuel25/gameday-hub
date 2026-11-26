@@ -16,6 +16,7 @@ import { nhlStep, nhlForebet, nhlStatus, nhlSetLine, nhlOddsRaw, gkCheck, nhlCar
 import { readErrors } from './errlog.js';
 import { WRITE_LIMIT, pendingWrites } from './store.js';
 import { BTTS_RESERVE, SAVER_AT, SHARP_NOTE, addDays, analyzeLeague, assignCandidate, backupAnalyst, cachePut, candidates, forebetPaste, gradeLeague, health, nhlTotals, noteLeague, num, oddsKeys, pinnCheck, priceWhy, readCredits, readSharpNote, refreshBtts, refreshCardClose, refreshOdds, smLeague, soccerTotals, syncNote, tally, today, viaOddsKey } from './jobs.js';
+import { readKeeper, keeperStatus } from './keeperlog.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -303,7 +304,7 @@ export async function handle(req, env) {
     return jsonText(await summary(env, { kind: 'nhltrends', prefix: 'nhl:day:', date, build: days => buildTrends(days, date) }));
   }
   if (req.method === 'POST' && p === '/api/nhl/line') { try { const b = await req.json(); return json(await nhlSetLine(env, String(b.date || ''), String(b.id || ''), b.line, new Date())); } catch (e) { return json({ error: `Line: ${e && e.message ? e.message : e}` }, 500); } }
-  if (p === '/api/nhl/status') return json(await nhlStatus(env));
+  if (p === '/api/nhl/status') return json({ ...(await nhlStatus(env)), keeper: keeperStatus(await readKeeper(env), Date.now(), 'nhl') }); // + the Data Keeper's hockey actions
   if (p === '/api/nhl/gk-check') { try { return json(await gkCheck(env, String(url.searchParams.get('date') || today()))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
   if (p === '/api/nhl/odds-raw') { try { return json(await nhlOddsRaw(env, String(url.searchParams.get('date') || ''))); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
   if (req.method === 'POST' && p === '/api/nhl/close') { try { const b = await req.json(); return json(await nhlCardClose(env, String(b.date || ''), String(b.id || ''), new Date())); } catch (e) { return json({ error: `Final price: ${e && e.message || e}` }, 500); } }
@@ -342,6 +343,7 @@ export async function handle(req, env) {
     };
     return json({
       jobErrors: await readErrors(env.HUB), // the background job's last caught errors (src/errlog.js)
+      keeper: keeperStatus(await readKeeper(env), Date.now(), 'soccer'), // the Data Keeper's last soccer actions and give-ups (src/keeperlog.js)
       now: Date.now(), btts: { key: oddsKeys(env).length > 0, credits: await readCredits(0), keys: oddsKeys(env).length, credits2: env.ODDS_API_KEY_2 ? await readCredits(1) : null, reserve: num(env.BTTS_RESERVE, BTTS_RESERVE) }, pinn: { key: !!env.PINNODDS_KEY, ...(await pinnState()) }, forebet: { pages: Object.keys(FB_PAGES), reads: fbMeta || {} }, writes: { used: (w && w.d === d ? w.n : 0) + await pendingWrites(d), limit: WRITE_LIMIT, resetsAtUtc: d + 'T24:00Z', by: w && w.d === d ? w.by || {} : {}, saverAt: Math.round(SAVER_AT * WRITE_LIMIT) },
       leagues: [...DOMESTIC, ...CUP_MODEL].map(l => ({ slug: l.slug, name: l.name, support: !!l.support, lastSync: (meta || {})[l.slug] || null, shots: shots[l.slug], problem: (errs || {})[l.slug] || null, ...srcOf(l), v4: l.slug in rated ? { ratingsAt: rated[l.slug] ? new Date(rated[l.slug]).toISOString() : null } : null })),
     });

@@ -17,7 +17,9 @@ import { FB_PAGES, forebetFetch } from './forebetpage.js';
 import { analystLook, analystNhl, getAnalyst } from './analyst.js';
 import { getDay } from './fixes.js';
 import { ask, budget } from './store.js';
-import { koOf, tracked, closed, noResult, noSoccerPrice, noSoccerClose, noBtts, noForebet, noHockeyPrice, noGoalie, noLine, noHockeyClose, betOpen, betNoClose } from './gaps.js';
+import { getPush, sendAll } from './push.js';
+import { KEEPER_KEY, LOG_MAX, readKeeper } from './keeperlog.js';
+import { HOUR, koOf, tracked, closed, noResult, noSoccerPrice, noSoccerClose, noBtts, noForebet, noHockeyPrice, noGoalie, noLine, noHockeyClose, betOpen, betNoClose } from './gaps.js';
 
 // A result is "too late" this many hours after kickoff: the game's 2 hours (GAME_HOURS) plus 4. Normal grading runs at kickoff + 5 h.
 export const RESULT_H = 6;
@@ -94,8 +96,7 @@ export function missing(days, now, { bets = [], resultH = RESULT_H, lookBack = L
 }
 
 // ---- the fixer ----------------------------------------------------------------------------------------------------------------------
-export const KEEPER_KEY = 'meta:keeper';
-export const LOG_MAX = 100;
+export { KEEPER_KEY, LOG_MAX, readKeeper };
 // After a failed try: wait 30 minutes, then 1 hour, then 2 hours; the third failed try gives up (the nightly sweep picks up give-ups).
 export const BACKOFF_MIN = [30, 60, 120], GIVE_UP = 3;
 // After a Forebet 403 or 429, no Forebet repair for this long.
@@ -176,10 +177,6 @@ async function forebetReadAt(env, it) {
   return NaN;
 }
 
-const freshState = () => ({ log: [], wait: {}, blocks: {} });
-export async function readKeeper(env) {
-  try { const s = await env.HUB.get(KEEPER_KEY, 'json'); return s && typeof s === 'object' ? { log: Array.isArray(s.log) ? s.log : [], wait: s.wait || {}, blocks: s.blocks || {} } : freshState(); } catch (e) { return freshState(); }
-}
 // The days the checker looks at: today - LOOK_BACK to tomorrow, both sports (read only; the cron's own reads are KV reads, not calls).
 async function loadDays(env, today) {
   const dates = []; for (let n = -LOOK_BACK; n <= 1; n++) dates.push(addDays(today, n));
@@ -189,23 +186,23 @@ async function loadDays(env, today) {
 const short = e => String((e && e.message) || e).slice(0, 120);
 
 // One repair per run, at most. opts (for tests and the worker): days / bets (already loaded), recent (recentFrom of this run's answers),
-// repairs (the reads). Answers { job: 'keeper', missing, did, skipped } and never throws an error of a read: a read that throws counts as a
-// failed try. meta:keeper is written once, only when something was done or a new skip noted.
-export async function keeperStep(env, now = new Date(), { days = null, bets = null, recent = [], repairs = REPAIRS } = {}) {
+// repairs (the reads), send (the phone alert). Answers { job: 'keeper', missing, did, skipped, alerted } and never throws an error of a read: a read that throws counts as a
+// failed try. meta:keeper is written once, only when something was done, a new skip noted or an alert sent.
+export async function keeperStep(env, now = new Date(), { days = null, bets = null, recent = [], repairs = REPAIRS, send = sendAlert } = {}) {
   const t = +now, today = localDate(new Date(t).toISOString());
   const st = await readKeeper(env);
   const D = days || await loadDays(env, today);
   const B = bets || (await getAnalyst(env, { readOnly: true }).catch(() => ({ items: [] }))).items || [];
   const list = missing(D, t, { bets: B });
-  const out = { job: 'keeper', missing: list.length, did: null, skipped: null };
+  const out = { job: 'keeper', missing: list.length, did: null, skipped: null, alerted: 0 };
   const blocked = st.blocks.forebet && Date.parse(st.blocks.forebet) > t;
-  let spend = null, first = null; // first: the most urgent item passed over, and why (noted once per item and reason)
+  let spend = null, first = null, filledKey = null; // first: the most urgent item passed over, and why (noted once per item and reason)
   const pass = (it, why) => { if (!first) first = { it, why }; };
   for (const it of list) {
     const w = st.wait[it.key];
     if (w && (w.gaveUp || Date.parse(w.next) > t)) continue;
     if (!it.fix) { // nothing can fill it: given up at once, with the reason
-      st.wait[it.key] = { tries: 0, gaveUp: true, why: 'settled with no closing price; the settle pass never goes back to a settled bet', at: new Date(t).toISOString() };
+      st.wait[it.key] = { tries: 0, gaveUp: true, why: 'settled with no closing price; the settle pass never goes back to a settled bet', at: new Date(t).toISOString(), ...about(it) };
       out.did = logOf(it, t, 'none', `gave up: ${st.wait[it.key].why}`); st.log.unshift(out.did); break;
     }
     if (env.SAVER && it.tier !== TIER.lineup && it.tier !== TIER.result) { pass(it, 'saver'); continue; } // saver mode: the lineup window and results only
@@ -224,10 +221,10 @@ export async function keeperStep(env, now = new Date(), { days = null, bets = nu
     // Filled or not: the same checker, on the day (and bets) read again after the read
     const still = await stillMissing(env, it, D, B, t);
     let result;
-    if (!still) { delete st.wait[it.key]; result = 'filled'; }
+    if (!still) { delete st.wait[it.key]; result = 'filled'; filledKey = it.key; }
     else {
       const tries = ((w && w.tries) || 0) + 1, why = err || 'still missing after the read';
-      if (tries >= GIVE_UP) { st.wait[it.key] = { tries, gaveUp: true, why, at: new Date(t).toISOString() }; result = `gave up: ${why}`; }
+      if (tries >= GIVE_UP) { st.wait[it.key] = { tries, gaveUp: true, why, at: new Date(t).toISOString(), ...about(it) }; result = `gave up: ${why}`; }
       else { st.wait[it.key] = { tries, next: new Date(t + BACKOFF_MIN[tries - 1] * 60000).toISOString(), why }; result = 'still missing'; }
     }
     out.did = logOf(it, t, it.fix, result); st.log.unshift(out.did);
@@ -238,8 +235,48 @@ export async function keeperStep(env, now = new Date(), { days = null, bets = nu
     out.skipped = logOf(first.it, t, first.it.fix, `skipped: ${first.why}`);
     if (w.skip === first.why) first = null; else { st.wait[first.it.key] = { ...w, skip: first.why }; st.log.unshift(out.skipped); }
   }
-  if (out.did || first) await saveKeeper(env, st, today);
+  // The phone alert: a result still missing 6 hours after kickoff, or a priced game with no price 2 hours before it. Once per game and
+  // problem; one message for all of them. A game this run just filled is not in it.
+  const due = keeperAlerts(list.filter(x => x.key !== filledKey), D, t, st.sent); let sent = false;
+  if (due.length) {
+    try { const r = await send(env, alertMessage(due), t); if (r && r.sent > 0) { for (const a of due) st.sent[a.key] = t; out.alerted = due.length; sent = true; } } catch (e) { /* tried again next run */ }
+  }
+  if (out.did || first || sent) await saveKeeper(env, st, today, t);
   return out;
+}
+const about = it => ({ sport: it.sport, league: it.league, game: it.game, check: it.check });
+
+// ---- the phone alerts ---------------------------------------------------------------------------------------------------------------
+// A missing result is alerted from kickoff + RESULT_H up to ALERT_RESULT_MAX_H after kickoff (older ones are the nightly sweep's, so a
+// first run does not alert on the last 3 days); a missing price from ALERT_PRICE_MIN minutes before kickoff. Second divisions never.
+export const ALERT_RESULT_MAX_H = 24, ALERT_PRICE_MIN = 120, SENT_KEEP_D = 3;
+export function keeperAlerts(list, days, now, sent = {}) {
+  const t = +now, out = [], seen = new Set();
+  const add = (problem, it, line) => { const key = `${problem}|${it.date}|${it.id}`; if (sent[key] || seen.has(key)) return; seen.add(key); out.push({ key, problem, sport: it.sport, line }); };
+  for (const it of list || []) {
+    if (it.second) continue;
+    const ko = koOf(it), mins = (ko - t) / 60000;
+    if (it.check === 'result' && t - ko <= ALERT_RESULT_MAX_H * HOUR) add('result', it, `${it.game}: no result ${Math.round((t - ko) / HOUR)} h after kickoff`);
+    if (it.check === 'price' && mins > 0 && mins <= ALERT_PRICE_MIN) add('price', it, `${it.game}: no price, ${Math.round(mins)} min to kickoff`);
+  }
+  // Hockey prices: the checker asks for them at the lineup read only; the alert looks from 2 hours out.
+  for (const [date, cards] of Object.entries((days && days.nhl) || {})) for (const c of cards || []) {
+    if (!tracked(c) || closed(c) || !noHockeyPrice(c)) continue;
+    const mins = (koOf(c) - t) / 60000;
+    if (mins > 0 && mins <= ALERT_PRICE_MIN) add('price', { sport: 'nhl', date, id: c.id }, `${c.home} v ${c.away}: no price, ${Math.round(mins)} min to puck drop`);
+  }
+  return out;
+}
+export function alertMessage(due) {
+  const lines = due.slice(0, 4).map(a => a.line), more = due.length - lines.length;
+  return { title: due.length === 1 ? 'Data Keeper: a game needs a look' : `Data Keeper: ${due.length} games need a look`, body: lines.join('\n') + (more > 0 ? `\nand ${more} more` : ''),
+    tag: 'keeper', url: due.every(a => a.sport === 'nhl') ? '/nhl' : '/soccer' };
+}
+// Sends to every device (src/push.js sendAll), one call each, from what is left of the run's calls.
+async function sendAlert(env, msg, now) {
+  const d = await getPush(env); if (!d.subs.length) return { sent: 0 };
+  if (!ask(env, d.subs.length)) return { sent: 0, waiting: 'budget' };
+  return sendAll(env, msg, now);
 }
 const logOf = (it, t, action, result) => ({ at: new Date(t).toISOString(), sport: it.sport, date: it.date, league: it.league, game: it.game, check: it.check, action, result });
 async function stillMissing(env, it, D, B, t) {
@@ -249,9 +286,10 @@ async function stillMissing(env, it, D, B, t) {
     return missing(D2, t, { bets: B2 }).some(x => x.key === it.key);
   } catch (e) { return true; }
 }
-// One write: the last LOG_MAX actions, the back-off clocks of games still in the look-back, and the blocks still running.
-async function saveKeeper(env, st, today) {
+// One write: the last LOG_MAX actions, the back-off clocks of games still in the look-back, the blocks, and the alerts of the last 3 days.
+async function saveKeeper(env, st, today, t) {
   const from = addDays(today, -LOOK_BACK - 1);
   const wait = Object.fromEntries(Object.entries(st.wait).filter(([k]) => (k.split('|')[1] || '') >= from));
-  await env.HUB.put(KEEPER_KEY, JSON.stringify({ log: st.log.slice(0, LOG_MAX), wait, blocks: st.blocks }));
+  const sent = Object.fromEntries(Object.entries(st.sent || {}).filter(([, at]) => t - at <= SENT_KEEP_D * 86400000));
+  await env.HUB.put(KEEPER_KEY, JSON.stringify({ log: st.log.slice(0, LOG_MAX), wait, blocks: st.blocks, sent }));
 }

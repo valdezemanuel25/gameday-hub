@@ -455,3 +455,11 @@ notes in the pages under public/.
   and only when it did something or noted a new skip. Both-score gaps are listed only once a game has its ESPN price (the price read
   brings the both-score price, Pinnacle first, with no credit). A settled bet with no close is given up at once: the settle pass never
   goes back to a settled bet.
+- Nov 26, 2026: Data Keeper step 3 of 4, what it did, shown. The record's reading side moved to src/keeperlog.js (so the health report
+  and the status routes read it without loading the reads). Status tabs: a "Data Keeper" section on public/index.html (soccer) and
+  public/nhl.html (hockey) with the last 10 actions and every give-up (/api/status and /api/nhl/status carry `keeper`). Health report:
+  a `keeper` field with counts for the last 24 h (filled / still missing / gave up / skipped), the give-up list and any Forebet pause;
+  the in-page Sweep report names the give-ups. Phone alert (src/push.js sendAll), one message per run for all that are due, at most once
+  per game and problem: a result still missing from kickoff + 6 h (up to 24 h after kickoff; older is the nightly sweep's), or a game
+  with no price 2 hours before kickoff (soccer top divisions and cups, and hockey). Second divisions never alert. Give-ups now keep the
+  game, league and check.

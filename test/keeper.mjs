@@ -1,6 +1,7 @@
 // The Data Keeper's checker (src/keeper.js missing): one list of what is missing, most urgent first, from made-up days. Reads only
 // what it is handed, so no stubs are needed.
-import { missing, scopeOf, TIER, RESULT_H, keeperStep, recentFrom, costOf, KEEPER_KEY, BACKOFF_MIN, GIVE_UP, BLOCK_H, LOG_MAX } from '../src/keeper.js';
+import { missing, scopeOf, TIER, RESULT_H, keeperStep, recentFrom, costOf, KEEPER_KEY, BACKOFF_MIN, GIVE_UP, BLOCK_H, LOG_MAX, keeperAlerts, alertMessage } from '../src/keeper.js';
+import { keeperStatus, keeperHealth, readKeeper } from '../src/keeperlog.js';
 import { budget, writeKind } from '../src/store.js';
 import { gameChecks } from '../src/health.js';
 import { dayGaps } from '../src/sweepdata.js';
@@ -341,6 +342,58 @@ for (const [what, seed, fix] of one) {
 }
 ok('writes: meta:keeper is counted as the Keeper\'s bookkeeping', writeKind(KEEPER_KEY) === 'bookkeeping: keeper');
 ok('cost: a price read costs more than a Forebet read, the Analyst\'s settle pass costs no call', costOf({ fix: 'refreshOdds', sport: 'soccer', date: T, league: 'eng.1' }, {}, {}) > costOf({ fix: 'forebetFetch' }, {}, {}) && costOf({ fix: 'analystLook' }, {}, {}) === 0);
+
+// ====================================================================================================================================
+// --- step 3: give-ups name the game; the Status and health summaries; the phone alerts ---
+{
+  const env = mkEnv(dayOf([card('r', 'eng.1', -7 * H)])), { R } = stubs();
+  for (const dt of [0, 31 * M, 92 * M]) await run(env, NOW + dt, R, { send: async () => ({ sent: 0 }) });
+  const st = await readKeeper(env), g = keeperStatus(st, NOW + 2 * H, 'soccer');
+  ok('give-ups: a give-up keeps the game, league and check, for the Status tab and the sweep', g.gaveUp.length === 1 && g.gaveUp[0].game === 'Hr v Ar' && g.gaveUp[0].league === 'eng.1' && g.gaveUp[0].check === 'result' && /still missing/.test(g.gaveUp[0].why), JSON.stringify(g.gaveUp));
+  ok('status: the last actions newest first, of the sport asked for', g.last.length === 3 && /^gave up/.test(g.last[0].result) && keeperStatus(st, NOW, 'nhl').last.length === 0);
+  const hh = keeperHealth(st, NOW + 2 * H);
+  ok('health: counts of the last 24 hours (filled / still missing / gave up) and the give-up list', hh.last24h.stillMissing === 2 && hh.last24h.gaveUp === 1 && hh.last24h.filled === 0 && hh.gaveUp.length === 1 && hh.lastAction.check === 'result', JSON.stringify(hh.last24h));
+  ok('health: actions older than 24 hours are not counted', keeperHealth(st, NOW + 30 * H).last24h.stillMissing === 0);
+  ok('status: only the last 10 actions are shown', keeperStatus({ log: Array.from({ length: 30 }, () => ({ sport: 'soccer', result: 'filled', at: 'x' })), wait: {}, blocks: {} }).last.length === 10);
+  ok('status: a Forebet block still running is shown, an old one is not', keeperStatus({ log: [], wait: {}, blocks: { forebet: new Date(NOW + H).toISOString() } }, NOW).forebetBlockedUntil && !keeperStatus({ log: [], wait: {}, blocks: { forebet: new Date(NOW - H).toISOString() } }, NOW).forebetBlockedUntil);
+  ok('status: an empty or broken record reads as nothing', (await readKeeper(mkEnv())).log.length === 0 && (await readKeeper({ HUB: { get: async () => { throw new Error('x'); } } })).log.length === 0);
+}
+{ // which gaps alert
+  const AD = { soccer: { [T]: [
+      card('ar', 'eng.1', -6.5 * H),                       // no result 6.5 h after kickoff: alert
+      card('ar2', 'ger.2', -6.5 * H),                      // second division: never
+      card('ap', 'eng.1', 90 * M, { odds: undefined }),    // no price 90 min out: alert
+      card('ap2', 'eng.1', 3 * H, { odds: undefined }),    // no price, 3 h out: not yet
+      card('ap3', 'esp.2', 60 * M, { odds: undefined }),   // second division price: never
+    ], [Y]: [card('aold', 'mex.1', -30 * H)] },            // 30 h without a result: the nightly sweep's, not a phone alert
+    nhl: { [T]: [hk('hp', 90 * M, { px: undefined }), hk('hp2', 3 * H, { px: undefined }), hk('hq', 90 * M)] } };
+  const due = keeperAlerts(missing(AD, NOW), AD, NOW, {}), keys = due.map(a => a.key).sort().join();
+  ok('alerts: a result missing at kickoff + 6 h, a soccer and a hockey price missing 2 h before: and nothing else', keys === `price|${T}|ap,price|${T}|hp,result|${T}|ar`, keys);
+  ok('alerts: already sent, not again', keeperAlerts(missing(AD, NOW), AD, NOW, { [`result|${T}|ar`]: NOW - H }).every(a => a.key !== `result|${T}|ar`));
+  const m1 = alertMessage(due), m2 = alertMessage([...due, ...due, ...due]);
+  ok('alerts: one message names the games', /3 games need a look/.test(m1.title) && /Har v Aar: no result 7 h after kickoff/.test(m1.body) && /no price, 90 min/.test(m1.body) && m1.tag === 'keeper', JSON.stringify(m1));
+  ok('alerts: a long list is cut to 4 lines', m2.body.split('\n').length === 5 && /and 5 more$/.test(m2.body));
+  ok('alerts: hockey-only alerts open the hockey page', alertMessage(due.filter(a => a.sport === 'nhl')).url === '/nhl' && m1.url === '/soccer');
+}
+{ // the alert is sent once, after the repair, and noted
+  const sent = [], send = async (env, msg) => { sent.push(msg); return { sent: 1 }; };
+  const env = mkEnv(dayOf([card('ar', 'eng.1', -6.5 * H)])), { R } = stubs();
+  const r = await run(env, NOW, R, { send });
+  ok('alerts: a result still missing after the repair is alerted, and noted in the record', sent.length === 1 && r.alerted === 1 && state(env).sent[`result|${T}|ar`] === NOW);
+  await run(env, NOW + 31 * M, R, { send });
+  ok('alerts: at most one alert per game per problem', sent.length === 1);
+  const fill = async (e, it) => { const k = `day:${it.date}`, d = JSON.parse(e.kv.get(k)); d.cards.find(c => c.id === it.id).final = { h: 1, a: 1 }; e.kv.set(k, JSON.stringify(d)); };
+  const env2 = mkEnv(dayOf([card('ar', 'eng.1', -6.5 * H)])), s2 = stubs(fill), sent2 = [];
+  await run(env2, NOW, s2.R, { send: async (e, m) => { sent2.push(m); return { sent: 1 }; } });
+  ok('alerts: a gap the Keeper just filled is not alerted', sent2.length === 0);
+  const env3 = mkEnv(dayOf([card('ar', 'eng.1', -6.5 * H)])), s3 = stubs();
+  await run(env3, NOW, s3.R, { send: async () => ({ sent: 0 }) });
+  ok('alerts: not delivered (no device, or out of calls): not marked sent, tried again next run', !state(env3).sent[`result|${T}|ar`]);
+  const env4 = mkEnv({ ...dayOf([card('ar', 'eng.1', -6.5 * H)]), push: { subs: [{ endpoint: 'https://push.example.com/a', keys: {} }, { endpoint: 'https://push.example.com/b', keys: {} }], sent: {} } }, { BUDGET: budget(1) }), s4 = stubs();
+  let fetched = 0; const realFetch = globalThis.fetch; globalThis.fetch = async () => { fetched++; return new Response(null, { status: 201 }); };
+  try { await run(env4, NOW, s4.R); } finally { globalThis.fetch = realFetch; }
+  ok('alerts: with fewer calls left than devices, nothing is sent', fetched === 0 && !state(env4)?.sent?.[`result|${T}|ar`]);
+}
 
 console.log(fail ? `\n${fail} FAILED` : '\nall keeper checks passed');
 process.exit(fail ? 1 : 0);

@@ -119,5 +119,7 @@ r = await worker.fetch(new Request('https://hub.test/api/config', { headers: { c
   const src = (await import('fs')).readFileSync(new URL('../public/sweep.js', import.meta.url), 'utf8'), m = src.match(/function readHealth\(h\) \{[\s\S]*?return out;\n  \}/);
   const rh = new Function(`${m[0]}; return readHealth;`)(), base = { soccer: { ungraded: [], unpriced: [] }, nhl: { ungraded: [], unpriced: [] }, analyst: { noClose: [], stale: [] }, syncProblems: {} };
   ok("Sweep's report: says so when the password is weak, and nothing when it is not", rh({ ...base, signIn: { weakPassword: true } }).some(x => /password is weak/.test(x)) && rh({ ...base, signIn: { weakPassword: false } }).length === 0 && rh(base).length === 0);
+  const kg = rh({ ...base, keeper: { last24h: {}, gaveUp: [{ game: 'Hr v Ar', check: 'result' }, { game: 'B v C', check: 'price' }, { game: 'D v E', check: 'forebet' }] } });
+  ok("Sweep's report: names the Data Keeper's give-ups, and nothing when there are none", kg.some(x => /Data Keeper gave up on 3 gaps \(Hr v Ar, result; B v C, price; \.\.\.\)/.test(x)) && rh({ ...base, keeper: { last24h: {}, gaveUp: [] } }).length === 0, JSON.stringify(kg));
 }
 console.log(fail ? `\n${fail} auth checks FAILED` : '\nAll auth checks passed'); process.exit(fail ? 1 : 0);
