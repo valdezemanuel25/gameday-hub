@@ -55,19 +55,11 @@ Forebet: a 403 / 429 recorded by Forebet's own job (`meta:fb` per league and tab
 ## What is left
 
 1. ~~Push `4b88273` to `main`~~: done Nov 26. Everything above is live.
-2. **Fix the trial tasks (audit #13)**, ideally before Sat Nov 28. Both are one-time scheduled tasks; change them with `update_trigger`
-   (read them first with `get_trigger`):
-   - Move night 1 (`trig_01QdmXfA5omwoGuhTdgAegmT`, now Sat Nov 28 23:13 Central) to **Sun Nov 29 01:13 Central** and night 2
-     (`trig_01DLDy7sKn2Dx8zGrp3Z4PHp`, now Wed Dec 2 23:13 Central) to **Thu Dec 3 01:13 Central**. The Hub saves its stats files to
-     `gameday-hub-data` between about 00:10 and 00:40 Central, so a run at 23:13 reads the day before.
-   - Night 1 clones with `--depth 1` and takes its write baseline "from the Notion log", but the tasks have **no Notion connector**
-     (the tool could not attach one). Make it clone the full history and read the baseline from `git show <sha>:health.json` for
-     Nov 19-25, as night 2 already does.
-   - Update both prompts for `4b88273`: name that commit; `keeper.last24h` now has `repairs` and `writes` (writes caused by the Keeper:
-     compare THAT with the 20-60 target, not the "bookkeeping: keeper" bucket alone); the 100-entry undercount caveat no longer applies;
-     give-ups are per repair (`game` reads "X and N more", `games` = count).
-   - Same prompt updates for the one-day check `trig_01J2h69D2tFfBWifUFvwwq23` (Fri Nov 27 01:13 Central, checks Thursday Nov 26) if it
-     has not fired yet.
+2. ~~Fix the trial tasks (audit #13)~~: done Nov 26 (Central morning). Night 1 now fires Sun Nov 29 01:13 Central and night 2 Thu Dec 3
+   01:13 Central; all three Keeper tasks (night 1, night 2, the one-day check) clone the stats repo with full history, take the
+   pre-Keeper baseline from `git show <sha>:health.json` (no Notion needed; they write the Notion note only if a Notion tool happens to
+   be there, and always put it in their summary), name `4b88273`, compare `keeper.last24h.writes` with the 20-60 target, drop the
+   100-entry caveat, and read give-ups as per repair (`game` "X and N more", `games` = count).
 3. **Nightly sweep (audit #12), only with Manny's OK:** the "Game Day Hub nightly sweep" task (`trig_0186JDUet3WDCYod2aH2Eyar`, Wed
    and Sat 22:30 Central) does not read `health.keeper`. The plan says the sweep picks up the give-ups. Add one line to its step 7
    (Data check): list `health.keeper.gaveUp` (game, check, why) and `last24h`, and flag `last24h.writes` above 60. Its prompt is long
@@ -91,8 +83,8 @@ Forebet: a 403 / 429 recorded by Forebet's own job (`meta:fb` per league and tab
 | Task | ID | When (Central) | Notes |
 |---|---|---|---|
 | Data Keeper check: Thursday Nov 26 slate | `trig_01J2h69D2tFfBWifUFvwwq23` | Fri Nov 27 01:13 | one-time; push notification; ~21 games expected |
-| Data Keeper trial, night 1 of 2 | `trig_01QdmXfA5omwoGuhTdgAegmT` | Sat Nov 28 23:13 (move, see above) | one-time |
-| Data Keeper trial, night 2 of 2 | `trig_01DLDy7sKn2Dx8zGrp3Z4PHp` | Wed Dec 2 23:13 (move, see above) | one-time; tuning suggestions |
+| Data Keeper trial, night 1 of 2 | `trig_01QdmXfA5omwoGuhTdgAegmT` | Sun Nov 29 01:13 (checks Sat Nov 28) | one-time |
+| Data Keeper trial, night 2 of 2 | `trig_01DLDy7sKn2Dx8zGrp3Z4PHp` | Thu Dec 3 01:13 (checks Wed Dec 2) | one-time; tuning suggestions |
 | Game Day Hub nightly sweep | `trig_0186JDUet3WDCYod2aH2Eyar` | Wed, Sat 22:30 | read-only; not edited |
 
 All three Keeper tasks are read-only (no code, KV, or task changes) and report by push notification and their session summary.
