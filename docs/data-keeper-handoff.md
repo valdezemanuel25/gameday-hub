@@ -18,7 +18,7 @@ work follows. This file says where the build stands and what is left, so a new s
 | `437f9c7` | Step 1, the checker: `missing()` in `src/keeper.js`; shared per-card tests moved to `src/gaps.js` (used by `src/health.js` `gameChecks` and `src/sweepdata.js` `dayGaps`) | yes |
 | `318cacb` | Step 2, the fixer: `keeperStep()` in `src/keeper.js`, run in `scheduled()` (`src/worker.js`) after the rotating job and before the alerts; `'meta:keeper': 'keeper'` in `META` (`src/store.js`) | yes |
 | `5601844` | Step 3: `src/keeperlog.js` (record reading, Status and health summaries); "Data Keeper" sections on the Status tabs (`public/index.html` `keeperBox`, `public/nhl.html`); `keeper` in `/api/status`, `/api/nhl/status` and the health report (`hubHealth`); give-ups line in `public/sweep.js`; phone alerts (`keeperAlerts`, `alertMessage`) | yes |
-| `4b88273` | Fixes from a read-only audit of steps 1-3 (below) | **no: waiting for Manny's "push"** |
+| `4b88273` | Fixes from a read-only audit of steps 1-3 (below) | yes (pushed Nov 26 with this file, `733a3cd`) |
 
 Branch with all of it: `claude/sleepy-sagan-2mw8ny` (the build session could not use the plan's `claude/data-keeper` name). At
 `4b88273`, `npm test` was **1,706 PASS, 0 FAIL**.
@@ -54,7 +54,7 @@ Forebet: a 403 / 429 recorded by Forebet's own job (`meta:fb` per league and tab
 
 ## What is left
 
-1. **Push `4b88273` to `main`** once Manny says "push" (check `git merge-base --is-ancestor origin/main HEAD`, then push `HEAD:main`).
+1. ~~Push `4b88273` to `main`~~: done Nov 26. Everything above is live.
 2. **Fix the trial tasks (audit #13)**, ideally before Sat Nov 28. Both are one-time scheduled tasks; change them with `update_trigger`
    (read them first with `get_trigger`):
    - Move night 1 (`trig_01QdmXfA5omwoGuhTdgAegmT`, now Sat Nov 28 23:13 Central) to **Sun Nov 29 01:13 Central** and night 2
@@ -67,7 +67,7 @@ Forebet: a 403 / 429 recorded by Forebet's own job (`meta:fb` per league and tab
      compare THAT with the 20-60 target, not the "bookkeeping: keeper" bucket alone); the 100-entry undercount caveat no longer applies;
      give-ups are per repair (`game` reads "X and N more", `games` = count).
    - Same prompt updates for the one-day check `trig_01J2h69D2tFfBWifUFvwwq23` (Fri Nov 27 01:13 Central, checks Thursday Nov 26) if it
-     has not fired yet. If `4b88273` is not on `main` by Nov 26 evening, that check runs against the step-3 code; say so in its prompt.
+     has not fired yet.
 3. **Nightly sweep (audit #12), only with Manny's OK:** the "Game Day Hub nightly sweep" task (`trig_0186JDUet3WDCYod2aH2Eyar`, Wed
    and Sat 22:30 Central) does not read `health.keeper`. The plan says the sweep picks up the give-ups. Add one line to its step 7
    (Data check): list `health.keeper.gaveUp` (game, check, why) and `last24h`, and flag `last24h.writes` above 60. Its prompt is long
