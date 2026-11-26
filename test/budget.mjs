@@ -45,6 +45,8 @@ globalThis.Date = RealDate; Date.now = realNow;
 const day = JSON.parse(kv.get(`day:${DATE}`)), read = LEAGUES.filter(l => day.cards.some(c => c.league === l && c.odds && c.odds.cl));
 ok(`a busy run stays within the budget (${calls} outside calls of ${RUN_BUDGET}, the free plan allows 50)`, calls <= RUN_BUDGET, calls);
 ok('...and still takes lineup reads (soonest first), leaving the rest for the next run', read.length >= 1 && read.length < LEAGUES.length, JSON.stringify(read));
+{ const k = JSON.parse(kv.get('meta:keeper') || 'null'), e = k && k.log[0];
+  ok('the Data Keeper runs in the cron after the rotating job: a price read it cannot afford is noted, not made, and no credits go on both-score reads of unpriced games', e && e.check === 'price' && e.result === 'skipped: budget' && !k.log.some(x => x.check === 'btts'), JSON.stringify(k)); }
 ok('the price reads never eat into what the rotating job and the alerts need', oddsCost(env, 6) === 2 + 1 + 9 && ODDS_KEEP > SLOT_COST);
 
 // ---- both price keys and a big league (sweep, Nov 25, 2026) ----

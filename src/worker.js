@@ -6,6 +6,7 @@ import { withFixes } from './fixes.js';
 import { errEntry, answerErrors, saveErrors } from './errlog.js';
 import { WRITE_LIMIT, counted, writesToday, budget, ask } from './store.js';
 import { SAVER_AT, SLOT_COST, SWEEP_COST, oddsStep, runSlot, sweepData } from './jobs.js';
+import { keeperStep, recentFrom } from './keeper.js';
 import { LOCAL_HOST, handle, json, pendingCookies, withCookies, withSecurity } from './routes.js';
 // The Worker: requests go to the routes (src/routes.js), the cron to the background job (src/jobs.js). Everything the tests import from
 // this file is re-exported here.
@@ -47,8 +48,9 @@ const hub = {
       try { env.SAVER = (await writesToday(env0.HUB)).used >= SAVER_AT * WRITE_LIMIT; } catch (e) { /* unknown: run as normal */ }
       // The closing reads go first: they are cheap and only have a few minutes, and a run cut short by the free plan's CPU limit
       // (a heavy soccer job) used to drop them. The rotating job runs after.
-      try { noteAnswer('nhl lineup', await nhlLineupStep(env)); } catch (e) { note('nhl lineup', e); /* retried in 5 minutes */ }
-      try { noteAnswer('odds', await oddsStep(env)); } catch (e) { note('odds', e); /* prices are a bonus; never allowed to break the background job */ }
+      const answers = []; // what this run's jobs read, so the Data Keeper does not read the same source again (src/keeper.js recentFrom)
+      try { const r = await nhlLineupStep(env); answers.push(r); noteAnswer('nhl lineup', r); } catch (e) { note('nhl lineup', e); /* retried in 5 minutes */ }
+      try { const r = await oddsStep(env); answers.push(r); noteAnswer('odds', r); } catch (e) { note('odds', e); /* prices are a bonus; never allowed to break the background job */ }
       // The sweep's stats file, when one is due (three runs a night, src/sweepdata.js), takes this run's turn in place of the rotating
       // job, so the run stays inside the free plan's CPU limit. Nothing due, not set up, or the file is already saved (nothing was built): the
       // rotating job runs as always.
@@ -60,10 +62,13 @@ const hub = {
       let sw = null; try { if (!sweepDue || ask(env, SWEEP_COST)) sw = await sweepData(env, new Date(at)); } catch (e) { note('stats files', e); /* never allowed to break the background job */ }
       // The rotating job runs on SLOT_COST calls set aside for it; the steps in it that fetch per item (the early-payout lead) ask that share.
       const run = env.BUDGET;
-      try { if (!(sw && sw.built)) { env.BUDGET = run.child(SLOT_COST); noteAnswer('slot', await runSlot(env, new Date(), Math.floor(at / 300000) % 4)); } }
+      try { if (!(sw && sw.built)) { env.BUDGET = run.child(SLOT_COST); const r = await runSlot(env, new Date(), Math.floor(at / 300000) % 4); answers.push(r); noteAnswer('slot', r); } }
       catch (e) { note('slot', e); throw e; }
       finally {
-        env.BUDGET = run; // the alerts use what is left
+        env.BUDGET = run; // the Keeper and then the alerts use what is left
+        // The Data Keeper (src/keeper.js): at most one repair of a missing price, close, Forebet, result or bet, on what is left of the
+        // run's calls with the alerts' share kept back. Not on a run that built a stats file (the CPU limit). Never allowed to break the background job.
+        if (!(sw && sw.built)) { try { noteAnswer('keeper', await keeperStep(env, new Date(), { recent: recentFrom(answers) })); } catch (e) { note('keeper', e); } }
         // Alerts for games about to start. Never allowed to break the background job.
         try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { note('alerts', e); /* retried in 5 minutes */ }
         try { await saveErrors(env.HUB, errs); } catch (e) { /* the log is bookkeeping */ }

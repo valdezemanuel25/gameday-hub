@@ -1,6 +1,7 @@
 // The Data Keeper's checker (src/keeper.js missing): one list of what is missing, most urgent first, from made-up days. Reads only
 // what it is handed, so no stubs are needed.
-import { missing, scopeOf, TIER, RESULT_H } from '../src/keeper.js';
+import { missing, scopeOf, TIER, RESULT_H, keeperStep, recentFrom, costOf, KEEPER_KEY, BACKOFF_MIN, GIVE_UP, BLOCK_H, LOG_MAX } from '../src/keeper.js';
+import { budget, writeKind } from '../src/store.js';
 import { gameChecks } from '../src/health.js';
 import { dayGaps } from '../src/sweepdata.js';
 let fail = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) fail++; };
@@ -52,8 +53,9 @@ ok('price: a price record with only Pinnacle / both-score numbers counts as no p
 ok('price: no price more than 24 h out is not listed yet', only(L, 'p3') === '', only(L, 'p3'));
 ok('close: priced, in the lineup window, no close: listed for refreshCardClose', has(L, 'close', 'w1') && L.find(i => i.id === 'w1').fix === 'refreshCardClose' && L.find(i => i.id === 'w1').tier === TIER.lineup);
 ok('close: a game that has its close is not listed', only(L, 'w2') === '', only(L, 'w2'));
-ok('close: no price at all in the window is one price item (the read is the close too), in the lineup tier', only(L, 'w3') === 'btts,price' && L.find(i => i.id === 'w3' && i.check === 'price').tier === TIER.lineup, only(L, 'w3'));
+ok('close: no price at all in the window is one price item (the read is the close too, and brings the both-score price), in the lineup tier', only(L, 'w3') === 'price' && L.find(i => i.id === 'w3' && i.check === 'price').tier === TIER.lineup, only(L, 'w3'));
 ok('close: past the price lock it is no longer a lineup-read item', !has(L, 'close', 'w4'));
+ok('btts: a game with no ESPN price is not listed for its both-score price (the price read brings it)', only(L, 'p1') === 'price', only(L, 'p1'));
 ok('btts: no both-score price within 24 h is listed, fixed by refreshBtts', has(L, 'btts', 'b1') && L.find(i => i.id === 'b1').fix === 'refreshBtts' && only(L, 'b1') === 'btts', only(L, 'b1'));
 ok('forebet: no Forebet on a game today is listed, fixed by forebetFetch (1x2)', has(L, 'forebet', 'f1') && L.find(i => i.id === 'f1').fix === 'forebetFetch' && L.find(i => i.id === 'f1').kind === '1x2');
 ok('forebet: a game already kicked off is not', !has(L, 'forebet', 'f2'));
@@ -115,7 +117,7 @@ const bets = [
 ];
 const B = missing(BD, NOW, { bets }), bt = id => B.find(i => i.bet === id);
 ok('bets: graded game, open bet: bet-settle via analystLook', bt('b1') && bt('b1').check === 'bet-settle' && bt('b1').fix === 'analystLook');
-ok('bets: settled with no close: bet-close', bt('b2') && bt('b2').check === 'bet-close');
+ok('bets: settled with no close: bet-close, with no read that can fill it', bt('b2') && bt('b2').check === 'bet-close' && bt('b2').fix === null);
 ok('bets: settled with a close, void, or game not graded yet: nothing', !bt('b3') && !bt('b4') && !bt('b5'));
 ok('bets: a postponed game\'s open bet is listed to settle', bt('b7') && bt('b7').check === 'bet-settle');
 ok('bets: a hockey bet goes to analystNhl', bt('b8') && bt('b8').fix === 'analystNhl' && bt('b8').sport === 'nhl');
@@ -140,6 +142,205 @@ const hg = gameChecks({ [T]: soccer[T] }, NOW, { graceH: RESULT_H, priced: new S
 ok('agree: the health report\'s late results match the Keeper\'s for the in-scope leagues', hg.ungraded.filter(u => / \(eng\.1,/.test(u.game)).length === L.filter(i => i.check === 'result' && i.league === 'eng.1' && i.date === T).length, JSON.stringify(hg.ungraded));
 const sgT = dayGaps({ [T]: soccer[T] }, NOW, { priced: new Set(['ned.1']) }).days[0];
 ok('agree: the stats files count the same Forebet gap', sgT.noForebet >= 1 && has(L, 'forebet', 'f1'));
+
+// ====================================================================================================================================
+// --- the fixer (keeperStep): an in-memory KV, the reads stubbed (nothing is fetched) ---
+function mkEnv(seed = {}, x = {}) {
+  const kv = new Map(Object.entries(seed).map(([k, v]) => [k, JSON.stringify(v)])), puts = [];
+  return { kv, puts, ...x, HUB: {
+    get: async (k, type) => { const v = kv.get(k); return v == null ? null : type === 'json' ? JSON.parse(v) : v; },
+    put: async (k, v) => { puts.push(k); kv.set(k, v); },
+    list: async ({ prefix }) => ({ keys: [...kv.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })), list_complete: true }),
+  } };
+}
+const state = env => JSON.parse(env.kv.get(KEEPER_KEY) || 'null');
+// A stub read for every fix: notes the call, and fills the gap in KV when told to (fill(kv, item)).
+function stubs(fill = null, answer = {}) {
+  const calls = [], R = {};
+  for (const f of ['refreshOdds', 'refreshCardClose', 'refreshBtts', 'gradeLeague', 'forebetFetch', 'nhlForebet', 'nhlLineupStep', 'nhlCardClose', 'nhlStep', 'analystLook', 'analystNhl'])
+    R[f] = async (env, it, now) => { calls.push({ fix: f, it, env }); if (fill) await fill(env, it); return typeof answer === 'function' ? answer(f) : answer; };
+  return { calls, R };
+}
+const dayOf = (cards, sport = 'soccer') => ({ [sport === 'nhl' ? `nhl:day:${T}` : `day:${T}`]: { date: T, cards } });
+const run = (env, at, R, o = {}) => keeperStep(env, new Date(at), { repairs: R, ...o });
+
+// each gap gets the right read, with the right arguments
+const one = [
+  ['price', dayOf([card('p', 'eng.1', 3 * H, { odds: { by: -110, bn: -110 } })]), 'refreshOdds'],
+  ['close', dayOf([card('w', 'esp.1', 25 * M, { odds: { ...FULL } })]), 'refreshCardClose'],
+  ['btts', dayOf([card('b', 'ger.1', 5 * H, { odds: { ...PRICE } })]), 'refreshBtts'],
+  ['forebet', dayOf([card('f', 'ned.1', 2 * H, { fb: undefined })]), 'forebetFetch'],
+  ['result', dayOf([card('r', 'eng.1', -7 * H)]), 'gradeLeague'],
+  ['nhl-lineup', dayOf([hk('n', 40 * M, { px: undefined })], 'nhl'), 'nhlLineupStep'],
+  ['nhl-lineup (close)', dayOf([hk('n', 30 * M, { px: { ml: [-130, 110] } })], 'nhl'), 'nhlCardClose'],
+  ['nhl-forebet', dayOf([hk('n', 3 * H, { fb: undefined })], 'nhl'), 'nhlForebet'],
+  ['nhl result', dayOf([hk('n', -7 * H)], 'nhl'), 'nhlStep'],
+  ['bet-settle', { ...dayOf([card('g', 'eng.1', -8 * H, { final: { h: 1, a: 0 } })]), analyst: { v: 1, items: [bet('x', 'g')] } }, 'analystLook'],
+  ['hockey bet-settle', { ...dayOf([hk('h', -8 * H, { final: { h: 3, a: 2 } })], 'nhl'), analyst: { v: 1, items: [bet('y', 'h', { sport: 'nhl', league: 'nhl' })] } }, 'analystNhl'],
+];
+for (const [what, seed, fix] of one) {
+  const env = mkEnv(seed, { BUDGET: budget(45) }), { calls, R } = stubs();
+  await run(env, NOW, R);
+  ok(`fixer: a ${what} gap gets ${fix}`, calls.length === 1 && calls[0].fix === fix, calls.map(c => c.fix).join());
+}
+{ // the item handed to the read carries what the read needs
+  const env = mkEnv(dayOf([card('w', 'esp.1', 25 * M, { odds: { ...FULL } })]), { BUDGET: budget(45) }), { calls, R } = stubs();
+  await run(env, NOW, R);
+  ok('fixer: the read is handed the date, league and game', calls[0].it.date === T && calls[0].it.league === 'esp.1' && calls[0].it.id === 'w');
+}
+
+// one repair per run, the most urgent first
+{
+  const env = mkEnv(dayOf([card('r', 'eng.1', -7 * H), card('w', 'esp.1', 25 * M, { odds: { ...FULL } }), card('f', 'ned.1', 2 * H, { fb: undefined })]), { BUDGET: budget(45) }), { calls, R } = stubs();
+  await run(env, NOW, R);
+  ok('fixer: one repair per run, the lineup window first', calls.length === 1 && calls[0].fix === 'refreshCardClose');
+  ok('fixer: meta:keeper is written once in the run', env.puts.filter(k => k === KEEPER_KEY).length === 1, env.puts.join());
+}
+
+// filled: the gap is gone when the day is read again
+{
+  const fill = async (env, it) => { const k = `day:${it.date}`, d = JSON.parse(env.kv.get(k)); d.cards.find(c => c.id === it.id).final = { h: 2, a: 1 }; env.kv.set(k, JSON.stringify(d)); };
+  const env = mkEnv(dayOf([card('r', 'eng.1', -7 * H)]), { BUDGET: budget(45) }), { calls, R } = stubs(fill);
+  const r = await run(env, NOW, R), s1 = state(env);
+  ok('fixer: a read that fills the gap is logged "filled"', r.did && r.did.result === 'filled' && s1.log[0].result === 'filled' && s1.log[0].check === 'result' && s1.log[0].action === 'gradeLeague', JSON.stringify(r.did));
+  ok('fixer: the log entry says when, which sport, day, league and game', s1.log[0].at === new Date(NOW).toISOString() && s1.log[0].sport === 'soccer' && s1.log[0].date === T && s1.log[0].league === 'eng.1' && s1.log[0].game === 'Hr v Ar');
+  ok('fixer: a filled gap leaves no back-off clock', !s1.wait[`result|${T}|r`]);
+}
+
+// budget 0: nothing fetched
+{
+  const env = mkEnv(dayOf([card('r', 'eng.1', -7 * H), card('p', 'eng.1', 3 * H, { odds: undefined })]), { BUDGET: budget(0) }), { calls, R } = stubs();
+  const r = await run(env, NOW, R);
+  ok('budget: with no calls left nothing is read', calls.length === 0);
+  ok('budget: the most urgent item is logged "skipped: budget"', r.skipped && r.skipped.result === 'skipped: budget' && state(env).log[0].result === 'skipped: budget');
+  const n = env.puts.length; await run(env, NOW + 5 * M, R);
+  ok('budget: the same skip again is not written again', env.puts.length === n && calls.length === 0, env.puts.join());
+}
+{ // the alerts' share is kept back
+  const env = mkEnv(dayOf([card('r', 'eng.1', -7 * H)]), { BUDGET: budget(5) }), { calls, R } = stubs();
+  await run(env, NOW, R);
+  ok('budget: a read is not run if it would eat into the alerts\' share', calls.length === 0);
+  const env2 = mkEnv(dayOf([card('r', 'eng.1', -7 * H)]), { BUDGET: budget(7) }), s2 = stubs();
+  await run(env2, NOW, s2.R);
+  ok('budget: with enough left it runs, on its own grant of calls', s2.calls.length === 1 && s2.calls[0].env.BUDGET.left === 3 && env2.BUDGET.left === 4, `${s2.calls[0] && s2.calls[0].env.BUDGET.left} ${env2.BUDGET.left}`);
+}
+{ // no budget at all (a button, a test): not limited
+  const env = mkEnv(dayOf([card('r', 'eng.1', -7 * H)])), { calls, R } = stubs();
+  await run(env, NOW, R);
+  ok('budget: a run with no budget set is not limited', calls.length === 1);
+}
+
+// back-off: 30 min, then 1 h, then gave up after the third failed try
+{
+  const env = mkEnv(dayOf([card('r', 'eng.1', -7 * H)])), { calls, R } = stubs(null, { graded: 0, pending: 1 });
+  const k = `result|${T}|r`;
+  await run(env, NOW, R);
+  ok('back-off: a read that leaves the gap is "still missing", and waits 30 minutes', calls.length === 1 && state(env).log[0].result === 'still missing' && state(env).wait[k].tries === 1 && Date.parse(state(env).wait[k].next) === NOW + BACKOFF_MIN[0] * M);
+  await run(env, NOW + 29 * M, R);
+  ok('back-off: not tried again before the wait is over', calls.length === 1);
+  await run(env, NOW + 31 * M, R);
+  ok('back-off: the second try, then a 1-hour wait', calls.length === 2 && state(env).wait[k].tries === 2 && Date.parse(state(env).wait[k].next) === NOW + 31 * M + BACKOFF_MIN[1] * M);
+  await run(env, NOW + 31 * M + 59 * M, R);
+  ok('back-off: still waiting at 59 minutes', calls.length === 2);
+  await run(env, NOW + 31 * M + 61 * M, R);
+  const w = state(env).wait[k];
+  ok(`back-off: after ${GIVE_UP} failed tries it gives up, with the reason`, calls.length === 3 && w.gaveUp && /^gave up: still missing after the read/.test(state(env).log[0].result), JSON.stringify(w));
+  await run(env, NOW + 10 * H, R);
+  ok('back-off: a gave-up item is not tried again', calls.length === 3);
+}
+{ // the read's own error is the reason; a read that throws is a failed try, never thrown out of the step
+  const env = mkEnv(dayOf([card('w', 'esp.1', 25 * M, { odds: { ...FULL } })])), R = { refreshCardClose: async () => { throw new Error('ESPN down'); } };
+  let threw = false, r; try { r = await run(env, NOW, R); } catch (e) { threw = true; }
+  ok('errors: a read that throws does not break the step, and its error is the reason', !threw && r.did.result === 'still missing' && state(env).wait[`close|${T}|w`].why === 'ESPN down');
+}
+
+// Forebet 403 / 429: no Forebet repair for 2 hours
+{
+  const seed = dayOf([card('f1', 'ned.1', 4 * H, { fb: undefined }), card('f2', 'eng.1', 5 * H, { fb: undefined })]);
+  const env = mkEnv(seed), { calls, R } = stubs(null, f => f === 'forebetFetch' ? { error: 'HTTP 403' } : {});
+  await run(env, NOW, R);
+  ok('forebet: a 403 blocks Forebet for 2 hours', calls.length === 1 && Date.parse(state(env).blocks.forebet) === NOW + BLOCK_H * H);
+  await run(env, NOW + 35 * M, R);
+  ok('forebet: inside the block no Forebet read runs (another game\'s either)', calls.length === 1, calls.map(c => c.it.id).join());
+  ok('forebet: the block is noted as a skip', state(env).log[0].result === 'skipped: block');
+  await run(env, NOW + BLOCK_H * H + M, R);
+  ok('forebet: after the block Forebet is read again', calls.length === 2);
+  const env2 = mkEnv(dayOf([hk('n', 3 * H, { fb: undefined })], 'nhl')), s2 = stubs(null, { error: 'HTTP 429' });
+  await run(env2, NOW, s2.R);
+  ok('forebet: a 429 from the hockey page blocks Forebet too', state(env2).blocks.forebet && Date.parse(state(env2).blocks.forebet) > NOW);
+  const env3 = mkEnv({ ...seed, 'meta:fb': { 'ned.1|1x2': { at: new Date(NOW - 2 * M).toISOString(), ok: false } } }), s3 = stubs();
+  await run(env3, NOW, s3.R);
+  ok('forebet: a page Forebet\'s own job read 2 minutes ago is not read again (the next one is)', s3.calls.length === 1 && s3.calls[0].it.id === 'f2', s3.calls.map(c => c.it.id).join());
+}
+
+// nothing to do: no write
+{
+  const env = mkEnv(dayOf([card('ok', 'eng.1', 3 * H)])), { calls, R } = stubs();
+  const r = await run(env, NOW, R);
+  ok('no write: nothing missing, nothing read, nothing written', calls.length === 0 && env.puts.length === 0 && r.did === null && r.missing === 0, env.puts.join());
+  const env2 = mkEnv(dayOf([card('ok', 'uefa.nations', 3 * H, { odds: undefined, fb: undefined })])), s2 = stubs();
+  await run(env2, NOW, s2.R);
+  ok('no write: a gap outside scope is not the Keeper\'s', s2.calls.length === 0 && env2.puts.length === 0);
+}
+
+// saver mode: the lineup window and results only
+{
+  const seed = dayOf([card('p', 'eng.1', 3 * H, { odds: undefined }), card('r', 'eng.1', -7 * H)]);
+  const env = mkEnv(seed, { SAVER: true }), { calls, R } = stubs();
+  await run(env, NOW, R);
+  ok('saver: a result is still repaired', calls.length === 1 && calls[0].fix === 'gradeLeague');
+  const env2 = mkEnv(dayOf([card('p', 'eng.1', 3 * H, { odds: undefined }), card('f', 'ned.1', 2 * H, { fb: undefined })]), { SAVER: true }), s2 = stubs();
+  const r2 = await run(env2, NOW, s2.R);
+  ok('saver: prices outside the window and Forebet wait', s2.calls.length === 0 && r2.skipped && r2.skipped.result === 'skipped: saver');
+  const env3 = mkEnv(dayOf([card('w', 'esp.1', 25 * M, { odds: { ...FULL } })]), { SAVER: true }), s3 = stubs();
+  await run(env3, NOW, s3.R);
+  ok('saver: the lineup-window read still runs', s3.calls.length === 1 && s3.calls[0].fix === 'refreshCardClose');
+}
+
+// credits: with no Odds API key above the reserve the read runs without the keys
+{
+  const seed = dayOf([card('b', 'ger.1', 5 * H, { odds: { ...PRICE } })]);
+  globalThis.caches = { default: { match: async () => new Response(JSON.stringify({ left: 40, at: new Date(NOW).toISOString() })), put: async () => {} } };
+  try {
+    const env = mkEnv(seed, { ODDS_API_KEY: 'k1' }), { calls, R } = stubs();
+    await run(env, NOW, R);
+    ok('credits: below the reserve the both-score read runs with no Odds API key (Pinnacle / ESPN only)', calls.length === 1 && calls[0].env.ODDS_API_KEY === '' && env.ODDS_API_KEY === 'k1');
+    globalThis.caches.default.match = async () => new Response(JSON.stringify({ left: 400, at: new Date(NOW).toISOString() }));
+    const env2 = mkEnv(seed, { ODDS_API_KEY: 'k1' }), s2 = stubs();
+    await run(env2, NOW, s2.R);
+    ok('credits: above the reserve the key is used', s2.calls[0].env.ODDS_API_KEY === 'k1');
+  } finally { delete globalThis.caches; }
+}
+
+// a source this run already read is left alone
+{
+  const seed = dayOf([card('w', 'esp.1', 25 * M, { odds: { ...FULL } }), card('r', 'eng.1', -7 * H)]);
+  const rec = recentFrom([{ job: 'odds', league: 'esp.1', date: T, changed: 1 }, null, { job: 'grade', idle: true }]);
+  ok('recent: the run\'s answers name what was read', rec.length === 1 && rec[0].source === 'prices' && rec[0].league === 'esp.1');
+  const env = mkEnv(seed), { calls, R } = stubs();
+  const r = await run(env, NOW, R, { recent: rec });
+  ok('recent: the price read just made is not repeated; the next item is repaired', calls.length === 1 && calls[0].fix === 'gradeLeague' && !r.skipped);
+  ok('recent: the hockey job and Forebet answers count too', recentFrom([{ job: 'nhl', forebet: { saved: 1 } }]).map(x => x.source).join() === 'nhl-results,nhl-prices,forebet' && recentFrom([{ job: 'forebet', slug: 'eng.1' }])[0].source === 'forebet');
+}
+
+// a settled bet with no close: nothing can fill it, so it is given up at once (no read)
+{
+  const env = mkEnv({ ...dayOf([card('g', 'eng.1', -8 * H, { final: { h: 1, a: 0 } })]), analyst: { v: 1, items: [bet('z', 'g', { res: 'win', close: null })] } }), { calls, R } = stubs();
+  await run(env, NOW, R);
+  ok('bets: a settled bet with no close is given up at once, with the reason, and no read', calls.length === 0 && /^gave up: settled with no closing price/.test(state(env).log[0].result));
+  const n = env.puts.length; await run(env, NOW + 5 * M, R);
+  ok('bets: and not written again', env.puts.length === n);
+}
+
+// the record stays small
+{
+  const env = mkEnv({ [KEEPER_KEY]: { log: Array.from({ length: LOG_MAX }, (_, i) => ({ at: 'x', i })), wait: { [`result|2026-11-01|old`]: { tries: 1 } }, blocks: {} }, ...dayOf([card('r', 'eng.1', -7 * H)]) }), { R } = stubs();
+  await run(env, NOW, R);
+  ok('record: the log keeps the last 100 actions, newest first', state(env).log.length === LOG_MAX && state(env).log[0].check === 'result');
+  ok('record: back-off clocks of games past the look-back are dropped', !state(env).wait['result|2026-11-01|old']);
+}
+ok('writes: meta:keeper is counted as the Keeper\'s bookkeeping', writeKind(KEEPER_KEY) === 'bookkeeping: keeper');
+ok('cost: a price read costs more than a Forebet read, the Analyst\'s settle pass costs no call', costOf({ fix: 'refreshOdds', sport: 'soccer', date: T, league: 'eng.1' }, {}, {}) > costOf({ fix: 'forebetFetch' }, {}, {}) && costOf({ fix: 'analystLook' }, {}, {}) === 0);
 
 console.log(fail ? `\n${fail} FAILED` : '\nall keeper checks passed');
 process.exit(fail ? 1 : 0);

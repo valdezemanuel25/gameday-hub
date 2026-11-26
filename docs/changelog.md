@@ -446,3 +446,12 @@ notes in the pages under public/.
   with none at kickoff + 6 h (back to today - 3), then prices, both-score prices, Forebet and Analyst bets; La Liga 2 and 2. Bundesliga
   last. Reads only what it is handed; nothing calls it yet. The per-card "missing" tests moved to src/gaps.js and are now shared by
   src/health.js gameChecks, src/sweepdata.js dayGaps and the Keeper (same answers as before). Tests: test/keeper.mjs.
+- Nov 26, 2026: Data Keeper step 2 of 4, the fixer. `keeperStep(env, now)` runs in the cron (src/worker.js) after the rotating job and
+  before the alerts: at most one repair a run, re-running the existing read for the most urgent item not waiting, only if the run's call
+  budget grants it with the alerts' share (ALERTS_KEEP) kept back. Back-off per game and check: 30 min, then 1 h; the third failed try
+  gives up with the reason. A Forebet 403 / 429 stops Forebet repairs for 2 h. With no Odds API key above BTTS_RESERVE the reads run
+  without the keys (ESPN and Pinnacle only). Saver mode: lineup-window and result repairs only. A source this run already read (or
+  Forebet's page read in the last 5 min) is left alone. Its state is one record, meta:keeper (counted as 'keeper'), written once a run
+  and only when it did something or noted a new skip. Both-score gaps are listed only once a game has its ESPN price (the price read
+  brings the both-score price, Pinnacle first, with no credit). A settled bet with no close is given up at once: the settle pass never
+  goes back to a settled bet.

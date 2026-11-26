@@ -8,7 +8,7 @@ export const WRITE_LIMIT = 1000; // Cloudflare free plan: KV writes per UTC day
 // The count is saved with ONE extra write at the end, and only when something was written.
 // What a key's write is for, for the per-job breakdown (meta:writes.by): soccer day cards, hockey day cards, the Analyst, and so on.
 // Bookkeeping is split by record, so the sweep can see which one costs saves.
-const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games', 'meta:joberrors': 'job errors' };
+const META = { 'meta:writes': 'write counter', 'meta:synced': 'sync times', 'meta:errors': 'sync problems', 'meta:fb': 'forebet', 'meta:unm': 'unmatched games', 'meta:joberrors': 'job errors', 'meta:keeper': 'keeper' };
 const META_KIND = s => `bookkeeping: ${META[s] || 'other'}`;
 export const writeKind = k => { const s = String(k); return s.startsWith('fix:') ? 'button saves' : s.startsWith('nhl:') ? 'hockey' : s.startsWith('day:') ? 'soccer days' : s === 'analyst' ? 'analyst'
   : s.startsWith('res:') ? 'results sync' : s.startsWith('rat:') ? 'v4 ratings' : s.startsWith('sm:') ? 'sportsmole' : s.startsWith('sweep:') ? 'stats files' : s.startsWith('push') ? 'alerts' : s.startsWith('meta:') ? META_KIND(s) : 'other'; };
