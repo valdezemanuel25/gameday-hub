@@ -450,11 +450,13 @@ function shotsFrom(SH, c, e, j) {
 }
 export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
   const t = localDate(now.toISOString()), out = [];
+  let fetched = false;
   for (const date of [addDays(t, -1), t, addDays(t, 1)]) {
     const day = await getDay(env, date, 'nhl'); if (!day) continue;
     const due = (day.cards || []).filter(c => { const m = (new Date(c.kickoff).getTime() - now.getTime()) / 60000; return !c.final && !c.void && m > PRICE_LOCK && m <= LINEUP_READ && lineupDue(c.px, now); });
     if (!due.length) continue;
     if (env.BUDGET && !env.BUDGET.take(1)) break; // the run's outside calls (src/store.js budget): retried in 5 minutes
+    fetched = true;
     const evs = await scoreboard(date, fetchFn, []); if (!evs) continue;
     let dirty = false; const n0 = env.BUDGET ? Math.min(8, env.BUDGET.left) : 8, st = { S5: null, cache: {}, budget: { n: n0 } }; // goalie game logs read
     try {
@@ -468,7 +470,8 @@ export async function nhlLineupStep(env, now = new Date(), fetchFn = fetch) {
     } finally { if (env.BUDGET) env.BUDGET.spend(n0 - st.budget.n); } // the game logs read
     if (dirty) { await env.HUB.put(`nhl:day:${date}`, JSON.stringify(day)); await analystNhl(env, date, day.cards, now); }
   }
-  return out.length ? { job: 'nhl-lineup', read: out } : null;
+  // An answer whenever ESPN was read, changed or not, so the Data Keeper (src/keeper.js recentFrom) knows not to read it again this run.
+  return out.length || fetched ? { job: 'nhl-lineup', read: out } : null;
 }
 
 // ---- cron / on-demand step ---------------------------------------------------------------------

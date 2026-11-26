@@ -11,14 +11,14 @@
 // Scope: the priced first divisions (FIRST_DIV), the two cups with a model (CUP_MODEL) and the NHL. La Liga 2 and 2. Bundesliga
 // (SECOND_PRICED) are checked too but sorted after everything else, so they only get calls that are left over. Other leagues: nothing.
 import { FIRST_DIV, CUP_MODEL, SECOND_PRICED, localDate } from './data.js';
-import { LINEUP_READ, PRICE_LOCK, BTTS_RESERVE, refreshOdds, refreshCardClose, refreshBtts, gradeLeague, oddsKeys, oddsCost, readCredits } from './jobs.js';
-import { LINEUP_READ as NHL_READ, PRICE_LOCK as NHL_LOCK, nhlLineupStep, nhlCardClose, nhlForebet, nhlStep } from './nhl.js';
+import { LINEUP_READ, PRICE_LOCK, BTTS_RESERVE, refreshOdds, gradeLeague, oddsKeys, oddsCost, readCredits, putDay } from './jobs.js';
+import { LINEUP_READ as NHL_READ, PRICE_LOCK as NHL_LOCK, nhlLineupStep, nhlForebet, nhlStep } from './nhl.js';
 import { FB_PAGES, forebetFetch } from './forebetpage.js';
 import { analystLook, analystNhl, getAnalyst } from './analyst.js';
 import { getDay } from './fixes.js';
-import { ask, budget } from './store.js';
+import { ask, budget, coalesce } from './store.js';
 import { getPush, sendAll } from './push.js';
-import { KEEPER_KEY, LOG_MAX, readKeeper } from './keeperlog.js';
+import { KEEPER_KEY, LOG_MAX, readKeeper, hourKey, HOURS_KEEP } from './keeperlog.js';
 import { HOUR, koOf, tracked, closed, noResult, noSoccerPrice, noSoccerClose, noBtts, noForebet, noHockeyPrice, noGoalie, noLine, noHockeyClose, betOpen, betNoClose } from './gaps.js';
 
 // A result is "too late" this many hours after kickoff: the game's 2 hours (GAME_HOURS) plus 4. Normal grading runs at kickoff + 5 h.
@@ -34,20 +34,25 @@ const TOP = new Set([...FIRST_DIV, ...CUP_MODEL.map(l => l.slug)]);
 const addDays = (d, n) => new Date(new Date(`${d}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 // In the lineup window: from `read` down to `lock` minutes before kickoff (soccer 30..20, hockey 45..20).
 const inWindow = (mins, read, lock) => mins > lock && mins <= read;
+// The repair an item needs, as one key: the read, the day, the league (Forebet: and the table), and |w for the lineup-window read, so a
+// price given up on hours out is still tried at the closing read.
+const rkOf = (fix, date, league, tier, kind) => fix ? `${fix}|${date}|${league}${fix === 'forebetFetch' ? `|${kind || '1x2'}` : ''}${tier === TIER.lineup ? '|w' : ''}` : null;
 // Which soccer leagues are in scope: 'top', 'second', or null (left alone).
 export const scopeOf = slug => TOP.has(slug) ? 'top' : SECOND_PRICED.has(slug) ? 'second' : null;
 
 // days: { soccer: { date: [cards] }, nhl: { date: [cards] } } (either may be missing). now: a Date or ms.
 // opts.bets: the Analyst's items (src/analyst.js getAnalyst().items), to find bets left open or settled with no close.
-// Returns [{ key, sport, date, league, id, game, kickoff, check, fix, tier, second, need? }], most urgent first.
-//   key:   "<check>|<date>|<id>", what the fixer keeps its back-off clock under
+// Returns [{ key, rk, sport, date, league, id, game, kickoff, check, fix, tier, second, need?, why? }], most urgent first.
+//   key:   "<check>|<date>|<id>", one game's gap
+//   rk:    the repair that fills it, "<fix>|<date>|<league or nhl>[|w]" (|w: the lineup-window read). One read fills every game of a
+//          league (or the whole hockey day), so the fixer keeps its back-off clock and its tries per repair, not per game.
 //   check: price | close | btts | forebet | result | nhl-lineup | nhl-forebet | bet-settle | bet-close
-//   fix:   the existing read that fills it (src/jobs.js, src/nhl.js, src/forebetpage.js, src/analyst.js); null when none can
+//   fix:   the existing read that fills it (src/jobs.js, src/nhl.js, src/forebetpage.js, src/analyst.js); null when none can (why says so)
 export function missing(days, now, { bets = [], resultH = RESULT_H, lookBack = LOOK_BACK } = {}) {
   const t = +now, today = localDate(new Date(t).toISOString()), from = addDays(today, -lookBack), out = [];
-  const add = (sport, date, c, check, fix, tier, extra = {}) => out.push({
-    key: `${check}|${date}|${c.id}`, sport, date, league: sport === 'nhl' ? 'nhl' : c.league, id: c.id, game: `${c.home} v ${c.away}`, kickoff: c.kickoff,
-    check, fix, tier, second: sport !== 'nhl' && scopeOf(c.league) === 'second', ...extra });
+  const add = (sport, date, c, check, fix, tier, extra = {}) => { const league = sport === 'nhl' ? 'nhl' : c.league; out.push({
+    key: `${check}|${date}|${c.id}`, rk: rkOf(fix, date, league, tier, extra.kind), sport, date, league, id: c.id, game: `${c.home} v ${c.away}`, kickoff: c.kickoff,
+    check, fix, tier, second: sport !== 'nhl' && scopeOf(c.league) === 'second', ...extra }); };
   const recent = date => date >= from && date <= today;
 
   for (const [date, cards] of Object.entries((days && days.soccer) || {})) for (const c of cards || []) {
@@ -55,11 +60,12 @@ export function missing(days, now, { bets = [], resultH = RESULT_H, lookBack = L
     const ko = koOf(c); if (!Number.isFinite(ko)) continue;
     if (closed(c)) continue; // a result is in, or void (postponed, canceled...): nothing more to fill
     const mins = (ko - t) / 60000, ahead = mins > 0 && mins <= PRICE_AHEAD_H * 60, win = inWindow(mins, LINEUP_READ, PRICE_LOCK);
-    if (ahead && noSoccerPrice(c)) add('soccer', date, c, 'price', 'refreshOdds', win ? TIER.lineup : TIER.other); // in the window this read is the close too
-    else if (win && noSoccerClose(c)) add('soccer', date, c, 'close', 'refreshCardClose', TIER.lineup);
-    // Both-score price only once the game has its ESPN price: the price read brings it along (Pinnacle first, no credit), so a game
-    // with neither waits for the price read instead of spending Odds API credits first.
-    if (ahead && !noSoccerPrice(c) && noBtts(c)) add('soccer', date, c, 'btts', 'refreshBtts', TIER.other);
+    // Price, close and both-score price are all filled by the league's price read (src/jobs.js refreshOdds): in the lineup window it is
+    // the close too (noted in odds.cl, as the background job's own read), and it brings the both-score price, Pinnacle first.
+    if (ahead && noSoccerPrice(c)) add('soccer', date, c, 'price', 'refreshOdds', win ? TIER.lineup : TIER.other);
+    else if (win && noSoccerClose(c)) add('soccer', date, c, 'close', 'refreshOdds', TIER.lineup);
+    // Both-score price only once the game has its ESPN price, and until the price locks (the price read leaves a game alone after that).
+    if (ahead && mins > PRICE_LOCK && !noSoccerPrice(c) && noBtts(c)) add('soccer', date, c, 'btts', 'refreshOdds', win ? TIER.lineup : TIER.other);
     if (date === today && mins > 0 && FB_PAGES[c.league] && noForebet(c)) add('soccer', date, c, 'forebet', 'forebetFetch', TIER.other, { kind: '1x2' });
     if (recent(date) && noResult(c, t, resultH)) add('soccer', date, c, 'result', 'gradeLeague', TIER.result);
   }
@@ -70,11 +76,14 @@ export function missing(days, now, { bets = [], resultH = RESULT_H, lookBack = L
     const mins = (ko - t) / 60000;
     if (inWindow(mins, NHL_READ, NHL_LOCK)) {
       const need = [noHockeyPrice(c) && 'price', noGoalie(c) && 'goalie', noLine(c) && 'line', !noHockeyPrice(c) && noHockeyClose(c) && 'close'].filter(Boolean);
-      // just the close missing: the one-game close read; anything else: the lineup read (price, goalies and line together)
-      if (need.length) add('nhl', date, c, 'nhl-lineup', need.length === 1 && need[0] === 'close' ? 'nhlCardClose' : 'nhlLineupStep', TIER.lineup, { need });
+      // The lineup read (src/nhl.js nhlLineupStep) fills the price, its close and the goalies. The line comes only from the hockey job's
+      // full read (which also reads Forebet and goalie logs: too heavy for a repair), so a game missing just its line is listed, not repaired.
+      const lineOnly = need.length === 1 && need[0] === 'line';
+      if (need.length) add('nhl', date, c, 'nhl-lineup', lineOnly ? null : 'nhlLineupStep', TIER.lineup, { need, ...(lineOnly ? { why: 'the line is read by the hockey job, not the lineup read' } : {}) });
     }
     if (date === today && mins > 0 && noForebet(c)) add('nhl', date, c, 'nhl-forebet', 'nhlForebet', TIER.other);
-    if (recent(date) && noResult(c, t, resultH)) add('nhl', date, c, 'result', 'nhlStep', TIER.result);
+    // The hockey results read (nhlStep) covers yesterday onward; an older game is listed, not repaired.
+    if (recent(date) && noResult(c, t, resultH)) add('nhl', date, c, 'result', date >= addDays(today, -1) ? 'nhlStep' : null, TIER.result, date >= addDays(today, -1) ? {} : { why: 'the hockey results read covers yesterday onward' });
   }
 
   // Analyst bets of the last few days: still open though the game is closed, or settled with no closing price.
@@ -84,10 +93,11 @@ export function missing(days, now, { bets = [], resultH = RESULT_H, lookBack = L
     if (!recent(b.date) || (sport === 'soccer' && !scopeOf(b.league))) continue;
     const c = (((days && days[sport]) || {})[b.date] || []).find(x => x && x.id === b.gid);
     const check = betOpen(b, c) ? 'bet-settle' : betNoClose(b) ? 'bet-close' : null; if (!check) continue;
-    out.push({ key: `${check}|${b.date}|${b.id}`, sport, date: b.date, league: sport === 'nhl' ? 'nhl' : b.league, id: b.gid, game: `${b.home} v ${b.away}`,
-      // A settled bet's close cannot be filled: the settle pass (src/analyst.js settle) never goes back to a settled bet, so there is no read to re-run.
-      kickoff: b.kickoff, check, fix: check === 'bet-close' ? null : sport === 'nhl' ? 'analystNhl' : 'analystLook', tier: TIER.other, second: sport !== 'nhl' && scopeOf(b.league) === 'second',
-      bet: b.id, rule: b.rule, market: b.key });
+    // A settled bet's close cannot be filled: the settle pass (src/analyst.js settle) never goes back to a settled bet, so there is no read to re-run.
+    const fix = check === 'bet-close' ? null : sport === 'nhl' ? 'analystNhl' : 'analystLook', league = sport === 'nhl' ? 'nhl' : b.league;
+    out.push({ key: `${check}|${b.date}|${b.id}`, rk: rkOf(fix, b.date, league, TIER.other), sport, date: b.date, league, id: b.gid, game: `${b.home} v ${b.away}`,
+      kickoff: b.kickoff, check, fix, tier: TIER.other, second: sport !== 'nhl' && scopeOf(b.league) === 'second',
+      bet: b.id, rule: b.rule, market: b.key, ...(fix ? {} : { why: 'settled with no closing price; the settle pass never goes back to a settled bet' }) });
   }
 
   // Most urgent first: second divisions after everything else; then by tier; in the lineup window and for the rest the soonest kickoff
@@ -97,20 +107,19 @@ export function missing(days, now, { bets = [], resultH = RESULT_H, lookBack = L
 
 // ---- the fixer ----------------------------------------------------------------------------------------------------------------------
 export { KEEPER_KEY, LOG_MAX, readKeeper };
-// After a failed try: wait 30 minutes, then 1 hour, then 2 hours; the third failed try gives up (the nightly sweep picks up give-ups).
-export const BACKOFF_MIN = [30, 60, 120], GIVE_UP = 3;
-// After a Forebet 403 or 429, no Forebet repair for this long.
+// After a failed repair: wait 30 minutes, then 1 hour; the third failed try gives up (the nightly checks pick up give-ups). A repair that
+// filled some of its games but not all waits the first step again without counting a try.
+export const BACKOFF_MIN = [30, 60], GIVE_UP = 3;
+// After a Forebet 403 or 429 (the Keeper's read, or Forebet's own job), no Forebet repair for this long.
 export const BLOCK_H = 2;
-// A source another job read this recently is not read again by the Keeper.
-export const RECENT_MIN = 5;
+// A source another job read this recently is not read again by the Keeper. A Forebet page read fine is left alone FB_OK_H hours, as
+// Forebet's own job does (src/forebetpage.js forebetStep).
+export const RECENT_MIN = 5, FB_OK_H = 3;
 // The calls kept back for the alerts after the Keeper (src/push.js pushStep: one per game about to start).
 export const ALERTS_KEEP = 4;
 
-// Which source each read uses: a read of the same source (and league and day) by another job in this run, or in the last RECENT_MIN
-// minutes, means the Keeper leaves it be.
-export const SOURCE = { refreshOdds: 'prices', refreshCardClose: 'prices', refreshBtts: 'prices', gradeLeague: 'results', forebetFetch: 'forebet', nhlForebet: 'forebet',
-  nhlLineupStep: 'nhl-prices', nhlCardClose: 'nhl-prices', nhlStep: 'nhl-results', analystLook: 'analyst', analystNhl: 'analyst' };
-const PRICE_FIX = new Set(['refreshOdds', 'refreshCardClose', 'refreshBtts']);
+// Which source each read uses: a read of the same source (and league and day) by another job in this run means the Keeper leaves it be.
+export const SOURCE = { refreshOdds: 'prices', gradeLeague: 'results', forebetFetch: 'forebet', nhlForebet: 'forebet', nhlLineupStep: 'nhl-prices', nhlStep: 'nhl-results', analystLook: 'analyst', analystNhl: 'analyst' };
 
 // What this run's other jobs read, from their answers (src/worker.js): [{ source, league?, date? }]. No league means the whole source.
 export function recentFrom(answers) {
@@ -127,33 +136,36 @@ export function recentFrom(answers) {
 }
 const isRecent = (recent, it) => recent.some(r => r.source === SOURCE[it.fix] && (!r.league || r.league === it.league) && (!r.date || r.date === it.date));
 
-// Outside calls each read may make (an upper estimate, asked of the run's budget before it runs). The read runs on exactly that grant,
-// so a read that asks the budget itself (the hockey lineup read's goalie logs) stays inside it.
+// Outside calls each read may make, an upper estimate asked of the run's budget before it runs (measured Nov 26, 2026). Only the hockey
+// lineup read asks the budget itself (for its goalie logs), so it is the one held to the grant; the others are estimated high enough.
+//   price read: ESPN, Pinnacle and the Odds API calls (oddsCost; none when the keys are left out for want of credits)
+//   results: the league's ESPN day plus the moved-game lookup (6); hockey results: 3 scoreboards and up to 6 game summaries (9)
+//   hockey lineup: the scoreboard plus 2 goalie logs; Forebet: one page; the Analyst's settle pass: KV only
 export function costOf(it, env, days) {
   const cards = ((days && days[it.sport]) || {})[it.date] || [], open = cards.filter(c => c && !c.final && !c.void && (it.sport === 'nhl' || c.league === it.league)).length;
   switch (it.fix) {
-    case 'refreshOdds': return oddsCost(env, Math.max(1, open)) + 2; // + the shots context and the Analyst's price shopping
-    case 'refreshCardClose': return oddsCost(env, 1);
-    case 'refreshBtts': return 2 + Math.max(1, open);
-    case 'gradeLeague': return 3;
+    case 'refreshOdds': return oddsCost(env, Math.max(1, open));
+    case 'gradeLeague': return 6;
+    case 'nhlStep': return 9;
     case 'nhlLineupStep': return 3;
-    case 'nhlStep': return Math.min(20, 3 + 2 * open);
-    case 'forebetFetch': case 'nhlForebet': case 'nhlCardClose': return 1;
-    default: return 0; // the Analyst's settle pass reads KV only
+    case 'forebetFetch': case 'nhlForebet': return 1;
+    default: return 0;
   }
 }
 
-// The reads themselves: the existing code, called as the buttons and the cron call it.
+// The reads themselves: the existing code, called as the cron calls it.
 const closedOn = async (env, date, sport, league) => ((await getDay(env, date, sport))?.cards || []).filter(c => (sport === 'nhl' || c.league === league) && (c.final || c.void));
 export const REPAIRS = {
-  refreshOdds: (env, it, now) => refreshOdds(env, it.date, it.league, now),
-  refreshCardClose: (env, it, now) => refreshCardClose(env, it.date, it.league, it.id, now),
-  refreshBtts: (env, it, now) => refreshBtts(env, it.date, it.league, now),
+  // The league's price read. Games still missing the both-score price have Pinnacle's 3-hour retry wait cleared first (odds.pbt), so the
+  // read asks Pinnacle for it now (free) before the Odds API (only with credits above the reserve). The day is saved once, only if changed.
+  refreshOdds: async (env, it, now) => {
+    const batch = coalesce(async d => { const day = await getDay(env, d); for (const c of day?.cards || []) if (c.league === it.league && c.odds && c.odds.by == null) delete c.odds.pbt; return day; }, (d, day) => putDay(env, d, day));
+    const r = await refreshOdds(env, it.date, it.league, now, fetch, batch); await batch.flush(); return r;
+  },
   gradeLeague: (env, it, now) => gradeLeague(it.date, it.league, env, { force: true }, now),
   forebetFetch: (env, it, now) => forebetFetch(env, it.league, it.kind || '1x2', now),
   nhlForebet: (env, it, now) => nhlForebet(env, now),
   nhlLineupStep: (env, it, now) => nhlLineupStep(env, now),
-  nhlCardClose: (env, it, now) => nhlCardClose(env, it.date, it.id, now),
   nhlStep: (env, it, now) => nhlStep(env, now, fetch, { mode: 'results' }),
   // The Analyst's settle pass, handed only the closed games of the day: with no open game in the list it places no new bet.
   analystLook: async (env, it, now) => analystLook(env, it.date, await closedOn(env, it.date, 'soccer', it.league), now),
@@ -161,90 +173,117 @@ export const REPAIRS = {
 };
 
 // Is any Odds API key above the credit reserve? (Credits left are noted per key in the edge cache; unknown counts as yes, as
-// src/jobs.js viaOddsKey does.) With none, the Keeper's reads run without the keys, so they fill from ESPN and Pinnacle only.
+// src/jobs.js viaOddsKey does.) With none, the Keeper's price reads run without the keys, so they fill from ESPN and Pinnacle only.
 async function creditsToSpend(env) {
   const keys = oddsKeys(env); if (!keys.length) return false;
   const v = env.BTTS_RESERVE, reserve = v == null || v === '' || Number.isNaN(+v) ? BTTS_RESERVE : +v;
   for (let i = 0; i < keys.length; i++) { const c = await readCredits(i); if (!c || c.left == null || c.left > reserve) return true; }
   return false;
 }
-// Read back a source's last read time (Forebet's own pages note it in meta:fb, hockey's in nhl:fbmeta), for the RECENT_MIN rule.
-async function forebetReadAt(env, it) {
+// Forebet's last read of this page (meta:fb per league and table; nhl:fbmeta for hockey), by the Keeper or Forebet's own job:
+// -> 'block' (refused with 403 / 429 in the last BLOCK_H hours), 'wait' (read in the last RECENT_MIN minutes, or read fine in the last
+// FB_OK_H hours), or null (go ahead).
+async function forebetState(env, it, t) {
   try {
-    if (it.fix === 'forebetFetch') { const m = await env.HUB.get('meta:fb', 'json'); return m && m[`${it.league}|${it.kind || '1x2'}`] ? Date.parse(m[`${it.league}|${it.kind || '1x2'}`].at) : NaN; }
-    if (it.fix === 'nhlForebet') { const m = await env.HUB.get('nhl:fbmeta', 'json'); return m ? Date.parse(m.at) : NaN; }
+    const m = it.fix === 'forebetFetch' ? ((await env.HUB.get('meta:fb', 'json')) || {})[`${it.league}|${it.kind || '1x2'}`] : await env.HUB.get('nhl:fbmeta', 'json');
+    const at = m && Date.parse(m.at); if (!Number.isFinite(at)) return null;
+    if (!m.ok && /\b(403|429)\b/.test(String(m.msg || '')) && t - at < BLOCK_H * 3600000) return { block: new Date(at + BLOCK_H * 3600000).toISOString() };
+    if (t - at < RECENT_MIN * 60000 || (m.ok && t - at < FB_OK_H * 3600000)) return 'wait';
   } catch (e) { /* unknown: go ahead */ }
-  return NaN;
+  return null;
 }
 
-// The days the checker looks at: today - LOOK_BACK to tomorrow, both sports (read only; the cron's own reads are KV reads, not calls).
+// The days the checker looks at: soccer today - LOOK_BACK to tomorrow; hockey yesterday to tomorrow (its results read reaches no further).
 async function loadDays(env, today) {
-  const dates = []; for (let n = -LOOK_BACK; n <= 1; n++) dates.push(addDays(today, n));
-  const [s, h] = await Promise.all(['soccer', 'nhl'].map(sp => Promise.all(dates.map(d => getDay(env, d, sp).catch(() => null)))));
-  return { soccer: Object.fromEntries(dates.map((d, i) => [d, s[i]?.cards || []])), nhl: Object.fromEntries(dates.map((d, i) => [d, h[i]?.cards || []])) };
+  const dates = n0 => { const a = []; for (let n = n0; n <= 1; n++) a.push(addDays(today, n)); return a; };
+  const sd = dates(-LOOK_BACK), hd = dates(-1);
+  const [s, h] = await Promise.all([Promise.all(sd.map(d => getDay(env, d).catch(() => null))), Promise.all(hd.map(d => getDay(env, d, 'nhl').catch(() => null)))]);
+  return { soccer: Object.fromEntries(sd.map((d, i) => [d, s[i]?.cards || []])), nhl: Object.fromEntries(hd.map((d, i) => [d, h[i]?.cards || []])) };
 }
 const short = e => String((e && e.message) || e).slice(0, 120);
+// The env a repair runs on: its own grant of calls, its KV writes counted (for the Keeper's write count), and without the Odds API keys
+// when no key is above the credit reserve.
+function repairEnv(env, cost, noKeys, w) {
+  const base = env.HUB, hub = Object.create(base);
+  hub.put = (...a) => { w.n++; return base.put(...a); };
+  return { ...env, HUB: hub, BUDGET: budget(cost), ...(noKeys ? { ODDS_API_KEY: '', ODDS_API_KEY_2: '' } : {}) };
+}
+// Per-hour counts (UTC hours, the last HOURS_KEEP): f filled, m still missing, g gave up, s skipped, r repairs run, w KV writes caused
+// (the repairs' saves and the Keeper's own record). The health report sums the last 24.
+const bump = (st, t, k, n = 1) => { const h = hourKey(t), o = st.hours[h] || (st.hours[h] = {}); o[k] = (o[k] || 0) + n; };
 
 // One repair per run, at most. opts (for tests and the worker): days / bets (already loaded), recent (recentFrom of this run's answers),
-// repairs (the reads), send (the phone alert). Answers { job: 'keeper', missing, did, skipped, alerted } and never throws an error of a read: a read that throws counts as a
-// failed try. meta:keeper is written once, only when something was done, a new skip noted or an alert sent.
+// repairs (the reads), send (the phone alert). Answers { job: 'keeper', missing, did, skipped, alerted } (and, not enumerated, the days as
+// read after the repair, for the alerts step) and never throws an error of a read: a read that throws counts as a failed try.
+// meta:keeper is written once, only when a repair ran, a new budget or block skip was noted, a give-up cleared, or an alert went out.
 export async function keeperStep(env, now = new Date(), { days = null, bets = null, recent = [], repairs = REPAIRS, send = sendAlert } = {}) {
   const t = +now, today = localDate(new Date(t).toISOString());
   const st = await readKeeper(env);
-  const D = days || await loadDays(env, today);
+  let D = days || await loadDays(env, today);
   const B = bets || (await getAnalyst(env, { readOnly: true }).catch(() => ({ items: [] }))).items || [];
   const list = missing(D, t, { bets: B });
   const out = { job: 'keeper', missing: list.length, did: null, skipped: null, alerted: 0 };
-  const blocked = st.blocks.forebet && Date.parse(st.blocks.forebet) > t;
-  let spend = null, first = null, filledKey = null; // first: the most urgent item passed over, and why (noted once per item and reason)
+  // Back-off clocks of repairs no longer needed (filled by another job, or the game is past): dropped. A give-up dropped is news.
+  const live = new Set(list.map(x => x.rk).filter(Boolean));
+  let dirty = false;
+  for (const k of Object.keys(st.wait)) if (!live.has(k)) { if (st.wait[k].gaveUp) dirty = true; delete st.wait[k]; }
+  let blocked = st.blocks.forebet && Date.parse(st.blocks.forebet) > t;
+  let spend = null, first = null, filled = new Set();
   const pass = (it, why) => { if (!first) first = { it, why }; };
+  const seen = new Set();
   for (const it of list) {
-    const w = st.wait[it.key];
+    if (!it.fix || seen.has(it.rk)) continue; // nothing can fill it (listed for the health report), or its repair was looked at already
+    seen.add(it.rk);
+    const w = st.wait[it.rk];
     if (w && (w.gaveUp || Date.parse(w.next) > t)) continue;
-    if (!it.fix) { // nothing can fill it: given up at once, with the reason
-      st.wait[it.key] = { tries: 0, gaveUp: true, why: 'settled with no closing price; the settle pass never goes back to a settled bet', at: new Date(t).toISOString(), ...about(it) };
-      out.did = logOf(it, t, 'none', `gave up: ${st.wait[it.key].why}`); st.log.unshift(out.did); break;
-    }
-    if (env.SAVER && it.tier !== TIER.lineup && it.tier !== TIER.result) { pass(it, 'saver'); continue; } // saver mode: the lineup window and results only
+    if (env.SAVER && it.tier !== TIER.lineup && it.tier !== TIER.result) continue; // saver mode: the lineup window and results only (not noted: saves are scarce)
+    if (SOURCE[it.fix] === 'forebet' && !blocked) { const fs = await forebetState(env, it, t); if (fs && fs.block) { st.blocks.forebet = fs.block; blocked = true; dirty = true; } else if (fs === 'wait') continue; }
     if (blocked && SOURCE[it.fix] === 'forebet') { pass(it, 'block'); continue; }
-    if (isRecent(recent, it)) continue; // the same read just ran: not a skip, the other job did it
-    if (SOURCE[it.fix] === 'forebet') { const last = await forebetReadAt(env, it); if (Number.isFinite(last) && t - last < RECENT_MIN * 60000) continue; }
-    const cost = costOf(it, env, D);
+    if (isRecent(recent, it)) continue; // the same read just ran: the other job did it
+    if (it.fix === 'refreshOdds' && spend == null) spend = await creditsToSpend(env);
+    const noKeys = it.fix === 'refreshOdds' && !spend, cost = costOf(it, noKeys ? { ...env, ODDS_API_KEY: '', ODDS_API_KEY_2: '' } : env, D);
     if (!ask(env, cost, ALERTS_KEEP)) { pass(it, 'budget'); continue; }
-    if (PRICE_FIX.has(it.fix) && spend == null) spend = await creditsToSpend(env);
-    // the read runs on its grant only; with no Odds API key above the reserve it runs without the keys (ESPN and Pinnacle only)
-    const renv = { ...env, BUDGET: budget(cost), ...(PRICE_FIX.has(it.fix) && !spend ? { ODDS_API_KEY: '', ODDS_API_KEY_2: '' } : {}) };
+    const group = list.filter(x => x.rk === it.rk), wn = { n: 0 };
     let r = null, err = null;
-    try { r = await repairs[it.fix](renv, it, new Date(t)); } catch (e) { err = short(e); }
+    try { r = await repairs[it.fix](repairEnv(env, cost, noKeys, wn), it, new Date(t)); } catch (e) { err = short(e); }
     if (!err && r && r.error) err = short(r.error);
     if (err && SOURCE[it.fix] === 'forebet' && /\b(403|429)\b/.test(err)) st.blocks.forebet = new Date(t + BLOCK_H * 3600000).toISOString();
-    // Filled or not: the same checker, on the day (and bets) read again after the read
-    const still = await stillMissing(env, it, D, B, t);
+    // Filled or not: the same checker, on the day (and bets) read again after the read, for every game this repair covers
+    const after = await readAfter(env, it, D, B, t);
+    D = after.D;
+    const left = new Set(missing(after.D, t, { bets: after.B }).filter(x => x.rk === it.rk).map(x => x.key));
+    const got = group.filter(x => !left.has(x.key)); for (const x of got) filled.add(x.key);
     let result;
-    if (!still) { delete st.wait[it.key]; result = 'filled'; filledKey = it.key; }
+    if (got.length === group.length) { delete st.wait[it.rk]; result = 'filled'; }
+    else if (got.length) { st.wait[it.rk] = { tries: (w && w.tries) || 0, next: new Date(t + BACKOFF_MIN[0] * 60000).toISOString(), why: 'partly filled' }; result = 'still missing'; }
     else {
-      const tries = ((w && w.tries) || 0) + 1, why = err || 'still missing after the read';
-      if (tries >= GIVE_UP) { st.wait[it.key] = { tries, gaveUp: true, why, at: new Date(t).toISOString(), ...about(it) }; result = `gave up: ${why}`; }
-      else { st.wait[it.key] = { tries, next: new Date(t + BACKOFF_MIN[tries - 1] * 60000).toISOString(), why }; result = 'still missing'; }
+      const tries = ((w && w.tries) || 0) + 1, why = err || (noKeys && oddsKeys(env).length ? 'still missing (no Odds API credits above the reserve: ESPN and Pinnacle only)' : 'still missing after the read');
+      if (tries >= GIVE_UP) { st.wait[it.rk] = { tries, gaveUp: true, why, at: new Date(t).toISOString(), ...about(it, group) }; result = `gave up: ${why}`; }
+      else { st.wait[it.rk] = { tries, next: new Date(t + BACKOFF_MIN[tries - 1] * 60000).toISOString(), why }; result = 'still missing'; }
     }
-    out.did = logOf(it, t, it.fix, result); st.log.unshift(out.did);
+    out.did = { ...logOf(it, t, it.fix, result, group), filled: got.length };
+    st.log.unshift(out.did);
+    bump(st, t, 'r'); bump(st, t, 'f', got.length); if (/^gave up/.test(result)) bump(st, t, 'g', group.length - got.length); else bump(st, t, 'm', group.length - got.length);
+    bump(st, t, 'w', wn.n); dirty = true;
     break;
   }
-  if (!out.did && first) { // nothing run: note the most urgent item passed over, once per item and reason
-    const w = st.wait[first.it.key] || {};
-    out.skipped = logOf(first.it, t, first.it.fix, `skipped: ${first.why}`);
-    if (w.skip === first.why) first = null; else { st.wait[first.it.key] = { ...w, skip: first.why }; st.log.unshift(out.skipped); }
+  if (!out.did && first) { // nothing run: note the most urgent repair passed over (budget, Forebet block), once per repair and reason
+    const w = st.wait[first.it.rk] || {};
+    out.skipped = logOf(first.it, t, first.it.fix, `skipped: ${first.why}`, list.filter(x => x.rk === first.it.rk));
+    if (w.skip !== first.why) { st.wait[first.it.rk] = { ...w, skip: first.why }; st.log.unshift(out.skipped); bump(st, t, 's'); dirty = true; }
   }
   // The phone alert: a result still missing 6 hours after kickoff, or a priced game with no price 2 hours before it. Once per game and
   // problem; one message for all of them. A game this run just filled is not in it.
-  const due = keeperAlerts(list.filter(x => x.key !== filledKey), D, t, st.sent); let sent = false;
+  const due = keeperAlerts(list.filter(x => !filled.has(x.key)), D, t, st.sent);
   if (due.length) {
-    try { const r = await send(env, alertMessage(due), t); if (r && r.sent > 0) { for (const a of due) st.sent[a.key] = t; out.alerted = due.length; sent = true; } } catch (e) { /* tried again next run */ }
+    try { const r = await send(env, alertMessage(due), t); if (r && r.sent > 0) { for (const a of due) st.sent[a.key] = t; out.alerted = due.length; dirty = true; } } catch (e) { /* tried again next run */ }
   }
-  if (out.did || first || sent) await saveKeeper(env, st, today, t);
+  if (dirty) { bump(st, t, 'w'); await saveKeeper(env, st, today, t); }
+  Object.defineProperty(out, 'days', { value: D, enumerable: false });
   return out;
 }
-const about = it => ({ sport: it.sport, league: it.league, game: it.game, check: it.check });
+const about = (it, group) => ({ sport: it.sport, league: it.league, game: label(it, group), check: it.check, games: group.length });
+const label = (it, group) => group.length > 1 ? `${it.game} and ${group.length - 1} more` : it.game;
 
 // ---- the phone alerts ---------------------------------------------------------------------------------------------------------------
 // A missing result is alerted from kickoff + RESULT_H up to ALERT_RESULT_MAX_H after kickoff (older ones are the nightly sweep's, so a
@@ -278,18 +317,19 @@ async function sendAlert(env, msg, now) {
   if (!ask(env, d.subs.length)) return { sent: 0, waiting: 'budget' };
   return sendAll(env, msg, now);
 }
-const logOf = (it, t, action, result) => ({ at: new Date(t).toISOString(), sport: it.sport, date: it.date, league: it.league, game: it.game, check: it.check, action, result });
-async function stillMissing(env, it, D, B, t) {
+const logOf = (it, t, action, result, group = [it]) => ({ at: new Date(t).toISOString(), sport: it.sport, date: it.date, league: it.league, game: label(it, group), check: it.check, action, result, games: group.length });
+// The repaired day (and the bets, for a bet repair) read again. On a failed read the old copy stands, so the gap counts as still there.
+async function readAfter(env, it, D, B, t) {
   try {
     const day = await getDay(env, it.date, it.sport), D2 = { ...D, [it.sport]: { ...(D[it.sport] || {}), [it.date]: day?.cards || [] } };
     const B2 = it.check.startsWith('bet-') ? (await getAnalyst(env, { readOnly: true })).items || [] : B;
-    return missing(D2, t, { bets: B2 }).some(x => x.key === it.key);
-  } catch (e) { return true; }
+    return { D: D2, B: B2 };
+  } catch (e) { return { D, B }; }
 }
-// One write: the last LOG_MAX actions, the back-off clocks of games still in the look-back, the blocks, and the alerts of the last 3 days.
+// One write: the last LOG_MAX actions, the back-off clocks of repairs still needed, the blocks, the alerts of the last 3 days and the
+// hourly counts of the last HOURS_KEEP hours.
 async function saveKeeper(env, st, today, t) {
-  const from = addDays(today, -LOOK_BACK - 1);
-  const wait = Object.fromEntries(Object.entries(st.wait).filter(([k]) => (k.split('|')[1] || '') >= from));
   const sent = Object.fromEntries(Object.entries(st.sent || {}).filter(([, at]) => t - at <= SENT_KEEP_D * 86400000));
-  await env.HUB.put(KEEPER_KEY, JSON.stringify({ log: st.log.slice(0, LOG_MAX), wait, blocks: st.blocks, sent }));
+  const hours = Object.fromEntries(Object.entries(st.hours || {}).filter(([h]) => t - Date.parse(`${h}:00:00Z`) < HOURS_KEEP * 3600000));
+  await env.HUB.put(KEEPER_KEY, JSON.stringify({ log: st.log.slice(0, LOG_MAX), wait: st.wait, blocks: st.blocks, sent, hours }));
 }

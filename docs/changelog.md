@@ -463,3 +463,14 @@ notes in the pages under public/.
   per game and problem: a result still missing from kickoff + 6 h (up to 24 h after kickoff; older is the nightly sweep's), or a game
   with no price 2 hours before kickoff (soccer top divisions and cups, and hockey). Second divisions never alert. Give-ups now keep the
   game, league and check.
+- Nov 26, 2026: Data Keeper fixes from a read-only audit of steps 1-3. One read fills a whole league (or the whole hockey day), so the
+  back-off clock and the tries are kept per repair ("<fix>|<date>|<league>[|w]"), not per game: 6 games of one league missing Forebet
+  cost 3 page reads, not 18. The lineup-window read has its own key, so a price given up on hours out is still tried at the closing
+  read. A give-up (or any back-off clock) is dropped once its gap is filled by another job. Forebet: a 403 / 429 that Forebet's own job
+  got blocks the Keeper too, and a page read fine is left alone 3 h (as Forebet's own job does). Closes and both-score prices are
+  repaired by the league's price read (the close is no longer marked as taken by hand; the both-score price asks Pinnacle first, then the
+  Odds API only above the credit reserve). A hockey game missing only its line, a hockey result older than yesterday and a settled bet
+  with no close are listed but not repaired (no read can fill them), and cost no run or save. Call estimates match what the reads fetch
+  (results 6, hockey results 9). Saver-mode waits are not saved. The health report's 24-hour counts come from hourly counts and include
+  repairs run and the KV writes the Keeper caused. The alerts step reuses the days the Keeper read. The hockey lineup read answers
+  whenever it read ESPN, so the Keeper does not read it again in the same run.

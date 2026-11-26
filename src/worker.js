@@ -68,9 +68,9 @@ const hub = {
         env.BUDGET = run; // the Keeper and then the alerts use what is left
         // The Data Keeper (src/keeper.js): at most one repair of a missing price, close, Forebet, result or bet, on what is left of the
         // run's calls with the alerts' share kept back. Not on a run that built a stats file (the CPU limit). Never allowed to break the background job.
-        if (!(sw && sw.built)) { try { noteAnswer('keeper', await keeperStep(env, new Date(), { recent: recentFrom(answers) })); } catch (e) { note('keeper', e); } }
-        // Alerts for games about to start. Never allowed to break the background job.
-        try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(env, now.getTime(), a === b ? [a] : [a, b]); } catch (e) { note('alerts', e); /* retried in 5 minutes */ }
+        let kd = null; if (!(sw && sw.built)) { try { const k = await keeperStep(env, new Date(), { recent: recentFrom(answers) }); kd = k.days || null; noteAnswer('keeper', k); } catch (e) { note('keeper', e); } }
+        // Alerts for games about to start, on the days the Keeper already read (and read again after its repair). Never allowed to break the background job.
+        try { const now = new Date(), a = localDate(now.toISOString()), b = localDate(new Date(now.getTime() + 45 * 60000).toISOString()); await pushStep(env, now.getTime(), a === b ? [a] : [a, b], fetch, kd); } catch (e) { note('alerts', e); /* retried in 5 minutes */ }
         try { await saveErrors(env.HUB, errs); } catch (e) { /* the log is bookkeeping */ }
         await c.flush();
       }

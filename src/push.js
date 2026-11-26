@@ -132,13 +132,15 @@ export function dueAlerts(cards, sent, now) {
   }
   return out;
 }
-// Runs after each background job. It reads nothing but the small device list unless a device is registered.
-export async function pushStep(env, now, dates, fetcher = fetch) {
+// Runs after each background job. It reads nothing but the small device list unless a device is registered. loaded: days the run has
+// read already ({ soccer: { date: cards }, nhl: { ... } }, the Data Keeper's, as saved after its repair), used instead of reading them again.
+export async function pushStep(env, now, dates, fetcher = fetch, loaded = null) {
   const d = await getPush(env); if (!d.subs.length) return { push: 'no devices' };
   const cards = { soccer: [], hockey: [] };
   for (const date of dates) {
-    for (const c of (await getDay(env, date))?.cards || []) cards.soccer.push(c);
-    for (const c of (await getDay(env, date, 'nhl'))?.cards || []) cards.hockey.push(c);
+    const have = sp => loaded && loaded[sp] && Array.isArray(loaded[sp][date]) ? loaded[sp][date] : null;
+    for (const c of have('soccer') || (await getDay(env, date))?.cards || []) cards.soccer.push(c);
+    for (const c of have('nhl') || (await getDay(env, date, 'nhl'))?.cards || []) cards.hockey.push(c);
   }
   const due = dueAlerts(cards, d.sent || {}, now); if (!due.length) return { push: 'nothing due' };
   // The device list and the signing key are read once. At most PUSH_CAP requests a run (the free plan allows 50 outside calls per run):
