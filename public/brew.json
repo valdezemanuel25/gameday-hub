@@ -1,6 +1,39 @@
 {
-  "updated": "2026-11-25T21:08:57Z",
+  "updated": "2026-11-27T11:08:06Z",
   "issues": [
+    {
+      "source": "Morning Brew",
+      "date": "2026-11-27",
+      "title": "Shipping & Handling Brew",
+      "markets": [],
+      "takeaways": [
+        {
+          "h": "Diesel",
+          "t": "Diesel has eased from record highs above $6.50 a gallon but remains well above last year's sub-$4 price."
+        },
+        {
+          "h": "Freight costs",
+          "t": "Truck transportation costs jumped nearly 25% in the past year, a broad problem since trucks hauled nearly 73% of US freight by weight in 2024."
+        },
+        {
+          "h": "Price ripple",
+          "t": "Fuel is an estimated 15% to 30% of total food costs, and FedEx, UPS, USPS and railroads have raised prices."
+        },
+        {
+          "h": "Other pressures",
+          "t": "A trucker shortage, port congestion, Middle East conflict and tariff-driven early importing are also pushing up shipping costs."
+        },
+        {
+          "h": "Cargo blimps",
+          "t": "Startups are developing cargo airships, and UK-backed Hybrid Air Vehicles has $2.2 billion in orders."
+        },
+        {
+          "h": "Train theft",
+          "t": "US train robberies reached 75,000 reported incidents last year, with more than $200 million in goods stolen."
+        }
+      ],
+      "note": "Holiday special edition on shipping; no market numbers in this issue."
+    },
     {
       "source": "Brew Markets",
       "date": "2026-11-25",
@@ -64,71 +97,6 @@
           "t": "CrowdStrike's $44B Zscaler buy and Sanofi's $41B Insmed deal lifted 2026 global M&A to $4.7T, up 20% and a post-2021 high."
         }
       ]
-    },
-    {
-      "source": "Morning Brew",
-      "date": "2026-11-25",
-      "title": "Another one",
-      "markets": [
-        {
-          "label": "Nasdaq",
-          "value": "23,734",
-          "change": -1.48
-        },
-        {
-          "label": "S&P 500",
-          "value": "7,201",
-          "change": -0.5
-        },
-        {
-          "label": "Dow",
-          "value": "50,019",
-          "change": 0.85
-        },
-        {
-          "label": "10-yr",
-          "value": "4.904%",
-          "change": -1,
-          "unit": "bps"
-        },
-        {
-          "label": "Bitcoin",
-          "value": "$59,679",
-          "change": -2.58
-        },
-        {
-          "label": "Anthropic",
-          "value": "$81.91",
-          "change": -6.54
-        }
-      ],
-      "takeaways": [
-        {
-          "h": "New tariffs",
-          "t": "The US is reportedly set to announce new country-specific duties on China, the EU and 14 other nations, with overall rates capped at 15% for the EU, Japan and South Korea and up to 20% for China."
-        },
-        {
-          "h": "AI rout",
-          "t": "The Nasdaq fell 1.5% as the AI selloff resumed, and Anthropic closed 6.5% lower at $81.91, below its IPO price."
-        },
-        {
-          "h": "Huang apology",
-          "t": "Nvidia CEO Jensen Huang told employees he made terrible mistakes and is in therapy, while the stock kept sliding and probes continue."
-        },
-        {
-          "h": "Pharma deal",
-          "t": "Sanofi will buy Insmed for $41 billion, the industry's biggest deal in three years."
-        },
-        {
-          "h": "Roche pill",
-          "t": "Roche's newly approved breast cancer pill could reach $14 billion in annual sales, priced at $22,500 per month in the US."
-        },
-        {
-          "h": "Dick's pop",
-          "t": "Dick's jumped over 14% after Foot Locker sales rose 0.5% in Q3 versus a feared 2% drop."
-        }
-      ],
-      "note": "Market numbers are the Tuesday close."
     },
     {
       "source": "Brew Markets",
