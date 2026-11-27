@@ -478,3 +478,7 @@ notes in the pages under public/.
   the Hub saves its stats files (00:10-00:40 Central), so each reads the day it checks. All three Keeper tasks take their baseline from the
   stats repo's history (no Notion needed) and read the audit fix's fields (`last24h.repairs` and `writes`, give-ups per repair). The
   nightly sweep's Data check now lists the Keeper's 24-hour counts and give-ups and flags Keeper writes above 60.
+- Nov 27, 2026: the stats-file token can be tried on demand: the health link with `&check=sweep` (src/routes.js) answers
+  `tokenCheck` (src/sweepdata.js): whether GitHub accepts SWEEP_GH_TOKEN, may write the data repo (permissions.push) and can read its
+  files, with the reason when not. Two reads from GitHub; nothing saved to GitHub or KV. Added after the night saves got 403 two nights
+  running, so a new token can be checked in the daytime.

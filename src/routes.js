@@ -17,6 +17,7 @@ import { readErrors } from './errlog.js';
 import { WRITE_LIMIT, pendingWrites } from './store.js';
 import { BTTS_RESERVE, SAVER_AT, SHARP_NOTE, addDays, analyzeLeague, assignCandidate, backupAnalyst, cachePut, candidates, forebetPaste, gradeLeague, health, nhlTotals, noteLeague, num, oddsKeys, pinnCheck, priceWhy, readCredits, readSharpNote, refreshBtts, refreshCardClose, refreshOdds, smLeague, soccerTotals, syncNote, tally, today, viaOddsKey } from './jobs.js';
 import { readKeeper, keeperStatus } from './keeperlog.js';
+import { tokenCheck } from './sweepdata.js';
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -178,12 +179,13 @@ export const PUBLIC_ROUTES = [
     handle: async (req, env) => env.ASSETS.fetch(req) }, // /login is public/login.html (the assets handler serves it without the .html)
   // Hub health for the nightly sweep: read-only, with its own secret (HEALTH_TOKEN) so the scheduled task never holds the password.
   // Every try at this token is counted. Without the key (or with a wrong one) it answers nothing: the request goes on to the sign-in check.
-  { name: 'health report with HEALTH_TOKEN', method: 'GET', path: '/api/health?k=<HEALTH_TOKEN> (or x-health-token)', match: (req, p, env) => req.method === 'GET' && p === '/api/health' && !!env.HEALTH_TOKEN,
+  { name: 'health report with HEALTH_TOKEN', method: 'GET', path: '/api/health?k=<HEALTH_TOKEN> (or x-health-token); &check=sweep tries the stats-file token', match: (req, p, env) => req.method === 'GET' && p === '/api/health' && !!env.HEALTH_TOKEN,
     handle: async (req, env, url) => {
       const ht = String(url.searchParams.get('k') || req.headers.get('x-health-token') || '');
       if (!ht) return null;
       if (await limited(env.API_LIMIT, 'health:' + visitor(req))) return new Response(JSON.stringify({ error: 'Too many requests. Wait a minute and try again.' }), { status: 429, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '60' } });
-      if (await same(ht, env.HEALTH_TOKEN)) return json(await health(env, true));
+      // ?check=sweep: try the stats-file token now (two reads from GitHub, nothing saved; src/sweepdata.js tokenCheck)
+      if (await same(ht, env.HEALTH_TOKEN)) return json(url.searchParams.get('check') === 'sweep' ? await tokenCheck(env) : await health(env, true));
       return null;
     } },
 ];

@@ -1,6 +1,6 @@
 // Nightly stats files for the sweep (src/sweepdata.js): three small files saved to a separate GitHub data repo just after midnight
 // Central, so the nightly sweep can read the Hub's results without the health link. Reads only on the Hub side: no KV writes.
-import { partDue, dayGaps, trimTotals, buildPart, putFile, sweepStep, FRESH_MIN } from '../src/sweepdata.js';
+import { partDue, dayGaps, trimTotals, buildPart, putFile, sweepStep, tokenCheck, FRESH_MIN } from '../src/sweepdata.js';
 let fail = 0; const ok = (n, c, x = '') => { console.log((c ? 'PASS  ' : 'FAIL  ') + n + (c ? '' : ' ' + x)); if (!c) fail++; };
 const H = 3600000;
 
@@ -85,6 +85,30 @@ const gh = (existing) => { const calls = []; const f = async (url, init = {}) =>
   const f = async (url, init = {}) => (init.method === 'PUT' ? new Response('{"message":"Bad credentials"}', { status: 401 }) : new Response('{}', { status: 404 }));
   const r = await putFile({ repo: 'me/data', path: 'nhl.json', token: 'T', obj: { exportedAt: 'x' }, now: NOW }, f);
   ok('save: a refused save reports the status and does not throw', r.saved === false && r.status === 401, JSON.stringify(r));
+}
+
+// --- trying the token on demand (health link ?check=sweep) ---
+{
+  const calls = [], f = async (url, init = {}) => { calls.push({ url, init });
+    if (/repos\/me\/data$/.test(url)) return new Response(JSON.stringify({ permissions: { pull: true, push: true } }), { status: 200 });
+    return new Response('{"message":"Not Found"}', { status: 404 }); };
+  const r = await tokenCheck({ SWEEP_GH_TOKEN: 'T0KEN', SWEEP_REPO: 'me/data' }, f);
+  ok('token check: a token that may write is ok, with no file yet', r.ok === true && r.push === true && r.read === 'no file yet', JSON.stringify(r));
+  ok('token check: only reads (no save), and the token never shows in the answer or an address', calls.every(c => (c.init.method || 'GET') === 'GET') && !JSON.stringify(r).includes('T0KEN') && !calls.some(c => c.url.includes('T0KEN')));
+}
+{
+  const f = async url => /repos\/me\/data$/.test(url) ? new Response(JSON.stringify({ permissions: { pull: true, push: false } }), { status: 200 }) : new Response('{}', { status: 404 });
+  const r = await tokenCheck({ SWEEP_GH_TOKEN: 'T', SWEEP_REPO: 'me/data' }, f);
+  ok('token check: a read-only token is not ok and says to give it Contents write', r.ok === false && r.push === false && /write/.test(r.why), JSON.stringify(r));
+}
+{
+  const f = async () => new Response('{"message":"Bad credentials"}', { status: 401 });
+  const r = await tokenCheck({ SWEEP_GH_TOKEN: 'T', SWEEP_REPO: 'me/data' }, f);
+  ok('token check: a refused token reports the status', r.ok === false && r.repoStatus === 401 && /401/.test(r.why), JSON.stringify(r));
+  const n = await tokenCheck({ SWEEP_REPO: 'me/data' }, f);
+  ok('token check: no token set says so without calling GitHub', n.ok === false && n.token === false);
+  const t = await tokenCheck({ SWEEP_GH_TOKEN: 'T', SWEEP_REPO: 'me/data' }, async () => { throw new Error('network down'); });
+  ok('token check: a network error does not throw', t.ok === false && /network down/.test(t.why));
 }
 
 // --- the cron step ---

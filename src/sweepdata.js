@@ -92,6 +92,25 @@ export async function putFile({ repo, path, token, obj, now = Date.now(), state 
   return r.ok ? { saved: true } : { saved: false, status: r.status };
 }
 
+// A check of the token, on demand (the health link with ?check=sweep): can it read the data repo, and does GitHub say it may write
+// there (permissions.push)? Two reads from GitHub, nothing saved anywhere (no file, no KV). It answers in the daytime too, so a new
+// SWEEP_GH_TOKEN can be tried without waiting for the night's saves. Never throws; the token itself never appears in the answer.
+export async function tokenCheck(env, f = fetch) {
+  const repo = env.SWEEP_REPO || null, token = env.SWEEP_GH_TOKEN;
+  if (!token || !repo) return { token: !!token, repo, ok: false, why: 'SWEEP_GH_TOKEN or SWEEP_REPO is not set' };
+  try {
+    const r = await f(`https://api.github.com/repos/${repo}`, { headers: ghHeaders(token) });
+    const j = r.ok ? await r.json().catch(() => ({})) : {};
+    const push = !!(j.permissions && j.permissions.push);
+    const st = await fileState({ repo, path: 'health.json', token }, f);
+    const read = st.status ? st.status : st.sha ? 'file there' : 'no file yet';
+    const ok = r.ok && push && !st.status;
+    const why = ok ? 'the token can read and write the data repo' : !r.ok ? `GitHub refused the token (${r.status}): wrong, expired or deleted, or not given this repo`
+      : !push ? 'the token can read the repo but may not write it: give it Contents read and write on this repo' : `GitHub refused reading the files (${st.status})`;
+    return { token: true, repo, ok, repoStatus: r.status, push, read, why };
+  } catch (e) { return { token: true, repo, ok: false, why: String(e && e.message || e).slice(0, 160) }; }
+}
+
 // One cron run: null when nothing is due, the secret / repo name is missing, or the file is already fresh (the second try after a good
 // first one: nothing is built and the rotating job keeps its turn); else what happened. Never throws.
 export async function sweepStep(env, deps, now = new Date(), f = fetch) {
