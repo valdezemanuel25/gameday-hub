@@ -1,38 +1,38 @@
 {
-  "updated": "2026-11-27T11:08:06Z",
+  "updated": "2026-11-28T11:07:38Z",
   "issues": [
     {
       "source": "Morning Brew",
-      "date": "2026-11-27",
-      "title": "Shipping & Handling Brew",
+      "date": "2026-11-28",
+      "title": "Traffic Brew",
       "markets": [],
       "takeaways": [
         {
-          "h": "Diesel",
-          "t": "Diesel has eased from record highs above $6.50 a gallon but remains well above last year's sub-$4 price."
+          "h": "Wider roads",
+          "t": "A 2009 study found each 1% added to metro road capacity brings about 1% more cars, and LA's $1 billion I-405 widening gave only brief relief."
         },
         {
-          "h": "Freight costs",
-          "t": "Truck transportation costs jumped nearly 25% in the past year, a broad problem since trucks hauled nearly 73% of US freight by weight in 2024."
+          "h": "Congestion pricing",
+          "t": "New York's toll raised over $550 million in its first year, and state data show traffic in the tolled zone fell 12%."
         },
         {
-          "h": "Price ripple",
-          "t": "Fuel is an estimated 15% to 30% of total food costs, and FedEx, UPS, USPS and railroads have raised prices."
+          "h": "Time cost",
+          "t": "INRIX estimates traffic costs the average US driver 97 hours, or $1,348 in lost productivity, each year."
         },
         {
-          "h": "Other pressures",
-          "t": "A trucker shortage, port congestion, Middle East conflict and tariff-driven early importing are also pushing up shipping costs."
+          "h": "Bigger vehicles",
+          "t": "SUVs and pickups went from under 25% of new car sales in the 1970s to nearly 80% by 2025, adding to gridlock."
         },
         {
-          "h": "Cargo blimps",
-          "t": "Startups are developing cargo airships, and UK-backed Hybrid Air Vehicles has $2.2 billion in orders."
+          "h": "Pedestrian safety",
+          "t": "A New York Times analysis tied larger vehicles to about 200 to 400 extra pedestrian deaths a year."
         },
         {
-          "h": "Train theft",
-          "t": "US train robberies reached 75,000 reported incidents last year, with more than $200 million in goods stolen."
+          "h": "Hoboken",
+          "t": "The New Jersey city has reported no traffic deaths in nearly nine years, and serious injuries fell 62% from 2022 to 2023."
         }
       ],
-      "note": "Holiday special edition on shipping; no market numbers in this issue."
+      "note": "Holiday special edition on traffic; no market numbers in this issue."
     },
     {
       "source": "Brew Markets",
